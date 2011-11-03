@@ -39,9 +39,11 @@
 #include "nodes/nodeFuncs.h"
 #include "optimizer/clauses.h"
 #include "optimizer/tlist.h"
+#include "parser/analyze.h"
 #include "parser/keywords.h"
 #include "parser/parse_func.h"
 #include "parser/parse_oper.h"
+#include "parser/parse_type.h"
 #include "parser/parser.h"
 #include "parser/parsetree.h"
 #include "rewrite/rewriteHandler.h"
@@ -255,7 +257,6 @@ static text *string_to_text(char *str);
 static char *flatten_reloptions(Oid relid);
 
 #define only_marker(rte)  ((rte)->inh ? "" : "ONLY ")
-
 
 /* ----------
  * get_ruledef			- Do it all and return a text
@@ -7325,4 +7326,353 @@ flatten_reloptions(Oid relid)
 	ReleaseSysCache(tuple);
 
 	return result;
+}
+
+/*
+ * Functions that ouputs a COMMAND given a Utility parsetree
+ *
+ * FIXME: First some tools that I couldn't find in the sources.
+ */
+static char *
+RangeVarToString(RangeVar *r)
+{
+	char *qualified_name = (char *)palloc0(NAMEDATALEN*2+2);
+
+	sprintf(qualified_name, "%s%s%s",
+			r->schemaname == NULL? "": r->schemaname,
+			r->schemaname == NULL? "": ".",
+			r->relname);
+
+	return qualified_name;
+}
+
+static const char *
+relkindToString(ObjectType relkind)
+{
+	const char *kind;
+
+	switch (relkind)
+	{
+		case OBJECT_FOREIGN_TABLE:
+			kind = "FOREIGN TABLE";
+			break;
+
+		case OBJECT_INDEX:
+			kind = "INDEX";
+			break;
+
+		case OBJECT_SEQUENCE:
+			kind = "SEQUENCE";
+			break;
+
+		case OBJECT_TABLE:
+			kind = "TABLE";
+			break;
+
+		case OBJECT_VIEW:
+			kind = "VIEW";
+			break;
+
+		default:
+			elog(DEBUG2, "unrecognized relkind: %d", relkind);
+			break;
+	}
+	return kind;
+}
+
+static void
+_rwCreateExtensionStmt(StringInfo buf, CreateExtensionStmt *node)
+{
+	ListCell   *lc;
+
+	appendStringInfo(buf, "CREATE EXTENSION%s %s",
+					 node->if_not_exists ? " IF NOT EXISTS" : "",
+					 node->extname);
+
+	foreach(lc, node->options)
+	{
+		DefElem    *defel = (DefElem *) lfirst(lc);
+
+		if (strcmp(defel->defname, "schema") == 0)
+			appendStringInfo(buf, " SCHEMA %s", strVal(defel->arg));
+
+		else if (strcmp(defel->defname, "new_version") == 0)
+			appendStringInfo(buf, " VERSION %s", strVal(defel->arg));
+
+		else if (strcmp(defel->defname, "old_version") == 0)
+			appendStringInfo(buf, " FROM %s", strVal(defel->arg));
+	}
+	appendStringInfoChar(buf, ';');
+}
+
+static void
+_rwViewStmt(StringInfo buf, ViewStmt *node)
+{
+	Query	   *viewParse;
+
+	viewParse = parse_analyze((Node *) copyObject(node->query),
+							  "(unavailable source text)", NULL, 0);
+
+	appendStringInfo(buf, "CREATE %s %s AS ",
+					 node->replace? "OR REPLACE VIEW": "VIEW",
+					 RangeVarToString(node->view));
+
+	get_query_def(viewParse, buf, NIL, NULL, 0, 1);
+	appendStringInfoChar(buf, ';');
+}
+
+static void
+_rwAlterTableStmt(StringInfo buf, AlterTableStmt *node)
+{
+	ListCell   *lcmd;
+	bool        first = true;
+
+	appendStringInfo(buf, "ALTER %s %s",
+					 relkindToString(node->relkind),
+					 RangeVarToString(node->relation));
+
+	foreach(lcmd, node->cmds)
+	{
+		AlterTableCmd *cmd = (AlterTableCmd *) lfirst(lcmd);
+		ColumnDef  *def = (ColumnDef *) cmd->def;
+
+		if (first)
+			first = false;
+		else
+			appendStringInfoString(buf, ", ");
+
+		switch (cmd->subtype)
+		{
+			case AT_AddColumn:				/* add column */
+				appendStringInfo(buf, " ADD COLUMN %s %s",
+								 def->colname,
+								 TypeNameToString(def->typeName));
+
+				if (def->is_not_null)
+					appendStringInfoString(buf, " NOT NULL");
+				break;
+
+			case AT_ColumnDefault:			/* alter column default */
+				if (def == NULL)
+					appendStringInfo(buf, " ALTER %s DROP DEFAULT",
+									 cmd->name);
+				else
+				{
+					char *str =
+						deparse_expression_pretty(cmd->def, NIL, false, false, 0, 0);
+
+					appendStringInfo(buf, " ALTER %s SET DEFAULT %s",
+									 cmd->name, str);
+				}
+				break;
+
+			case AT_DropNotNull:			/* alter column drop not null */
+				appendStringInfo(buf, " ALTER %s DROP NOT NULL", cmd->name);
+				break;
+
+			case AT_SetNotNull:				/* alter column set not null */
+				appendStringInfo(buf, " ALTER %s SET NOT NULL", cmd->name);
+				break;
+
+			case AT_SetStatistics:			/* alter column set statistics */
+				appendStringInfo(buf, " ALTER %s SET STATISTICS %ld",
+								 cmd->name,
+								 (long) intVal((Value *)(cmd->def)));
+				break;
+
+			case AT_SetOptions:				/* alter column set ( options ) */
+				break;
+
+			case AT_ResetOptions:			/* alter column reset ( options ) */
+				break;
+
+			case AT_SetStorage:				/* alter column set storage */
+				appendStringInfo(buf, " ALTER %s SET STORAGE %s",
+								 cmd->name,
+								 strVal((Value *)(cmd->def)));
+				break;
+
+			case AT_DropColumn:				/* drop column */
+				appendStringInfo(buf, " %s %s%s",
+								 cmd->missing_ok? "DROP IF EXISTS": "DROP",
+								 cmd->name,
+								 cmd->behavior == DROP_CASCADE? " CASCADE": "");
+				break;
+
+			case AT_AddIndex:				/* add index */
+				break;
+
+			case AT_AddConstraint:			/* add constraint */
+				break;
+
+			case AT_ValidateConstraint:		/* validate constraint */
+				appendStringInfo(buf, " VALIDATE CONSTRAINT %s", cmd->name);
+				break;
+
+			case AT_AddIndexConstraint:		/* add constraint using existing index */
+				break;
+
+			case AT_DropConstraint:			/* drop constraint */
+				appendStringInfo(buf, " DROP CONSTRAINT%s %s %s",
+								 cmd->missing_ok? " IF EXISTS": "",
+								 cmd->name,
+								 cmd->behavior == DROP_CASCADE? " CASCADE": "");
+				break;
+
+			case AT_AlterColumnType:		/* alter column type */
+				appendStringInfo(buf, " ALTER %s TYPE %s",
+								 cmd->name,
+								 TypeNameToString(def->typeName));
+				if (def->raw_default != NULL)
+				{
+					char *str =
+						deparse_expression_pretty(def->raw_default,
+												  NIL, false, false, 0, 0);
+					appendStringInfo(buf, " USING %s", str);
+				}
+				break;
+
+			case AT_AlterColumnGenericOptions:	/* alter column OPTIONS (...) */
+				break;
+
+			case AT_ChangeOwner:			/* change owner */
+				appendStringInfo(buf, " OWNER TO %s", cmd->name);
+				break;
+
+			case AT_ClusterOn:				/* CLUSTER ON */
+				appendStringInfo(buf, " CLUSTER ON %s", cmd->name);
+				break;
+
+			case AT_DropCluster:			/* SET WITHOUT CLUSTER */
+				appendStringInfo(buf, " SET WITHOUT CLUSTER");
+				break;
+
+			case AT_SetTableSpace:			/* SET TABLESPACE */
+				appendStringInfo(buf, " SET TABLESPACE %s", cmd->name);
+				break;
+
+			case AT_SetRelOptions:			/* SET (...) -- AM specific parameters */
+				break;
+
+			case AT_ResetRelOptions:		/* RESET (...) -- AM specific parameters */
+				break;
+
+			case AT_EnableTrig:				/* ENABLE TRIGGER name */
+				appendStringInfo(buf, " ENABLE TRIGGER %s", cmd->name);
+				break;
+
+			case AT_EnableAlwaysTrig:		/* ENABLE ALWAYS TRIGGER name */
+				appendStringInfo(buf, " ENABLE ALWAYS TRIGGER %s", cmd->name);
+				break;
+
+			case AT_EnableReplicaTrig:		/* ENABLE REPLICA TRIGGER name */
+				appendStringInfo(buf, " ENABLE REPLICA TRIGGER %s", cmd->name);
+				break;
+
+			case AT_DisableTrig:			/* DISABLE TRIGGER name */
+				appendStringInfo(buf, " DISABLE TRIGGER %s", cmd->name);
+				break;
+
+			case AT_EnableTrigAll:			/* ENABLE TRIGGER ALL */
+				appendStringInfo(buf, " ENABLE TRIGGER ALL");
+				break;
+
+			case AT_DisableTrigAll:			/* DISABLE TRIGGER ALL */
+				appendStringInfo(buf, " DISABLE TRIGGER ALL");
+				break;
+
+			case AT_EnableTrigUser:			/* ENABLE TRIGGER USER */
+				appendStringInfo(buf, " ENABLE TRIGGER USER");
+				break;
+
+			case AT_DisableTrigUser:		/* DISABLE TRIGGER USER */
+				appendStringInfo(buf, " DISABLE TRIGGER USER");
+				break;
+
+			case AT_EnableRule:				/* ENABLE RULE name */
+				appendStringInfo(buf, " ENABLE RULE %s", cmd->name);
+				break;
+
+			case AT_EnableAlwaysRule:		/* ENABLE ALWAYS RULE name */
+				appendStringInfo(buf, " ENABLE ALWAYS RULE %s", cmd->name);
+				break;
+
+			case AT_EnableReplicaRule:		/* ENABLE REPLICA RULE name */
+				appendStringInfo(buf, " ENABLE REPLICA RULE %s", cmd->name);
+				break;
+
+			case AT_DisableRule:			/* DISABLE RULE name */
+				appendStringInfo(buf, " DISABLE RULE %s", cmd->name);
+				break;
+
+			case AT_AddInherit:				/* INHERIT parent */
+				appendStringInfo(buf, " INHERIT %s",
+								 RangeVarToString((RangeVar *) cmd->def));
+				break;
+
+			case AT_DropInherit:			/* NO INHERIT parent */
+				appendStringInfo(buf, " NO INHERIT %s",
+								 RangeVarToString((RangeVar *) cmd->def));
+				break;
+
+			case AT_AddOf:					/* OF <type_name> */
+				appendStringInfo(buf, " OF %s", TypeNameToString(def->typeName));
+				break;
+
+			case AT_DropOf:					/* NOT OF */
+				appendStringInfo(buf, " NOT OF");
+				break;
+
+			case AT_GenericOptions:			/* OPTIONS (...) */
+				break;
+
+			default:
+				break;
+		}
+	}
+	appendStringInfoChar(buf, ';');
+}
+
+/*
+ * get_ddldef
+ *
+ * internal use only, used for DDL Triggers
+ *
+ * Utility statements are not planned thus won't get into a Query *, we get to
+ * work from the parsetree directly, that would be query->utilityStmt which is
+ * of type Node *. We declare that a void * to avoid incompatible pointer type
+ * warnings.
+ */
+char *
+pg_get_ddldef(void *parsetree)
+{
+	StringInfoData buf;
+	initStringInfo(&buf);
+
+	/*
+	 * we need the big'o'switch here, and calling a specialized function per
+	 * utility statement nodetag.
+	 */
+
+	switch (nodeTag(parsetree))
+	{
+		case T_AlterTableStmt:
+			_rwAlterTableStmt(&buf, parsetree);
+
+		case T_ViewStmt:
+			_rwViewStmt(&buf, parsetree);
+			return NULL;
+			break;
+
+		case T_CreateExtensionStmt:
+			_rwCreateExtensionStmt(&buf, parsetree);
+			break;
+
+		default:
+			/* is it best to elog(ERROR)?  Not while in development :) */
+			elog(DEBUG2, "unrecognized node type: %d",
+				 (int) nodeTag(parsetree));
+			return NULL;
+	}
+	return buf.data;
 }

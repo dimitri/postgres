@@ -328,7 +328,24 @@ ProcessUtility(Node *parsetree,
 			   DestReceiver *dest,
 			   char *completionTag)
 {
+	/*
+	 * Build the DDL command we're about to execute from the parsetree.
+	 *
+	 * The queryString comes from untrusted places: it could be a multiple
+	 * queries string that has been passed through psql -c or otherwise in the
+	 * protocol, or something that comes from an EXECUTE evaluation in plpgsql.
+	 *
+	 * Also we need to be able to spit out a normalized (canonical?) SQL
+	 * command to ease DDL trigger code, and we even provide them with a
+	 * nodeToString() output.
+	 */
+	char *command = pg_get_ddldef(parsetree);
+	char *nodestr = nodeToString(parsetree);
+
 	Assert(queryString != NULL);	/* required as of 8.4 */
+
+	if (command != NULL)
+		elog(WARNING, "%s", command);
 
 	/*
 	 * We provide a function hook variable that lets loadable plugins get
@@ -2223,6 +2240,13 @@ CreateCommandTag(Node *parsetree)
 			tag = "???";
 			break;
 	}
+
+	/*
+	 * Useful to raise WARNINGs for any DDL command not yet supported.
+	 *
+	elog(WARNING, "Command Tag:    %s", tag);
+	elog(WARNING, "Note to String: %s", nodeToString(parsetree));
+	 */
 
 	return tag;
 }

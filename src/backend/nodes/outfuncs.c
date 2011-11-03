@@ -1943,6 +1943,137 @@ _outPlannerParamItem(StringInfo str, PlannerParamItem *node)
  *****************************************************************************/
 
 static void
+_outInsertStmt(StringInfo str, InsertStmt *node)
+{
+	WRITE_NODE_TYPE("INSERTSTMT");
+
+	WRITE_NODE_FIELD(relation);
+	WRITE_NODE_FIELD(cols);
+	WRITE_NODE_FIELD(selectStmt);
+	WRITE_NODE_FIELD(returningList);
+	WRITE_NODE_FIELD(withClause);
+}
+
+static void
+_outDeleteStmt(StringInfo str, DeleteStmt *node)
+{
+	WRITE_NODE_TYPE("DELETESTMT");
+
+	WRITE_NODE_FIELD(relation);
+	WRITE_NODE_FIELD(usingClause);
+	WRITE_NODE_FIELD(whereClause);
+	WRITE_NODE_FIELD(returningList);
+	WRITE_NODE_FIELD(withClause);
+}
+
+static void
+_outUpdateStmt(StringInfo str, UpdateStmt *node)
+{
+	WRITE_NODE_TYPE("UPDATESTMT");
+
+	WRITE_NODE_FIELD(relation);
+	WRITE_NODE_FIELD(targetList);
+	WRITE_NODE_FIELD(whereClause);
+	WRITE_NODE_FIELD(fromClause);
+	WRITE_NODE_FIELD(returningList);
+	WRITE_NODE_FIELD(withClause);
+}
+
+static void
+_outAlterTableStmt(StringInfo str, AlterTableStmt *node)
+{
+	WRITE_NODE_TYPE("ALTERTABLESTMT");
+
+	WRITE_NODE_FIELD(relation);
+	WRITE_NODE_FIELD(cmds);
+	WRITE_CHAR_FIELD(relkind);
+}
+
+static void
+_outAlterTableCmd(StringInfo str, AlterTableCmd *node)
+{
+	WRITE_NODE_TYPE("ALTERTABLECMD");
+
+	WRITE_ENUM_FIELD(subtype, AlterTableType);
+	WRITE_STRING_FIELD(name);
+	WRITE_NODE_FIELD(def);
+	WRITE_ENUM_FIELD(behavior, DropBehavior);
+	WRITE_BOOL_FIELD(missing_ok);
+}
+
+static void
+_outAlterDomainStmt(StringInfo str, AlterDomainStmt *node)
+{
+	WRITE_NODE_TYPE("ALTERDOMAINSTMT");
+
+	WRITE_CHAR_FIELD(subtype);
+	WRITE_NODE_FIELD(typeName);
+	WRITE_STRING_FIELD(name);
+	WRITE_NODE_FIELD(def);
+	WRITE_ENUM_FIELD(behavior, DropBehavior);
+}
+
+static void
+_outGrantStmt(StringInfo str, GrantStmt *node)
+{
+	WRITE_NODE_TYPE("GRANTSTMT");
+
+	WRITE_BOOL_FIELD(is_grant);
+	WRITE_ENUM_FIELD(targtype, GrantTargetType);
+	WRITE_ENUM_FIELD(objtype, GrantObjectType);
+	WRITE_NODE_FIELD(objects);
+	WRITE_NODE_FIELD(privileges);
+	WRITE_NODE_FIELD(grantees);
+	WRITE_BOOL_FIELD(grant_option);
+	WRITE_ENUM_FIELD(behavior, DropBehavior);
+}
+
+static void
+_outGrantRoleStmt(StringInfo str, GrantRoleStmt *node)
+{
+	WRITE_NODE_TYPE("GRANTROLESTMT");
+
+	WRITE_NODE_FIELD(granted_roles);
+	WRITE_NODE_FIELD(grantee_roles);
+	WRITE_BOOL_FIELD(is_grant);
+	WRITE_BOOL_FIELD(admin_opt);
+	WRITE_STRING_FIELD(grantor);
+	WRITE_ENUM_FIELD(behavior, DropBehavior);
+}
+
+static void
+_outAlterDefaultPrivilegesStmt(StringInfo str, AlterDefaultPrivilegesStmt *node)
+{
+	WRITE_NODE_TYPE("ALTERDEFAULTPRIVILEGESSTMT");
+
+	WRITE_NODE_FIELD(options);
+	WRITE_NODE_FIELD(action);
+}
+
+static void
+_outClusterStmt(StringInfo str, ClusterStmt *node)
+{
+	WRITE_NODE_TYPE("CLUSTERSTMT");
+
+	WRITE_NODE_FIELD(relation);
+	WRITE_STRING_FIELD(indexname);
+	WRITE_BOOL_FIELD(verbose);
+}
+
+static void
+_outCopyStmt(StringInfo str, CopyStmt *node)
+{
+	WRITE_NODE_TYPE("COPYSTMT");
+
+	WRITE_NODE_FIELD(relation);
+	WRITE_NODE_FIELD(query);
+	WRITE_NODE_FIELD(attlist);
+	WRITE_BOOL_FIELD(is_from);
+	WRITE_STRING_FIELD(filename);
+	WRITE_NODE_FIELD(options);
+}
+
+static void
 _outCreateStmt(StringInfo str, CreateStmt *node)
 {
 	WRITE_NODE_TYPE("CREATESTMT");
@@ -1959,6 +2090,31 @@ _outCreateStmt(StringInfo str, CreateStmt *node)
 }
 
 static void
+_outDefineStmt(StringInfo str, DefineStmt *node)
+{
+	WRITE_NODE_TYPE("DEFINESTMT");
+
+	WRITE_ENUM_FIELD(kind, ObjectType);
+	WRITE_BOOL_FIELD(oldstyle);
+	WRITE_NODE_FIELD(defnames);
+	WRITE_NODE_FIELD(args);
+	WRITE_NODE_FIELD(definition);
+}
+
+static void
+_outAlterTSConfigurationStmt(StringInfo str, AlterTSConfigurationStmt *node)
+{
+	WRITE_NODE_TYPE("ALTERTSCONFIGURATIONSTMT");
+
+	WRITE_NODE_FIELD(cfgname);
+	WRITE_NODE_FIELD(tokentype);
+	WRITE_NODE_FIELD(dicts);
+	WRITE_BOOL_FIELD(override);
+	WRITE_BOOL_FIELD(replace);
+	WRITE_BOOL_FIELD(missing_ok);
+}
+
+static void
 _outCreateForeignTableStmt(StringInfo str, CreateForeignTableStmt *node)
 {
 	WRITE_NODE_TYPE("CREATEFOREIGNTABLESTMT");
@@ -1967,6 +2123,17 @@ _outCreateForeignTableStmt(StringInfo str, CreateForeignTableStmt *node)
 
 	WRITE_STRING_FIELD(servername);
 	WRITE_NODE_FIELD(options);
+}
+
+static void
+_outCommentStmt(StringInfo str, CommentStmt *node)
+{
+	WRITE_NODE_TYPE("COMMENTSTMT");
+
+	WRITE_ENUM_FIELD(objtype, ObjectType);
+	WRITE_NODE_FIELD(objname);
+	WRITE_NODE_FIELD(objargs);
+	WRITE_STRING_FIELD(comment);
 }
 
 static void
@@ -1993,12 +2160,128 @@ _outIndexStmt(StringInfo str, IndexStmt *node)
 }
 
 static void
+_outCreateFunctionStmt(StringInfo str, CreateFunctionStmt *node)
+{
+	WRITE_NODE_TYPE("CREATEFUNCTIONSTMT");
+
+	WRITE_BOOL_FIELD(replace);
+	WRITE_NODE_FIELD(funcname);
+	WRITE_NODE_FIELD(parameters);
+	WRITE_NODE_FIELD(returnType);
+	WRITE_NODE_FIELD(options);
+	WRITE_NODE_FIELD(withClause);
+}
+
+static void
+_outRuleStmt(StringInfo str, RuleStmt *node)
+{
+	WRITE_NODE_TYPE("RULESTMT");
+
+	WRITE_NODE_FIELD(relation);
+	WRITE_STRING_FIELD(rulename);
+	WRITE_NODE_FIELD(whereClause);
+	WRITE_ENUM_FIELD(event, CmdType);
+	WRITE_BOOL_FIELD(instead);
+	WRITE_NODE_FIELD(actions);
+	WRITE_BOOL_FIELD(replace);
+}
+
+static void
 _outNotifyStmt(StringInfo str, NotifyStmt *node)
 {
 	WRITE_NODE_TYPE("NOTIFY");
 
 	WRITE_STRING_FIELD(conditionname);
 	WRITE_STRING_FIELD(payload);
+}
+
+static void
+_outViewStmt(StringInfo str, ViewStmt *node)
+{
+	WRITE_NODE_TYPE("VIEWSTMT");
+
+	WRITE_NODE_FIELD(view);
+	WRITE_NODE_FIELD(aliases);
+	WRITE_NODE_FIELD(query);
+	WRITE_BOOL_FIELD(replace);
+}
+
+static void
+_outCreateDomainStmt(StringInfo str, CreateDomainStmt *node)
+{
+	WRITE_NODE_TYPE("CREATECONVERSIONSTMT");
+
+	WRITE_NODE_FIELD(domainname);
+	WRITE_NODE_FIELD(typeName);
+	WRITE_NODE_FIELD(collClause);
+	WRITE_NODE_FIELD(constraints);
+}
+
+static void
+_outCreatedbStmt(StringInfo str, CreatedbStmt *node)
+{
+	WRITE_NODE_TYPE("CREATEDBSTMT");
+
+	WRITE_STRING_FIELD(dbname);
+	WRITE_NODE_FIELD(options);
+}
+
+static void
+_outVacuumStmt(StringInfo str, VacuumStmt *node)
+{
+	WRITE_NODE_TYPE("VACUUMSTMT");
+
+	WRITE_INT_FIELD(options);
+	WRITE_INT_FIELD(freeze_min_age);
+	WRITE_INT_FIELD(freeze_table_age);
+	WRITE_NODE_FIELD(relation);
+	WRITE_NODE_FIELD(va_cols);
+}
+
+static void
+_outVariableSetStmt(StringInfo str, VariableSetStmt *node)
+{
+	WRITE_NODE_TYPE("VARIABLESETSTMT");
+
+	WRITE_ENUM_FIELD(kind, VariableSetKind);
+	WRITE_STRING_FIELD(name);
+	WRITE_NODE_FIELD(args);
+	WRITE_BOOL_FIELD(is_local);
+}
+
+static void
+_outCreatePLangStmt(StringInfo str, CreatePLangStmt *node)
+{
+	WRITE_NODE_TYPE("CREATESPLANGSTMT");
+
+	WRITE_BOOL_FIELD(replace);
+	WRITE_STRING_FIELD(plname);
+	WRITE_NODE_FIELD(plhandler);
+	WRITE_NODE_FIELD(plinline);
+	WRITE_NODE_FIELD(plvalidator);
+	WRITE_BOOL_FIELD(pltrusted);
+}
+
+static void
+_outCreateSchemaStmt(StringInfo str, CreateSchemaStmt *node)
+{
+	WRITE_NODE_TYPE("CREATESCHEMASTMT");
+
+	WRITE_STRING_FIELD(schemaname);
+	WRITE_STRING_FIELD(authid);
+	WRITE_NODE_FIELD(schemaElts);
+}
+
+static void
+_outCreateConversionStmt(StringInfo str, CreateConversionStmt *node)
+{
+	WRITE_NODE_TYPE("CREATECONVERSIONSTMT");
+
+	WRITE_NODE_FIELD(conversion_name);
+	WRITE_STRING_FIELD(for_encoding_name);
+	WRITE_STRING_FIELD(to_encoding_name);
+	WRITE_NODE_FIELD(func_name);
+	WRITE_BOOL_FIELD(def);
 }
 
 static void
@@ -2063,6 +2346,23 @@ _outDefElem(StringInfo str, DefElem *node)
 }
 
 static void
+_outPrivGrantee(StringInfo str, PrivGrantee *node)
+{
+	WRITE_NODE_TYPE("PRIVGRANTEE");
+
+	WRITE_STRING_FIELD(rolname);
+}
+
+static void
+_outAccessPriv(StringInfo str, AccessPriv *node)
+{
+	WRITE_NODE_TYPE("ACCESSPRIV");
+
+	WRITE_STRING_FIELD(priv_name);
+	WRITE_NODE_FIELD(cols);
+}
+
+static void
 _outInhRelation(StringInfo str, InhRelation *node)
 {
 	WRITE_NODE_TYPE("INHRELATION");
@@ -2090,6 +2390,16 @@ _outXmlSerialize(StringInfo str, XmlSerialize *node)
 	WRITE_NODE_FIELD(expr);
 	WRITE_NODE_FIELD(typeName);
 	WRITE_LOCATION_FIELD(location);
+}
+
+static void
+_outCreateExtensionStmt(StringInfo str, CreateExtensionStmt *node)
+{
+	WRITE_NODE_TYPE("CREATEEXTENSIONSTMT");
+
+	WRITE_STRING_FIELD(extname);
+	WRITE_BOOL_FIELD(if_not_exists);
+	WRITE_NODE_FIELD(options);
 }
 
 static void
@@ -2247,6 +2557,17 @@ _outWindowClause(StringInfo str, WindowClause *node)
 	WRITE_NODE_FIELD(endOffset);
 	WRITE_UINT_FIELD(winref);
 	WRITE_BOOL_FIELD(copiedOrder);
+}
+
+static void
+_outFunctionParameter(StringInfo str, FunctionParameter *node)
+{
+	WRITE_NODE_TYPE("FUNCTIONPARAMETER");
+
+	WRITE_STRING_FIELD(name);
+	WRITE_NODE_FIELD(argType);
+	WRITE_CHAR_FIELD(mode);
+	WRITE_NODE_FIELD(defexpr);
 }
 
 static void
@@ -3033,23 +3354,98 @@ _outNode(StringInfo str, void *obj)
 				_outPlannerParamItem(str, obj);
 				break;
 
+			case T_InsertStmt:
+				_outInsertStmt(str, obj);
+				break;
+			case T_DeleteStmt:
+				_outDeleteStmt(str, obj);
+				break;
+			case T_UpdateStmt:
+				_outUpdateStmt(str, obj);
+				break;
+			case T_AlterTableStmt:
+				_outAlterTableStmt(str, obj);
+				break;
+			case T_AlterTableCmd:
+				_outAlterTableCmd(str, obj);
+				break;
+			case T_AlterDomainStmt:
+				_outAlterDomainStmt(str, obj);
+				break;
+			case T_GrantStmt:
+				_outGrantStmt(str, obj);
+				break;
+			case T_GrantRoleStmt:
+				_outGrantRoleStmt(str, obj);
+				break;
+			case T_AlterDefaultPrivilegesStmt:
+				_outAlterDefaultPrivilegesStmt(str, obj);
+				break;
+			case T_ClusterStmt:
+				_outClusterStmt(str, obj);
+				break;
+			case T_CopyStmt:
+				_outCopyStmt(str, obj);
+				break;
 			case T_CreateStmt:
 				_outCreateStmt(str, obj);
+				break;
+			case T_DefineStmt:
+				_outDefineStmt(str, obj);
+				break;
+			case T_AlterTSConfigurationStmt:
+				_outAlterTSConfigurationStmt(str, obj);
 				break;
 			case T_CreateForeignTableStmt:
 				_outCreateForeignTableStmt(str, obj);
 				break;
+			case T_CommentStmt:
+				_outCommentStmt(str, obj);
+				break;
 			case T_IndexStmt:
 				_outIndexStmt(str, obj);
 				break;
+			case T_CreateFunctionStmt:
+				_outCreateFunctionStmt(str, obj);
+				break;
+			case T_RuleStmt:
+				_outRuleStmt(str, obj);
+				break;
 			case T_NotifyStmt:
 				_outNotifyStmt(str, obj);
+				break;
+			case T_ViewStmt:
+				_outViewStmt(str, obj);
+				break;
+			case T_CreateDomainStmt:
+				_outCreateDomainStmt(str, obj);
+				break;
+			case T_CreatedbStmt:
+				_outCreatedbStmt(str, obj);
+				break;
+			case T_VacuumStmt:
+				_outVacuumStmt(str, obj);
+				break;
+			case T_VariableSetStmt:
+				_outVariableSetStmt(str, obj);
+				break;
+			case T_CreatePLangStmt:
+				_outCreatePLangStmt(str, obj);
+				break;
+			case T_CreateSchemaStmt:
+				_outCreateSchemaStmt(str, obj);
+				break;
+			case T_CreateConversionStmt:
+				_outCreateConversionStmt(str, obj);
 				break;
 			case T_DeclareCursorStmt:
 				_outDeclareCursorStmt(str, obj);
 				break;
 			case T_SelectStmt:
 				_outSelectStmt(str, obj);
+				break;
+			case T_CreateExtensionStmt:
+				_outCreateExtensionStmt(str, obj);
 				break;
 			case T_ColumnDef:
 				_outColumnDef(str, obj);
@@ -3074,6 +3470,9 @@ _outNode(StringInfo str, void *obj)
 				break;
 			case T_WindowClause:
 				_outWindowClause(str, obj);
+				break;
+			case T_FunctionParameter:
+				_outFunctionParameter(str, obj);
 				break;
 			case T_RowMarkClause:
 				_outRowMarkClause(str, obj);
@@ -3137,6 +3536,12 @@ _outNode(StringInfo str, void *obj)
 				break;
 			case T_DefElem:
 				_outDefElem(str, obj);
+				break;
+			case T_PrivGrantee:
+				_outPrivGrantee(str, obj);
+				break;
+			case T_AccessPriv:
+				_outAccessPriv(str, obj);
 				break;
 			case T_InhRelation:
 				_outInhRelation(str, obj);

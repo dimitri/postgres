@@ -185,4 +185,7 @@ extern TypeName *defGetTypeName(DefElem *def);
 extern int	defGetTypeLength(DefElem *def);
 extern DefElem *defWithOids(bool value);
 
+/* utils/adt/ruleutils.c -- FIXME, find a better place */
+extern char *pg_get_ddldef(void *parsetree);
+
 #endif   /* DEFREM_H */
