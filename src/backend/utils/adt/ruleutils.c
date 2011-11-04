@@ -7381,11 +7381,13 @@ relkindToString(ObjectType relkind)
 }
 
 static void
-_rwCreateExtensionStmt(StringInfo buf, CreateExtensionStmt *node)
+_rwCreateExtensionStmt(CommandContext cmd, CreateExtensionStmt *node)
 {
+	StringInfoData buf;
 	ListCell   *lc;
 
-	appendStringInfo(buf, "CREATE EXTENSION%s %s",
+	initStringInfo(&buf);
+	appendStringInfo(&buf, "CREATE EXTENSION%s %s",
 					 node->if_not_exists ? " IF NOT EXISTS" : "",
 					 node->extname);
 
@@ -7394,48 +7396,67 @@ _rwCreateExtensionStmt(StringInfo buf, CreateExtensionStmt *node)
 		DefElem    *defel = (DefElem *) lfirst(lc);
 
 		if (strcmp(defel->defname, "schema") == 0)
-			appendStringInfo(buf, " SCHEMA %s", strVal(defel->arg));
+			appendStringInfo(&buf, " SCHEMA %s", strVal(defel->arg));
 
 		else if (strcmp(defel->defname, "new_version") == 0)
-			appendStringInfo(buf, " VERSION %s", strVal(defel->arg));
+			appendStringInfo(&buf, " VERSION %s", strVal(defel->arg));
 
 		else if (strcmp(defel->defname, "old_version") == 0)
-			appendStringInfo(buf, " FROM %s", strVal(defel->arg));
+			appendStringInfo(&buf, " FROM %s", strVal(defel->arg));
 	}
-	appendStringInfoChar(buf, ';');
+	appendStringInfoChar(&buf, ';');
+
+	cmd->cmdstr = buf.data;
+	cmd->schemaname = NULL;
+	cmd->objectname = node->extname;
 }
 
 static void
-_rwViewStmt(StringInfo buf, ViewStmt *node)
+_rwViewStmt(CommandContext cmd, ViewStmt *node)
 {
+	StringInfoData buf;
 	Query	   *viewParse;
 
+	initStringInfo(&buf);
 	viewParse = parse_analyze((Node *) copyObject(node->query),
 							  "(unavailable source text)", NULL, 0);
 
-	appendStringInfo(buf, "CREATE %s %s AS ",
+	appendStringInfo(&buf, "CREATE %s %s AS ",
 					 node->replace? "OR REPLACE VIEW": "VIEW",
 					 RangeVarToString(node->view));
 
-	get_query_def(viewParse, buf, NIL, NULL, 0, 1);
-	appendStringInfoChar(buf, ';');
+	get_query_def(viewParse, &buf, NIL, NULL, 0, 1);
+	appendStringInfoChar(&buf, ';');
+
+	cmd->cmdstr = buf.data;
+	cmd->schemaname = node->view->schemaname;
+	cmd->objectname = node->view->relname;
 }
 
 static void
-_rwCreateStmt(StringInfo buf, CreateStmt *node)
+_rwCreateStmt(CommandContext cmd, CreateStmt *node)
 {
-	appendStringInfo(buf, "CREATE TABLE %s %s",
+	StringInfoData buf;
+
+	initStringInfo(&buf);
+	appendStringInfo(&buf, "CREATE TABLE %s %s",
 					 RangeVarToString(node->relation),
 					 node->if_not_exists ? " IF NOT EXISTS" : "");
+
+	cmd->cmdstr = buf.data;
+	cmd->schemaname = node->relation->schemaname;
+	cmd->objectname = node->relation->relname;
 }
 
 static void
-_rwAlterTableStmt(StringInfo buf, AlterTableStmt *node)
+_rwAlterTableStmt(CommandContext cmd, AlterTableStmt *node)
 {
+	StringInfoData buf;
 	ListCell   *lcmd;
 	bool        first = true;
 
-	appendStringInfo(buf, "ALTER %s %s",
+	initStringInfo(&buf);
+	appendStringInfo(&buf, "ALTER %s %s",
 					 relkindToString(node->relkind),
 					 RangeVarToString(node->relation));
 
@@ -7447,43 +7468,43 @@ _rwAlterTableStmt(StringInfo buf, AlterTableStmt *node)
 		if (first)
 			first = false;
 		else
-			appendStringInfoString(buf, ", ");
+			appendStringInfoString(&buf, ", ");
 
 		switch (cmd->subtype)
 		{
 			case AT_AddColumn:				/* add column */
-				appendStringInfo(buf, " ADD COLUMN %s %s",
+				appendStringInfo(&buf, " ADD COLUMN %s %s",
 								 def->colname,
 								 TypeNameToString(def->typeName));
 
 				if (def->is_not_null)
-					appendStringInfoString(buf, " NOT NULL");
+					appendStringInfoString(&buf, " NOT NULL");
 				break;
 
 			case AT_ColumnDefault:			/* alter column default */
 				if (def == NULL)
-					appendStringInfo(buf, " ALTER %s DROP DEFAULT",
+					appendStringInfo(&buf, " ALTER %s DROP DEFAULT",
 									 cmd->name);
 				else
 				{
 					char *str =
 						deparse_expression_pretty(cmd->def, NIL, false, false, 0, 0);
 
-					appendStringInfo(buf, " ALTER %s SET DEFAULT %s",
+					appendStringInfo(&buf, " ALTER %s SET DEFAULT %s",
 									 cmd->name, str);
 				}
 				break;
 
 			case AT_DropNotNull:			/* alter column drop not null */
-				appendStringInfo(buf, " ALTER %s DROP NOT NULL", cmd->name);
+				appendStringInfo(&buf, " ALTER %s DROP NOT NULL", cmd->name);
 				break;
 
 			case AT_SetNotNull:				/* alter column set not null */
-				appendStringInfo(buf, " ALTER %s SET NOT NULL", cmd->name);
+				appendStringInfo(&buf, " ALTER %s SET NOT NULL", cmd->name);
 				break;
 
 			case AT_SetStatistics:			/* alter column set statistics */
-				appendStringInfo(buf, " ALTER %s SET STATISTICS %ld",
+				appendStringInfo(&buf, " ALTER %s SET STATISTICS %ld",
 								 cmd->name,
 								 (long) intVal((Value *)(cmd->def)));
 				break;
@@ -7495,13 +7516,13 @@ _rwAlterTableStmt(StringInfo buf, AlterTableStmt *node)
 				break;
 
 			case AT_SetStorage:				/* alter column set storage */
-				appendStringInfo(buf, " ALTER %s SET STORAGE %s",
+				appendStringInfo(&buf, " ALTER %s SET STORAGE %s",
 								 cmd->name,
 								 strVal((Value *)(cmd->def)));
 				break;
 
 			case AT_DropColumn:				/* drop column */
-				appendStringInfo(buf, " %s %s%s",
+				appendStringInfo(&buf, " %s %s%s",
 								 cmd->missing_ok? "DROP IF EXISTS": "DROP",
 								 cmd->name,
 								 cmd->behavior == DROP_CASCADE? " CASCADE": "");
@@ -7514,21 +7535,21 @@ _rwAlterTableStmt(StringInfo buf, AlterTableStmt *node)
 				break;
 
 			case AT_ValidateConstraint:		/* validate constraint */
-				appendStringInfo(buf, " VALIDATE CONSTRAINT %s", cmd->name);
+				appendStringInfo(&buf, " VALIDATE CONSTRAINT %s", cmd->name);
 				break;
 
 			case AT_AddIndexConstraint:		/* add constraint using existing index */
 				break;
 
 			case AT_DropConstraint:			/* drop constraint */
-				appendStringInfo(buf, " DROP CONSTRAINT%s %s %s",
+				appendStringInfo(&buf, " DROP CONSTRAINT%s %s %s",
 								 cmd->missing_ok? " IF EXISTS": "",
 								 cmd->name,
 								 cmd->behavior == DROP_CASCADE? " CASCADE": "");
 				break;
 
 			case AT_AlterColumnType:		/* alter column type */
-				appendStringInfo(buf, " ALTER %s TYPE %s",
+				appendStringInfo(&buf, " ALTER %s TYPE %s",
 								 cmd->name,
 								 TypeNameToString(def->typeName));
 				if (def->raw_default != NULL)
@@ -7536,7 +7557,7 @@ _rwAlterTableStmt(StringInfo buf, AlterTableStmt *node)
 					char *str =
 						deparse_expression_pretty(def->raw_default,
 												  NIL, false, false, 0, 0);
-					appendStringInfo(buf, " USING %s", str);
+					appendStringInfo(&buf, " USING %s", str);
 				}
 				break;
 
@@ -7544,19 +7565,19 @@ _rwAlterTableStmt(StringInfo buf, AlterTableStmt *node)
 				break;
 
 			case AT_ChangeOwner:			/* change owner */
-				appendStringInfo(buf, " OWNER TO %s", cmd->name);
+				appendStringInfo(&buf, " OWNER TO %s", cmd->name);
 				break;
 
 			case AT_ClusterOn:				/* CLUSTER ON */
-				appendStringInfo(buf, " CLUSTER ON %s", cmd->name);
+				appendStringInfo(&buf, " CLUSTER ON %s", cmd->name);
 				break;
 
 			case AT_DropCluster:			/* SET WITHOUT CLUSTER */
-				appendStringInfo(buf, " SET WITHOUT CLUSTER");
+				appendStringInfo(&buf, " SET WITHOUT CLUSTER");
 				break;
 
 			case AT_SetTableSpace:			/* SET TABLESPACE */
-				appendStringInfo(buf, " SET TABLESPACE %s", cmd->name);
+				appendStringInfo(&buf, " SET TABLESPACE %s", cmd->name);
 				break;
 
 			case AT_SetRelOptions:			/* SET (...) -- AM specific parameters */
@@ -7566,69 +7587,69 @@ _rwAlterTableStmt(StringInfo buf, AlterTableStmt *node)
 				break;
 
 			case AT_EnableTrig:				/* ENABLE TRIGGER name */
-				appendStringInfo(buf, " ENABLE TRIGGER %s", cmd->name);
+				appendStringInfo(&buf, " ENABLE TRIGGER %s", cmd->name);
 				break;
 
 			case AT_EnableAlwaysTrig:		/* ENABLE ALWAYS TRIGGER name */
-				appendStringInfo(buf, " ENABLE ALWAYS TRIGGER %s", cmd->name);
+				appendStringInfo(&buf, " ENABLE ALWAYS TRIGGER %s", cmd->name);
 				break;
 
 			case AT_EnableReplicaTrig:		/* ENABLE REPLICA TRIGGER name */
-				appendStringInfo(buf, " ENABLE REPLICA TRIGGER %s", cmd->name);
+				appendStringInfo(&buf, " ENABLE REPLICA TRIGGER %s", cmd->name);
 				break;
 
 			case AT_DisableTrig:			/* DISABLE TRIGGER name */
-				appendStringInfo(buf, " DISABLE TRIGGER %s", cmd->name);
+				appendStringInfo(&buf, " DISABLE TRIGGER %s", cmd->name);
 				break;
 
 			case AT_EnableTrigAll:			/* ENABLE TRIGGER ALL */
-				appendStringInfo(buf, " ENABLE TRIGGER ALL");
+				appendStringInfo(&buf, " ENABLE TRIGGER ALL");
 				break;
 
 			case AT_DisableTrigAll:			/* DISABLE TRIGGER ALL */
-				appendStringInfo(buf, " DISABLE TRIGGER ALL");
+				appendStringInfo(&buf, " DISABLE TRIGGER ALL");
 				break;
 
 			case AT_EnableTrigUser:			/* ENABLE TRIGGER USER */
-				appendStringInfo(buf, " ENABLE TRIGGER USER");
+				appendStringInfo(&buf, " ENABLE TRIGGER USER");
 				break;
 
 			case AT_DisableTrigUser:		/* DISABLE TRIGGER USER */
-				appendStringInfo(buf, " DISABLE TRIGGER USER");
+				appendStringInfo(&buf, " DISABLE TRIGGER USER");
 				break;
 
 			case AT_EnableRule:				/* ENABLE RULE name */
-				appendStringInfo(buf, " ENABLE RULE %s", cmd->name);
+				appendStringInfo(&buf, " ENABLE RULE %s", cmd->name);
 				break;
 
 			case AT_EnableAlwaysRule:		/* ENABLE ALWAYS RULE name */
-				appendStringInfo(buf, " ENABLE ALWAYS RULE %s", cmd->name);
+				appendStringInfo(&buf, " ENABLE ALWAYS RULE %s", cmd->name);
 				break;
 
 			case AT_EnableReplicaRule:		/* ENABLE REPLICA RULE name */
-				appendStringInfo(buf, " ENABLE REPLICA RULE %s", cmd->name);
+				appendStringInfo(&buf, " ENABLE REPLICA RULE %s", cmd->name);
 				break;
 
 			case AT_DisableRule:			/* DISABLE RULE name */
-				appendStringInfo(buf, " DISABLE RULE %s", cmd->name);
+				appendStringInfo(&buf, " DISABLE RULE %s", cmd->name);
 				break;
 
 			case AT_AddInherit:				/* INHERIT parent */
-				appendStringInfo(buf, " INHERIT %s",
+				appendStringInfo(&buf, " INHERIT %s",
 								 RangeVarToString((RangeVar *) cmd->def));
 				break;
 
 			case AT_DropInherit:			/* NO INHERIT parent */
-				appendStringInfo(buf, " NO INHERIT %s",
+				appendStringInfo(&buf, " NO INHERIT %s",
 								 RangeVarToString((RangeVar *) cmd->def));
 				break;
 
 			case AT_AddOf:					/* OF <type_name> */
-				appendStringInfo(buf, " OF %s", TypeNameToString(def->typeName));
+				appendStringInfo(&buf, " OF %s", TypeNameToString(def->typeName));
 				break;
 
 			case AT_DropOf:					/* NOT OF */
-				appendStringInfo(buf, " NOT OF");
+				appendStringInfo(&buf, " NOT OF");
 				break;
 
 			case AT_GenericOptions:			/* OPTIONS (...) */
@@ -7638,7 +7659,11 @@ _rwAlterTableStmt(StringInfo buf, AlterTableStmt *node)
 				break;
 		}
 	}
-	appendStringInfoChar(buf, ';');
+	appendStringInfoChar(&buf, ';');
+
+	cmd->cmdstr = buf.data;
+	cmd->schemaname = node->relation->schemaname;
+	cmd->objectname = node->relation->relname;
 }
 
 /*
@@ -7651,11 +7676,11 @@ _rwAlterTableStmt(StringInfo buf, AlterTableStmt *node)
  * of type Node *. We declare that a void * to avoid incompatible pointer type
  * warnings.
  */
-char *
-pg_get_cmddef(void *parsetree)
+void
+pg_get_cmddef(CommandContext cmd, void *parsetree)
 {
-	StringInfoData buf;
-	initStringInfo(&buf);
+	/* cmd->nodestr = nodeToString(parsetree); */
+	cmd->nodestr = NULL;
 
 	/*
 	 * we need the big'o'switch here, and calling a specialized function per
@@ -7665,27 +7690,24 @@ pg_get_cmddef(void *parsetree)
 	switch (nodeTag(parsetree))
 	{
 		case T_CreateStmt:
-			_rwCreateStmt(&buf, parsetree);
+			_rwCreateStmt(cmd, parsetree);
 			break;
 
 		case T_AlterTableStmt:
-			_rwAlterTableStmt(&buf, parsetree);
+			_rwAlterTableStmt(cmd, parsetree);
 			break;
 
 		case T_ViewStmt:
-			_rwViewStmt(&buf, parsetree);
-			return NULL;
+			_rwViewStmt(cmd, parsetree);
 			break;
 
 		case T_CreateExtensionStmt:
-			_rwCreateExtensionStmt(&buf, parsetree);
+			_rwCreateExtensionStmt(cmd, parsetree);
 			break;
 
 		default:
 			/* is it best to elog(ERROR)?  Not while in development :) */
 			elog(DEBUG2, "unrecognized node type: %d",
 				 (int) nodeTag(parsetree));
-			return NULL;
 	}
-	return buf.data;
 }

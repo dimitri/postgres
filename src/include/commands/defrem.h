@@ -186,6 +186,16 @@ extern int	defGetTypeLength(DefElem *def);
 extern DefElem *defWithOids(bool value);
 
 /* utils/adt/ruleutils.c -- FIXME, find a better place */
-extern char *pg_get_cmddef(void *parsetree);
+typedef struct CommandContextData
+{
+	char *cmdstr;				/* Command String, rewritten by ruleutils */
+	char *nodestr;				/* nodeToString(parsetree) */
+	char *schemaname;			/* schemaname or NULL if not relevant */
+	char *objectname;			/* objectname */
+} CommandContextData;
+
+typedef struct CommandContextData *CommandContext;
+
+extern void pg_get_cmddef(CommandContext cmd, void *parsetree);
 
 #endif   /* DEFREM_H */

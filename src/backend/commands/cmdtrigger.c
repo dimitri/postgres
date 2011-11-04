@@ -28,6 +28,7 @@
 #include "commands/trigger.h"
 #include "parser/parse_func.h"
 #include "tcop/utility.h"
+#include "utils/acl.h"
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
@@ -47,7 +48,7 @@ CreateCmdTrigger(CreateCmdTrigStmt *stmt, const char *queryString)
 	Datum		values[Natts_pg_trigger];
 	bool		nulls[Natts_pg_trigger];
 	/* cmd trigger args: cmd_string, cmd_nodestring, schemaname, objectname */
-	Oid			fargtypes[5] = {TEXTOID, TEXTOID, NAMEOID, NAMEOID, NULL};
+	Oid			fargtypes[4] = {TEXTOID, TEXTOID, TEXTOID, TEXTOID};
 	Oid			funcoid;
 	Oid			funcrettype;
 	Oid			trigoid;
@@ -100,14 +101,19 @@ CreateCmdTrigger(CreateCmdTrigStmt *stmt, const char *queryString)
 	}
 	systable_endscan(tgscan);
 
-	if (TRIGGER_FIRED_BEFORE(stmt->timing))
-		ctgtype = CMD_TRIGGER_FIRED_BEFORE;
-	else if (TRIGGER_FIRED_INSTEAD(stmt->timing))
-		ctgtype = CMD_TRIGGER_FIRED_INSTEAD;
-	else
+	switch (stmt->timing)
 	{
-		Assert(TRIGGER_FIRED_AFTER(stmt->timing));
-		ctgtype = CMD_TRIGGER_FIRED_AFTER;
+		case TRIGGER_TYPE_BEFORE:
+		    ctgtype = CMD_TRIGGER_FIRED_BEFORE;
+            break;
+
+		case TRIGGER_TYPE_INSTEAD:
+		    ctgtype = CMD_TRIGGER_FIRED_INSTEAD;;
+            break;
+
+		case TRIGGER_TYPE_AFTER:
+		    ctgtype = CMD_TRIGGER_FIRED_AFTER;
+            break;
 	}
 
 	/*
@@ -293,16 +299,147 @@ get_cmdtrigger_oid(const char *trigname, const char *command, bool missing_ok)
  *
  */
 
+static RegProcedure *
+list_triggers_for_command(const char *command, char type)
+{
+	int  count = 0, size = 10;
+	RegProcedure *procs = (RegProcedure *) palloc(size*sizeof(RegProcedure));
+
+	Relation	rel, irel;
+	SysScanDesc scandesc;
+	HeapTuple	tuple;
+	ScanKeyData entry[1];
+
+	/* init the first entry of the procs array */
+	procs[0] = InvalidOid;
+
+	rel = heap_open(CmdTriggerRelationId, AccessShareLock);
+	irel = index_open(CmdTriggerCommandNameIndexId, AccessShareLock);
+
+	ScanKeyInit(&entry[0],
+				Anum_pg_cmdtrigger_ctgcommand,
+				BTEqualStrategyNumber, F_NAMEEQ,
+				CStringGetDatum(command));
+
+	scandesc = systable_beginscan_ordered(rel, irel, SnapshotNow, 1, entry);
+
+	while (HeapTupleIsValid(tuple = systable_getnext_ordered(scandesc, ForwardScanDirection)))
+	{
+		Form_pg_cmdtrigger cmd = (Form_pg_cmdtrigger) GETSTRUCT(tuple);
+
+		if (cmd->ctgtype == type)
+		{
+			if (count == size)
+			{
+				size += 10;
+				procs = (Oid *)repalloc(procs, size);
+			}
+			procs[count++] = cmd->ctgfoid;
+			procs[count] = InvalidOid;
+		}
+	}
+	systable_endscan_ordered(scandesc);
+
+	index_close(irel, AccessShareLock);
+	heap_close(rel, AccessShareLock);
+
+	return procs;
+}
+
+static void
+call_void_cmdtrigger_procedure(RegProcedure proc, CommandContext cmd)
+{
+	FmgrInfo	flinfo;
+	FunctionCallInfoData fcinfo;
+	Datum		result;
+
+	fmgr_info(proc, &flinfo);
+
+	/* Can't use OidFunctionCallN because we might get a NULL result */
+	InitFunctionCallInfoData(fcinfo, &flinfo, 4, InvalidOid, NULL, NULL);
+
+	fcinfo.arg[0] = CStringGetDatum(cmd->cmdstr);
+
+	if (cmd->nodestr != NULL)
+		fcinfo.arg[1] = CStringGetDatum(cmd->nodestr);
+
+	if (cmd->schemaname != NULL)
+		fcinfo.arg[2] = CStringGetDatum(cmd->schemaname);
+
+	fcinfo.arg[3] = CStringGetDatum(cmd->objectname);
+
+	fcinfo.argnull[0] = false;
+	fcinfo.argnull[1] = cmd->nodestr == NULL;
+	fcinfo.argnull[2] = cmd->schemaname == NULL;
+	fcinfo.argnull[3] = false;
+
+	result = FunctionCallInvoke(&fcinfo);
+	return;
+}
+
 /*
  * returning false in a before command trigger will cancel the execution of
  * subsequent triggers and of the command itself.
  */
 bool
-ExecBeforeCommandTriggers(Node *parsetree)
+ExecBeforeCommandTriggers(Node *parsetree, const char *command)
 {
-	char *command = pg_get_cmddef(parsetree);
-	char *nodestr = nodeToString(parsetree);
+	CommandContextData cmd;
+	RegProcedure *procs = list_triggers_for_command(command,
+													CMD_TRIGGER_FIRED_BEFORE);
+	RegProcedure proc;
+	int cur= 0;
 
+	pg_get_cmddef(&cmd, parsetree);
+
+	while (InvalidOid != (proc = procs[cur++]))
+	{
+		/* we care about the result, so we can't use
+		 * call_void_command_trigger_procedure
+		 */
+		FmgrInfo	flinfo;
+		FunctionCallInfoData fcinfo;
+		Datum		result;
+		AclResult	aclresult;
+
+		/* Check permission to call function */
+		aclresult = pg_proc_aclcheck(proc, GetUserId(), ACL_EXECUTE);
+		if (aclresult != ACLCHECK_OK)
+			aclcheck_error(aclresult, ACL_KIND_PROC,
+						   get_func_name(proc));
+
+		/* we care about the result here, can't use
+		 * call_void_command_trigger_procedure
+		 */
+		fmgr_info(proc, &flinfo);
+
+		/* Can't use OidFunctionCallN because we might get a NULL result */
+		InitFunctionCallInfoData(fcinfo, &flinfo, 4, InvalidOid, NULL, NULL);
+
+		fcinfo.arg[0] = CStringGetDatum(cmd.cmdstr);
+
+		if (cmd.nodestr != NULL)
+			fcinfo.arg[1] = CStringGetDatum(cmd.nodestr);
+
+		if (cmd.schemaname != NULL)
+			fcinfo.arg[2] = CStringGetDatum(cmd.schemaname);
+
+		fcinfo.arg[3] = CStringGetDatum(cmd.objectname);
+
+		fcinfo.argnull[0] = false;
+		fcinfo.argnull[1] = cmd.nodestr == NULL;
+		fcinfo.argnull[2] = cmd.schemaname == NULL;
+		fcinfo.argnull[3] = false;
+
+		result = FunctionCallInvoke(&fcinfo);
+
+		if (!fcinfo.isnull && DatumGetBool(result) == false)
+		{
+			elog(WARNING, "%s %s command cancelled by procedure %s",
+				 command, cmd.objectname, get_func_name(proc));
+			return false;
+		}
+	}
 	return true;
 }
 
@@ -310,19 +447,35 @@ ExecBeforeCommandTriggers(Node *parsetree)
  * return the count of triggers we fired
  */
 int
-ExecInsteadOfCommandTriggers(Node *parsetree)
+ExecInsteadOfCommandTriggers(Node *parsetree, const char *command)
 {
-	char *command = pg_get_cmddef(parsetree);
-	char *nodestr = nodeToString(parsetree);
+	CommandContextData cmd;
+	RegProcedure *procs = list_triggers_for_command(command,
+													CMD_TRIGGER_FIRED_INSTEAD);
+	RegProcedure proc;
+	int cur = 0;
 
-	return 0;
+	pg_get_cmddef(&cmd, parsetree);
+
+	while (InvalidOid != (proc = procs[cur++]))
+	{
+		call_void_cmdtrigger_procedure(proc, &cmd);
+	}
+	return cur-1;
 }
 
 void
-ExecAfterCommandTriggers(Node *parsetree)
+ExecAfterCommandTriggers(Node *parsetree, const char *command)
 {
-	char *command = pg_get_cmddef(parsetree);
-	char *nodestr = nodeToString(parsetree);
+	CommandContextData cmd;
+	RegProcedure *procs = list_triggers_for_command(command,
+													CMD_TRIGGER_FIRED_AFTER);
+	RegProcedure proc;
+	int cur;
 
+	pg_get_cmddef(&cmd, parsetree);
+
+	while (InvalidOid != (proc = procs[cur++]))
+		call_void_cmdtrigger_procedure(proc, &cmd);
 	return;
 }

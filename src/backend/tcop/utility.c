@@ -331,12 +331,18 @@ ProcessUtility(Node *parsetree,
 			   DestReceiver *dest,
 			   char *completionTag)
 {
+	/* we want a completion tag to identify which triggers to run, and that's
+	 * true whatever is given as completionTag here, so just call
+	 * CreateCommandTag() for our own business.
+	 */
+	const char *commandTag = CreateCommandTag(parsetree);
+
 	Assert(queryString != NULL);	/* required as of 8.4 */
 
-	if (ExecBeforeCommandTriggers(parsetree) == false)
+	if (ExecBeforeCommandTriggers(parsetree, commandTag) == false)
 		return;
 
-	if (ExecInsteadOfCommandTriggers(parsetree) > 0)
+	if (ExecInsteadOfCommandTriggers(parsetree, commandTag) > 0)
 		return;
 
 	/*
@@ -351,7 +357,7 @@ ProcessUtility(Node *parsetree,
 		standard_ProcessUtility(parsetree, queryString, params,
 								isTopLevel, dest, completionTag);
 
-	ExecAfterCommandTriggers(parsetree);
+	ExecAfterCommandTriggers(parsetree, commandTag);
 }
 
 void

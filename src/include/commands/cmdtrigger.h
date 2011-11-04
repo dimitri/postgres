@@ -33,8 +33,8 @@ extern void DropCmdTrigger(DropCmdTrigStmt *stmt);
 extern void RemoveCmdTriggerById(Oid ctrigOid);
 extern Oid	get_cmdtrigger_oid(const char *trigname, const char *name, bool missing_ok);
 
-bool ExecBeforeCommandTriggers(Node *parsetree);
-int ExecInsteadOfCommandTriggers(Node *parsetree);
-void ExecAfterCommandTriggers(Node *parsetree);
+bool ExecBeforeCommandTriggers(Node *parsetree, const char *command);
+int ExecInsteadOfCommandTriggers(Node *parsetree, const char *command);
+void ExecAfterCommandTriggers(Node *parsetree, const char *command);
 
 #endif   /* TRIGGER_H */
