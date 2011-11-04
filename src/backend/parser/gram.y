@@ -4229,7 +4229,7 @@ DropTrigStmt:
 
 CreateCmdTrigStmt:
 			CREATE TRIGGER name TriggerActionTime COMMAND trigger_command
-			EXECUTE PROCEDURE func_name '(' ')'
+			EXECUTE PROCEDURE func_name '(' TriggerFuncArgs ')'
 				{
 					CreateCmdTrigStmt *n = makeNode(CreateCmdTrigStmt);
 					n->trigname = $3;
