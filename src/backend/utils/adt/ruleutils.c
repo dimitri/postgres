@@ -7634,7 +7634,7 @@ _rwAlterTableStmt(StringInfo buf, AlterTableStmt *node)
 }
 
 /*
- * get_ddldef
+ * get_cmddef
  *
  * internal use only, used for DDL Triggers
  *
@@ -7644,7 +7644,7 @@ _rwAlterTableStmt(StringInfo buf, AlterTableStmt *node)
  * warnings.
  */
 char *
-pg_get_ddldef(void *parsetree)
+pg_get_cmddef(void *parsetree)
 {
 	StringInfoData buf;
 	initStringInfo(&buf);

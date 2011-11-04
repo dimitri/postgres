@@ -340,7 +340,7 @@ ProcessUtility(Node *parsetree,
 	 * command to ease DDL trigger code, and we even provide them with a
 	 * nodeToString() output.
 	 */
-	char *command = pg_get_ddldef(parsetree);
+	char *command = pg_get_cmddef(parsetree);
 	char *nodestr = nodeToString(parsetree);
 
 	Assert(queryString != NULL);	/* required as of 8.4 */
