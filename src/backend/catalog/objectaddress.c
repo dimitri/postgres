@@ -21,6 +21,7 @@
 #include "catalog/objectaddress.h"
 #include "catalog/pg_authid.h"
 #include "catalog/pg_cast.h"
+#include "catalog/pg_cmdtrigger.h"
 #include "catalog/pg_collation.h"
 #include "catalog/pg_constraint.h"
 #include "catalog/pg_conversion.h"
@@ -44,6 +45,7 @@
 #include "catalog/pg_ts_parser.h"
 #include "catalog/pg_ts_template.h"
 #include "catalog/pg_type.h"
+#include "commands/cmdtrigger.h"
 #include "commands/dbcommands.h"
 #include "commands/defrem.h"
 #include "commands/extension.h"
@@ -199,6 +201,12 @@ static ObjectPropertyType ObjectProperty[] =
 	{
 		TriggerRelationId,
 		TriggerOidIndexId,
+		-1,
+		InvalidAttrNumber
+	},
+	{
+		CmdTriggerRelationId,
+		CmdTriggerOidIndexId,
 		-1,
 		InvalidAttrNumber
 	},

@@ -7422,6 +7422,14 @@ _rwViewStmt(StringInfo buf, ViewStmt *node)
 }
 
 static void
+_rwCreateStmt(StringInfo buf, CreateStmt *node)
+{
+	appendStringInfo(buf, "CREATE TABLE %s %s",
+					 RangeVarToString(node->relation),
+					 node->if_not_exists ? " IF NOT EXISTS" : "");
+}
+
+static void
 _rwAlterTableStmt(StringInfo buf, AlterTableStmt *node)
 {
 	ListCell   *lcmd;
@@ -7656,8 +7664,13 @@ pg_get_cmddef(void *parsetree)
 
 	switch (nodeTag(parsetree))
 	{
+		case T_CreateStmt:
+			_rwCreateStmt(&buf, parsetree);
+			break;
+
 		case T_AlterTableStmt:
 			_rwAlterTableStmt(&buf, parsetree);
+			break;
 
 		case T_ViewStmt:
 			_rwViewStmt(&buf, parsetree);

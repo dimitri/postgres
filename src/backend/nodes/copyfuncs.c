@@ -3527,6 +3527,32 @@ _copyDropPropertyStmt(DropPropertyStmt *from)
 	return newnode;
 }
 
+static CreateCmdTrigStmt *
+_copyCreateCmdTrigStmt(CreateCmdTrigStmt *from)
+{
+	CreateCmdTrigStmt *newnode = makeNode(CreateCmdTrigStmt);
+
+	COPY_STRING_FIELD(command);
+	COPY_STRING_FIELD(trigname);
+	COPY_SCALAR_FIELD(timing);
+	COPY_NODE_FIELD(funcname);
+
+	return newnode;
+}
+
+static DropCmdTrigStmt *
+_copyDropCmdTrigStmt(DropCmdTrigStmt *from)
+{
+	DropCmdTrigStmt *newnode = makeNode(DropCmdTrigStmt);
+
+	COPY_STRING_FIELD(command);
+	COPY_STRING_FIELD(trigname);
+	COPY_SCALAR_FIELD(behavior);
+	COPY_SCALAR_FIELD(missing_ok);
+
+	return newnode;
+}
+
 static CreatePLangStmt *
 _copyCreatePLangStmt(CreatePLangStmt *from)
 {
@@ -4421,6 +4447,12 @@ copyObject(void *from)
 			break;
 		case T_DropPropertyStmt:
 			retval = _copyDropPropertyStmt(from);
+			break;
+		case T_CreateCmdTrigStmt:
+			retval = _copyCreateCmdTrigStmt(from);
+			break;
+		case T_DropCmdTrigStmt:
+			retval = _copyDropCmdTrigStmt(from);
 			break;
 		case T_CreatePLangStmt:
 			retval = _copyCreatePLangStmt(from);

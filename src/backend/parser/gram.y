@@ -208,12 +208,12 @@ static void processCASbits(int cas_bits, int location, const char *constrType,
 		CreateOpFamilyStmt AlterOpFamilyStmt CreatePLangStmt
 		CreateSchemaStmt CreateSeqStmt CreateStmt CreateTableSpaceStmt
 		CreateFdwStmt CreateForeignServerStmt CreateForeignTableStmt
-		CreateAssertStmt CreateTrigStmt
+		CreateAssertStmt CreateTrigStmt CreateCmdTrigStmt
 		CreateUserStmt CreateUserMappingStmt CreateRoleStmt
 		CreatedbStmt DeclareCursorStmt DefineStmt DeleteStmt DiscardStmt DoStmt
 		DropGroupStmt DropOpClassStmt DropOpFamilyStmt DropPLangStmt DropStmt
-		DropAssertStmt DropTrigStmt DropRuleStmt DropCastStmt DropRoleStmt
-		DropUserStmt DropdbStmt DropTableSpaceStmt DropFdwStmt
+		DropAssertStmt DropTrigStmt DropCmdTrigStmt DropRuleStmt DropCastStmt
+		DropRoleStmt DropUserStmt DropdbStmt DropTableSpaceStmt DropFdwStmt
 		DropForeignServerStmt DropUserMappingStmt ExplainStmt FetchStmt
 		GrantStmt GrantRoleStmt IndexStmt InsertStmt ListenStmt LoadStmt
 		LockStmt NotifyStmt ExplainableStmt PreparableStmt
@@ -268,6 +268,7 @@ static void processCASbits(int cas_bits, int location, const char *constrType,
 %type <list>	TriggerEvents TriggerOneEvent
 %type <value>	TriggerFuncArg
 %type <node>	TriggerWhen
+%type <str>		trigger_command
 
 %type <str>		copy_file_name
 				database_name access_method_clause access_method attr_name
@@ -496,7 +497,7 @@ static void processCASbits(int cas_bits, int location, const char *constrType,
 
 	CACHE CALLED CASCADE CASCADED CASE CAST CATALOG_P CHAIN CHAR_P
 	CHARACTER CHARACTERISTICS CHECK CHECKPOINT CLASS CLOSE
-	CLUSTER COALESCE COLLATE COLLATION COLUMN COMMENT COMMENTS COMMIT
+	CLUSTER COALESCE COLLATE COLLATION COLUMN COMMAND COMMENT COMMENTS COMMIT
 	COMMITTED CONCURRENTLY CONFIGURATION CONNECTION CONSTRAINT CONSTRAINTS
 	CONTENT_P CONTINUE_P CONVERSION_P COPY COST CREATE
 	CROSS CSV CURRENT_P
@@ -727,6 +728,7 @@ stmt :
 			| CreateStmt
 			| CreateTableSpaceStmt
 			| CreateTrigStmt
+			| CreateCmdTrigStmt
 			| CreateRoleStmt
 			| CreateUserStmt
 			| CreateUserMappingStmt
@@ -750,6 +752,7 @@ stmt :
 			| DropStmt
 			| DropTableSpaceStmt
 			| DropTrigStmt
+			| DropCmdTrigStmt
 			| DropRoleStmt
 			| DropUserStmt
 			| DropUserMappingStmt
@@ -4215,6 +4218,63 @@ DropTrigStmt:
 				}
 		;
 
+
+/*****************************************************************************
+ *
+ *		QUERIES :
+ *				CREATE TRIGGER ... BEFORE|INSTEAD OF|AFTER COMMAND ...
+ *				DROP TRIGGER ... ON COMMAND ...
+ *
+ *****************************************************************************/
+
+CreateCmdTrigStmt:
+			CREATE TRIGGER name TriggerActionTime COMMAND trigger_command
+			EXECUTE PROCEDURE func_name '(' ')'
+				{
+					CreateCmdTrigStmt *n = makeNode(CreateCmdTrigStmt);
+					n->trigname = $3;
+					n->timing   = $4;
+					n->command  = $6;
+					n->funcname = $9;
+					$$ = (Node *)n;
+				}
+		;
+
+/*
+ * that will get matched against what CreateCommandTag  returns
+ *
+ * we don't support Command Triggers on every possible command that PostgreSQL
+ * supports, this list should match with the implementation of rewriting
+ * utility statements in pg_get_cmddef() in src/backend/utils/adt/ruleutils.c
+ */
+trigger_command:
+			CREATE TABLE						{ $$ = "CREATE TABLE"; }
+			| ALTER TABLE						{ $$ = "ALTER TABLE"; }
+			| CREATE VIEW						{ $$ = "CREATE VIEW"; }
+			| ALTER VIEW						{ $$ = "ALTER VIEW"; }
+			| CREATE EXTENSION					{ $$ = "CREATE EXTENSION"; }
+		;
+
+DropCmdTrigStmt:
+			DROP TRIGGER name ON COMMAND trigger_command opt_drop_behavior
+				{
+					DropCmdTrigStmt *n = makeNode(DropCmdTrigStmt);
+					n->trigname = $3;
+					n->command  = $6;
+					n->behavior = $7;
+					n->missing_ok = false;
+					$$ = (Node *) n;
+				}
+			| DROP TRIGGER IF_P EXISTS name ON COMMAND trigger_command opt_drop_behavior
+				{
+					DropCmdTrigStmt *n = makeNode(DropCmdTrigStmt);
+					n->trigname = $5;
+					n->command  = $8;
+					n->behavior = $9;
+					n->missing_ok = true;
+					$$ = (Node *) n;
+				}
+		;
 
 /*****************************************************************************
  *

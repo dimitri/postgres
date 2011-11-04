@@ -25,6 +25,7 @@
 #include "catalog/pg_attrdef.h"
 #include "catalog/pg_authid.h"
 #include "catalog/pg_cast.h"
+#include "catalog/pg_cmdtrigger.h"
 #include "catalog/pg_collation.h"
 #include "catalog/pg_collation_fn.h"
 #include "catalog/pg_constraint.h"
@@ -52,6 +53,7 @@
 #include "catalog/pg_ts_template.h"
 #include "catalog/pg_type.h"
 #include "catalog/pg_user_mapping.h"
+#include "commands/cmdtrigger.h"
 #include "commands/comment.h"
 #include "commands/dbcommands.h"
 #include "commands/defrem.h"
@@ -157,7 +159,8 @@ static const Oid object_classes[MAX_OCLASS] = {
 	ForeignServerRelationId,	/* OCLASS_FOREIGN_SERVER */
 	UserMappingRelationId,		/* OCLASS_USER_MAPPING */
 	DefaultAclRelationId,		/* OCLASS_DEFACL */
-	ExtensionRelationId			/* OCLASS_EXTENSION */
+	ExtensionRelationId,		/* OCLASS_EXTENSION */
+	CmdTriggerRelationId		/* OCLASS_CMDTRIGGER */
 };
 
 
@@ -1051,6 +1054,10 @@ doDeletion(const ObjectAddress *object)
 				}
 				break;
 			}
+
+		case OCLASS_CMDTRIGGER:
+			RemoveCmdTriggerById(object->objectId);
+			break;
 
 		case OCLASS_PROC:
 			RemoveFunctionById(object->objectId);
@@ -2173,6 +2180,9 @@ getObjectClass(const ObjectAddress *object)
 
 		case ExtensionRelationId:
 			return OCLASS_EXTENSION;
+
+		case CmdTriggerRelationId:
+			return OCLASS_CMDTRIGGER;
 	}
 
 	/* shouldn't get here */
@@ -2804,6 +2814,41 @@ getObjectDescription(const ObjectAddress *object)
 					elog(ERROR, "cache lookup failed for extension %u",
 						 object->objectId);
 				appendStringInfo(&buffer, _("extension %s"), extname);
+				break;
+			}
+
+        case OCLASS_CMDTRIGGER:
+			{
+				Relation	trigDesc;
+				ScanKeyData skey[1];
+				SysScanDesc tgscan;
+				HeapTuple	tup;
+				Form_pg_cmdtrigger trig;
+
+				trigDesc = heap_open(CmdTriggerRelationId, AccessShareLock);
+
+				ScanKeyInit(&skey[0],
+							ObjectIdAttributeNumber,
+							BTEqualStrategyNumber, F_OIDEQ,
+							ObjectIdGetDatum(object->objectId));
+
+				tgscan = systable_beginscan(trigDesc, CmdTriggerOidIndexId, true,
+											SnapshotNow, 1, skey);
+
+				tup = systable_getnext(tgscan);
+
+				if (!HeapTupleIsValid(tup))
+					elog(ERROR, "could not find tuple for command trigger %u",
+						 object->objectId);
+
+				trig = (Form_pg_cmdtrigger) GETSTRUCT(tup);
+
+				appendStringInfo(&buffer, _("trigger %s on %s"),
+								 NameStr(trig->ctgname),
+								 NameStr(trig->ctgcommand));
+
+				systable_endscan(tgscan);
+				heap_close(trigDesc, AccessShareLock);
 				break;
 			}
 

@@ -1837,6 +1837,28 @@ _equalDropPropertyStmt(DropPropertyStmt *a, DropPropertyStmt *b)
 }
 
 static bool
+_equalCreateCmdTrigStmt(CreateCmdTrigStmt *a, CreateCmdTrigStmt *b)
+{
+	COMPARE_STRING_FIELD(command);
+	COMPARE_STRING_FIELD(trigname);
+	COMPARE_SCALAR_FIELD(timing);
+	COMPARE_NODE_FIELD(funcname);
+
+	return true;
+}
+
+static bool
+_equalDropCmdTrigStmt(DropCmdTrigStmt *a, DropCmdTrigStmt *b)
+{
+	COMPARE_STRING_FIELD(command);
+	COMPARE_STRING_FIELD(trigname);
+	COMPARE_SCALAR_FIELD(behavior);
+	COMPARE_SCALAR_FIELD(missing_ok);
+
+	return true;
+}
+
+static bool
 _equalCreatePLangStmt(CreatePLangStmt *a, CreatePLangStmt *b)
 {
 	COMPARE_SCALAR_FIELD(replace);
@@ -2948,6 +2970,12 @@ equal(void *a, void *b)
 			break;
 		case T_DropPropertyStmt:
 			retval = _equalDropPropertyStmt(a, b);
+			break;
+		case T_CreateCmdTrigStmt:
+			retval = _equalCreateCmdTrigStmt(a, b);
+			break;
+		case T_DropCmdTrigStmt:
+			retval = _equalDropCmdTrigStmt(a, b);
 			break;
 		case T_CreatePLangStmt:
 			retval = _equalCreatePLangStmt(a, b);

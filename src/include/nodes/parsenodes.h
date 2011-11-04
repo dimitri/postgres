@@ -1106,6 +1106,7 @@ typedef enum ObjectType
 	OBJECT_AGGREGATE,
 	OBJECT_ATTRIBUTE,			/* type's attribute, when distinct from column */
 	OBJECT_CAST,
+	OBJECT_CMDTRIGGER,
 	OBJECT_COLUMN,
 	OBJECT_CONSTRAINT,
 	OBJECT_COLLATION,
@@ -1739,6 +1740,20 @@ typedef struct CreateTrigStmt
 } CreateTrigStmt;
 
 /* ----------------------
+ *		Create COMMAND TRIGGER Statement
+ * ----------------------
+ */
+typedef struct CreateCmdTrigStmt
+{
+	NodeTag		type;
+	char	   *command;		/* command's name */
+	char	   *trigname;			/* TRIGGER's name */
+	/* timing uses the TRIGGER_TYPE bits defined in catalog/pg_trigger.h */
+	int16		timing;			/* BEFORE, AFTER, or INSTEAD */
+	List	   *funcname;		/* qual. name of function to call */
+} CreateCmdTrigStmt;
+
+/* ----------------------
  *		Create/Drop PROCEDURAL LANGUAGE Statements
  * ----------------------
  */
@@ -1943,6 +1958,19 @@ typedef struct DropPropertyStmt
 	DropBehavior behavior;		/* RESTRICT or CASCADE behavior */
 	bool		missing_ok;		/* skip error if missing? */
 } DropPropertyStmt;
+
+/* ----------------------
+ *		Drop Command Trigger Statement
+ * ----------------------
+ */
+typedef struct DropCmdTrigStmt
+{
+	NodeTag		type;
+	char	   *command;		/* command's name */
+	char	   *trigname;		/* TRIGGER's name */
+	DropBehavior behavior;		/* RESTRICT or CASCADE behavior */
+	bool		missing_ok;		/* skip error if missing? */
+} DropCmdTrigStmt;
 
 /* ----------------------
  *				Truncate Table Statement

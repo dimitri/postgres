@@ -25,6 +25,7 @@
 #include "commands/alter.h"
 #include "commands/async.h"
 #include "commands/cluster.h"
+#include "commands/cmdtrigger.h"
 #include "commands/comment.h"
 #include "commands/collationcmds.h"
 #include "commands/conversioncmds.h"
@@ -184,6 +185,7 @@ check_xact_readonly(Node *parsetree)
 		case T_CommentStmt:
 		case T_DefineStmt:
 		case T_CreateCastStmt:
+		case T_CreateCmdTrigStmt:
 		case T_CreateConversionStmt:
 		case T_CreatedbStmt:
 		case T_CreateDomainStmt:
@@ -329,24 +331,13 @@ ProcessUtility(Node *parsetree,
 			   DestReceiver *dest,
 			   char *completionTag)
 {
-	/*
-	 * Build the DDL command we're about to execute from the parsetree.
-	 *
-	 * The queryString comes from untrusted places: it could be a multiple
-	 * queries string that has been passed through psql -c or otherwise in the
-	 * protocol, or something that comes from an EXECUTE evaluation in plpgsql.
-	 *
-	 * Also we need to be able to spit out a normalized (canonical?) SQL
-	 * command to ease DDL trigger code, and we even provide them with a
-	 * nodeToString() output.
-	 */
-	char *command = pg_get_cmddef(parsetree);
-	char *nodestr = nodeToString(parsetree);
-
 	Assert(queryString != NULL);	/* required as of 8.4 */
 
-	if (command != NULL)
-		elog(WARNING, "%s", command);
+	if (ExecBeforeCommandTriggers(parsetree) == false)
+		return;
+
+	if (ExecInsteadOfCommandTriggers(parsetree) > 0)
+		return;
 
 	/*
 	 * We provide a function hook variable that lets loadable plugins get
@@ -359,6 +350,8 @@ ProcessUtility(Node *parsetree,
 	else
 		standard_ProcessUtility(parsetree, queryString, params,
 								isTopLevel, dest, completionTag);
+
+	ExecAfterCommandTriggers(parsetree);
 }
 
 void
@@ -1118,6 +1111,14 @@ standard_ProcessUtility(Node *parsetree,
 						break;
 				}
 			}
+			break;
+
+		case T_CreateCmdTrigStmt:
+			(void) CreateCmdTrigger((CreateCmdTrigStmt *) parsetree, queryString);
+			break;
+
+		case T_DropCmdTrigStmt:
+			DropCmdTrigger((DropCmdTrigStmt *) parsetree);
 			break;
 
 		case T_CreatePLangStmt:
@@ -2033,6 +2034,14 @@ CreateCommandTag(Node *parsetree)
 			}
 			break;
 
+		case T_CreateCmdTrigStmt:
+			tag = "CREATE COMMAND TRIGGER";
+			break;
+
+		case T_DropCmdTrigStmt:
+			tag = "DROP COMMAND TRIGGER";
+			break;
+
 		case T_CreatePLangStmt:
 			tag = "CREATE LANGUAGE";
 			break;
@@ -2558,6 +2567,14 @@ GetCommandLogLevel(Node *parsetree)
 			break;
 
 		case T_DropPropertyStmt:
+			lev = LOGSTMT_DDL;
+			break;
+
+		case T_CreateCmdTrigStmt:
+			lev = LOGSTMT_DDL;
+			break;
+
+		case T_DropCmdTrigStmt:
 			lev = LOGSTMT_DDL;
 			break;
 
