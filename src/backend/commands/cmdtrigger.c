@@ -65,13 +65,6 @@ CreateCmdTrigger(CreateCmdTrigStmt *stmt, const char *queryString)
 	 */
 	funcoid = LookupFuncName(stmt->funcname, 4, fargtypes, false);
 	funcrettype = get_func_rettype(funcoid);
-	if (funcrettype != BOOLOID)
-	{
-		ereport(ERROR,
-				(errcode(ERRCODE_INVALID_OBJECT_DEFINITION),
-				 errmsg("function %s must return type \"boolean\"",
-						NameListToString(stmt->funcname))));
-	}
 
 	/*
 	 * Generate the trigger's OID now, so that we can use it in the name if
@@ -155,6 +148,18 @@ CreateCmdTrigger(CreateCmdTrigStmt *stmt, const char *queryString)
             break;
 		}
 	}
+
+	if (ctgtype == CMD_TRIGGER_FIRED_BEFORE && funcrettype != BOOLOID)
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_OBJECT_DEFINITION),
+				 errmsg("function \"%s\" must return type \"boolean\"",
+						NameListToString(stmt->funcname))));
+
+	if (ctgtype != CMD_TRIGGER_FIRED_BEFORE && funcrettype != VOIDOID)
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_OBJECT_DEFINITION),
+				 errmsg("function \"%s\" must return type \"void\"",
+						NameListToString(stmt->funcname))));
 
 	/*
 	 * Build the new pg_trigger tuple.
