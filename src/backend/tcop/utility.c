@@ -339,10 +339,7 @@ ProcessUtility(Node *parsetree,
 
 	Assert(queryString != NULL);	/* required as of 8.4 */
 
-	if (ExecBeforeCommandTriggers(parsetree, commandTag) == false)
-		return;
-
-	if (ExecInsteadOfCommandTriggers(parsetree, commandTag) > 0)
+	if (ExecBeforeOrInsteadOfCommandTriggers(parsetree, commandTag) > 0)
 		return;
 
 	/*
