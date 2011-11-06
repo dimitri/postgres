@@ -7434,14 +7434,133 @@ _rwViewStmt(CommandContext cmd, ViewStmt *node)
 }
 
 static void
+_rwColQualList(StringInfo buf, List *constraints, const char *relname)
+{
+	ListCell   *lc;
+
+	foreach(lc, constraints)
+	{
+		Constraint *c = (Constraint *) lfirst(lc);
+
+		if (c->conname != NULL)
+			appendStringInfo(buf, " CONSTRAINT %s", c->conname);
+
+		switch (c->contype)
+		{
+			case CONSTR_NOTNULL:
+				appendStringInfo(buf, " NOT NULL");
+				break;
+
+			case CONSTR_NULL:
+				appendStringInfo(buf, " NULL");
+				break;
+
+			case CONSTR_UNIQUE:
+				appendStringInfo(buf, " UNIQUE");
+				if (c->indexspace != NULL)
+					appendStringInfo(buf, " USING INDEX TABLESPACE %s", c->indexspace);
+				break;
+
+			case CONSTR_PRIMARY:
+				appendStringInfo(buf, " PRIMARY KEY");
+				if (c->indexspace != NULL)
+					appendStringInfo(buf, " USING INDEX TABLESPACE %s", c->indexspace);
+				break;
+
+			case CONSTR_CHECK:
+			{
+				char	   *consrc;
+				List	   *context;
+
+				context = deparse_context_for(relname, InvalidOid);
+				consrc = deparse_expression_pretty(c->raw_expr, context, false, false, 0, 0);
+				appendStringInfo(buf, " CHECK (%s)", consrc);
+				break;
+			}
+
+			case CONSTR_DEFAULT:
+			{
+				char	   *consrc;
+				List	   *context;
+
+				context = deparse_context_for(relname, InvalidOid);
+				consrc = deparse_expression_pretty(c->raw_expr, context, false, false, 0, 0);
+				appendStringInfo(buf, " DEFAUT %s", consrc);
+				break;
+			}
+
+			case CONSTR_EXCLUSION:
+				appendStringInfo(buf, " EXCLUDE %s () ", c->access_method);
+				if (c->indexspace != NULL)
+					appendStringInfo(buf, " USING INDEX TABLESPACE %s", c->indexspace);
+				break;
+
+			case CONSTR_FOREIGN:
+				appendStringInfo(buf, " REFERENCES %s()", RangeVarToString(c->pktable));
+				break;
+
+			case CONSTR_ATTR_DEFERRABLE:
+				appendStringInfo(buf, " DEFERRABLE");
+				break;
+
+			case CONSTR_ATTR_NOT_DEFERRABLE:
+				appendStringInfo(buf, " NOT DEFERRABLE");
+				break;
+
+			case CONSTR_ATTR_DEFERRED:
+				appendStringInfo(buf, " INITIALLY DEFERRED");
+				break;
+
+			case CONSTR_ATTR_IMMEDIATE:
+				appendStringInfo(buf, " INITIALLY IMMEDIATE");
+				break;
+		}
+	}
+}
+
+static void
 _rwCreateStmt(CommandContext cmd, CreateStmt *node)
 {
+	ListCell   *lcmd;
 	StringInfoData buf;
 
 	initStringInfo(&buf);
 	appendStringInfo(&buf, "CREATE TABLE %s %s",
 					 RangeVarToString(node->relation),
 					 node->if_not_exists ? " IF NOT EXISTS" : "");
+
+	appendStringInfoChar(&buf, '(');
+
+	foreach(lcmd, node->tableElts)
+	{
+		Node *elmt = (Node *) lfirst(lcmd);
+
+		switch (nodeTag(elmt))
+		{
+			case T_ColumnDef:
+			{
+				ColumnDef  *c = (ColumnDef *) elmt;
+				appendStringInfo(&buf, "%s %s",
+								 c->colname,
+								 TypeNameToString(c->typeName));
+				_rwColQualList(&buf, c->constraints, node->relation->relname);
+				break;
+			}
+			case T_InhRelation:
+				break;
+
+			case T_Constraint:
+				break;
+
+			default:
+				/* Many nodeTags are not interesting as an
+				 * OptTableElementList
+				 */
+				break;
+		}
+	}
+	appendStringInfoChar(&buf, ')');
+	appendStringInfoChar(&buf, ';');
 
 	cmd->cmdstr = buf.data;
 	cmd->schemaname = node->relation->schemaname;
