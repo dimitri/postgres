@@ -7463,6 +7463,21 @@ _rwColQualList(StringInfo buf, List *constraints, const char *relname)
 
 			case CONSTR_PRIMARY:
 				appendStringInfo(buf, " PRIMARY KEY");
+				if (c->keys != NULL)
+				{
+					ListCell *k;
+					bool first = true;
+
+					appendStringInfoChar(buf, '(');
+					foreach(k, c->keys)
+					{
+						if (first) first = false;
+						else       appendStringInfoChar(buf, ',');
+
+						appendStringInfo(buf, "%s", strVal(lfirst(k)));
+					}
+					appendStringInfoChar(buf, ')');
+				}
 				if (c->indexspace != NULL)
 					appendStringInfo(buf, " USING INDEX TABLESPACE %s", c->indexspace);
 				break;
@@ -7547,17 +7562,25 @@ _rwCreateStmt(CommandContext cmd, CreateStmt *node)
 				break;
 			}
 			case T_InhRelation:
+			{
+				InhRelation  *r = (InhRelation *) elmt;
+				appendStringInfo(&buf, "%s", RangeVarToString(r->relation));
 				break;
-
+			}
 			case T_Constraint:
+			{
+				Constraint  *c = (Constraint *) elmt;
+				_rwColQualList(&buf, list_make1(c), node->relation->relname);
 				break;
-
+			}
 			default:
 				/* Many nodeTags are not interesting as an
 				 * OptTableElementList
 				 */
 				break;
 		}
+		if (lnext(lcmd) != NULL)
+			appendStringInfoChar(&buf, ',');
 	}
 	appendStringInfoChar(&buf, ')');
 	appendStringInfoChar(&buf, ';');
