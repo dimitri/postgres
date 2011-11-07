@@ -1443,3 +1443,36 @@ NOTICE:  drop cascades to 2 other objects
 DETAIL:  drop cascades to view city_view
 drop cascades to view european_city_view
 DROP TABLE country_table;
+CREATE FUNCTION cmdtrigger_notice
+ (
+   IN cmd_string     text,
+   IN cmd_nodestring text,
+   IN schemaname     text,
+   IN relname        text
+ )
+ RETURNS void
+ LANGUAGE plpgsql
+AS $$
+BEGIN
+  RAISE NOTICE 'cmd_string: %', cmd_string;
+END;
+$$;
+CREATE TRIGGER cmdtrigger_notice
+        AFTER COMMAND CREATE TABLE
+       EXECUTE PROCEDURE cmdtrigger_notice();
+CREATE TRIGGER cmdtrigger_notice
+        AFTER COMMAND DROP TABLE
+       EXECUTE PROCEDURE cmdtrigger_notice();
+-- that should error out as you can't have both INSTEAD OF command triggers
+-- and BEFORE|AFTER triggers defined on the same command
+CREATE TRIGGER cmdtrigger_notice_error
+    INSTEAD OF COMMAND DROP TABLE
+       EXECUTE PROCEDURE cmdtrigger_notice();
+ERROR:  "DROP TABLE" already has AFTER triggers
+DETAIL:  Commands cannot have both AFTER and INSTEAD OF triggers.
+CREATE TABLE foo(a serial, b text, primary key (a, b));
+NOTICE:  CREATE TABLE will create implicit sequence "foo_a_seq" for serial column "foo.a"
+NOTICE:  CREATE TABLE / PRIMARY KEY will create implicit index "foo_pkey" for table "foo"
+NOTICE:  cmd_string: CREATE TABLE foo (a serial,b text, PRIMARY KEY(a,b));
+DROP TABLE foo;
+NOTICE:  cmd_string: DROP TABLE foo RESTRICT;

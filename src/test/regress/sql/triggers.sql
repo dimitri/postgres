@@ -961,3 +961,35 @@ SELECT * FROM city_view;
 
 DROP TABLE city_table CASCADE;
 DROP TABLE country_table;
+
+CREATE FUNCTION cmdtrigger_notice
+ (
+   IN cmd_string     text,
+   IN cmd_nodestring text,
+   IN schemaname     text,
+   IN relname        text
+ )
+ RETURNS void
+ LANGUAGE plpgsql
+AS $$
+BEGIN
+  RAISE NOTICE 'cmd_string: %', cmd_string;
+END;
+$$;
+
+CREATE TRIGGER cmdtrigger_notice
+        AFTER COMMAND CREATE TABLE
+       EXECUTE PROCEDURE cmdtrigger_notice();
+
+CREATE TRIGGER cmdtrigger_notice
+        AFTER COMMAND DROP TABLE
+       EXECUTE PROCEDURE cmdtrigger_notice();
+
+-- that should error out as you can't have both INSTEAD OF command triggers
+-- and BEFORE|AFTER triggers defined on the same command
+CREATE TRIGGER cmdtrigger_notice_error
+    INSTEAD OF COMMAND DROP TABLE
+       EXECUTE PROCEDURE cmdtrigger_notice();
+
+CREATE TABLE foo(a serial, b text, primary key (a, b));
+DROP TABLE foo;
