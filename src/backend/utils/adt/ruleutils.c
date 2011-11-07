@@ -7571,7 +7571,7 @@ _rwColQualList(StringInfo buf, List *constraints, const char *relname)
 				List	   *context;
 
 				context = deparse_context_for(relname, InvalidOid);
-				consrc = deparse_expression_pretty(c->raw_expr, context, false, false, 0, 0);
+				consrc = deparse_expression(c->raw_expr, context, false, false);
 				appendStringInfo(buf, " CHECK (%s)", consrc);
 				break;
 			}
@@ -7582,7 +7582,7 @@ _rwColQualList(StringInfo buf, List *constraints, const char *relname)
 				List	   *context;
 
 				context = deparse_context_for(relname, InvalidOid);
-				consrc = deparse_expression_pretty(c->raw_expr, context, false, false, 0, 0);
+				consrc = deparse_expression(c->raw_expr, context, false, false);
 				appendStringInfo(buf, " DEFAUT %s", consrc);
 				break;
 			}
