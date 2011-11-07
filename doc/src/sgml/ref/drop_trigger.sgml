@@ -22,6 +22,18 @@ PostgreSQL documentation
  <refsynopsisdiv>
 <synopsis>
 DROP TRIGGER [ IF EXISTS ] <replaceable class="PARAMETER">name</replaceable> ON <replaceable class="PARAMETER">table</replaceable> [ CASCADE | RESTRICT ]
+DROP TRIGGER [ IF EXISTS ] <replaceable class="PARAMETER">name</replaceable> ON COMMAND <replaceable class="PARAMETER">command</replaceable> [ CASCADE | RESTRICT ]
+
+<phrase>where <replaceable class="parameter">command</replaceable> can be one of:</phrase>
+
+    CREATE TABLE
+    ALTER TABLE
+    DROP TABLE
+    CREATE VIEW
+    DROP VIEW
+    CREATE EXTENSION
+    DROP EXTENSION
+
 </synopsis>
  </refsynopsisdiv>
 
@@ -29,9 +41,10 @@ DROP TRIGGER [ IF EXISTS ] <replaceable class="PARAMETER">name</replaceable> ON 
   <title>Description</title>
 
   <para>
-   <command>DROP TRIGGER</command> removes an existing
-   trigger definition. To execute this command, the current
-   user must be the owner of the table for which the trigger is defined.
+   <command>DROP TRIGGER</command> removes an existing trigger definition.
+   To execute this command, the current user must be the owner of the table
+   for which the trigger is defined, or a database owner in case of a
+   command trigger.
   </para>
  </refsect1>
 

@@ -29,12 +29,26 @@ CREATE [ CONSTRAINT ] TRIGGER <replaceable class="PARAMETER">name</replaceable> 
     [ WHEN ( <replaceable class="parameter">condition</replaceable> ) ]
     EXECUTE PROCEDURE <replaceable class="PARAMETER">function_name</replaceable> ( <replaceable class="PARAMETER">arguments</replaceable> )
 
+CREATE TRIGGER <replaceable class="PARAMETER">name</replaceable> { BEFORE | AFTER | INSTEAD OF } COMMAND <replaceable class="PARAMETER">command</replaceable>
+    EXECUTE PROCEDURE <replaceable class="PARAMETER">function_name</replaceable> ( <replaceable class="PARAMETER">arguments</replaceable> )
+
 <phrase>where <replaceable class="parameter">event</replaceable> can be one of:</phrase>
 
     INSERT
     UPDATE [ OF <replaceable class="parameter">column_name</replaceable> [, ... ] ]
     DELETE
     TRUNCATE
+
+<phrase>and where <replaceable class="parameter">command</replaceable> can be one of:</phrase>
+
+    CREATE TABLE
+    ALTER TABLE
+    DROP TABLE
+    CREATE VIEW
+    DROP VIEW
+    CREATE EXTENSION
+    DROP EXTENSION
+
 </synopsis>
  </refsynopsisdiv>
 
@@ -42,10 +56,20 @@ CREATE [ CONSTRAINT ] TRIGGER <replaceable class="PARAMETER">name</replaceable> 
   <title>Description</title>
 
   <para>
-   <command>CREATE TRIGGER</command> creates a new trigger.  The
-   trigger will be associated with the specified table or view and will
-   execute the specified function <replaceable
-   class="parameter">function_name</replaceable> when certain events occur.
+   <command>CREATE TRIGGER</command> creates a new trigger. The trigger will
+   be associated with the specified table, view or command and will execute
+   the specified
+   function <replaceable class="parameter">function_name</replaceable> when
+   certain events occur.
+  </para>
+
+  <para>
+   The command trigger can be specified to fire before or after the command
+   is executed, or instead of executing the command. A before trigger's
+   function must return a boolean, returning <literal>False</literal> allows
+   the procedure to prevent the command execution. AFTER and INSTEAD OF
+   triggers return value is not used, such trigger's function must then
+   return <literal>void</literal>.
   </para>
 
   <para>
@@ -251,6 +275,15 @@ UPDATE OF <replaceable>column_name1</replaceable> [, <replaceable>column_name2</
    </varlistentry>
 
    <varlistentry>
+    <term><replaceable class="parameter">command</replaceable></term>
+    <listitem>
+     <para>
+      The tag of the command the trigger is for.
+     </para>
+    </listitem>
+   </varlistentry>
+
+   <varlistentry>
     <term><replaceable class="PARAMETER">referenced_table_name</replaceable></term>
     <listitem>
      <para>
@@ -334,7 +367,23 @@ UPDATE OF <replaceable>column_name1</replaceable> [, <replaceable>column_name2</
      <para>
       A user-supplied function that is declared as taking no arguments
       and returning type <literal>trigger</>, which is executed when
-      the trigger fires.
+      the trigger fires, for table and view triggers.
+     </para>
+     <para>
+      In the case of a BEFORE COMMAND trigger, the user-supplied function
+      must be declared as taking 4 text arguments and returning a boolean.
+      In the case of an AFTER COMMAND trigger or an INSTEAD OF trigger, the
+      user-supplied function must be declare as taking 4 text arguments and
+      returning void.
+     </para>
+     <para>
+      The command trigger function is called with the
+      parameters <literal>command string</literal> (normalized command
+      string rewritten by PostgreSQL), <literal>command node
+      string</literal> (the command syntax tree, in its text form, is easier
+      to deal with programmaticaly for more complex inquiries about the
+      command), <literal>schemaname</literal> (can be null)
+      and <literal>object name</literal>.
      </para>
     </listitem>
    </varlistentry>
@@ -351,6 +400,10 @@ UPDATE OF <replaceable>column_name1</replaceable> [, <replaceable>column_name2</
       language of the trigger function to find out how these arguments
       can be accessed within the function; it might be different from
       normal function arguments.
+     </para>
+     <para>
+      Command triggers pay no attention to
+      the <replaceable class="parameter">arguments</replaceable>.
      </para>
     </listitem>
    </varlistentry>
@@ -469,6 +522,35 @@ CREATE TRIGGER view_insert
     FOR EACH ROW
     EXECUTE PROCEDURE view_insert_row();
 </programlisting>
+
+   Execute the function <function>enforce_local_style</> each time
+   a <literal>CREATE TABLE</literal> command is run:
+
+<programlisting>
+CREATE OR REPLACE FUNCTION enforce_local_style
+ (
+   IN cmd_string     text,
+   IN cmd_nodestring text,
+   IN schemaname     text,
+   IN relname        text
+ )
+ RETURNS bool
+ LANGUAGE plpgsql
+AS $$
+BEGIN
+  IF substring(relname, 0, 4) NOT IN ('ab_', 'cz_', 'fr_')
+  THEN
+    RAISE WARNING 'invalid relation name: %', relname;
+    RETURN FALSE;
+  END IF;
+  RETURN TRUE;
+END;
+$$;
+
+CREATE TRIGGER check_style
+        BEFORE COMMAND CREATE TABLE
+       EXECUTE PROCEDURE enforce_local_style();
+</programlisting>
   </para>
 
   <para>
@@ -528,6 +610,11 @@ CREATE TRIGGER view_insert
    updates during an update that is caused by a referential action.  This can
    lead to constraint violations or stored data that does not honor the
    referential constraint.
+  </para>
+
+  <para>
+   The ability to run triggers on commands is <productname>PostgreSQL</>
+   extension of the SQL standard.
   </para>
 
   <para>
