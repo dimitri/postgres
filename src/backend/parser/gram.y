@@ -4250,9 +4250,11 @@ CreateCmdTrigStmt:
 trigger_command:
 			CREATE TABLE						{ $$ = "CREATE TABLE"; }
 			| ALTER TABLE						{ $$ = "ALTER TABLE"; }
+			| DROP TABLE						{ $$ = "DROP TABLE"; }
 			| CREATE VIEW						{ $$ = "CREATE VIEW"; }
-			| ALTER VIEW						{ $$ = "ALTER VIEW"; }
+			| DROP VIEW							{ $$ = "DROP VIEW"; }
 			| CREATE EXTENSION					{ $$ = "CREATE EXTENSION"; }
+			| DROP EXTENSION					{ $$ = "DROP EXTENSION"; }
 		;
 
 DropCmdTrigStmt:

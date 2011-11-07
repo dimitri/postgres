@@ -7381,6 +7381,91 @@ relkindToString(ObjectType relkind)
 }
 
 static void
+_maybeAddSeparator(StringInfo buf, const char *sep, bool *first)
+{
+	if (*first) *first = false;
+	else        appendStringInfoString(buf, sep);
+}
+
+/*
+ * The DROP statement is "generic" as in supporting multiple object types. The
+ * specialized part is only finding the names of the objects dropped.
+ *
+ * Also the easiest way to get the command prefix is to use the command tag.
+ */
+static void
+_rwDropStmt(CommandContext cmd, DropStmt *node)
+{
+	StringInfoData buf;
+	ListCell *obj;
+	bool first = true;
+
+	initStringInfo(&buf);
+	appendStringInfo(&buf, "%s ", cmd->tag);
+
+	foreach(obj, node->objects)
+	{
+		switch (node->removeType)
+		{
+			case OBJECT_TABLE:
+			case OBJECT_SEQUENCE:
+			case OBJECT_VIEW:
+			case OBJECT_INDEX:
+			case OBJECT_FOREIGN_TABLE:
+			{
+				RangeVar *rel = makeRangeVarFromNameList((List *) lfirst(obj));
+				_maybeAddSeparator(&buf, ", ", &first);
+				appendStringInfoString(&buf, RangeVarToString(rel));
+
+				cmd->schemaname = rel->schemaname;
+				cmd->objectname = rel->relname;
+				break;
+			}
+
+			case OBJECT_TYPE:
+			case OBJECT_DOMAIN:
+			{
+				TypeName *typename = makeTypeNameFromNameList((List *) obj);
+				_maybeAddSeparator(&buf, ", ", &first);
+				appendStringInfoString(&buf, TypeNameToString(typename));
+
+				if (list_nth((List *) obj, 1) == NIL)
+				{
+					cmd->schemaname = NULL;
+					cmd->objectname = strVal(linitial((List *) obj));
+				}
+				else
+				{
+					cmd->schemaname = strVal(list_nth((List *) obj, 0));
+					cmd->objectname = strVal(list_nth((List *) obj, 1));
+				}
+				break;
+			}
+
+			/* case OBJECT_COLLATION: */
+			/* case OBJECT_CONVERSION: */
+			/* case OBJECT_SCHEMA: */
+			/* case OBJECT_EXTENSION: */
+			default:
+			{
+				char *name = strVal(linitial((List *) obj));
+				_maybeAddSeparator(&buf, ", ", &first);
+				appendStringInfoString(&buf, name);
+
+				cmd->schemaname = NULL;
+				cmd->objectname = name;
+				break;
+			}
+		}
+	}
+	appendStringInfo(&buf, "%s %s;",
+					 node->missing_ok ? " IF EXISTS":"",
+					 node->behavior == DROP_CASCADE ? "CASCADE" : "RESTRICT");
+
+	cmd->cmdstr = buf.data;
+}
+
+static void
 _rwCreateExtensionStmt(CommandContext cmd, CreateExtensionStmt *node)
 {
 	StringInfoData buf;
@@ -7471,9 +7556,7 @@ _rwColQualList(StringInfo buf, List *constraints, const char *relname)
 					appendStringInfoChar(buf, '(');
 					foreach(k, c->keys)
 					{
-						if (first) first = false;
-						else       appendStringInfoChar(buf, ',');
-
+						_maybeAddSeparator(buf, ",", &first);
 						appendStringInfo(buf, "%s", strVal(lfirst(k)));
 					}
 					appendStringInfoChar(buf, ')');
@@ -7607,10 +7690,7 @@ _rwAlterTableStmt(CommandContext cmd, AlterTableStmt *node)
 		AlterTableCmd *cmd = (AlterTableCmd *) lfirst(lcmd);
 		ColumnDef  *def = (ColumnDef *) cmd->def;
 
-		if (first)
-			first = false;
-		else
-			appendStringInfoString(&buf, ", ");
+		_maybeAddSeparator(&buf, ", ", &first);
 
 		switch (cmd->subtype)
 		{
@@ -7831,6 +7911,10 @@ pg_get_cmddef(CommandContext cmd, void *parsetree)
 
 	switch (nodeTag(parsetree))
 	{
+		case T_DropStmt:
+			_rwDropStmt(cmd, parsetree);
+			break;
+
 		case T_CreateStmt:
 			_rwCreateStmt(cmd, parsetree);
 			break;

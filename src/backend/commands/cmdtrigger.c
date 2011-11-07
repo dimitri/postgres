@@ -486,6 +486,7 @@ ExecBeforeCommandTriggers(Node *parsetree, const char *cmdtag,
 	oldContext = MemoryContextSwitchTo(per_command_context);
 	MemoryContextReset(per_command_context);
 
+	cmd.tag = cmdtag;
 	pg_get_cmddef(&cmd, parsetree);
 
 	while (cont && InvalidOid != (proc = procs[cur++]))
@@ -522,6 +523,7 @@ ExecInsteadOfCommandTriggers(Node *parsetree, const char *cmdtag,
 	oldContext = MemoryContextSwitchTo(per_command_context);
 	MemoryContextReset(per_command_context);
 
+	cmd.tag = cmdtag;
 	pg_get_cmddef(&cmd, parsetree);
 
 	while (InvalidOid != (proc = procs[cur++]))
@@ -556,6 +558,7 @@ ExecAfterCommandTriggers(Node *parsetree, const char *cmdtag)
 
 	oldContext = MemoryContextSwitchTo(per_command_context);
 
+	cmd.tag = cmdtag;
 	pg_get_cmddef(&cmd, parsetree);
 
 	while (InvalidOid != (proc = procs[cur++]))

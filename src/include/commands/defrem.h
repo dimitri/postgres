@@ -188,6 +188,7 @@ extern DefElem *defWithOids(bool value);
 /* utils/adt/ruleutils.c -- FIXME, find a better place */
 typedef struct CommandContextData
 {
+	char *tag;					/* Command Tag */
 	char *cmdstr;				/* Command String, rewritten by ruleutils */
 	char *nodestr;				/* nodeToString(parsetree) */
 	char *schemaname;			/* schemaname or NULL if not relevant */
