@@ -1476,3 +1476,5 @@ NOTICE:  CREATE TABLE / PRIMARY KEY will create implicit index "foo_pkey" for ta
 NOTICE:  cmd_string: CREATE TABLE foo (a serial,b text, PRIMARY KEY(a,b));
 DROP TABLE foo;
 NOTICE:  cmd_string: DROP TABLE foo RESTRICT;
+DROP TRIGGER cmdtrigger_notice ON COMMAND CREATE TABLE;
+DROP TRIGGER cmdtrigger_notice ON COMMAND DROP TABLE;

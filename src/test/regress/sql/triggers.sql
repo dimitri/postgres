@@ -993,3 +993,6 @@ CREATE TRIGGER cmdtrigger_notice_error
 
 CREATE TABLE foo(a serial, b text, primary key (a, b));
 DROP TABLE foo;
+
+DROP TRIGGER cmdtrigger_notice ON COMMAND CREATE TABLE;
+DROP TRIGGER cmdtrigger_notice ON COMMAND DROP TABLE;
