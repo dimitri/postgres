@@ -255,6 +255,173 @@ _readDeclareCursorStmt(void)
 }
 
 /*
+ * _readCreateStmt
+ */
+static CreateStmt *
+_readCreateStmt(void)
+{
+	READ_LOCALS(CreateStmt);
+
+	READ_NODE_FIELD(relation);
+	READ_NODE_FIELD(tableElts);
+	READ_NODE_FIELD(inhRelations);
+	READ_NODE_FIELD(ofTypename);
+	READ_NODE_FIELD(constraints);
+	READ_NODE_FIELD(options);
+	READ_ENUM_FIELD(oncommit, OnCommitAction);
+	READ_STRING_FIELD(tablespacename);
+	READ_BOOL_FIELD(if_not_exists);
+
+	READ_DONE();
+}
+
+/*
+ * _readDropStmt
+ */
+static DropStmt *
+_readDropStmt(void)
+{
+	READ_LOCALS(DropStmt);
+
+	READ_NODE_FIELD(objects);
+	READ_ENUM_FIELD(removeType,ObjectType);
+	READ_ENUM_FIELD(behavior,DropBehavior);
+	READ_BOOL_FIELD(missing_ok);
+
+	READ_DONE();
+}
+
+/*
+ * _readTypeName
+ */
+static TypeName *
+_readTypeName(void)
+{
+	READ_LOCALS(TypeName);
+
+	READ_NODE_FIELD(names);
+	READ_OID_FIELD(typeOid);
+	READ_BOOL_FIELD(setof);
+	READ_BOOL_FIELD(pct_type);
+	READ_NODE_FIELD(typmods);
+	READ_INT_FIELD(typemod);
+	READ_NODE_FIELD(arrayBounds);
+	READ_LOCATION_FIELD(location);
+
+	READ_DONE();
+}
+
+/*
+ * _readColumnDef
+ */
+static ColumnDef *
+_readColumnDef(void)
+{
+	READ_LOCALS(ColumnDef);
+
+	READ_STRING_FIELD(colname);
+	READ_NODE_FIELD(typeName);
+	READ_INT_FIELD(inhcount);
+	READ_BOOL_FIELD(is_local);
+	READ_BOOL_FIELD(is_not_null);
+	READ_BOOL_FIELD(is_from_type);
+	READ_CHAR_FIELD(storage);
+	READ_NODE_FIELD(raw_default);
+	READ_NODE_FIELD(cooked_default);
+	READ_NODE_FIELD(collClause);
+	READ_OID_FIELD(collOid);
+	READ_NODE_FIELD(constraints);
+	READ_NODE_FIELD(fdwoptions);
+
+	READ_DONE();
+}
+
+/*
+ * _readConstraint
+ */
+static Constraint *
+_readConstraint(void)
+{
+	READ_LOCALS(Constraint);
+
+	READ_STRING_FIELD(conname);
+	READ_BOOL_FIELD(deferrable);
+	READ_BOOL_FIELD(initdeferred);
+	READ_LOCATION_FIELD(location);
+
+	/* READ_ENUM_FIELD(contype,ConstrType); */
+
+	token = pg_strtok(&length); /* skip :constraint */
+	token = pg_strtok(&length); /* get field value */
+
+	if (strncmp(token, "NULL", 4) == 0)
+		local_node->contype = CONSTR_NULL;
+	else if (strncmp(token, "NOT_NULL", 8) == 0)
+		local_node->contype = CONSTR_NOTNULL;
+	else if (strncmp(token, "DEFAULT", 7) == 0)
+	{
+		local_node->contype = CONSTR_DEFAULT;
+		READ_NODE_FIELD(raw_expr);
+		READ_STRING_FIELD(cooked_expr);
+	}
+	else if (strncmp(token, "CHECK", 7) == 0)
+	{
+		local_node->contype = CONSTR_CHECK;
+		READ_NODE_FIELD(raw_expr);
+		READ_STRING_FIELD(cooked_expr);
+	}
+	else if (strncmp(token, "PRIMARY_KEY", 11) == 0)
+	{
+		local_node->contype = CONSTR_PRIMARY;
+		READ_NODE_FIELD(keys);
+		READ_NODE_FIELD(options);
+		READ_STRING_FIELD(indexname);
+		READ_STRING_FIELD(indexspace);
+	}
+	else if (strncmp(token, "UNIQUE", 6) == 0)
+	{
+		local_node->contype = CONSTR_UNIQUE;
+		READ_NODE_FIELD(keys);
+		READ_NODE_FIELD(options);
+		READ_STRING_FIELD(indexname);
+		READ_STRING_FIELD(indexspace);
+	}
+	else if (strncmp(token, "EXCLUSION", 9) == 0)
+	{
+		local_node->contype = CONSTR_EXCLUSION;
+		READ_NODE_FIELD(exclusions);
+		READ_NODE_FIELD(keys);
+		READ_NODE_FIELD(options);
+		READ_STRING_FIELD(indexname);
+		READ_STRING_FIELD(indexspace);
+	}
+	else if (strncmp(token, "FOREIGN_KEY", 11) == 0)
+	{
+		local_node->contype = CONSTR_FOREIGN;
+		READ_NODE_FIELD(pktable);
+		READ_NODE_FIELD(fk_attrs);
+		READ_NODE_FIELD(pk_attrs);
+		READ_CHAR_FIELD(fk_matchtype);
+		READ_CHAR_FIELD(fk_upd_action);
+		READ_CHAR_FIELD(fk_del_action);
+		READ_BOOL_FIELD(skip_validation);
+		READ_BOOL_FIELD(initially_valid);
+	}
+	else if (strncmp(token, "ATTR_DEFERRABLE", 15) == 0)
+		local_node->contype = CONSTR_ATTR_DEFERRABLE;
+	else if (strncmp(token, "ATTR_NOT_DEFERRABLE", 19) == 0)
+		local_node->contype = CONSTR_ATTR_NOT_DEFERRABLE;
+	else if (strncmp(token, "ATTR_DEFERRED", 13) == 0)
+		local_node->contype = CONSTR_ATTR_DEFERRED;
+	else if (strncmp(token, "ATTR_IMMEDIATE", 14) == 0)
+		local_node->contype = CONSTR_ATTR_IMMEDIATE;
+	else
+		elog(ERROR, "unrecognized constraint type: %d",
+			 (int) local_node->contype);
+	READ_DONE();
+}
+
+/*
  * _readSortGroupClause
  */
 static SortGroupClause *
@@ -1253,6 +1420,16 @@ parseNodeString(void)
 
 	if (MATCH("QUERY", 5))
 		return_value = _readQuery();
+	else if (MATCH("CREATESTMT", 10))
+		return_value = _readCreateStmt();
+	else if (MATCH("DROPSTMT", 8))
+		return_value = _readDropStmt();
+	else if (MATCH("TYPENAME", 8))
+		return_value = _readTypeName();
+	else if (MATCH("COLUMNDEF", 9))
+		return_value = _readColumnDef();
+	else if (MATCH("CONSTRAINT", 10))
+		return_value = _readConstraint();
 	else if (MATCH("SORTGROUPCLAUSE", 15))
 		return_value = _readSortGroupClause();
 	else if (MATCH("WINDOWCLAUSE", 12))

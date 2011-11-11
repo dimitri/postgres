@@ -2126,6 +2126,17 @@ _outCreateForeignTableStmt(StringInfo str, CreateForeignTableStmt *node)
 }
 
 static void
+_outDropStmt(StringInfo str, DropStmt *node)
+{
+	WRITE_NODE_TYPE("DROPSTMT");
+
+	WRITE_NODE_FIELD(objects);
+	WRITE_ENUM_FIELD(removeType,ObjectType);
+	WRITE_ENUM_FIELD(behavior,DropBehavior);
+	WRITE_BOOL_FIELD(missing_ok);
+}
+
+static void
 _outCommentStmt(StringInfo str, CommentStmt *node)
 {
 	WRITE_NODE_TYPE("COMMENTSTMT");
@@ -3398,6 +3409,9 @@ _outNode(StringInfo str, void *obj)
 				break;
 			case T_CreateForeignTableStmt:
 				_outCreateForeignTableStmt(str, obj);
+				break;
+			case T_DropStmt:
+				_outDropStmt(str, obj);
 				break;
 			case T_CommentStmt:
 				_outCommentStmt(str, obj);

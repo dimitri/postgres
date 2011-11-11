@@ -7901,8 +7901,9 @@ _rwAlterTableStmt(CommandContext cmd, AlterTableStmt *node)
 void
 pg_get_cmddef(CommandContext cmd, void *parsetree)
 {
-	/* cmd->nodestr = nodeToString(parsetree); */
-	cmd->nodestr = NULL;
+	cmd->nodestr = nodeToString(parsetree);
+	/* elog(NOTICE, "nodeToString: %s", cmd->nodestr); */
+	stringToNode(cmd->nodestr);
 
 	/*
 	 * we need the big'o'switch here, and calling a specialized function per
