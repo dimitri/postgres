@@ -268,6 +268,56 @@ RemoveCmdTriggerById(Oid trigOid)
 }
 
 /*
+ * ALTER TRIGGER foo ON COMMAND ... ENABLE|DISABLE|ENABLE ALWAYS|REPLICA
+ */
+void
+AlterCmdTrigger(AlterCmdTrigStmt *stmt)
+{
+	Relation	tgrel;
+	SysScanDesc tgscan;
+	ScanKeyData skey[2];
+	HeapTuple	tup;
+	Form_pg_cmdtrigger cmdForm;
+	char        tgenabled = pstrdup(stmt->tgenabled)[0]; /* works with gram.y */
+
+	tgrel = heap_open(CmdTriggerRelationId, AccessShareLock);
+
+	ScanKeyInit(&skey[0],
+				Anum_pg_cmdtrigger_ctgcommand,
+				BTEqualStrategyNumber, F_NAMEEQ,
+				CStringGetDatum(stmt->command));
+	ScanKeyInit(&skey[1],
+				Anum_pg_cmdtrigger_ctgname,
+				BTEqualStrategyNumber, F_NAMEEQ,
+				CStringGetDatum(stmt->trigname));
+
+	tgscan = systable_beginscan(tgrel, CmdTriggerCommandNameIndexId, true,
+								SnapshotNow, 2, skey);
+
+	tup = systable_getnext(tgscan);
+
+	if (!HeapTupleIsValid(tup))
+		ereport(ERROR,
+				(errcode(ERRCODE_UNDEFINED_OBJECT),
+				 errmsg("trigger \"%s\" for command \"%s\" does not exist, skipping",
+						stmt->trigname, stmt->command)));
+
+	/* Copy tuple so we can modify it below */
+	tup = heap_copytuple(tup);
+	cmdForm = (Form_pg_cmdtrigger) GETSTRUCT(tup);
+
+	systable_endscan(tgscan);
+
+	cmdForm->ctgenabled = tgenabled;
+
+	simple_heap_update(tgrel, &tup->t_self, tup);
+	CatalogUpdateIndexes(tgrel, tup);
+
+	heap_close(tgrel, AccessShareLock);
+	heap_freetuple(tup);
+}
+
+/*
  * get_cmdtrigger_oid - Look up a trigger by name to find its OID.
  *
  * If missing_ok is false, throw an error if trigger not found.  If
@@ -372,7 +422,10 @@ list_triggers_for_command(const char *command, char type)
 	{
 		Form_pg_cmdtrigger cmd = (Form_pg_cmdtrigger) GETSTRUCT(tuple);
 
-		if (cmd->ctgtype == type)
+        /*
+		 * Replica support for command triggers is still on the TODO
+		 */
+		if (cmd->ctgenabled != 'D' && cmd->ctgtype == type)
 		{
 			if (count == size)
 			{

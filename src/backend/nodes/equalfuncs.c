@@ -1859,6 +1859,16 @@ _equalDropCmdTrigStmt(DropCmdTrigStmt *a, DropCmdTrigStmt *b)
 }
 
 static bool
+_equalAlterCmdTrigStmt(AlterCmdTrigStmt *a, AlterCmdTrigStmt *b)
+{
+	COMPARE_STRING_FIELD(command);
+	COMPARE_STRING_FIELD(trigname);
+	COMPARE_STRING_FIELD(tgenabled);
+
+	return true;
+}
+
+static bool
 _equalCreatePLangStmt(CreatePLangStmt *a, CreatePLangStmt *b)
 {
 	COMPARE_SCALAR_FIELD(replace);
@@ -2976,6 +2986,9 @@ equal(void *a, void *b)
 			break;
 		case T_DropCmdTrigStmt:
 			retval = _equalDropCmdTrigStmt(a, b);
+			break;
+		case T_AlterCmdTrigStmt:
+			retval = _equalAlterCmdTrigStmt(a, b);
 			break;
 		case T_CreatePLangStmt:
 			retval = _equalCreatePLangStmt(a, b);

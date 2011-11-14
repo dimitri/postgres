@@ -292,6 +292,36 @@ _readDropStmt(void)
 }
 
 /*
+ * _readCreateExtensionStmt
+ */
+static CreateExtensionStmt *
+_readCreateExtensionStmt(void)
+{
+	READ_LOCALS(CreateExtensionStmt);
+
+	READ_STRING_FIELD(extname);
+	READ_BOOL_FIELD(if_not_exists);
+	READ_NODE_FIELD(options);
+
+	READ_DONE();
+}
+
+/*
+ * _readAlterCmdTrigStmt
+ */
+static AlterCmdTrigStmt *
+_readAlterCmdTrigStmt(void)
+{
+	READ_LOCALS(AlterCmdTrigStmt);
+
+	READ_STRING_FIELD(command);
+	READ_STRING_FIELD(trigname);
+	READ_CHAR_FIELD(tgenabled);
+
+	READ_DONE();
+}
+
+/*
  * _readTypeName
  */
 static TypeName *
@@ -1424,6 +1454,10 @@ parseNodeString(void)
 		return_value = _readCreateStmt();
 	else if (MATCH("DROPSTMT", 8))
 		return_value = _readDropStmt();
+	else if (MATCH("CREATEEXTENSIONSTMT", 19))
+		return_value = _readCreateExtensionStmt();
+	else if (MATCH("ALTERCMDTRIGSTMT", 16))
+		return_value = _readAlterCmdTrigStmt();
 	else if (MATCH("TYPENAME", 8))
 		return_value = _readTypeName();
 	else if (MATCH("COLUMNDEF", 9))

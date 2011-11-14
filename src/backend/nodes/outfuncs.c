@@ -2689,6 +2689,16 @@ _outRangeTblEntry(StringInfo str, RangeTblEntry *node)
 }
 
 static void
+_outAlterCmdTrigStmt(StringInfo str, AlterCmdTrigStmt *node)
+{
+	WRITE_NODE_TYPE("ALTERCMDTRIGSTMT");
+
+	WRITE_STRING_FIELD(command);
+	WRITE_STRING_FIELD(trigname);
+	WRITE_STRING_FIELD(tgenabled);
+}
+
+static void
 _outAExpr(StringInfo str, A_Expr *node)
 {
 	WRITE_NODE_TYPE("AEXPR");
@@ -3502,6 +3512,9 @@ _outNode(StringInfo str, void *obj)
 				break;
 			case T_RangeTblEntry:
 				_outRangeTblEntry(str, obj);
+				break;
+			case T_AlterCmdTrigStmt:
+				_outAlterCmdTrigStmt(str, obj);
 				break;
 			case T_A_Expr:
 				_outAExpr(str, obj);

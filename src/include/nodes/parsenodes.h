@@ -1754,6 +1754,19 @@ typedef struct CreateCmdTrigStmt
 } CreateCmdTrigStmt;
 
 /* ----------------------
+ *		Alter COMMAND TRIGGER Statement
+ * ----------------------
+ */
+typedef struct AlterCmdTrigStmt
+{
+	NodeTag		type;
+	char	   *command;		/* command's name */
+	char	   *trigname;		/* TRIGGER's name */
+	char       *tgenabled;		/* trigger's firing configuration WRT
+								 * session_replication_role */
+} AlterCmdTrigStmt;
+
+/* ----------------------
  *		Create/Drop PROCEDURAL LANGUAGE Statements
  * ----------------------
  */

@@ -3553,6 +3553,18 @@ _copyDropCmdTrigStmt(DropCmdTrigStmt *from)
 	return newnode;
 }
 
+static AlterCmdTrigStmt *
+_copyAlterCmdTrigStmt(AlterCmdTrigStmt *from)
+{
+	AlterCmdTrigStmt *newnode = makeNode(AlterCmdTrigStmt);
+
+	COPY_STRING_FIELD(command);
+	COPY_STRING_FIELD(trigname);
+	COPY_STRING_FIELD(tgenabled);
+
+	return newnode;
+}
+
 static CreatePLangStmt *
 _copyCreatePLangStmt(CreatePLangStmt *from)
 {
@@ -4453,6 +4465,9 @@ copyObject(void *from)
 			break;
 		case T_DropCmdTrigStmt:
 			retval = _copyDropCmdTrigStmt(from);
+			break;
+		case T_AlterCmdTrigStmt:
+			retval = _copyAlterCmdTrigStmt(from);
 			break;
 		case T_CreatePLangStmt:
 			retval = _copyCreatePLangStmt(from);

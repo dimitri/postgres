@@ -195,6 +195,7 @@ static void processCASbits(int cas_bits, int location, const char *constrType,
 }
 
 %type <node>	stmt schema_stmt
+		AlterCmdTrigStmt
 		AlterDatabaseStmt AlterDatabaseSetStmt AlterDomainStmt AlterEnumStmt
 		AlterFdwStmt AlterForeignServerStmt AlterGroupStmt
 		AlterObjectSchemaStmt AlterOwnerStmt AlterSeqStmt AlterTableStmt
@@ -268,7 +269,7 @@ static void processCASbits(int cas_bits, int location, const char *constrType,
 %type <list>	TriggerEvents TriggerOneEvent
 %type <value>	TriggerFuncArg
 %type <node>	TriggerWhen
-%type <str>		trigger_command
+%type <str>		trigger_command enable_trigger
 
 %type <str>		copy_file_name
 				database_name access_method_clause access_method attr_name
@@ -677,7 +678,8 @@ stmtmulti:	stmtmulti ';' stmt
 		;
 
 stmt :
-			AlterDatabaseStmt
+			AlterCmdTrigStmt
+			| AlterDatabaseStmt
 			| AlterDatabaseSetStmt
 			| AlterDefaultPrivilegesStmt
 			| AlterDomainStmt
@@ -4276,6 +4278,24 @@ DropCmdTrigStmt:
 					n->missing_ok = true;
 					$$ = (Node *) n;
 				}
+		;
+
+AlterCmdTrigStmt:
+			ALTER TRIGGER name ON COMMAND trigger_command SET enable_trigger
+				{
+					AlterCmdTrigStmt *n = makeNode(AlterCmdTrigStmt);
+					n->trigname   = $3;
+					n->command    = $6;
+					n->tgenabled  = $8;
+					$$ = (Node *) n;
+				}
+		;
+
+enable_trigger:
+			ENABLE_P					{ $$ = "O"; }
+			| ENABLE_P REPLICA			{ $$ = "R"; }
+			| ENABLE_P ALWAYS			{ $$ = "A"; }
+			| DISABLE_P					{ $$ = "D"; }
 		;
 
 /*****************************************************************************

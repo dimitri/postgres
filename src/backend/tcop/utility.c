@@ -186,6 +186,7 @@ check_xact_readonly(Node *parsetree)
 		case T_DefineStmt:
 		case T_CreateCastStmt:
 		case T_CreateCmdTrigStmt:
+		case T_AlterCmdTrigStmt:
 		case T_CreateConversionStmt:
 		case T_CreatedbStmt:
 		case T_CreateDomainStmt:
@@ -208,6 +209,7 @@ check_xact_readonly(Node *parsetree)
 		case T_AlterEnumStmt:
 		case T_ViewStmt:
 		case T_DropCastStmt:
+		case T_DropCmdTrigStmt:
 		case T_DropStmt:
 		case T_DropdbStmt:
 		case T_DropTableSpaceStmt:
@@ -1122,6 +1124,10 @@ standard_ProcessUtility(Node *parsetree,
 
 		case T_DropCmdTrigStmt:
 			DropCmdTrigger((DropCmdTrigStmt *) parsetree);
+			break;
+
+		case T_AlterCmdTrigStmt:
+			(void) AlterCmdTrigger((AlterCmdTrigStmt *) parsetree);
 			break;
 
 		case T_CreatePLangStmt:
@@ -2045,6 +2051,10 @@ CreateCommandTag(Node *parsetree)
 			tag = "DROP COMMAND TRIGGER";
 			break;
 
+		case T_AlterCmdTrigStmt:
+			tag = "ALTER COMMAND TRIGGER";
+			break;
+
 		case T_CreatePLangStmt:
 			tag = "CREATE LANGUAGE";
 			break;
@@ -2578,6 +2588,10 @@ GetCommandLogLevel(Node *parsetree)
 			break;
 
 		case T_DropCmdTrigStmt:
+			lev = LOGSTMT_DDL;
+			break;
+
+		case T_AlterCmdTrigStmt:
 			lev = LOGSTMT_DDL;
 			break;
 
