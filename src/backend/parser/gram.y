@@ -6655,6 +6655,15 @@ RenameStmt: ALTER AGGREGATE func_name aggr_args RENAME TO name
 					n->newname = $8;
 					$$ = (Node *)n;
 				}
+			| ALTER TRIGGER name ON COMMAND trigger_command RENAME TO name
+				{
+					RenameStmt *n = makeNode(RenameStmt);
+					n->renameType = OBJECT_CMDTRIGGER;
+					n->object  = list_make1(makeString($6));
+					n->subname = $3;
+					n->newname = $9;
+					$$ = (Node *)n;
+				}
 			| ALTER ROLE RoleId RENAME TO RoleId
 				{
 					RenameStmt *n = makeNode(RenameStmt);

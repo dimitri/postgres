@@ -37,6 +37,7 @@
 #include "utils/rel.h"
 #include "utils/tqual.h"
 
+static void check_cmdtrigger_name(const char *command, const char *trigname, Relation tgrel);
 static RegProcedure * list_triggers_for_command(const char *command, char type);
 
 /*
@@ -46,8 +47,6 @@ Oid
 CreateCmdTrigger(CreateCmdTrigStmt *stmt, const char *queryString)
 {
 	Relation	tgrel;
-	SysScanDesc tgscan;
-	ScanKeyData key;
 	HeapTuple	tuple;
 	Datum		values[Natts_pg_trigger];
 	bool		nulls[Natts_pg_trigger];
@@ -80,23 +79,7 @@ CreateCmdTrigger(CreateCmdTrigStmt *stmt, const char *queryString)
 	 * NOTE that this is cool only because we have AccessExclusiveLock on
 	 * the relation, so the trigger set won't be changing underneath us.
 	 */
-	ScanKeyInit(&key,
-				Anum_pg_cmdtrigger_ctgcommand,
-				BTEqualStrategyNumber, F_NAMEEQ,
-				CStringGetDatum(stmt->command));
-	tgscan = systable_beginscan(tgrel, CmdTriggerCommandNameIndexId, true,
-								SnapshotNow, 1, &key);
-	while (HeapTupleIsValid(tuple = systable_getnext(tgscan)))
-	{
-		Form_pg_cmdtrigger pg_cmdtrigger = (Form_pg_cmdtrigger) GETSTRUCT(tuple);
-
-		if (namestrcmp(&(pg_cmdtrigger->ctgname), stmt->trigname) == 0)
-			ereport(ERROR,
-					(errcode(ERRCODE_DUPLICATE_OBJECT),
-					 errmsg("trigger \"%s\" for command \"%s\" already exists",
-							stmt->trigname, stmt->command)));
-	}
-	systable_endscan(tgscan);
+	check_cmdtrigger_name(stmt->command, stmt->trigname, tgrel);
 
 	switch (stmt->timing)
 	{
@@ -212,7 +195,7 @@ DropCmdTrigger(DropCmdTrigStmt *stmt)
 	ObjectAddress object;
 
 	object.classId = CmdTriggerRelationId;
-	object.objectId = get_cmdtrigger_oid(stmt->trigname, stmt->command,
+	object.objectId = get_cmdtrigger_oid(stmt->command, stmt->trigname,
 										 stmt->missing_ok);
 	object.objectSubId = 0;
 
@@ -317,6 +300,64 @@ AlterCmdTrigger(AlterCmdTrigStmt *stmt)
 	heap_freetuple(tup);
 }
 
+
+/*
+ * Rename conversion
+ */
+void
+RenameCmdTrigger(List *name, const char *trigname, const char *newname)
+{
+	SysScanDesc tgscan;
+	ScanKeyData skey[2];
+	HeapTuple	tup;
+	Relation	rel;
+	Form_pg_cmdtrigger cmdForm;
+	char       *command;
+
+	Assert(list_length(name) == 1);
+	command = strVal((Value *)linitial(name));
+
+	rel = heap_open(CmdTriggerRelationId, RowExclusiveLock);
+
+	/* newname must be available */
+	check_cmdtrigger_name(command, newname, rel);
+
+	/* get existing tuple */
+	ScanKeyInit(&skey[0],
+				Anum_pg_cmdtrigger_ctgcommand,
+				BTEqualStrategyNumber, F_NAMEEQ,
+				CStringGetDatum(command));
+	ScanKeyInit(&skey[1],
+				Anum_pg_cmdtrigger_ctgname,
+				BTEqualStrategyNumber, F_NAMEEQ,
+				CStringGetDatum(trigname));
+
+	tgscan = systable_beginscan(rel, CmdTriggerCommandNameIndexId, true,
+								SnapshotNow, 2, skey);
+
+	tup = systable_getnext(tgscan);
+
+	if (!HeapTupleIsValid(tup))
+		ereport(ERROR,
+				(errcode(ERRCODE_UNDEFINED_OBJECT),
+				 errmsg("trigger \"%s\" for command \"%s\" does not exist, skipping",
+						trigname, command)));
+
+	/* Copy tuple so we can modify it below */
+	tup = heap_copytuple(tup);
+	cmdForm = (Form_pg_cmdtrigger) GETSTRUCT(tup);
+
+	systable_endscan(tgscan);
+
+	/* rename */
+	namestrcpy(&(cmdForm->ctgname), newname);
+	simple_heap_update(rel, &tup->t_self, tup);
+	CatalogUpdateIndexes(rel, tup);
+
+	heap_freetuple(tup);
+	heap_close(rel, NoLock);
+}
+
 /*
  * get_cmdtrigger_oid - Look up a trigger by name to find its OID.
  *
@@ -324,7 +365,7 @@ AlterCmdTrigger(AlterCmdTrigStmt *stmt)
  * true, just return InvalidOid.
  */
 Oid
-get_cmdtrigger_oid(const char *trigname, const char *command, bool missing_ok)
+get_cmdtrigger_oid(const char *command, const char *trigname, bool missing_ok)
 {
 	Relation	tgrel;
 	ScanKeyData skey[2];
@@ -370,6 +411,40 @@ get_cmdtrigger_oid(const char *trigname, const char *command, bool missing_ok)
 	return oid;
 }
 
+/*
+ * Scan pg_cmdtrigger for existing triggers on command. We do this only to
+ * give a nice error message if there's already a trigger of the same name.
+ */
+void
+check_cmdtrigger_name(const char *command, const char *trigname, Relation tgrel)
+{
+	SysScanDesc tgscan;
+	ScanKeyData skey[2];
+	HeapTuple	tuple;
+
+	ScanKeyInit(&skey[0],
+				Anum_pg_cmdtrigger_ctgcommand,
+				BTEqualStrategyNumber, F_NAMEEQ,
+				CStringGetDatum(command));
+	ScanKeyInit(&skey[1],
+				Anum_pg_cmdtrigger_ctgname,
+				BTEqualStrategyNumber, F_NAMEEQ,
+				CStringGetDatum(trigname));
+
+	tgscan = systable_beginscan(tgrel, CmdTriggerCommandNameIndexId, true,
+								SnapshotNow, 2, skey);
+
+	tuple = systable_getnext(tgscan);
+
+	elog(NOTICE, "check_cmdtrigger_name(%s, %s)", command, trigname);
+
+	if (HeapTupleIsValid(tuple))
+		ereport(ERROR,
+				(errcode(ERRCODE_DUPLICATE_OBJECT),
+				 errmsg("trigger \"%s\" for command \"%s\" already exists",
+						trigname, command)));
+	systable_endscan(tgscan);
+}
 
 /*
  * Functions to execute the command triggers.

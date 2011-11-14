@@ -31,8 +31,9 @@
 extern Oid CreateCmdTrigger(CreateCmdTrigStmt *stmt, const char *queryString);
 extern void DropCmdTrigger(DropCmdTrigStmt *stmt);
 extern void RemoveCmdTriggerById(Oid ctrigOid);
-extern Oid	get_cmdtrigger_oid(const char *trigname, const char *name, bool missing_ok);
+extern Oid	get_cmdtrigger_oid(const char *command, const char *trigname, bool missing_ok);
 extern void AlterCmdTrigger(AlterCmdTrigStmt *stmt);
+extern void RenameCmdTrigger(List *command, const char *trigname, const char *newname);
 
 int ExecBeforeOrInsteadOfCommandTriggers(Node *parsetree, const char *command);
 int ExecInsteadOfCommandTriggers(Node *parsetree, const char *command,

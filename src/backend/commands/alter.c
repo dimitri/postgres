@@ -61,6 +61,10 @@ ExecRenameStmt(RenameStmt *stmt)
 			RenameConversion(stmt->object, stmt->newname);
 			break;
 
+		case OBJECT_CMDTRIGGER:
+			RenameCmdTrigger(stmt->object, stmt->subname, stmt->newname);
+			break;
+
 		case OBJECT_DATABASE:
 			RenameDatabase(stmt->subname, stmt->newname);
 			break;
