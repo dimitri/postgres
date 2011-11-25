@@ -591,6 +591,7 @@ _readIntoClause(void)
 	READ_NODE_FIELD(options);
 	READ_ENUM_FIELD(onCommit, OnCommitAction);
 	READ_STRING_FIELD(tableSpaceName);
+	READ_BOOL_FIELD(skipData);
 
 	READ_DONE();
 }

@@ -389,8 +389,7 @@ static void processCASbits(int cas_bits, int location, const char *constrType,
 %type <node>	case_expr case_arg when_clause case_default
 %type <list>	when_clause_list
 %type <ival>	sub_type
-%type <list>	OptCreateAs CreateAsList
-%type <node>	CreateAsElement ctext_expr
+%type <node>	ctext_expr
 %type <value>	NumericOnly
 %type <list>	NumericOnly_list
 %type <alias>	alias_clause
@@ -3020,8 +3019,7 @@ CreateAsStmt:
 					 * When the SelectStmt is a set-operation tree, we must
 					 * stuff the INTO information into the leftmost component
 					 * Select, because that's where analyze.c will expect
-					 * to find it.	Similarly, the output column names must
-					 * be attached to that Select's target list.
+					 * to find it.
 					 */
 					SelectStmt *n = findLeftmostSelect((SelectStmt *) $6);
 					if (n->intoClause != NULL)
@@ -3029,17 +3027,16 @@ CreateAsStmt:
 								(errcode(ERRCODE_SYNTAX_ERROR),
 								 errmsg("CREATE TABLE AS cannot specify INTO"),
 								 parser_errposition(exprLocation((Node *) n->intoClause))));
-					$4->rel->relpersistence = $2;
 					n->intoClause = $4;
-					/* Implement WITH NO DATA by forcing top-level LIMIT 0 */
-					if (!$7)
-						((SelectStmt *) $6)->limitCount = makeIntConst(0, -1);
+					/* cram additional flags into the IntoClause */
+					$4->rel->relpersistence = $2;
+					$4->skipData = !($7);
 					$$ = $6;
 				}
 		;
 
 create_as_target:
-			qualified_name OptCreateAs OptWith OnCommitOption OptTableSpace
+			qualified_name opt_column_list OptWith OnCommitOption OptTableSpace
 				{
 					$$ = makeNode(IntoClause);
 					$$->rel = $1;
@@ -3047,36 +3044,7 @@ create_as_target:
 					$$->options = $3;
 					$$->onCommit = $4;
 					$$->tableSpaceName = $5;
-				}
-		;
-
-OptCreateAs:
-			'(' CreateAsList ')'					{ $$ = $2; }
-			| /*EMPTY*/								{ $$ = NIL; }
-		;
-
-CreateAsList:
-			CreateAsElement							{ $$ = list_make1($1); }
-			| CreateAsList ',' CreateAsElement		{ $$ = lappend($1, $3); }
-		;
-
-CreateAsElement:
-			ColId
-				{
-					ColumnDef *n = makeNode(ColumnDef);
-					n->colname = $1;
-					n->typeName = NULL;
-					n->inhcount = 0;
-					n->is_local = true;
-					n->is_not_null = false;
-					n->is_from_type = false;
-					n->storage = 0;
-					n->raw_default = NULL;
-					n->cooked_default = NULL;
-					n->collClause = NULL;
-					n->collOid = InvalidOid;
-					n->constraints = NIL;
-					$$ = (Node *)n;
+					$$->skipData = false;		/* might get changed later */
 				}
 		;
 
@@ -3260,16 +3228,19 @@ opt_validator:
 DropPLangStmt:
 			DROP opt_procedural LANGUAGE ColId_or_Sconst opt_drop_behavior
 				{
-					DropPLangStmt *n = makeNode(DropPLangStmt);
-					n->plname = $4;
+					DropStmt *n = makeNode(DropStmt);
+					n->removeType = OBJECT_LANGUAGE;
+					n->objects = list_make1(list_make1(makeString($4)));
+					n->arguments = NIL;
 					n->behavior = $5;
 					n->missing_ok = false;
 					$$ = (Node *)n;
 				}
 			| DROP opt_procedural LANGUAGE IF_P EXISTS ColId_or_Sconst opt_drop_behavior
 				{
-					DropPLangStmt *n = makeNode(DropPLangStmt);
-					n->plname = $6;
+					DropStmt *n = makeNode(DropStmt);
+					n->removeType = OBJECT_LANGUAGE;
+					n->objects = list_make1(list_make1(makeString($6)));
 					n->behavior = $7;
 					n->missing_ok = true;
 					$$ = (Node *)n;
@@ -3661,16 +3632,20 @@ opt_fdw_options:
 
 DropFdwStmt: DROP FOREIGN DATA_P WRAPPER name opt_drop_behavior
 				{
-					DropFdwStmt *n = makeNode(DropFdwStmt);
-					n->fdwname = $5;
+					DropStmt *n = makeNode(DropStmt);
+					n->removeType = OBJECT_FDW;
+					n->objects = list_make1(list_make1(makeString($5)));
+					n->arguments = NIL;
 					n->missing_ok = false;
 					n->behavior = $6;
 					$$ = (Node *) n;
 				}
 				|  DROP FOREIGN DATA_P WRAPPER IF_P EXISTS name opt_drop_behavior
-				{
-					DropFdwStmt *n = makeNode(DropFdwStmt);
-					n->fdwname = $7;
+                {
+					DropStmt *n = makeNode(DropStmt);
+					n->removeType = OBJECT_FDW;
+					n->objects = list_make1(list_make1(makeString($7)));
+					n->arguments = NIL;
 					n->missing_ok = true;
 					n->behavior = $8;
 					$$ = (Node *) n;
@@ -3817,16 +3792,20 @@ opt_foreign_server_version:
 
 DropForeignServerStmt: DROP SERVER name opt_drop_behavior
 				{
-					DropForeignServerStmt *n = makeNode(DropForeignServerStmt);
-					n->servername = $3;
+					DropStmt *n = makeNode(DropStmt);
+					n->removeType = OBJECT_FOREIGN_SERVER;
+					n->objects = list_make1(list_make1(makeString($3)));
+					n->arguments = NIL;
 					n->missing_ok = false;
 					n->behavior = $4;
 					$$ = (Node *) n;
 				}
 				|  DROP SERVER IF_P EXISTS name opt_drop_behavior
-				{
-					DropForeignServerStmt *n = makeNode(DropForeignServerStmt);
-					n->servername = $5;
+                {
+					DropStmt *n = makeNode(DropStmt);
+					n->removeType = OBJECT_FOREIGN_SERVER;
+					n->objects = list_make1(list_make1(makeString($5)));
+					n->arguments = NIL;
 					n->missing_ok = true;
 					n->behavior = $6;
 					$$ = (Node *) n;
@@ -4198,23 +4177,23 @@ ConstraintAttributeElem:
 
 
 DropTrigStmt:
-			DROP TRIGGER name ON qualified_name opt_drop_behavior
+			DROP TRIGGER name ON any_name opt_drop_behavior
 				{
-					DropPropertyStmt *n = makeNode(DropPropertyStmt);
-					n->relation = $5;
-					n->property = $3;
-					n->behavior = $6;
+					DropStmt *n = makeNode(DropStmt);
 					n->removeType = OBJECT_TRIGGER;
+					n->objects = list_make1(lappend($5, makeString($3)));
+					n->arguments = NIL;
+					n->behavior = $6;
 					n->missing_ok = false;
 					$$ = (Node *) n;
 				}
-			| DROP TRIGGER IF_P EXISTS name ON qualified_name opt_drop_behavior
+			| DROP TRIGGER IF_P EXISTS name ON any_name opt_drop_behavior
 				{
-					DropPropertyStmt *n = makeNode(DropPropertyStmt);
-					n->relation = $7;
-					n->property = $5;
-					n->behavior = $8;
+					DropStmt *n = makeNode(DropStmt);
 					n->removeType = OBJECT_TRIGGER;
+					n->objects = list_make1(lappend($7, makeString($5)));
+					n->arguments = NIL;
+					n->behavior = $8;
 					n->missing_ok = true;
 					$$ = (Node *) n;
 				}
@@ -4329,9 +4308,9 @@ CreateAssertStmt:
 DropAssertStmt:
 			DROP ASSERTION name opt_drop_behavior
 				{
-					DropPropertyStmt *n = makeNode(DropPropertyStmt);
-					n->relation = NULL;
-					n->property = $3;
+					DropStmt *n = makeNode(DropStmt);
+					n->objects = NIL;
+					n->arguments = NIL;
 					n->behavior = $4;
 					n->removeType = OBJECT_TRIGGER; /* XXX */
 					ereport(ERROR,
@@ -4747,18 +4726,20 @@ opclass_drop:
 DropOpClassStmt:
 			DROP OPERATOR CLASS any_name USING access_method opt_drop_behavior
 				{
-					RemoveOpClassStmt *n = makeNode(RemoveOpClassStmt);
-					n->opclassname = $4;
-					n->amname = $6;
+					DropStmt *n = makeNode(DropStmt);
+					n->objects = list_make1($4);
+					n->arguments = list_make1(list_make1(makeString($6)));
+					n->removeType = OBJECT_OPCLASS;
 					n->behavior = $7;
 					n->missing_ok = false;
 					$$ = (Node *) n;
 				}
 			| DROP OPERATOR CLASS IF_P EXISTS any_name USING access_method opt_drop_behavior
 				{
-					RemoveOpClassStmt *n = makeNode(RemoveOpClassStmt);
-					n->opclassname = $6;
-					n->amname = $8;
+					DropStmt *n = makeNode(DropStmt);
+					n->objects = list_make1($6);
+					n->arguments = list_make1(list_make1(makeString($8)));
+					n->removeType = OBJECT_OPCLASS;
 					n->behavior = $9;
 					n->missing_ok = true;
 					$$ = (Node *) n;
@@ -4768,18 +4749,20 @@ DropOpClassStmt:
 DropOpFamilyStmt:
 			DROP OPERATOR FAMILY any_name USING access_method opt_drop_behavior
 				{
-					RemoveOpFamilyStmt *n = makeNode(RemoveOpFamilyStmt);
-					n->opfamilyname = $4;
-					n->amname = $6;
+					DropStmt *n = makeNode(DropStmt);
+					n->objects = list_make1($4);
+					n->arguments = list_make1(list_make1(makeString($6)));
+					n->removeType = OBJECT_OPFAMILY;
 					n->behavior = $7;
 					n->missing_ok = false;
 					$$ = (Node *) n;
 				}
 			| DROP OPERATOR FAMILY IF_P EXISTS any_name USING access_method opt_drop_behavior
 				{
-					RemoveOpFamilyStmt *n = makeNode(RemoveOpFamilyStmt);
-					n->opfamilyname = $6;
-					n->amname = $8;
+					DropStmt *n = makeNode(DropStmt);
+					n->objects = list_make1($6);
+					n->arguments = list_make1(list_make1(makeString($8)));
+					n->removeType = OBJECT_OPFAMILY;
 					n->behavior = $9;
 					n->missing_ok = true;
 					$$ = (Node *) n;
@@ -4830,6 +4813,7 @@ DropStmt:	DROP drop_type IF_P EXISTS any_name_list opt_drop_behavior
 					n->removeType = $2;
 					n->missing_ok = TRUE;
 					n->objects = $5;
+					n->arguments = NIL;
 					n->behavior = $6;
 					$$ = (Node *)n;
 				}
@@ -4839,6 +4823,7 @@ DropStmt:	DROP drop_type IF_P EXISTS any_name_list opt_drop_behavior
 					n->removeType = $2;
 					n->missing_ok = FALSE;
 					n->objects = $3;
+					n->arguments = NIL;
 					n->behavior = $4;
 					$$ = (Node *)n;
 				}
@@ -6255,20 +6240,20 @@ opt_restrict:
 RemoveFuncStmt:
 			DROP FUNCTION func_name func_args opt_drop_behavior
 				{
-					RemoveFuncStmt *n = makeNode(RemoveFuncStmt);
-					n->kind = OBJECT_FUNCTION;
-					n->name = $3;
-					n->args = extractArgTypes($4);
+					DropStmt *n = makeNode(DropStmt);
+					n->removeType = OBJECT_FUNCTION;
+					n->objects = list_make1($3);
+					n->arguments = list_make1(extractArgTypes($4));
 					n->behavior = $5;
 					n->missing_ok = false;
 					$$ = (Node *)n;
 				}
 			| DROP FUNCTION IF_P EXISTS func_name func_args opt_drop_behavior
 				{
-					RemoveFuncStmt *n = makeNode(RemoveFuncStmt);
-					n->kind = OBJECT_FUNCTION;
-					n->name = $5;
-					n->args = extractArgTypes($6);
+					DropStmt *n = makeNode(DropStmt);
+					n->removeType = OBJECT_FUNCTION;
+					n->objects = list_make1($5);
+					n->arguments = list_make1(extractArgTypes($6));
 					n->behavior = $7;
 					n->missing_ok = true;
 					$$ = (Node *)n;
@@ -6278,20 +6263,20 @@ RemoveFuncStmt:
 RemoveAggrStmt:
 			DROP AGGREGATE func_name aggr_args opt_drop_behavior
 				{
-					RemoveFuncStmt *n = makeNode(RemoveFuncStmt);
-					n->kind = OBJECT_AGGREGATE;
-					n->name = $3;
-					n->args = $4;
+					DropStmt *n = makeNode(DropStmt);
+					n->removeType = OBJECT_AGGREGATE;
+					n->objects = list_make1($3);
+					n->arguments = list_make1($4);
 					n->behavior = $5;
 					n->missing_ok = false;
 					$$ = (Node *)n;
 				}
 			| DROP AGGREGATE IF_P EXISTS func_name aggr_args opt_drop_behavior
 				{
-					RemoveFuncStmt *n = makeNode(RemoveFuncStmt);
-					n->kind = OBJECT_AGGREGATE;
-					n->name = $5;
-					n->args = $6;
+					DropStmt *n = makeNode(DropStmt);
+					n->removeType = OBJECT_AGGREGATE;
+					n->objects = list_make1($5);
+					n->arguments = list_make1($6);
 					n->behavior = $7;
 					n->missing_ok = true;
 					$$ = (Node *)n;
@@ -6301,20 +6286,20 @@ RemoveAggrStmt:
 RemoveOperStmt:
 			DROP OPERATOR any_operator oper_argtypes opt_drop_behavior
 				{
-					RemoveFuncStmt *n = makeNode(RemoveFuncStmt);
-					n->kind = OBJECT_OPERATOR;
-					n->name = $3;
-					n->args = $4;
+					DropStmt *n = makeNode(DropStmt);
+					n->removeType = OBJECT_OPERATOR;
+					n->objects = list_make1($3);
+					n->arguments = list_make1($4);
 					n->behavior = $5;
 					n->missing_ok = false;
 					$$ = (Node *)n;
 				}
 			| DROP OPERATOR IF_P EXISTS any_operator oper_argtypes opt_drop_behavior
 				{
-					RemoveFuncStmt *n = makeNode(RemoveFuncStmt);
-					n->kind = OBJECT_OPERATOR;
-					n->name = $5;
-					n->args = $6;
+					DropStmt *n = makeNode(DropStmt);
+					n->removeType = OBJECT_OPERATOR;
+					n->objects = list_make1($5);
+					n->arguments = list_make1($6);
 					n->behavior = $7;
 					n->missing_ok = true;
 					$$ = (Node *)n;
@@ -6427,9 +6412,10 @@ cast_context:  AS IMPLICIT_P					{ $$ = COERCION_IMPLICIT; }
 
 DropCastStmt: DROP CAST opt_if_exists '(' Typename AS Typename ')' opt_drop_behavior
 				{
-					DropCastStmt *n = makeNode(DropCastStmt);
-					n->sourcetype = $5;
-					n->targettype = $7;
+					DropStmt *n = makeNode(DropStmt);
+					n->removeType = OBJECT_CAST;
+					n->objects = list_make1(list_make1($5));
+					n->arguments = list_make1(list_make1($7));
 					n->behavior = $9;
 					n->missing_ok = $3;
 					$$ = (Node *)n;
@@ -7154,23 +7140,23 @@ opt_instead:
 
 
 DropRuleStmt:
-			DROP RULE name ON qualified_name opt_drop_behavior
+			DROP RULE name ON any_name opt_drop_behavior
 				{
-					DropPropertyStmt *n = makeNode(DropPropertyStmt);
-					n->relation = $5;
-					n->property = $3;
-					n->behavior = $6;
+					DropStmt *n = makeNode(DropStmt);
 					n->removeType = OBJECT_RULE;
+					n->objects = list_make1(lappend($5, makeString($3)));
+					n->arguments = NIL;
+					n->behavior = $6;
 					n->missing_ok = false;
 					$$ = (Node *) n;
 				}
-			| DROP RULE IF_P EXISTS name ON qualified_name opt_drop_behavior
+			| DROP RULE IF_P EXISTS name ON any_name opt_drop_behavior
 				{
-					DropPropertyStmt *n = makeNode(DropPropertyStmt);
-					n->relation = $7;
-					n->property = $5;
-					n->behavior = $8;
+					DropStmt *n = makeNode(DropStmt);
 					n->removeType = OBJECT_RULE;
+					n->objects = list_make1(lappend($7, makeString($5)));
+					n->arguments = NIL;
+					n->behavior = $8;
 					n->missing_ok = true;
 					$$ = (Node *) n;
 				}
@@ -8103,18 +8089,15 @@ ExecuteStmt: EXECUTE name execute_param_clause
 					$$ = (Node *) n;
 				}
 			| CREATE OptTemp TABLE create_as_target AS
-				EXECUTE name execute_param_clause
+				EXECUTE name execute_param_clause opt_with_data
 				{
 					ExecuteStmt *n = makeNode(ExecuteStmt);
 					n->name = $7;
 					n->params = $8;
-					$4->rel->relpersistence = $2;
 					n->into = $4;
-					if ($4->colNames)
-						ereport(ERROR,
-								(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-								 errmsg("column name list not allowed in CREATE TABLE / AS EXECUTE")));
-					/* ... because it's not implemented, but it could be */
+					/* cram additional flags into the IntoClause */
+					$4->rel->relpersistence = $2;
+					$4->skipData = !($9);
 					$$ = (Node *) n;
 				}
 		;
@@ -8656,6 +8639,7 @@ into_clause:
 					$$->options = NIL;
 					$$->onCommit = ONCOMMIT_NOOP;
 					$$->tableSpaceName = NULL;
+					$$->skipData = false;
 				}
 			| /*EMPTY*/
 				{ $$ = NULL; }

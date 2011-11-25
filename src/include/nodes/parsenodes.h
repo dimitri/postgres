@@ -1613,7 +1613,7 @@ typedef struct AlterExtensionContentsStmt
 } AlterExtensionContentsStmt;
 
 /* ----------------------
- *		Create/Drop FOREIGN DATA WRAPPER Statements
+ *		Create/Alter FOREIGN DATA WRAPPER Statements
  * ----------------------
  */
 
@@ -1633,16 +1633,8 @@ typedef struct AlterFdwStmt
 	List	   *options;		/* generic options to FDW */
 } AlterFdwStmt;
 
-typedef struct DropFdwStmt
-{
-	NodeTag		type;
-	char	   *fdwname;		/* foreign-data wrapper name */
-	bool		missing_ok;		/* don't complain if missing */
-	DropBehavior behavior;		/* drop behavior - cascade/restrict */
-} DropFdwStmt;
-
 /* ----------------------
- *		Create/Drop FOREIGN SERVER Statements
+ *		Create/Alter FOREIGN SERVER Statements
  * ----------------------
  */
 
@@ -1664,14 +1656,6 @@ typedef struct AlterForeignServerStmt
 	List	   *options;		/* generic options to server */
 	bool		has_version;	/* version specified */
 } AlterForeignServerStmt;
-
-typedef struct DropForeignServerStmt
-{
-	NodeTag		type;
-	char	   *servername;		/* server name */
-	bool		missing_ok;		/* ignore missing servers */
-	DropBehavior behavior;		/* drop behavior - cascade/restrict */
-} DropForeignServerStmt;
 
 /* ----------------------
  *		Create FOREIGN TABLE Statements
@@ -1768,6 +1752,7 @@ typedef struct AlterCmdTrigStmt
 
 /* ----------------------
  *		Create/Drop PROCEDURAL LANGUAGE Statements
+ *		Create PROCEDURAL LANGUAGE Statements
  * ----------------------
  */
 typedef struct CreatePLangStmt
@@ -1780,14 +1765,6 @@ typedef struct CreatePLangStmt
 	List	   *plvalidator;	/* optional validator function (qual. name) */
 	bool		pltrusted;		/* PL is trusted */
 } CreatePLangStmt;
-
-typedef struct DropPLangStmt
-{
-	NodeTag		type;
-	char	   *plname;			/* PL name */
-	DropBehavior behavior;		/* RESTRICT or CASCADE behavior */
-	bool		missing_ok;		/* skip error if missing? */
-} DropPLangStmt;
 
 /* ----------------------
  *	Create/Alter/Drop Role Statements
@@ -1949,6 +1926,7 @@ typedef struct DropStmt
 {
 	NodeTag		type;
 	List	   *objects;		/* list of sublists of names (as Values) */
+	List	   *arguments;		/* list of sublists of arguments (as Values) */
 	ObjectType	removeType;		/* object type */
 	DropBehavior behavior;		/* RESTRICT or CASCADE behavior */
 	bool		missing_ok;		/* skip error if object is missing? */
@@ -2159,20 +2137,6 @@ typedef struct AlterFunctionStmt
 } AlterFunctionStmt;
 
 /* ----------------------
- *		Drop {Function|Aggregate|Operator} Statement
- * ----------------------
- */
-typedef struct RemoveFuncStmt
-{
-	NodeTag		type;
-	ObjectType	kind;			/* function, aggregate, operator */
-	List	   *name;			/* qualified name of object to drop */
-	List	   *args;			/* types of the arguments */
-	DropBehavior behavior;		/* RESTRICT or CASCADE behavior */
-	bool		missing_ok;		/* skip error if missing? */
-} RemoveFuncStmt;
-
-/* ----------------------
  *		DO Statement
  *
  * DoStmt is the raw parser output, InlineCodeBlock is the execution-time API
@@ -2191,32 +2155,6 @@ typedef struct InlineCodeBlock
 	Oid			langOid;		/* OID of selected language */
 	bool		langIsTrusted;	/* trusted property of the language */
 } InlineCodeBlock;
-
-/* ----------------------
- *		Drop Operator Class Statement
- * ----------------------
- */
-typedef struct RemoveOpClassStmt
-{
-	NodeTag		type;
-	List	   *opclassname;	/* qualified name (list of Value strings) */
-	char	   *amname;			/* name of index AM opclass is for */
-	DropBehavior behavior;		/* RESTRICT or CASCADE behavior */
-	bool		missing_ok;		/* skip error if missing? */
-} RemoveOpClassStmt;
-
-/* ----------------------
- *		Drop Operator Family Statement
- * ----------------------
- */
-typedef struct RemoveOpFamilyStmt
-{
-	NodeTag		type;
-	List	   *opfamilyname;	/* qualified name (list of Value strings) */
-	char	   *amname;			/* name of index AM opfamily is for */
-	DropBehavior behavior;		/* RESTRICT or CASCADE behavior */
-	bool		missing_ok;		/* skip error if missing? */
-} RemoveOpFamilyStmt;
 
 /* ----------------------
  *		Alter Object Rename Statement
@@ -2363,6 +2301,17 @@ typedef struct CreateEnumStmt
 } CreateEnumStmt;
 
 /* ----------------------
+ *		Create Type Statement, range types
+ * ----------------------
+ */
+typedef struct CreateRangeStmt
+{
+	NodeTag		type;
+	List	   *typeName;		/* qualified name (list of Value strings) */
+	List	   *params;			/* range parameters (list of DefElem) */
+} CreateRangeStmt;
+
+/* ----------------------
  *		Alter Type Statement, enum types
  * ----------------------
  */
@@ -2374,17 +2323,6 @@ typedef struct AlterEnumStmt
 	char	   *newValNeighbor; /* neighboring enum value, if specified */
 	bool		newValIsAfter;	/* place new enum value after neighbor? */
 } AlterEnumStmt;
-
-/* ----------------------
- *		Create Type Statement, range types
- * ----------------------
- */
-typedef struct CreateRangeStmt
-{
-	NodeTag		type;
-	List	   *typeName;		/* qualified name (list of Value strings) */
-	List	   *params;			/* range parameters (list of DefElem) */
-} CreateRangeStmt;
 
 /* ----------------------
  *		Create View Statement
@@ -2597,20 +2535,6 @@ typedef struct CreateCastStmt
 	CoercionContext context;
 	bool		inout;
 } CreateCastStmt;
-
-/* ----------------------
- *	DROP CAST Statement
- * ----------------------
- */
-typedef struct DropCastStmt
-{
-	NodeTag		type;
-	TypeName   *sourcetype;
-	TypeName   *targettype;
-	DropBehavior behavior;
-	bool		missing_ok;		/* skip error if missing? */
-} DropCastStmt;
-
 
 /* ----------------------
  *		PREPARE Statement

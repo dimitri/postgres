@@ -119,6 +119,7 @@ _equalIntoClause(IntoClause *a, IntoClause *b)
 	COMPARE_NODE_FIELD(options);
 	COMPARE_SCALAR_FIELD(onCommit);
 	COMPARE_STRING_FIELD(tableSpaceName);
+	COMPARE_SCALAR_FIELD(skipData);
 
 	return true;
 }
@@ -1182,6 +1183,7 @@ static bool
 _equalDropStmt(DropStmt *a, DropStmt *b)
 {
 	COMPARE_NODE_FIELD(objects);
+	COMPARE_NODE_FIELD(arguments);
 	COMPARE_SCALAR_FIELD(removeType);
 	COMPARE_SCALAR_FIELD(behavior);
 	COMPARE_SCALAR_FIELD(missing_ok);
@@ -1290,43 +1292,9 @@ _equalAlterFunctionStmt(AlterFunctionStmt *a, AlterFunctionStmt *b)
 }
 
 static bool
-_equalRemoveFuncStmt(RemoveFuncStmt *a, RemoveFuncStmt *b)
-{
-	COMPARE_SCALAR_FIELD(kind);
-	COMPARE_NODE_FIELD(name);
-	COMPARE_NODE_FIELD(args);
-	COMPARE_SCALAR_FIELD(behavior);
-	COMPARE_SCALAR_FIELD(missing_ok);
-
-	return true;
-}
-
-static bool
 _equalDoStmt(DoStmt *a, DoStmt *b)
 {
 	COMPARE_NODE_FIELD(args);
-
-	return true;
-}
-
-static bool
-_equalRemoveOpClassStmt(RemoveOpClassStmt *a, RemoveOpClassStmt *b)
-{
-	COMPARE_NODE_FIELD(opclassname);
-	COMPARE_STRING_FIELD(amname);
-	COMPARE_SCALAR_FIELD(behavior);
-	COMPARE_SCALAR_FIELD(missing_ok);
-
-	return true;
-}
-
-static bool
-_equalRemoveOpFamilyStmt(RemoveOpFamilyStmt *a, RemoveOpFamilyStmt *b)
-{
-	COMPARE_NODE_FIELD(opfamilyname);
-	COMPARE_STRING_FIELD(amname);
-	COMPARE_SCALAR_FIELD(behavior);
-	COMPARE_SCALAR_FIELD(missing_ok);
 
 	return true;
 }
@@ -1720,16 +1688,6 @@ _equalAlterFdwStmt(AlterFdwStmt *a, AlterFdwStmt *b)
 }
 
 static bool
-_equalDropFdwStmt(DropFdwStmt *a, DropFdwStmt *b)
-{
-	COMPARE_STRING_FIELD(fdwname);
-	COMPARE_SCALAR_FIELD(missing_ok);
-	COMPARE_SCALAR_FIELD(behavior);
-
-	return true;
-}
-
-static bool
 _equalCreateForeignServerStmt(CreateForeignServerStmt *a, CreateForeignServerStmt *b)
 {
 	COMPARE_STRING_FIELD(servername);
@@ -1748,16 +1706,6 @@ _equalAlterForeignServerStmt(AlterForeignServerStmt *a, AlterForeignServerStmt *
 	COMPARE_STRING_FIELD(version);
 	COMPARE_NODE_FIELD(options);
 	COMPARE_SCALAR_FIELD(has_version);
-
-	return true;
-}
-
-static bool
-_equalDropForeignServerStmt(DropForeignServerStmt *a, DropForeignServerStmt *b)
-{
-	COMPARE_STRING_FIELD(servername);
-	COMPARE_SCALAR_FIELD(missing_ok);
-	COMPARE_SCALAR_FIELD(behavior);
 
 	return true;
 }
@@ -1882,16 +1830,6 @@ _equalCreatePLangStmt(CreatePLangStmt *a, CreatePLangStmt *b)
 }
 
 static bool
-_equalDropPLangStmt(DropPLangStmt *a, DropPLangStmt *b)
-{
-	COMPARE_STRING_FIELD(plname);
-	COMPARE_SCALAR_FIELD(behavior);
-	COMPARE_SCALAR_FIELD(missing_ok);
-
-	return true;
-}
-
-static bool
 _equalCreateRoleStmt(CreateRoleStmt *a, CreateRoleStmt *b)
 {
 	COMPARE_SCALAR_FIELD(stmt_type);
@@ -1991,17 +1929,6 @@ _equalCreateCastStmt(CreateCastStmt *a, CreateCastStmt *b)
 	COMPARE_NODE_FIELD(func);
 	COMPARE_SCALAR_FIELD(context);
 	COMPARE_SCALAR_FIELD(inout);
-
-	return true;
-}
-
-static bool
-_equalDropCastStmt(DropCastStmt *a, DropCastStmt *b)
-{
-	COMPARE_NODE_FIELD(sourcetype);
-	COMPARE_NODE_FIELD(targettype);
-	COMPARE_SCALAR_FIELD(behavior);
-	COMPARE_SCALAR_FIELD(missing_ok);
 
 	return true;
 }
@@ -2825,17 +2752,8 @@ equal(void *a, void *b)
 		case T_AlterFunctionStmt:
 			retval = _equalAlterFunctionStmt(a, b);
 			break;
-		case T_RemoveFuncStmt:
-			retval = _equalRemoveFuncStmt(a, b);
-			break;
 		case T_DoStmt:
 			retval = _equalDoStmt(a, b);
-			break;
-		case T_RemoveOpClassStmt:
-			retval = _equalRemoveOpClassStmt(a, b);
-			break;
-		case T_RemoveOpFamilyStmt:
-			retval = _equalRemoveOpFamilyStmt(a, b);
 			break;
 		case T_RenameStmt:
 			retval = _equalRenameStmt(a, b);
@@ -2951,17 +2869,11 @@ equal(void *a, void *b)
 		case T_AlterFdwStmt:
 			retval = _equalAlterFdwStmt(a, b);
 			break;
-		case T_DropFdwStmt:
-			retval = _equalDropFdwStmt(a, b);
-			break;
 		case T_CreateForeignServerStmt:
 			retval = _equalCreateForeignServerStmt(a, b);
 			break;
 		case T_AlterForeignServerStmt:
 			retval = _equalAlterForeignServerStmt(a, b);
-			break;
-		case T_DropForeignServerStmt:
-			retval = _equalDropForeignServerStmt(a, b);
 			break;
 		case T_CreateUserMappingStmt:
 			retval = _equalCreateUserMappingStmt(a, b);
@@ -2992,9 +2904,6 @@ equal(void *a, void *b)
 			break;
 		case T_CreatePLangStmt:
 			retval = _equalCreatePLangStmt(a, b);
-			break;
-		case T_DropPLangStmt:
-			retval = _equalDropPLangStmt(a, b);
 			break;
 		case T_CreateRoleStmt:
 			retval = _equalCreateRoleStmt(a, b);
@@ -3028,9 +2937,6 @@ equal(void *a, void *b)
 			break;
 		case T_CreateCastStmt:
 			retval = _equalCreateCastStmt(a, b);
-			break;
-		case T_DropCastStmt:
-			retval = _equalDropCastStmt(a, b);
 			break;
 		case T_PrepareStmt:
 			retval = _equalPrepareStmt(a, b);
