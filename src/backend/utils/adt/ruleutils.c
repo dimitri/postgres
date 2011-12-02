@@ -7902,40 +7902,44 @@ _rwAlterTableStmt(CommandContext cmd, AlterTableStmt *node)
  * of type Node *. We declare that a void * to avoid incompatible pointer type
  * warnings.
  *
- * FIXME: just add a cast + assert at the callsite ^^^?
  */
 void
 pg_get_cmddef(CommandContext cmd, void *parsetree)
 {
-	//FIXME: at least add an assert for type
-	cmd->nodestr = nodeToString(parsetree);
-	/* elog(NOTICE, "nodeToString: %s", cmd->nodestr); */
-	stringToNode(cmd->nodestr);
-
 	/*
 	 * we need the big'o'switch here, and calling a specialized function per
-	 * utility statement nodetag.
+	 * utility statement nodetag. Also, we could have a trigger on ANY command
+	 * firing, in that case we need to avoid trying to fill the CommandContext
+	 * for command we don't know how to back parse.
 	 */
+	cmd->nodestr = NULL;
+	cmd->objectname = NULL;
+	cmd->schemaname = NULL;
 
 	switch (nodeTag(parsetree))
 	{
 		case T_DropStmt:
+			cmd->nodestr = nodeToString(parsetree);
 			_rwDropStmt(cmd, parsetree);
 			break;
 
 		case T_CreateStmt:
+			cmd->nodestr = nodeToString(parsetree);
 			_rwCreateStmt(cmd, parsetree);
 			break;
 
 		case T_AlterTableStmt:
+			cmd->nodestr = nodeToString(parsetree);
 			_rwAlterTableStmt(cmd, parsetree);
 			break;
 
 		case T_ViewStmt:
+			cmd->nodestr = nodeToString(parsetree);
 			_rwViewStmt(cmd, parsetree);
 			break;
 
 		case T_CreateExtensionStmt:
+			cmd->nodestr = nodeToString(parsetree);
 			_rwCreateExtensionStmt(cmd, parsetree);
 			break;
 

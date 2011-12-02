@@ -36,7 +36,8 @@
 #include "utils/tqual.h"
 
 static void check_cmdtrigger_name(const char *command, const char *trigname, Relation tgrel);
-static RegProcedure * list_triggers_for_command(const char *command, char type);
+static RegProcedure *list_triggers_for_command(const char *command, char type);
+static RegProcedure *list_all_triggers_for_command(const char *command, char type);
 static bool ExecBeforeCommandTriggers(Node *parsetree, CommandContext cmd,
 									  MemoryContext per_command_context);
 static int ExecInsteadOfCommandTriggers(Node *parsetree, CommandContext cmd,
@@ -122,26 +123,27 @@ CreateCmdTrigger(CreateCmdTrigStmt *stmt, const char *queryString)
 	 */
 	tgrel = heap_open(CmdTriggerRelationId, RowExclusiveLock);
 
-	/*
-	 * Scan pg_cmdtrigger for existing triggers on command. We do this only to
-	 * give a nice error message if there's already a trigger of the same name.
-	 * (The unique index on ctgcommand/ctgname would complain anyway.)
-	 *
-	 * NOTE that this is cool only because we have AccessExclusiveLock on
-	 * the relation, so the trigger set won't be changing underneath us.
-	 */
 	foreach(c, stmt->command)
 	{
 		A_Const *con = (A_Const *) lfirst(c);
 		char    *command = strVal(&con->val);
 
+		/*
+		 * Scan pg_cmdtrigger for existing triggers on command. We do this only
+		 * to give a nice error message if there's already a trigger of the
+		 * same name. (The unique index on ctgcommand/ctgname would complain
+		 * anyway.)
+		 *
+		 * NOTE that this is cool only because we have AccessExclusiveLock on
+		 * the relation, so the trigger set won't be changing underneath us.
+		 */
 		check_cmdtrigger_name(command, stmt->trigname, tgrel);
 
 		switch (stmt->timing)
 		{
 			case TRIGGER_TYPE_BEFORE:
 			{
-				RegProcedure *procs = list_triggers_for_command(command, CMD_TRIGGER_FIRED_INSTEAD);
+				RegProcedure *procs = list_all_triggers_for_command(command, CMD_TRIGGER_FIRED_INSTEAD);
 				ctgtype = CMD_TRIGGER_FIRED_BEFORE;
 				if (procs[0] != InvalidOid)
 					ereport(ERROR,
@@ -153,7 +155,7 @@ CreateCmdTrigger(CreateCmdTrigStmt *stmt, const char *queryString)
 
 			case TRIGGER_TYPE_INSTEAD:
 			{
-				RegProcedure *before = list_triggers_for_command(command, CMD_TRIGGER_FIRED_BEFORE);
+				RegProcedure *before = list_all_triggers_for_command(command, CMD_TRIGGER_FIRED_BEFORE);
 				RegProcedure *after;
 				ctgtype = CMD_TRIGGER_FIRED_INSTEAD;
 				if (before[0] != InvalidOid)
@@ -162,7 +164,7 @@ CreateCmdTrigger(CreateCmdTrigStmt *stmt, const char *queryString)
 							 errmsg("\"%s\" already has BEFORE triggers", command),
 							 errdetail("Commands cannot have both BEFORE and INSTEAD OF triggers.")));
 
-				after = list_triggers_for_command(command, CMD_TRIGGER_FIRED_AFTER);
+				after = list_all_triggers_for_command(command, CMD_TRIGGER_FIRED_AFTER);
 				if (after[0] != InvalidOid)
 					ereport(ERROR,
 							(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
@@ -173,7 +175,7 @@ CreateCmdTrigger(CreateCmdTrigStmt *stmt, const char *queryString)
 
 			case TRIGGER_TYPE_AFTER:
 			{
-				RegProcedure *procs = list_triggers_for_command(command, CMD_TRIGGER_FIRED_INSTEAD);
+				RegProcedure *procs = list_all_triggers_for_command(command, CMD_TRIGGER_FIRED_INSTEAD);
 				ctgtype = CMD_TRIGGER_FIRED_AFTER;
 				if (procs[0] != InvalidOid)
 					ereport(ERROR,
@@ -493,8 +495,24 @@ check_cmdtrigger_name(const char *command, const char *trigname, Relation tgrel)
  * nodeToString() output.
  *
  */
-//FIXME: Return a List here.
-//FIXME: add abort-after-first for CreateCmdTrigger?
+static RegProcedure *
+list_all_triggers_for_command(const char *command, char type)
+{
+	RegProcedure *procs = list_triggers_for_command(command, type);
+	RegProcedure *anyp  = list_triggers_for_command("ANY", type);
+
+	/* add the ANY trigger at the last position */
+	if (anyp != InvalidOid)
+	{
+		/* list_triggers_for_command ensure procs has at least one free slot */
+		int i;
+		for (i=0; procs[i] != InvalidOid; i++);
+		procs[i++] = anyp[0];
+		procs[i] = InvalidOid;
+	}
+	return procs;
+}
+
 static RegProcedure *
 list_triggers_for_command(const char *command, char type)
 {
@@ -528,9 +546,10 @@ list_triggers_for_command(const char *command, char type)
 		 */
 		if (cmd->ctgenabled != 'D' && cmd->ctgtype == type)
 		{
-			if (count == size)
+			/* ensure at least a free slot at the end of the array */
+			if ((count+1) == size)
 			{
-				size += 10;//FIXME: WTF?
+				size += 10;
 				procs = (Oid *)repalloc(procs, size);
 			}
 			procs[count++] = cmd->ctgfoid;
@@ -559,8 +578,12 @@ call_cmdtrigger_procedure(RegProcedure proc, CommandContext cmd,
 	/* Can't use OidFunctionCallN because we might get a NULL result */
 	InitFunctionCallInfoData(fcinfo, &flinfo, 5, InvalidOid, NULL, NULL);
 
-	fcinfo.arg[0] = PointerGetDatum(cstring_to_text(pstrdup(cmd->tag)));
-	fcinfo.arg[1] = PointerGetDatum(cstring_to_text(pstrdup(cmd->cmdstr)));
+	/* We support triggers ON ANY COMMAND so all fields here are nullable. */
+	if (cmd->tag != NULL)
+		fcinfo.arg[0] = PointerGetDatum(cstring_to_text(pstrdup(cmd->tag)));
+
+	if (cmd->cmdstr != NULL)
+		fcinfo.arg[1] = PointerGetDatum(cstring_to_text(pstrdup(cmd->cmdstr)));
 
 	if (cmd->nodestr != NULL)
 		fcinfo.arg[2] = PointerGetDatum(cstring_to_text(pstrdup(cmd->nodestr)));
@@ -568,13 +591,14 @@ call_cmdtrigger_procedure(RegProcedure proc, CommandContext cmd,
 	if (cmd->schemaname != NULL)
 		fcinfo.arg[3] = PointerGetDatum(cstring_to_text(pstrdup(cmd->schemaname)));
 
-	fcinfo.arg[4] = PointerGetDatum(cstring_to_text(pstrdup(cmd->objectname)));
+	if (cmd->objectname != NULL)
+		fcinfo.arg[4] = PointerGetDatum(cstring_to_text(pstrdup(cmd->objectname)));
 
-	fcinfo.argnull[0] = false;
-	fcinfo.argnull[1] = false;
+	fcinfo.argnull[0] = cmd->tag == NULL;
+	fcinfo.argnull[1] = cmd->cmdstr == NULL;
 	fcinfo.argnull[2] = cmd->nodestr == NULL;
 	fcinfo.argnull[3] = cmd->schemaname == NULL;
-	fcinfo.argnull[4] = false;
+	fcinfo.argnull[4] = cmd->objectname == NULL;
 
 	pgstat_init_function_usage(&fcinfo, &fcusage);
 
@@ -633,8 +657,8 @@ ExecBeforeCommandTriggers(Node *parsetree, CommandContext cmd,
 						  MemoryContext per_command_context)
 {
 	MemoryContext oldContext;
-	RegProcedure *procs = list_triggers_for_command(cmd->tag,
-													CMD_TRIGGER_FIRED_BEFORE);
+	RegProcedure *procs =
+		list_all_triggers_for_command(cmd->tag, CMD_TRIGGER_FIRED_BEFORE);
 	RegProcedure proc;
 	int cur= 0;
 	bool cont = true;
@@ -676,8 +700,8 @@ ExecInsteadOfCommandTriggers(Node *parsetree, CommandContext cmd,
 							 MemoryContext per_command_context)
 {
 	MemoryContext oldContext;
-	RegProcedure *procs = list_triggers_for_command(cmd->tag,
-													CMD_TRIGGER_FIRED_INSTEAD);
+	RegProcedure *procs =
+		list_all_triggers_for_command(cmd->tag, CMD_TRIGGER_FIRED_INSTEAD);
 	RegProcedure proc;
 	int cur = 0;
 
@@ -709,8 +733,8 @@ void
 ExecAfterCommandTriggers(Node *parsetree, CommandContext cmd)
 {
 	MemoryContext oldContext, per_command_context;
-	RegProcedure *procs = list_triggers_for_command(cmd->tag,
-													CMD_TRIGGER_FIRED_AFTER);
+	RegProcedure *procs =
+		list_all_triggers_for_command(cmd->tag, CMD_TRIGGER_FIRED_AFTER);
 	RegProcedure proc;
 	int cur = 0;
 

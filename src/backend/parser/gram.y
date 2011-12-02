@@ -4220,6 +4220,16 @@ CreateCmdTrigStmt:
 					n->funcname = $9;
 					$$ = (Node *)n;
 				}
+	      | CREATE TRIGGER name TriggerActionTime ANY COMMAND
+			EXECUTE PROCEDURE func_name '(' TriggerFuncArgs ')'
+				{
+					CreateCmdTrigStmt *n = makeNode(CreateCmdTrigStmt);
+					n->trigname = $3;
+					n->timing   = $4;
+					n->command  = list_make1(makeStringConst("ANY", @5));
+					n->funcname = $9;
+					$$ = (Node *)n;
+				}
 		;
 
 trigger_command_list:
@@ -4270,6 +4280,24 @@ DropCmdTrigStmt:
 					n->missing_ok = true;
 					$$ = (Node *) n;
 				}
+			| DROP TRIGGER name ON ANY COMMAND opt_drop_behavior
+				{
+					DropCmdTrigStmt *n = makeNode(DropCmdTrigStmt);
+					n->trigname = $3;
+					n->command  = list_make1(makeStringConst("ANY", @4));
+					n->behavior = $7;
+					n->missing_ok = false;
+					$$ = (Node *) n;
+				}
+			| DROP TRIGGER IF_P EXISTS name ON ANY COMMAND opt_drop_behavior
+				{
+					DropCmdTrigStmt *n = makeNode(DropCmdTrigStmt);
+					n->trigname = $5;
+					n->command  = list_make1(makeStringConst("ANY", @6));
+					n->behavior = $9;
+					n->missing_ok = true;
+					$$ = (Node *) n;
+				}
 		;
 
 AlterCmdTrigStmt:
@@ -4278,6 +4306,14 @@ AlterCmdTrigStmt:
 					AlterCmdTrigStmt *n = makeNode(AlterCmdTrigStmt);
 					n->trigname   = $3;
 					n->command    = $6;
+					n->tgenabled  = $8;
+					$$ = (Node *) n;
+				}
+		  | ALTER TRIGGER name ON ANY COMMAND SET enable_trigger
+				{
+					AlterCmdTrigStmt *n = makeNode(AlterCmdTrigStmt);
+					n->trigname   = $3;
+					n->command    = makeStringConst("ANY", @6);
 					n->tgenabled  = $8;
 					$$ = (Node *) n;
 				}
