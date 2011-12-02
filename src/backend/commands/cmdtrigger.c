@@ -50,7 +50,7 @@ CreateCmdTrigger(CreateCmdTrigStmt *stmt, const char *queryString)
 	Datum		values[Natts_pg_trigger];
 	bool		nulls[Natts_pg_trigger];
 	/* cmd trigger args: cmd_string, cmd_nodestring, schemaname, objectname */
-	Oid			fargtypes[4] = {TEXTOID, TEXTOID, TEXTOID, TEXTOID};
+	Oid			fargtypes[5] = {TEXTOID, TEXTOID, TEXTOID, TEXTOID, TEXTOID};
 	Oid			funcoid;
 	Oid			funcrettype;
 	Oid			trigoid;
@@ -61,7 +61,7 @@ CreateCmdTrigger(CreateCmdTrigStmt *stmt, const char *queryString)
 	/*
 	 * Find and validate the trigger function.
 	 */
-	funcoid = LookupFuncName(stmt->funcname, 4, fargtypes, false);
+	funcoid = LookupFuncName(stmt->funcname, 5, fargtypes, false);
 	funcrettype = get_func_rettype(funcoid);
 
 	/*
@@ -451,6 +451,7 @@ check_cmdtrigger_name(const char *command, const char *trigname, Relation tgrel)
  * We call the functions that matches the command triggers definitions in
  * alphabetical order, and give them those arguments:
  *
+ *   command tag, text
  *   command string, text
  *   command node string, text
  *   schemaname, text, can be null
@@ -531,22 +532,24 @@ call_cmdtrigger_procedure(RegProcedure proc, CommandContext cmd,
 	fmgr_info_cxt(proc, &flinfo, per_command_context);
 
 	/* Can't use OidFunctionCallN because we might get a NULL result */
-	InitFunctionCallInfoData(fcinfo, &flinfo, 4, InvalidOid, NULL, NULL);
+	InitFunctionCallInfoData(fcinfo, &flinfo, 5, InvalidOid, NULL, NULL);
 
-	fcinfo.arg[0] = PointerGetDatum(cstring_to_text(pstrdup(cmd->cmdstr)));
+	fcinfo.arg[0] = PointerGetDatum(cstring_to_text(pstrdup(cmd->tag)));
+	fcinfo.arg[1] = PointerGetDatum(cstring_to_text(pstrdup(cmd->cmdstr)));
 
 	if (cmd->nodestr != NULL)
-		fcinfo.arg[1] = PointerGetDatum(cstring_to_text(pstrdup(cmd->nodestr)));
+		fcinfo.arg[2] = PointerGetDatum(cstring_to_text(pstrdup(cmd->nodestr)));
 
 	if (cmd->schemaname != NULL)
-		fcinfo.arg[2] = PointerGetDatum(cstring_to_text(pstrdup(cmd->schemaname)));
+		fcinfo.arg[3] = PointerGetDatum(cstring_to_text(pstrdup(cmd->schemaname)));
 
-	fcinfo.arg[3] = PointerGetDatum(cstring_to_text(pstrdup(cmd->objectname)));
+	fcinfo.arg[4] = PointerGetDatum(cstring_to_text(pstrdup(cmd->objectname)));
 
 	fcinfo.argnull[0] = false;
-	fcinfo.argnull[1] = cmd->nodestr == NULL;
-	fcinfo.argnull[2] = cmd->schemaname == NULL;
-	fcinfo.argnull[3] = false;
+	fcinfo.argnull[1] = false;
+	fcinfo.argnull[2] = cmd->nodestr == NULL;
+	fcinfo.argnull[3] = cmd->schemaname == NULL;
+	fcinfo.argnull[4] = false;
 
 	pgstat_init_function_usage(&fcinfo, &fcusage);
 
