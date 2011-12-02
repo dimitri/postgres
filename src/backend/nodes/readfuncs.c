@@ -379,7 +379,13 @@ _readConstraint(void)
 	READ_BOOL_FIELD(initdeferred);
 	READ_LOCATION_FIELD(location);
 
-	/* READ_ENUM_FIELD(contype,ConstrType); */
+	/*
+	 * READ_ENUM_FIELD(contype,ConstrType);
+	 *
+	 * The contype is not written out as an enum value, but as a string.
+	 * Depending on the value of the string some fields or some other are to be
+	 * read in the node string.
+	 */
 
 	token = pg_strtok(&length); /* skip :constraint */
 	token = pg_strtok(&length); /* get field value */
@@ -1427,7 +1433,6 @@ _readRangeTblEntry(void)
 
 	READ_DONE();
 }
-
 
 /*
  * parseNodeString

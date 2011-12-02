@@ -1,13 +1,12 @@
 /*-------------------------------------------------------------------------
  *
- * trigger.c
- *	  PostgreSQL TRIGGERs support code.
+ * cmdtrigger.c
+ *	  PostgreSQL COMMAND TRIGGER support code.
  *
- * Portions Copyright (c) 1996-2011, PostgreSQL Global Development Group
- * Portions Copyright (c) 1994, Regents of the University of California
+ * Portions Copyright (c) 2011, PostgreSQL Global Development Group
  *
  * IDENTIFICATION
- *	  src/backend/commands/trigger.c
+ *	  src/backend/commands/cmdtrigger.c
  *
  *-------------------------------------------------------------------------
  */
@@ -130,6 +129,8 @@ CreateCmdTrigger(CreateCmdTrigStmt *stmt, const char *queryString)
 						 errdetail("Commands cannot have both AFTER and INSTEAD OF triggers.")));
             break;
 		}
+		default:
+			elog(ERROR, "unknown trigger type for COMMAND TRIGGER");
 	}
 
 	if (ctgtype == CMD_TRIGGER_FIRED_BEFORE && funcrettype != BOOLOID)
@@ -157,15 +158,12 @@ CreateCmdTrigger(CreateCmdTrigStmt *stmt, const char *queryString)
 
 	tuple = heap_form_tuple(tgrel->rd_att, values, nulls);
 
-	/* force tuple to have the desired OID */
-	trigoid = HeapTupleGetOid(tuple);
-
-	/*
-	 * Insert tuple into pg_trigger.
-	 */
 	simple_heap_insert(tgrel, tuple);
 
 	CatalogUpdateIndexes(tgrel, tuple);
+
+	/* remember oid for record dependencies */
+	trigoid = HeapTupleGetOid(tuple);
 
 	heap_freetuple(tuple);
 	heap_close(tgrel, RowExclusiveLock);
@@ -174,7 +172,7 @@ CreateCmdTrigger(CreateCmdTrigStmt *stmt, const char *queryString)
 	 * Record dependencies for trigger.  Always place a normal dependency on
 	 * the function.
 	 */
-	myself.classId = TriggerRelationId;
+	myself.classId = CmdTriggerRelationId;
 	myself.objectId = trigoid;
 	myself.objectSubId = 0;
 
@@ -263,8 +261,8 @@ AlterCmdTrigger(AlterCmdTrigStmt *stmt)
 	Form_pg_cmdtrigger cmdForm;
 	char        tgenabled = pstrdup(stmt->tgenabled)[0]; /* works with gram.y */
 
-	tgrel = heap_open(CmdTriggerRelationId, AccessShareLock);
-
+	tgrel = heap_open(CmdTriggerRelationId, AccessShareLock);//FIXME: wrong lock level?
+	//FIXME: need a row level lock here
 	ScanKeyInit(&skey[0],
 				Anum_pg_cmdtrigger_ctgcommand,
 				BTEqualStrategyNumber, F_NAMEEQ,
@@ -319,6 +317,7 @@ RenameCmdTrigger(List *name, const char *trigname, const char *newname)
 
 	rel = heap_open(CmdTriggerRelationId, RowExclusiveLock);
 
+	//FIXME: need a row level lock here
 	/* newname must be available */
 	check_cmdtrigger_name(command, newname, rel);
 
@@ -436,7 +435,7 @@ check_cmdtrigger_name(const char *command, const char *trigname, Relation tgrel)
 
 	tuple = systable_getnext(tgscan);
 
-	elog(NOTICE, "check_cmdtrigger_name(%s, %s)", command, trigname);
+	elog(DEBUG1, "check_cmdtrigger_name(%s, %s)", command, trigname);
 
 	if (HeapTupleIsValid(tuple))
 		ereport(ERROR,
@@ -468,7 +467,8 @@ check_cmdtrigger_name(const char *command, const char *trigname, Relation tgrel)
  * nodeToString() output.
  *
  */
-
+//FIXME: Return a List here.
+//FIXME: add abort-after-first for CreateCmdTrigger?
 static RegProcedure *
 list_triggers_for_command(const char *command, char type)
 {
@@ -504,7 +504,7 @@ list_triggers_for_command(const char *command, char type)
 		{
 			if (count == size)
 			{
-				size += 10;
+				size += 10;//FIXME: WTF?
 				procs = (Oid *)repalloc(procs, size);
 			}
 			procs[count++] = cmd->ctgfoid;
@@ -564,7 +564,7 @@ call_cmdtrigger_procedure(RegProcedure proc, CommandContext cmd,
  * Instead Of triggers, not both.
  *
  * Instead Of triggers have to run before the command and to cancel its
- * execution , hence this API where we return the number of InsteadOf trigger
+ * execution, hence this API where we return the number of InsteadOf trigger
  * procedures we fired.
  */
 int
@@ -595,6 +595,8 @@ ExecBeforeOrInsteadOfCommandTriggers(Node *parsetree, const char *cmdtag)
 	return nb;
 }
 
+//FIXME: This looks like it should be static
+//FIXME: why not return the number of calls here as well?
 bool
 ExecBeforeCommandTriggers(Node *parsetree, const char *cmdtag,
 						  MemoryContext per_command_context)
@@ -606,6 +608,7 @@ ExecBeforeCommandTriggers(Node *parsetree, const char *cmdtag,
 	RegProcedure proc;
 	int cur= 0;
 	bool cont = true;
+	//FIXME: add assert for IsA(parsetree, parsetree)
 
 	/*
 	 * Do the functions evaluation in a per-command memory context, so that
@@ -635,6 +638,7 @@ ExecBeforeCommandTriggers(Node *parsetree, const char *cmdtag,
 /*
  * return the count of triggers we fired
  */
+//FIXME: This looks like it should be static
 int
 ExecInsteadOfCommandTriggers(Node *parsetree, const char *cmdtag,
 							 MemoryContext per_command_context)
@@ -645,6 +649,7 @@ ExecInsteadOfCommandTriggers(Node *parsetree, const char *cmdtag,
 													CMD_TRIGGER_FIRED_INSTEAD);
 	RegProcedure proc;
 	int cur = 0;
+	//FIXME: add assert for IsA(parsetree, parsetree)
 
 	/*
 	 * Do the functions evaluation in a per-command memory context, so that
@@ -676,6 +681,8 @@ ExecAfterCommandTriggers(Node *parsetree, const char *cmdtag)
 													CMD_TRIGGER_FIRED_AFTER);
 	RegProcedure proc;
 	int cur = 0;
+
+	//FIXME: add assert for IsA(parsetree, parsetree)
 
 	/*
 	 * Do the functions evaluation in a per-command memory context, so that

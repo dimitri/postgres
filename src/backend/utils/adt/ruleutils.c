@@ -7332,6 +7332,9 @@ flatten_reloptions(Oid relid)
  * Functions that ouputs a COMMAND given a Utility parsetree
  *
  * FIXME: First some tools that I couldn't find in the sources.
+ * FIXME: replace conversion to rangevar and back to string with
+ *  NameListToQuotedString
+ * FIXME: missing quoting
  */
 static char *
 RangeVarToString(RangeVar *r)
@@ -7506,8 +7509,8 @@ _rwViewStmt(CommandContext cmd, ViewStmt *node)
 	viewParse = parse_analyze((Node *) copyObject(node->query),
 							  "(unavailable source text)", NULL, 0);
 
-	appendStringInfo(&buf, "CREATE %s %s AS ",
-					 node->replace? "OR REPLACE VIEW": "VIEW",
+	appendStringInfo(&buf, "CREATE %sVIEW %s AS ",
+					 node->replace? "OR REPLACE": "",
 					 RangeVarToString(node->view));
 
 	get_query_def(viewParse, &buf, NIL, NULL, 0, 1);
@@ -7526,6 +7529,7 @@ _rwColQualList(StringInfo buf, List *constraints, const char *relname)
 	foreach(lc, constraints)
 	{
 		Constraint *c = (Constraint *) lfirst(lc);
+		Assert(IsA(c, Constraint));
 
 		if (c->conname != NULL)
 			appendStringInfo(buf, " CONSTRAINT %s", c->conname);
@@ -7897,10 +7901,13 @@ _rwAlterTableStmt(CommandContext cmd, AlterTableStmt *node)
  * work from the parsetree directly, that would be query->utilityStmt which is
  * of type Node *. We declare that a void * to avoid incompatible pointer type
  * warnings.
+ *
+ * FIXME: just add a cast + assert at the callsite ^^^?
  */
 void
 pg_get_cmddef(CommandContext cmd, void *parsetree)
 {
+	//FIXME: at least add an assert for type
 	cmd->nodestr = nodeToString(parsetree);
 	/* elog(NOTICE, "nodeToString: %s", cmd->nodestr); */
 	stringToNode(cmd->nodestr);

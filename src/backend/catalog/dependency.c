@@ -2843,7 +2843,7 @@ getObjectDescription(const ObjectAddress *object)
 
 				trig = (Form_pg_cmdtrigger) GETSTRUCT(tup);
 
-				appendStringInfo(&buffer, _("trigger %s on %s"),
+				appendStringInfo(&buffer, _("command trigger %s on %s"),
 								 NameStr(trig->ctgname),
 								 NameStr(trig->ctgcommand));
 
