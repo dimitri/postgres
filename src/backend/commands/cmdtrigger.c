@@ -264,8 +264,7 @@ AlterCmdTrigger(AlterCmdTrigStmt *stmt)
 	Form_pg_cmdtrigger cmdForm;
 	char        tgenabled = pstrdup(stmt->tgenabled)[0]; /* works with gram.y */
 
-	tgrel = heap_open(CmdTriggerRelationId, AccessShareLock);//FIXME: wrong lock level?
-	//FIXME: need a row level lock here
+	tgrel = heap_open(CmdTriggerRelationId, RowExclusiveLock);
 	ScanKeyInit(&skey[0],
 				Anum_pg_cmdtrigger_ctgcommand,
 				BTEqualStrategyNumber, F_NAMEEQ,
