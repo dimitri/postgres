@@ -270,6 +270,7 @@ static void processCASbits(int cas_bits, int location, const char *constrType,
 %type <value>	TriggerFuncArg
 %type <node>	TriggerWhen
 %type <str>		trigger_command enable_trigger
+%type <list>    trigger_command_list
 
 %type <str>		copy_file_name
 				database_name access_method_clause access_method attr_name
@@ -4209,7 +4210,7 @@ DropTrigStmt:
  *****************************************************************************/
 
 CreateCmdTrigStmt:
-			CREATE TRIGGER name TriggerActionTime COMMAND trigger_command
+			CREATE TRIGGER name TriggerActionTime COMMAND trigger_command_list
 			EXECUTE PROCEDURE func_name '(' TriggerFuncArgs ')'
 				{
 					CreateCmdTrigStmt *n = makeNode(CreateCmdTrigStmt);
@@ -4221,6 +4222,18 @@ CreateCmdTrigStmt:
 				}
 		;
 
+trigger_command_list:
+          trigger_command
+          {
+              $$ = list_make1(makeStringConst($1, @1));
+          }
+		| trigger_command_list ',' trigger_command
+          {
+			  $$ = lappend($1, makeStringConst($3, @1));
+          }
+		;
+
+
 /*
  * that will get matched against what CreateCommandTag  returns
  *
@@ -4229,17 +4242,17 @@ CreateCmdTrigStmt:
  * utility statements in pg_get_cmddef() in src/backend/utils/adt/ruleutils.c
  */
 trigger_command:
-			CREATE TABLE						{ $$ = "CREATE TABLE"; }
-			| ALTER TABLE						{ $$ = "ALTER TABLE"; }
-			| DROP TABLE						{ $$ = "DROP TABLE"; }
-			| CREATE VIEW						{ $$ = "CREATE VIEW"; }
-			| DROP VIEW							{ $$ = "DROP VIEW"; }
-			| CREATE EXTENSION					{ $$ = "CREATE EXTENSION"; }
-			| DROP EXTENSION					{ $$ = "DROP EXTENSION"; }
+			   CREATE TABLE						{ $$ = "CREATE TABLE"; }
+			   | ALTER TABLE					{ $$ = "ALTER TABLE"; }
+			   | DROP TABLE						{ $$ = "DROP TABLE"; }
+			   | CREATE VIEW					{ $$ = "CREATE VIEW"; }
+			   | DROP VIEW						{ $$ = "DROP VIEW"; }
+			   | CREATE EXTENSION				{ $$ = "CREATE EXTENSION"; }
+			   | DROP EXTENSION					{ $$ = "DROP EXTENSION"; }
 		;
 
 DropCmdTrigStmt:
-			DROP TRIGGER name ON COMMAND trigger_command opt_drop_behavior
+			DROP TRIGGER name ON COMMAND trigger_command_list opt_drop_behavior
 				{
 					DropCmdTrigStmt *n = makeNode(DropCmdTrigStmt);
 					n->trigname = $3;
@@ -4248,7 +4261,7 @@ DropCmdTrigStmt:
 					n->missing_ok = false;
 					$$ = (Node *) n;
 				}
-			| DROP TRIGGER IF_P EXISTS name ON COMMAND trigger_command opt_drop_behavior
+			| DROP TRIGGER IF_P EXISTS name ON COMMAND trigger_command_list opt_drop_behavior
 				{
 					DropCmdTrigStmt *n = makeNode(DropCmdTrigStmt);
 					n->trigname = $5;

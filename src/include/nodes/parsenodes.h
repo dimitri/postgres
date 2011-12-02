@@ -1730,8 +1730,8 @@ typedef struct CreateTrigStmt
 typedef struct CreateCmdTrigStmt
 {
 	NodeTag		type;
-	char	   *command;		/* command's name */
-	char	   *trigname;			/* TRIGGER's name */
+	List	   *command;		/* commands name */
+	char	   *trigname;		/* TRIGGER's name */
 	/* timing uses the TRIGGER_TYPE bits defined in catalog/pg_trigger.h */
 	int16		timing;			/* BEFORE, AFTER, or INSTEAD */
 	List	   *funcname;		/* qual. name of function to call */
@@ -1957,7 +1957,7 @@ typedef struct DropPropertyStmt
 typedef struct DropCmdTrigStmt
 {
 	NodeTag		type;
-	char	   *command;		/* command's name */
+	List	   *command;		/* command's name */
 	char	   *trigname;		/* TRIGGER's name */
 	DropBehavior behavior;		/* RESTRICT or CASCADE behavior */
 	bool		missing_ok;		/* skip error if missing? */

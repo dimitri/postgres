@@ -29,7 +29,7 @@
 #define CMD_TRIGGER_FIRED_AFTER				'A'
 #define CMD_TRIGGER_FIRED_INSTEAD			'I'
 
-extern Oid CreateCmdTrigger(CreateCmdTrigStmt *stmt, const char *queryString);
+extern void CreateCmdTrigger(CreateCmdTrigStmt *stmt, const char *queryString);
 extern void DropCmdTrigger(DropCmdTrigStmt *stmt);
 extern void RemoveCmdTriggerById(Oid ctrigOid);
 extern Oid	get_cmdtrigger_oid(const char *command, const char *trigname, bool missing_ok);

@@ -43,23 +43,72 @@ static int ExecInsteadOfCommandTriggers(Node *parsetree, CommandContext cmd,
 										MemoryContext per_command_context);
 
 /*
- * Create a trigger.  Returns the OID of the created trigger.
+ * Insert Command Trigger Tuple
+ *
+ * Insert the new pg_cmdtrigger row, and return the OID assigned to the new
+ * row.
  */
-Oid
-CreateCmdTrigger(CreateCmdTrigStmt *stmt, const char *queryString)
+static Oid
+InsertCmdTriggerTuple(Relation tgrel,
+					  char *command, char *trigname, Oid funcoid, char ctgtype)
 {
-	Relation	tgrel;
+	Oid         trigoid;
 	HeapTuple	tuple;
 	Datum		values[Natts_pg_trigger];
 	bool		nulls[Natts_pg_trigger];
+	ObjectAddress myself, referenced;
+
+	/*
+	 * Build the new pg_trigger tuple.
+	 */
+	memset(nulls, false, sizeof(nulls));
+
+	values[Anum_pg_cmdtrigger_ctgcommand - 1] = NameGetDatum(command);
+	values[Anum_pg_cmdtrigger_ctgname - 1] = NameGetDatum(trigname);
+	values[Anum_pg_cmdtrigger_ctgfoid - 1] = ObjectIdGetDatum(funcoid);
+	values[Anum_pg_cmdtrigger_ctgtype - 1] = CharGetDatum(ctgtype);
+	values[Anum_pg_cmdtrigger_ctgenabled - 1] = CharGetDatum(TRIGGER_FIRES_ON_ORIGIN);
+
+	tuple = heap_form_tuple(tgrel->rd_att, values, nulls);
+
+	simple_heap_insert(tgrel, tuple);
+
+	CatalogUpdateIndexes(tgrel, tuple);
+
+	/* remember oid for record dependencies */
+	trigoid = HeapTupleGetOid(tuple);
+
+	heap_freetuple(tuple);
+
+	/*
+	 * Record dependencies for trigger.  Always place a normal dependency on
+	 * the function.
+	 */
+	myself.classId = CmdTriggerRelationId;
+	myself.objectId = trigoid;
+	myself.objectSubId = 0;
+
+	referenced.classId = ProcedureRelationId;
+	referenced.objectId = funcoid;
+	referenced.objectSubId = 0;
+	recordDependencyOn(&myself, &referenced, DEPENDENCY_NORMAL);
+
+	return trigoid;
+}
+
+/*
+ * Create a trigger.  Returns the OID of the created trigger.
+ */
+void
+CreateCmdTrigger(CreateCmdTrigStmt *stmt, const char *queryString)
+{
+	Relation	tgrel;
+	ListCell   *c;
 	/* cmd trigger args: cmd_string, cmd_nodestring, schemaname, objectname */
 	Oid			fargtypes[5] = {TEXTOID, TEXTOID, TEXTOID, TEXTOID, TEXTOID};
 	Oid			funcoid;
 	Oid			funcrettype;
-	Oid			trigoid;
 	char        ctgtype;
-	ObjectAddress myself,
-				referenced;
 
 	/*
 	 * Find and validate the trigger function.
@@ -81,110 +130,77 @@ CreateCmdTrigger(CreateCmdTrigStmt *stmt, const char *queryString)
 	 * NOTE that this is cool only because we have AccessExclusiveLock on
 	 * the relation, so the trigger set won't be changing underneath us.
 	 */
-	check_cmdtrigger_name(stmt->command, stmt->trigname, tgrel);
-
-	switch (stmt->timing)
+	foreach(c, stmt->command)
 	{
-		case TRIGGER_TYPE_BEFORE:
+		A_Const *con = (A_Const *) lfirst(c);
+		char    *command = strVal(&con->val);
+
+		check_cmdtrigger_name(command, stmt->trigname, tgrel);
+
+		switch (stmt->timing)
 		{
-	        RegProcedure *procs = list_triggers_for_command(stmt->command, CMD_TRIGGER_FIRED_INSTEAD);
-		    ctgtype = CMD_TRIGGER_FIRED_BEFORE;
-			if (procs[0] != InvalidOid)
-				ereport(ERROR,
-						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						 errmsg("\"%s\" already has INSTEAD OF triggers",
-								stmt->command),
-						 errdetail("Commands cannot have both BEFORE and INSTEAD OF triggers.")));
-            break;
+			case TRIGGER_TYPE_BEFORE:
+			{
+				RegProcedure *procs = list_triggers_for_command(command, CMD_TRIGGER_FIRED_INSTEAD);
+				ctgtype = CMD_TRIGGER_FIRED_BEFORE;
+				if (procs[0] != InvalidOid)
+					ereport(ERROR,
+							(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							 errmsg("\"%s\" already has INSTEAD OF triggers", command),
+							 errdetail("Commands cannot have both BEFORE and INSTEAD OF triggers.")));
+				break;
+			}
+
+			case TRIGGER_TYPE_INSTEAD:
+			{
+				RegProcedure *before = list_triggers_for_command(command, CMD_TRIGGER_FIRED_BEFORE);
+				RegProcedure *after;
+				ctgtype = CMD_TRIGGER_FIRED_INSTEAD;
+				if (before[0] != InvalidOid)
+					ereport(ERROR,
+							(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							 errmsg("\"%s\" already has BEFORE triggers", command),
+							 errdetail("Commands cannot have both BEFORE and INSTEAD OF triggers.")));
+
+				after = list_triggers_for_command(command, CMD_TRIGGER_FIRED_AFTER);
+				if (after[0] != InvalidOid)
+					ereport(ERROR,
+							(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							 errmsg("\"%s\" already has AFTER triggers", command),
+							 errdetail("Commands cannot have both AFTER and INSTEAD OF triggers.")));
+				break;
+			}
+
+			case TRIGGER_TYPE_AFTER:
+			{
+				RegProcedure *procs = list_triggers_for_command(command, CMD_TRIGGER_FIRED_INSTEAD);
+				ctgtype = CMD_TRIGGER_FIRED_AFTER;
+				if (procs[0] != InvalidOid)
+					ereport(ERROR,
+							(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							 errmsg("\"%s\" already has INSTEAD OF triggers", command),
+							 errdetail("Commands cannot have both AFTER and INSTEAD OF triggers.")));
+				break;
+			}
+			default:
+				elog(ERROR, "unknown trigger type for COMMAND TRIGGER");
 		}
 
-		case TRIGGER_TYPE_INSTEAD:
-		{
-	        RegProcedure *before = list_triggers_for_command(stmt->command, CMD_TRIGGER_FIRED_BEFORE);
-	        RegProcedure *after;
-		    ctgtype = CMD_TRIGGER_FIRED_INSTEAD;
-			if (before[0] != InvalidOid)
-				ereport(ERROR,
-						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						 errmsg("\"%s\" already has BEFORE triggers",
-								stmt->command),
-						 errdetail("Commands cannot have both BEFORE and INSTEAD OF triggers.")));
+		if (ctgtype == CMD_TRIGGER_FIRED_BEFORE && funcrettype != BOOLOID)
+			ereport(ERROR,
+					(errcode(ERRCODE_INVALID_OBJECT_DEFINITION),
+					 errmsg("function \"%s\" must return type \"boolean\"",
+							NameListToString(stmt->funcname))));
 
-			after = list_triggers_for_command(stmt->command, CMD_TRIGGER_FIRED_AFTER);
-			if (after[0] != InvalidOid)
-				ereport(ERROR,
-						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						 errmsg("\"%s\" already has AFTER triggers",
-								stmt->command),
-						 errdetail("Commands cannot have both AFTER and INSTEAD OF triggers.")));
-            break;
-		}
+		if (ctgtype != CMD_TRIGGER_FIRED_BEFORE && funcrettype != VOIDOID)
+			ereport(ERROR,
+					(errcode(ERRCODE_INVALID_OBJECT_DEFINITION),
+					 errmsg("function \"%s\" must return type \"void\"",
+							NameListToString(stmt->funcname))));
 
-		case TRIGGER_TYPE_AFTER:
-		{
-	        RegProcedure *procs = list_triggers_for_command(stmt->command, CMD_TRIGGER_FIRED_INSTEAD);
-		    ctgtype = CMD_TRIGGER_FIRED_AFTER;
-			if (procs[0] != InvalidOid)
-				ereport(ERROR,
-						(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-						 errmsg("\"%s\" already has INSTEAD OF triggers",
-								stmt->command),
-						 errdetail("Commands cannot have both AFTER and INSTEAD OF triggers.")));
-            break;
-		}
-		default:
-			elog(ERROR, "unknown trigger type for COMMAND TRIGGER");
+		(void) InsertCmdTriggerTuple(tgrel, command, stmt->trigname, funcoid, ctgtype);
 	}
-
-	if (ctgtype == CMD_TRIGGER_FIRED_BEFORE && funcrettype != BOOLOID)
-		ereport(ERROR,
-				(errcode(ERRCODE_INVALID_OBJECT_DEFINITION),
-				 errmsg("function \"%s\" must return type \"boolean\"",
-						NameListToString(stmt->funcname))));
-
-	if (ctgtype != CMD_TRIGGER_FIRED_BEFORE && funcrettype != VOIDOID)
-		ereport(ERROR,
-				(errcode(ERRCODE_INVALID_OBJECT_DEFINITION),
-				 errmsg("function \"%s\" must return type \"void\"",
-						NameListToString(stmt->funcname))));
-
-	/*
-	 * Build the new pg_trigger tuple.
-	 */
-	memset(nulls, false, sizeof(nulls));
-
-	values[Anum_pg_cmdtrigger_ctgcommand - 1] = NameGetDatum(stmt->command);
-	values[Anum_pg_cmdtrigger_ctgname - 1] = NameGetDatum(stmt->trigname);
-	values[Anum_pg_cmdtrigger_ctgfoid - 1] = ObjectIdGetDatum(funcoid);
-	values[Anum_pg_cmdtrigger_ctgtype - 1] = CharGetDatum(ctgtype);
-	values[Anum_pg_cmdtrigger_ctgenabled - 1] = CharGetDatum(TRIGGER_FIRES_ON_ORIGIN);
-
-	tuple = heap_form_tuple(tgrel->rd_att, values, nulls);
-
-	simple_heap_insert(tgrel, tuple);
-
-	CatalogUpdateIndexes(tgrel, tuple);
-
-	/* remember oid for record dependencies */
-	trigoid = HeapTupleGetOid(tuple);
-
-	heap_freetuple(tuple);
 	heap_close(tgrel, RowExclusiveLock);
-
-	/*
-	 * Record dependencies for trigger.  Always place a normal dependency on
-	 * the function.
-	 */
-	myself.classId = CmdTriggerRelationId;
-	myself.objectId = trigoid;
-	myself.objectSubId = 0;
-
-	referenced.classId = ProcedureRelationId;
-	referenced.objectId = funcoid;
-	referenced.objectSubId = 0;
-	recordDependencyOn(&myself, &referenced, DEPENDENCY_NORMAL);
-
-	return trigoid;
 }
 
 /*
@@ -193,25 +209,32 @@ CreateCmdTrigger(CreateCmdTrigStmt *stmt, const char *queryString)
 void
 DropCmdTrigger(DropCmdTrigStmt *stmt)
 {
-	ObjectAddress object;
+	ListCell   *c;
 
-	object.classId = CmdTriggerRelationId;
-	object.objectId = get_cmdtrigger_oid(stmt->command, stmt->trigname,
-										 stmt->missing_ok);
-	object.objectSubId = 0;
-
-	if (!OidIsValid(object.objectId))
+	foreach(c, stmt->command)
 	{
-		ereport(NOTICE,
-		  (errmsg("trigger \"%s\" for command \"%s\" does not exist, skipping",
-				  stmt->trigname, stmt->command)));
-		return;
-	}
+		ObjectAddress object;
+		A_Const *con = (A_Const *) lfirst(c);
+		char    *command = strVal(&con->val);
 
-	/*
-	 * Do the deletion
-	 */
-	performDeletion(&object, stmt->behavior);
+		object.classId = CmdTriggerRelationId;
+		object.objectId = get_cmdtrigger_oid(command, stmt->trigname,
+											 stmt->missing_ok);
+		object.objectSubId = 0;
+
+		if (!OidIsValid(object.objectId))
+		{
+			ereport(NOTICE,
+					(errmsg("trigger \"%s\" for command \"%s\" does not exist, skipping",
+							stmt->trigname, command)));
+			break;
+		}
+
+		/*
+		 * Do the deletion
+		 */
+		performDeletion(&object, stmt->behavior);
+	}
 }
 
 /*

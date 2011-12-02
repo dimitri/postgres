@@ -1058,7 +1058,7 @@ standard_ProcessUtility(Node *parsetree,
 			break;
 
 		case T_CreateCmdTrigStmt:
-			(void) CreateCmdTrigger((CreateCmdTrigStmt *) parsetree, queryString);
+			CreateCmdTrigger((CreateCmdTrigStmt *) parsetree, queryString);
 			break;
 
 		case T_DropCmdTrigStmt:
