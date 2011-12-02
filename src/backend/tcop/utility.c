@@ -329,11 +329,13 @@ ProcessUtility(Node *parsetree,
 	 * true whatever is given as completionTag here, so just call
 	 * CreateCommandTag() for our own business.
 	 */
-	const char *commandTag = CreateCommandTag(parsetree);
+	CommandContextData cmd;
+	cmd.tag = (char *) CreateCommandTag(parsetree);
+	cmd.cmdstr = NULL;
 
 	Assert(queryString != NULL);	/* required as of 8.4 */
 
-	if (ExecBeforeOrInsteadOfCommandTriggers(parsetree, commandTag) > 0)
+	if (ExecBeforeOrInsteadOfCommandTriggers(parsetree, &cmd) > 0)
 		return;
 
 	/*
@@ -348,7 +350,7 @@ ProcessUtility(Node *parsetree,
 		standard_ProcessUtility(parsetree, queryString, params,
 								isTopLevel, dest, completionTag);
 
-	ExecAfterCommandTriggers(parsetree, commandTag);
+	ExecAfterCommandTriggers(parsetree, &cmd);
 }
 
 void

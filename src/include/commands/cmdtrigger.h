@@ -13,6 +13,7 @@
 #ifndef CMDTRIGGER_H
 #define CMDTRIGGER_H
 
+#include "commands/defrem.h"
 #include "nodes/execnodes.h"
 #include "nodes/parsenodes.h"
 
@@ -35,7 +36,7 @@ extern Oid	get_cmdtrigger_oid(const char *command, const char *trigname, bool mi
 extern void AlterCmdTrigger(AlterCmdTrigStmt *stmt);
 extern void RenameCmdTrigger(List *command, const char *trigname, const char *newname);
 
-int ExecBeforeOrInsteadOfCommandTriggers(Node *parsetree, const char *command);
-void ExecAfterCommandTriggers(Node *parsetree, const char *command);
+int ExecBeforeOrInsteadOfCommandTriggers(Node *parsetree, CommandContext cmd);
+void ExecAfterCommandTriggers(Node *parsetree, CommandContext cmd);
 
 #endif   /* TRIGGER_H */

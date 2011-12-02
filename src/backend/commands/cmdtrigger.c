@@ -22,7 +22,6 @@
 #include "catalog/pg_proc.h"
 #include "catalog/pg_trigger.h"
 #include "catalog/pg_type.h"
-#include "commands/defrem.h"
 #include "commands/cmdtrigger.h"
 #include "commands/trigger.h"
 #include "parser/parse_func.h"
@@ -38,6 +37,10 @@
 
 static void check_cmdtrigger_name(const char *command, const char *trigname, Relation tgrel);
 static RegProcedure * list_triggers_for_command(const char *command, char type);
+static bool ExecBeforeCommandTriggers(Node *parsetree, CommandContext cmd,
+									  MemoryContext per_command_context);
+static int ExecInsteadOfCommandTriggers(Node *parsetree, CommandContext cmd,
+										MemoryContext per_command_context);
 
 /*
  * Create a trigger.  Returns the OID of the created trigger.
@@ -571,7 +574,7 @@ call_cmdtrigger_procedure(RegProcedure proc, CommandContext cmd,
  * procedures we fired.
  */
 int
-ExecBeforeOrInsteadOfCommandTriggers(Node *parsetree, const char *cmdtag)
+ExecBeforeOrInsteadOfCommandTriggers(Node *parsetree, CommandContext cmd)
 {
 	MemoryContext per_command_context;
 	int nb = 0;
@@ -589,9 +592,9 @@ ExecBeforeOrInsteadOfCommandTriggers(Node *parsetree, const char *cmdtag)
 	 * through an empty list in at least one of those cases.  The cost of doing
 	 * it this lazy way is an index scan on pg_catalog.pg_cmdtrigger.
 	 */
-	if (!ExecBeforeCommandTriggers(parsetree, cmdtag, per_command_context))
+	if (!ExecBeforeCommandTriggers(parsetree, cmd, per_command_context))
 		nb++;
-	nb += ExecInsteadOfCommandTriggers(parsetree, cmdtag, per_command_context);
+	nb += ExecInsteadOfCommandTriggers(parsetree, cmd, per_command_context);
 
 	/* Release working resources */
 	MemoryContextDelete(per_command_context);
@@ -604,38 +607,37 @@ ExecBeforeOrInsteadOfCommandTriggers(Node *parsetree, const char *cmdtag)
  * is not exposed to other modules.
  */
 static bool
-ExecBeforeCommandTriggers(Node *parsetree, const char *cmdtag,
+ExecBeforeCommandTriggers(Node *parsetree, CommandContext cmd,
 						  MemoryContext per_command_context)
 {
 	MemoryContext oldContext;
-	CommandContextData cmd;
-	RegProcedure *procs = list_triggers_for_command(cmdtag,
+	RegProcedure *procs = list_triggers_for_command(cmd->tag,
 													CMD_TRIGGER_FIRED_BEFORE);
 	RegProcedure proc;
 	int cur= 0;
 	bool cont = true;
-	//FIXME: add assert for IsA(parsetree, parsetree)
 
 	/*
 	 * Do the functions evaluation in a per-command memory context, so that
 	 * leaked memory will be reclaimed once per command.
+	 *
+	 * Only back parse the command tree if we have at least one trigger
+	 * function to fire.
 	 */
+	if (procs[0] != InvalidOid && cmd->cmdstr == NULL)
+		pg_get_cmddef(cmd, parsetree);
+
 	oldContext = MemoryContextSwitchTo(per_command_context);
 	MemoryContextReset(per_command_context);
 
 	while (cont && InvalidOid != (proc = procs[cur++]))
 	{
-		if (cur==1)
-		{
-			cmd.tag = (char *)cmdtag;
-			pg_get_cmddef(&cmd, parsetree);
-		}
-		cont = call_cmdtrigger_procedure(proc, &cmd, per_command_context);
+		cont = call_cmdtrigger_procedure(proc, cmd, per_command_context);
 
 		if (cont == false)
 			elog(WARNING,
 				 "command \"%s %s...\" was cancelled by procedure \"%s\"",
-				 cmdtag, cmd.objectname, get_func_name(proc));
+				 cmd->tag, cmd->objectname, get_func_name(proc));
 	}
 	MemoryContextSwitchTo(oldContext);
 	return cont;
@@ -648,33 +650,30 @@ ExecBeforeCommandTriggers(Node *parsetree, const char *cmdtag,
  * modules.
  */
 static int
-ExecInsteadOfCommandTriggers(Node *parsetree, const char *cmdtag,
+ExecInsteadOfCommandTriggers(Node *parsetree, CommandContext cmd,
 							 MemoryContext per_command_context)
 {
 	MemoryContext oldContext;
-	CommandContextData cmd;
-	RegProcedure *procs = list_triggers_for_command(cmdtag,
+	RegProcedure *procs = list_triggers_for_command(cmd->tag,
 													CMD_TRIGGER_FIRED_INSTEAD);
 	RegProcedure proc;
 	int cur = 0;
-	//FIXME: add assert for IsA(parsetree, parsetree)
 
 	/*
 	 * Do the functions evaluation in a per-command memory context, so that
 	 * leaked memory will be reclaimed once per command.
+	 *
+	 * Only back parse the command tree if we have at least one trigger
+	 * function to fire.
 	 */
+	if (procs[0] != InvalidOid && cmd->cmdstr == NULL)
+		pg_get_cmddef(cmd, parsetree);
+
 	oldContext = MemoryContextSwitchTo(per_command_context);
 	MemoryContextReset(per_command_context);
 
 	while (InvalidOid != (proc = procs[cur++]))
-	{
-		if (cur==1)
-		{
-			cmd.tag = (char *)cmdtag;
-			pg_get_cmddef(&cmd, parsetree);
-		}
-		call_cmdtrigger_procedure(proc, &cmd, per_command_context);
-	}
+		call_cmdtrigger_procedure(proc, cmd, per_command_context);
 
 	MemoryContextSwitchTo(oldContext);
 	return cur-1;
@@ -685,16 +684,13 @@ ExecInsteadOfCommandTriggers(Node *parsetree, const char *cmdtag,
  * executed.
  */
 void
-ExecAfterCommandTriggers(Node *parsetree, const char *cmdtag)
+ExecAfterCommandTriggers(Node *parsetree, CommandContext cmd)
 {
 	MemoryContext oldContext, per_command_context;
-	CommandContextData cmd;
-	RegProcedure *procs = list_triggers_for_command(cmdtag,
+	RegProcedure *procs = list_triggers_for_command(cmd->tag,
 													CMD_TRIGGER_FIRED_AFTER);
 	RegProcedure proc;
 	int cur = 0;
-
-	//FIXME: add assert for IsA(parsetree, parsetree)
 
 	/*
 	 * Do the functions evaluation in a per-command memory context, so that
@@ -707,17 +703,17 @@ ExecAfterCommandTriggers(Node *parsetree, const char *cmdtag)
 							  ALLOCSET_DEFAULT_INITSIZE,
 							  ALLOCSET_DEFAULT_MAXSIZE);
 
+	/*
+	 * Only back parse the command tree if we have at least one trigger
+	 * function to fire.
+	 */
+	if (procs[0] != InvalidOid && cmd->cmdstr == NULL)
+		pg_get_cmddef(cmd, parsetree);
+
 	oldContext = MemoryContextSwitchTo(per_command_context);
 
 	while (InvalidOid != (proc = procs[cur++]))
-	{
-		if (cur==1)
-		{
-			cmd.tag = (char *)cmdtag;
-			pg_get_cmddef(&cmd, parsetree);
-		}
-		call_cmdtrigger_procedure(proc, &cmd, per_command_context);
-	}
+		call_cmdtrigger_procedure(proc, cmd, per_command_context);
 
 	/* Release working resources */
 	MemoryContextSwitchTo(oldContext);
