@@ -36,10 +36,6 @@ extern void AlterCmdTrigger(AlterCmdTrigStmt *stmt);
 extern void RenameCmdTrigger(List *command, const char *trigname, const char *newname);
 
 int ExecBeforeOrInsteadOfCommandTriggers(Node *parsetree, const char *command);
-int ExecInsteadOfCommandTriggers(Node *parsetree, const char *command,
-								 MemoryContext per_command_context);
-bool ExecBeforeCommandTriggers(Node *parsetree, const char *command,
-							   MemoryContext per_command_context);
 void ExecAfterCommandTriggers(Node *parsetree, const char *command);
 
 #endif   /* TRIGGER_H */

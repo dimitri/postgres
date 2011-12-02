@@ -598,9 +598,12 @@ ExecBeforeOrInsteadOfCommandTriggers(Node *parsetree, const char *cmdtag)
 	return nb;
 }
 
-//FIXME: This looks like it should be static
-//FIXME: why not return the number of calls here as well?
-bool
+/*
+ * A BEFORE command trigger can choose to "abort" the command by returning
+ * false. This function is called by ExecBeforeOrInsteadOfCommandTriggers() so
+ * is not exposed to other modules.
+ */
+static bool
 ExecBeforeCommandTriggers(Node *parsetree, const char *cmdtag,
 						  MemoryContext per_command_context)
 {
@@ -639,10 +642,12 @@ ExecBeforeCommandTriggers(Node *parsetree, const char *cmdtag,
 }
 
 /*
- * return the count of triggers we fired
+ * An INSTEAD OF command trigger will always cancel execution of the command,
+ * we only need to know that at least one of them got fired. This function is
+ * called by ExecBeforeOrInsteadOfCommandTriggers() so is not exposed to other
+ * modules.
  */
-//FIXME: This looks like it should be static
-int
+static int
 ExecInsteadOfCommandTriggers(Node *parsetree, const char *cmdtag,
 							 MemoryContext per_command_context)
 {
@@ -675,6 +680,10 @@ ExecInsteadOfCommandTriggers(Node *parsetree, const char *cmdtag,
 	return cur-1;
 }
 
+/*
+ * An AFTER trigger will have no impact on the command, which already was
+ * executed.
+ */
 void
 ExecAfterCommandTriggers(Node *parsetree, const char *cmdtag)
 {
