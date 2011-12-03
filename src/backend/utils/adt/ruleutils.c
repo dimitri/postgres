@@ -7333,9 +7333,32 @@ flatten_reloptions(Oid relid)
  *
  * And some utilities.
  */
+
+/*
+ * Given a RangeVar, return the namespace name to use as schemaname. When
+ * r->schemaname is NULL, returns the first schema name of the current
+ * search_path.
+ */
+static char *
+RangeVarGetNamespace(RangeVar *r)
+{
+	char       *schemaname;
+	List	   *search_path = fetch_search_path(false);
+
+	if (search_path == NIL) /* probably can't happen */
+		schemaname = NULL;
+	else
+		schemaname = get_namespace_name(linitial_oid(search_path));
+
+	list_free(search_path);
+
+	return schemaname;
+}
+
 static char *
 RangeVarToString(RangeVar *r)
 {
+	char       *schemaname = RangeVarGetNamespace(r);
 	StringInfoData string;
 	initStringInfo(&string);
 
@@ -7344,9 +7367,9 @@ RangeVarToString(RangeVar *r)
 		appendStringInfoString(&string, quote_identifier(r->catalogname));
 		appendStringInfoChar(&string, '.');
 	}
-	if (r->schemaname != NULL)
+	if (schemaname != NULL)
 	{
-		appendStringInfoString(&string, quote_identifier(r->schemaname));
+		appendStringInfoString(&string, quote_identifier(schemaname));
 		appendStringInfoChar(&string, '.');
 	}
 	appendStringInfoString(&string, quote_identifier(r->relname));
@@ -7425,7 +7448,7 @@ _rwDropStmt(CommandContext cmd, DropStmt *node)
 				_maybeAddSeparator(&buf, ", ", &first);
 				appendStringInfoString(&buf, RangeVarToString(rel));
 
-				cmd->schemaname = rel->schemaname;
+				cmd->schemaname = RangeVarGetNamespace(rel);
 				cmd->objectname = rel->relname;
 				break;
 			}
@@ -7522,7 +7545,7 @@ _rwViewStmt(CommandContext cmd, ViewStmt *node)
 	appendStringInfoChar(&buf, ';');
 
 	cmd->cmdstr = buf.data;
-	cmd->schemaname = node->view->schemaname;
+	cmd->schemaname = RangeVarGetNamespace(node->view);
 	cmd->objectname = node->view->relname;
 }
 
@@ -7678,7 +7701,7 @@ _rwCreateStmt(CommandContext cmd, CreateStmt *node)
 	appendStringInfoChar(&buf, ';');
 
 	cmd->cmdstr = buf.data;
-	cmd->schemaname = node->relation->schemaname;
+	cmd->schemaname = RangeVarGetNamespace(node->relation);
 	cmd->objectname = node->relation->relname;
 }
 
@@ -7893,7 +7916,7 @@ _rwAlterTableStmt(CommandContext cmd, AlterTableStmt *node)
 	appendStringInfoChar(&buf, ';');
 
 	cmd->cmdstr = buf.data;
-	cmd->schemaname = node->relation->schemaname;
+	cmd->schemaname = RangeVarGetNamespace(node->relation);
 	cmd->objectname = node->relation->relname;
 }
 
@@ -7953,4 +7976,11 @@ pg_get_cmddef(CommandContext cmd, void *parsetree)
 			elog(DEBUG2, "unrecognized node type: %d",
 				 (int) nodeTag(parsetree));
 	}
+
+	/* quote identifiers */
+	if (cmd->objectname != NULL)
+		cmd->objectname = (char *)quote_identifier(cmd->objectname);
+
+	if (cmd->schemaname != NULL)
+		cmd->schemaname = (char *)quote_identifier(cmd->schemaname);
 }
