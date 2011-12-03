@@ -7331,22 +7331,27 @@ flatten_reloptions(Oid relid)
 /*
  * Functions that ouputs a COMMAND given a Utility parsetree
  *
- * FIXME: First some tools that I couldn't find in the sources.
- * FIXME: replace conversion to rangevar and back to string with
- *  NameListToQuotedString
- * FIXME: missing quoting
+ * And some utilities.
  */
 static char *
 RangeVarToString(RangeVar *r)
 {
-	char *qualified_name = (char *)palloc0(NAMEDATALEN*2+2);
+	StringInfoData string;
+	initStringInfo(&string);
 
-	sprintf(qualified_name, "%s%s%s",
-			r->schemaname == NULL? "": r->schemaname,
-			r->schemaname == NULL? "": ".",
-			r->relname);
+	if (r->catalogname != NULL)
+	{
+		appendStringInfoString(&string, quote_identifier(r->catalogname));
+		appendStringInfoChar(&string, '.');
+	}
+	if (r->schemaname != NULL)
+	{
+		appendStringInfoString(&string, quote_identifier(r->schemaname));
+		appendStringInfoChar(&string, '.');
+	}
+	appendStringInfoString(&string, quote_identifier(r->relname));
 
-	return qualified_name;
+	return string.data;
 }
 
 static const char *
