@@ -151,6 +151,161 @@ CommandIsReadOnly(Node *parsetree)
 }
 
 /*
+ * Support function for calling the command triggers.
+ */
+static int
+call_before_or_insteadof_cmdtriggers(Node *parsetree, CommandContext cmd)
+{
+	switch (nodeTag(parsetree))
+	{
+		case T_AlterDatabaseStmt:
+		case T_AlterDatabaseSetStmt:
+		case T_AlterDomainStmt:
+		case T_AlterFunctionStmt:
+		case T_AlterRoleStmt:
+		case T_AlterRoleSetStmt:
+		case T_AlterObjectSchemaStmt:
+		case T_AlterOwnerStmt:
+		case T_AlterSeqStmt:
+		case T_AlterTableStmt:
+		case T_RenameStmt:
+		case T_CommentStmt:
+		case T_DefineStmt:
+		case T_CreateCastStmt:
+		case T_CreateCmdTrigStmt:
+		case T_AlterCmdTrigStmt:
+		case T_CreateConversionStmt:
+		case T_CreatedbStmt:
+		case T_CreateDomainStmt:
+		case T_CreateFunctionStmt:
+		case T_CreateRoleStmt:
+		case T_IndexStmt:
+		case T_CreatePLangStmt:
+		case T_CreateOpClassStmt:
+		case T_CreateOpFamilyStmt:
+		case T_AlterOpFamilyStmt:
+		case T_RuleStmt:
+		case T_CreateSchemaStmt:
+		case T_CreateSeqStmt:
+		case T_CreateStmt:
+		case T_CreateTableSpaceStmt:
+		case T_CreateTrigStmt:
+		case T_CompositeTypeStmt:
+		case T_CreateEnumStmt:
+		case T_CreateRangeStmt:
+		case T_AlterEnumStmt:
+		case T_ViewStmt:
+		case T_DropCmdTrigStmt:
+		case T_DropStmt:
+		case T_DropdbStmt:
+		case T_DropTableSpaceStmt:
+		case T_DropRoleStmt:
+		case T_GrantStmt:
+		case T_GrantRoleStmt:
+		case T_AlterDefaultPrivilegesStmt:
+		case T_TruncateStmt:
+		case T_DropOwnedStmt:
+		case T_ReassignOwnedStmt:
+		case T_AlterTSDictionaryStmt:
+		case T_AlterTSConfigurationStmt:
+		case T_CreateExtensionStmt:
+		case T_AlterExtensionStmt:
+		case T_AlterExtensionContentsStmt:
+		case T_CreateFdwStmt:
+		case T_AlterFdwStmt:
+		case T_CreateForeignServerStmt:
+		case T_AlterForeignServerStmt:
+		case T_CreateUserMappingStmt:
+		case T_AlterUserMappingStmt:
+		case T_DropUserMappingStmt:
+		case T_AlterTableSpaceOptionsStmt:
+		case T_CreateForeignTableStmt:
+		case T_SecLabelStmt:
+			return ExecBeforeOrInsteadOfCommandTriggers(parsetree, cmd);
+
+		default:
+			/* commands that don't support triggers */
+			return 0;
+	}
+}
+
+static void
+call_after_cmdtriggers(Node *parsetree, CommandContext cmd)
+{
+	switch (nodeTag(parsetree))
+	{
+		case T_AlterDatabaseStmt:
+		case T_AlterDatabaseSetStmt:
+		case T_AlterDomainStmt:
+		case T_AlterFunctionStmt:
+		case T_AlterRoleStmt:
+		case T_AlterRoleSetStmt:
+		case T_AlterObjectSchemaStmt:
+		case T_AlterOwnerStmt:
+		case T_AlterSeqStmt:
+		case T_AlterTableStmt:
+		case T_RenameStmt:
+		case T_CommentStmt:
+		case T_DefineStmt:
+		case T_CreateCastStmt:
+		case T_CreateCmdTrigStmt:
+		case T_AlterCmdTrigStmt:
+		case T_CreateConversionStmt:
+		case T_CreatedbStmt:
+		case T_CreateDomainStmt:
+		case T_CreateFunctionStmt:
+		case T_CreateRoleStmt:
+		case T_IndexStmt:
+		case T_CreatePLangStmt:
+		case T_CreateOpClassStmt:
+		case T_CreateOpFamilyStmt:
+		case T_AlterOpFamilyStmt:
+		case T_RuleStmt:
+		case T_CreateSchemaStmt:
+		case T_CreateSeqStmt:
+		case T_CreateStmt:
+		case T_CreateTableSpaceStmt:
+		case T_CreateTrigStmt:
+		case T_CompositeTypeStmt:
+		case T_CreateEnumStmt:
+		case T_CreateRangeStmt:
+		case T_AlterEnumStmt:
+		case T_ViewStmt:
+		case T_DropCmdTrigStmt:
+		case T_DropStmt:
+		case T_DropdbStmt:
+		case T_DropTableSpaceStmt:
+		case T_DropRoleStmt:
+		case T_GrantStmt:
+		case T_GrantRoleStmt:
+		case T_AlterDefaultPrivilegesStmt:
+		case T_TruncateStmt:
+		case T_DropOwnedStmt:
+		case T_ReassignOwnedStmt:
+		case T_AlterTSDictionaryStmt:
+		case T_AlterTSConfigurationStmt:
+		case T_CreateExtensionStmt:
+		case T_AlterExtensionStmt:
+		case T_AlterExtensionContentsStmt:
+		case T_CreateFdwStmt:
+		case T_AlterFdwStmt:
+		case T_CreateForeignServerStmt:
+		case T_AlterForeignServerStmt:
+		case T_CreateUserMappingStmt:
+		case T_AlterUserMappingStmt:
+		case T_DropUserMappingStmt:
+		case T_AlterTableSpaceOptionsStmt:
+		case T_CreateForeignTableStmt:
+		case T_SecLabelStmt:
+			ExecAfterCommandTriggers(parsetree, cmd);
+
+		default:
+			/* commands that don't support triggers */
+			return;
+	}
+}
+
+/*
  * check_xact_readonly: is a utility command read-only?
  *
  * Here we use the loose rules of XactReadOnly mode: no permanent effects
@@ -325,18 +480,7 @@ ProcessUtility(Node *parsetree,
 			   DestReceiver *dest,
 			   char *completionTag)
 {
-	/* we want a completion tag to identify which triggers to run, and that's
-	 * true whatever is given as completionTag here, so just call
-	 * CreateCommandTag() for our own business.
-	 */
-	CommandContextData cmd;
-	cmd.tag = (char *) CreateCommandTag(parsetree);
-	cmd.cmdstr = NULL;
-
 	Assert(queryString != NULL);	/* required as of 8.4 */
-
-	if (ExecBeforeOrInsteadOfCommandTriggers(parsetree, &cmd) > 0)
-		return;
 
 	/*
 	 * We provide a function hook variable that lets loadable plugins get
@@ -349,8 +493,6 @@ ProcessUtility(Node *parsetree,
 	else
 		standard_ProcessUtility(parsetree, queryString, params,
 								isTopLevel, dest, completionTag);
-
-	ExecAfterCommandTriggers(parsetree, &cmd);
 }
 
 void
@@ -361,10 +503,23 @@ standard_ProcessUtility(Node *parsetree,
 						DestReceiver *dest,
 						char *completionTag)
 {
+	CommandContextData cmd;
+
 	check_xact_readonly(parsetree);
 
 	if (completionTag)
 		completionTag[0] = '\0';
+
+	/*
+	 * we want a completion tag to identify which triggers to run, and that's
+	 * true whatever is given as completionTag here, so just call
+	 * CreateCommandTag() for our own business.
+	 */
+	cmd.tag = (char *) CreateCommandTag(parsetree);
+	cmd.cmdstr = NULL;
+
+	if (call_before_or_insteadof_cmdtriggers(parsetree, &cmd) > 0)
+		return;
 
 	switch (nodeTag(parsetree))
 	{
@@ -1207,6 +1362,7 @@ standard_ProcessUtility(Node *parsetree,
 				 (int) nodeTag(parsetree));
 			break;
 	}
+	call_after_cmdtriggers(parsetree, &cmd);
 }
 
 /*
