@@ -23,10 +23,11 @@
 #include "catalog/pg_trigger.h"
 #include "catalog/pg_type.h"
 #include "commands/cmdtrigger.h"
+#include "commands/dbcommands.h"
 #include "commands/trigger.h"
 #include "parser/parse_func.h"
 #include "pgstat.h"
-#include "tcop/utility.h"
+#include "miscadmin.h"
 #include "utils/acl.h"
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
@@ -34,6 +35,7 @@
 #include "utils/memutils.h"
 #include "utils/rel.h"
 #include "utils/tqual.h"
+#include "tcop/utility.h"
 
 static void check_cmdtrigger_name(const char *command, const char *trigname, Relation tgrel);
 static RegProcedure *list_triggers_for_command(const char *command, char type);
@@ -42,6 +44,20 @@ static bool ExecBeforeCommandTriggers(Node *parsetree, CommandContext cmd,
 									  MemoryContext per_command_context);
 static int ExecInsteadOfCommandTriggers(Node *parsetree, CommandContext cmd,
 										MemoryContext per_command_context);
+
+
+/*
+ * Check permission: command triggers are only available for superusers and
+ * database owner.  Raise an exception when requirements are not fullfilled.
+ */
+static void
+CheckCmdTriggerPrivileges()
+{
+	if (!superuser())
+		if (!pg_database_ownercheck(MyDatabaseId, GetUserId()))
+			aclcheck_error(ACLCHECK_NOT_OWNER, ACL_KIND_DATABASE,
+						   get_database_name(MyDatabaseId));
+}
 
 /*
  * Insert Command Trigger Tuple
@@ -110,6 +126,8 @@ CreateCmdTrigger(CreateCmdTrigStmt *stmt, const char *queryString)
 	Oid			funcoid;
 	Oid			funcrettype;
 	char        ctgtype;
+
+	CheckCmdTriggerPrivileges();
 
 	/*
 	 * Find and validate the trigger function.
@@ -213,6 +231,8 @@ DropCmdTrigger(DropCmdTrigStmt *stmt)
 {
 	ListCell   *c;
 
+	CheckCmdTriggerPrivileges();
+
 	foreach(c, stmt->command)
 	{
 		ObjectAddress object;
@@ -289,6 +309,8 @@ AlterCmdTrigger(AlterCmdTrigStmt *stmt)
 	Form_pg_cmdtrigger cmdForm;
 	char        tgenabled = pstrdup(stmt->tgenabled)[0]; /* works with gram.y */
 
+	CheckCmdTriggerPrivileges();
+
 	tgrel = heap_open(CmdTriggerRelationId, RowExclusiveLock);
 	ScanKeyInit(&skey[0],
 				Anum_pg_cmdtrigger_ctgcommand,
@@ -327,7 +349,7 @@ AlterCmdTrigger(AlterCmdTrigStmt *stmt)
 
 
 /*
- * Rename conversion
+ * Rename command trigger
  */
 void
 RenameCmdTrigger(List *name, const char *trigname, const char *newname)
@@ -338,6 +360,8 @@ RenameCmdTrigger(List *name, const char *trigname, const char *newname)
 	Relation	rel;
 	Form_pg_cmdtrigger cmdForm;
 	char       *command;
+
+	CheckCmdTriggerPrivileges();
 
 	Assert(list_length(name) == 1);
 	command = strVal((Value *)linitial(name));
@@ -481,7 +505,7 @@ check_cmdtrigger_name(const char *command, const char *trigname, Relation tgrel)
  *   command tag, text
  *   command string, text
  *   command node string, text
- *   schemaname, text, can be null
+ *   schemaname, text
  *   objectname, text
  *
  * we rebuild the DDL command we're about to execute from the parsetree.
