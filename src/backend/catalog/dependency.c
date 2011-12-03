@@ -2843,9 +2843,13 @@ getObjectDescription(const ObjectAddress *object)
 
 				trig = (Form_pg_cmdtrigger) GETSTRUCT(tup);
 
-				appendStringInfo(&buffer, _("command trigger %s on %s"),
-								 NameStr(trig->ctgname),
-								 NameStr(trig->ctgcommand));
+				if (strcmp(NameStr(trig->ctgcommand), "ANY") == 0)
+					appendStringInfo(&buffer, _("trigger %s on any command"),
+									 NameStr(trig->ctgname));
+				else
+					appendStringInfo(&buffer, _("trigger %s on command %s"),
+									 NameStr(trig->ctgname),
+									 NameStr(trig->ctgcommand));
 
 				systable_endscan(tgscan);
 				heap_close(trigDesc, AccessShareLock);
