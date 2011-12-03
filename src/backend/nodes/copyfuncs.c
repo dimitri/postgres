@@ -3470,7 +3470,7 @@ _copyCreateCmdTrigStmt(CreateCmdTrigStmt *from)
 {
 	CreateCmdTrigStmt *newnode = makeNode(CreateCmdTrigStmt);
 
-	COPY_STRING_FIELD(command);
+	COPY_NODE_FIELD(command);
 	COPY_STRING_FIELD(trigname);
 	COPY_SCALAR_FIELD(timing);
 	COPY_NODE_FIELD(funcname);
@@ -3483,7 +3483,7 @@ _copyDropCmdTrigStmt(DropCmdTrigStmt *from)
 {
 	DropCmdTrigStmt *newnode = makeNode(DropCmdTrigStmt);
 
-	COPY_STRING_FIELD(command);
+	COPY_NODE_FIELD(command);
 	COPY_STRING_FIELD(trigname);
 	COPY_SCALAR_FIELD(behavior);
 	COPY_SCALAR_FIELD(missing_ok);

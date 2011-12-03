@@ -316,7 +316,7 @@ _readAlterCmdTrigStmt(void)
 
 	READ_STRING_FIELD(command);
 	READ_STRING_FIELD(trigname);
-	READ_CHAR_FIELD(tgenabled);
+	READ_STRING_FIELD(tgenabled);
 
 	READ_DONE();
 }

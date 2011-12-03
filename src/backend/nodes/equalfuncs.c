@@ -1787,7 +1787,7 @@ _equalDropPropertyStmt(DropPropertyStmt *a, DropPropertyStmt *b)
 static bool
 _equalCreateCmdTrigStmt(CreateCmdTrigStmt *a, CreateCmdTrigStmt *b)
 {
-	COMPARE_STRING_FIELD(command);
+	COMPARE_NODE_FIELD(command);
 	COMPARE_STRING_FIELD(trigname);
 	COMPARE_SCALAR_FIELD(timing);
 	COMPARE_NODE_FIELD(funcname);
@@ -1798,7 +1798,7 @@ _equalCreateCmdTrigStmt(CreateCmdTrigStmt *a, CreateCmdTrigStmt *b)
 static bool
 _equalDropCmdTrigStmt(DropCmdTrigStmt *a, DropCmdTrigStmt *b)
 {
-	COMPARE_STRING_FIELD(command);
+	COMPARE_NODE_FIELD(command);
 	COMPARE_STRING_FIELD(trigname);
 	COMPARE_SCALAR_FIELD(behavior);
 	COMPARE_SCALAR_FIELD(missing_ok);
