@@ -7976,11 +7976,4 @@ pg_get_cmddef(CommandContext cmd, void *parsetree)
 			elog(DEBUG2, "unrecognized node type: %d",
 				 (int) nodeTag(parsetree));
 	}
-
-	/* quote identifiers */
-	if (cmd->objectname != NULL)
-		cmd->objectname = (char *)quote_identifier(cmd->objectname);
-
-	if (cmd->schemaname != NULL)
-		cmd->schemaname = (char *)quote_identifier(cmd->schemaname);
 }
