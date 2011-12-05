@@ -118,7 +118,8 @@ typedef enum
 	DO_DEFAULT_ACL,
 	DO_BLOB,
 	DO_BLOB_DATA,
-	DO_COLLATION
+	DO_COLLATION,
+	DO_CMDTRIGGER
 } DumpableObjectType;
 
 typedef struct _dumpableObject
@@ -357,6 +358,16 @@ typedef struct _triggerInfo
 	char	   *tgdef;
 } TriggerInfo;
 
+typedef struct _cmdtriggerInfo
+{
+	DumpableObject dobj;
+	char	   *ctgcommand;
+	char	   *ctgname;
+	char	   *ctgfname;
+	char		ctgtype;
+	char		ctgenabled;
+} CmdTriggerInfo;
+
 /*
  * struct ConstraintInfo is used for all constraint types.	However we
  * use a different objType for foreign key constraints, to make it easier
@@ -549,6 +560,7 @@ extern void getIndexes(TableInfo tblinfo[], int numTables);
 extern void getConstraints(TableInfo tblinfo[], int numTables);
 extern RuleInfo *getRules(int *numRules);
 extern void getTriggers(TableInfo tblinfo[], int numTables);
+extern CmdTriggerInfo *getCmdTriggers(int *numCmdTriggers);
 extern ProcLangInfo *getProcLangs(int *numProcLangs);
 extern CastInfo *getCasts(int *numCasts);
 extern void getTableAttrs(TableInfo *tbinfo, int numTables);

@@ -17,18 +17,6 @@
 #include "nodes/execnodes.h"
 #include "nodes/parsenodes.h"
 
-/*
- * Times at which a command trigger can be fired. These are the
- * possible values for pg_cmdtrigger.ctgtype.
- *
- * pg_trigger is using binary mask tricks to make it super fast, but we don't
- * need to be that tricky here: we're talking about commands, not data editing,
- * and we don't have so many conditions, only type and enabled.
- */
-#define CMD_TRIGGER_FIRED_BEFORE			'B'
-#define CMD_TRIGGER_FIRED_AFTER				'A'
-#define CMD_TRIGGER_FIRED_INSTEAD			'I'
-
 extern void CreateCmdTrigger(CreateCmdTrigStmt *stmt, const char *queryString);
 extern void DropCmdTrigger(DropCmdTrigStmt *stmt);
 extern void RemoveCmdTriggerById(Oid ctrigOid);

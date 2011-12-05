@@ -48,6 +48,7 @@
 #include "access/transam.h"
 #include "catalog/pg_cast.h"
 #include "catalog/pg_class.h"
+#include "catalog/pg_cmdtrigger.h"
 #include "catalog/pg_default_acl.h"
 #include "catalog/pg_largeobject.h"
 #include "catalog/pg_largeobject_metadata.h"
@@ -184,6 +185,7 @@ static void dumpConversion(Archive *fout, ConvInfo *convinfo);
 static void dumpRule(Archive *fout, RuleInfo *rinfo);
 static void dumpAgg(Archive *fout, AggInfo *agginfo);
 static void dumpTrigger(Archive *fout, TriggerInfo *tginfo);
+static void dumpCmdTrigger(Archive *fout, CmdTriggerInfo *ctginfo);
 static void dumpTable(Archive *fout, TableInfo *tbinfo);
 static void dumpTableSchema(Archive *fout, TableInfo *tbinfo);
 static void dumpAttrDef(Archive *fout, AttrDefInfo *adinfo);
@@ -5303,6 +5305,76 @@ getTriggers(TableInfo tblinfo[], int numTables)
 }
 
 /*
+ * getCmdTriggers
+ *	  get information about every command trigger on a dumpable table
+ */
+CmdTriggerInfo *
+getCmdTriggers(int *numCmdTriggers)
+{
+	int			i;
+	PQExpBuffer query = createPQExpBuffer();
+	PGresult   *res;
+	CmdTriggerInfo *ctginfo;
+	int			i_tableoid,
+				i_oid,
+				i_ctgcommand,
+				i_ctgname,
+				i_ctgfname,
+				i_ctgtype,
+				i_ctgenabled;
+	int			ntups;
+
+	/* Make sure we are in proper schema */
+	selectSourceSchema("pg_catalog");
+
+	if (g_fout->remoteVersion >= 90200)
+	{
+		appendPQExpBuffer(query,
+						  "SELECT c.tableoid, c.oid, "
+						  "ctgname, ctgtype, ctgcommand, proname as ctgfname, ctgenabled "
+						  "FROM pg_cmdtrigger c JOIN pg_proc p on c.ctgfoid = p.oid "
+						  "ORDER BY c.oid");
+	}
+
+	res = PQexec(g_conn, query->data);
+	check_sql_result(res, g_conn, query->data, PGRES_TUPLES_OK);
+
+	ntups = PQntuples(res);
+
+	*numCmdTriggers = ntups;
+
+	ctginfo = (CmdTriggerInfo *) pg_malloc(ntups * sizeof(CmdTriggerInfo));
+
+	i_tableoid = PQfnumber(res, "tableoid");
+	i_oid = PQfnumber(res, "oid");
+	i_ctgname = PQfnumber(res, "ctgname");
+	i_ctgtype = PQfnumber(res, "ctgtype");
+	i_ctgcommand = PQfnumber(res, "ctgcommand");
+	i_ctgfname = PQfnumber(res, "ctgfname");
+	i_ctgenabled = PQfnumber(res, "ctgenabled");
+
+	for (i = 0; i < ntups; i++)
+	{
+		ctginfo[i].dobj.objType = DO_CMDTRIGGER;
+		ctginfo[i].dobj.catId.tableoid = atooid(PQgetvalue(res, i, i_tableoid));
+		ctginfo[i].dobj.catId.oid = atooid(PQgetvalue(res, i, i_oid));
+		AssignDumpId(&ctginfo[i].dobj);
+		ctginfo[i].dobj.name = pg_strdup(PQgetvalue(res, i, i_ctgname));
+		ctginfo[i].ctgname = pg_strdup(PQgetvalue(res, i, i_ctgname));
+		ctginfo[i].ctgtype = *(PQgetvalue(res, i, i_ctgtype));
+		ctginfo[i].ctgcommand = pg_strdup(PQgetvalue(res, i, i_ctgcommand));
+		ctginfo[i].ctgfname = pg_strdup(PQgetvalue(res, i, i_ctgfname));
+		ctginfo[i].ctgenabled = *(PQgetvalue(res, i, i_ctgenabled));
+	}
+
+	PQclear(res);
+
+	destroyPQExpBuffer(query);
+
+	return ctginfo;
+}
+
+/*
  * getProcLangs
  *	  get basic information about every procedural language in the system
  *
@@ -7114,6 +7186,9 @@ dumpDumpableObject(Archive *fout, DumpableObject *dobj)
 			break;
 		case DO_TRIGGER:
 			dumpTrigger(fout, (TriggerInfo *) dobj);
+			break;
+		case DO_CMDTRIGGER:
+			dumpCmdTrigger(fout, (CmdTriggerInfo *) dobj);
 			break;
 		case DO_CONSTRAINT:
 			dumpConstraint(fout, (ConstraintInfo *) dobj);
@@ -13708,6 +13783,66 @@ dumpTrigger(Archive *fout, TriggerInfo *tginfo)
 
 	destroyPQExpBuffer(query);
 	destroyPQExpBuffer(delqry);
+	destroyPQExpBuffer(labelq);
+}
+
+static void
+dumpCmdTrigger(Archive *fout, CmdTriggerInfo *ctginfo)
+{
+	PQExpBuffer query;
+	PQExpBuffer labelq;
+
+	query = createPQExpBuffer();
+	labelq = createPQExpBuffer();
+
+	appendPQExpBuffer(query, "CREATE TRIGGER ");
+	appendPQExpBufferStr(query, fmtId(ctginfo->dobj.name));
+
+	/* Trigger type */
+	if (ctginfo->ctgtype == CMD_TRIGGER_FIRED_BEFORE)
+		appendPQExpBuffer(query, " BEFORE");
+	else if (ctginfo->ctgtype == CMD_TRIGGER_FIRED_AFTER)
+		appendPQExpBuffer(query, " AFTER");
+	else if (ctginfo->ctgtype == CMD_TRIGGER_FIRED_INSTEAD)
+		appendPQExpBuffer(query, " INSTEAD OF");
+	else
+	{
+		write_msg(NULL, "unexpected ctgtype value: %d\n", ctginfo->ctgtype);
+		exit_nicely();
+	}
+	write_msg(NULL, "PHOQUE\n");
+
+	if (strcmp("ANY", ctginfo->ctgcommand) == 0)
+		appendPQExpBufferStr(query, " ANY COMMAND");
+	else
+	{
+		appendPQExpBufferStr(query, " COMMAND ");
+		appendPQExpBufferStr(query, fmtId(ctginfo->ctgcommand));
+	}
+
+	appendPQExpBuffer(query, " EXECUTE PROCEDURE ");
+	appendPQExpBufferStr(query, fmtId(ctginfo->ctgfname));
+	appendPQExpBuffer(query, " ();\n");
+
+	appendPQExpBuffer(labelq, "TRIGGER %s ",
+					  fmtId(ctginfo->dobj.name));
+	appendPQExpBuffer(labelq, "ON COMMAND %s",
+					  fmtId(ctginfo->ctgcommand));
+
+	write_msg(NULL, "BLURPS\n");
+
+	ArchiveEntry(fout, ctginfo->dobj.catId, ctginfo->dobj.dumpId,
+				 ctginfo->dobj.name, NULL, NULL, "", false,
+				 "COMMAND TRIGGER", SECTION_POST_DATA,
+				 query->data, "", NULL, NULL, 0, NULL, NULL);
+
+	write_msg(NULL, "PLOP\n");
+
+	dumpComment(fout, labelq->data,
+				NULL, NULL,
+				ctginfo->dobj.catId, 0, ctginfo->dobj.dumpId);
+
+	destroyPQExpBuffer(query);
 	destroyPQExpBuffer(labelq);
 }
 

@@ -98,6 +98,7 @@ getSchemaData(int *numTablesPtr)
 	int			numForeignDataWrappers;
 	int			numForeignServers;
 	int			numDefaultACLs;
+	int			numCmdTriggers;
 
 	if (g_verbose)
 		write_msg(NULL, "reading schemas\n");
@@ -233,6 +234,10 @@ getSchemaData(int *numTablesPtr)
 	if (g_verbose)
 		write_msg(NULL, "reading triggers\n");
 	getTriggers(tblinfo, numTables);
+
+	if (g_verbose)
+		write_msg(NULL, "reading command triggers\n");
+	getCmdTriggers(&numCmdTriggers);
 
 	*numTablesPtr = numTables;
 	return tblinfo;
