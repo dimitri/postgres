@@ -1445,6 +1445,7 @@ drop cascades to view european_city_view
 DROP TABLE country_table;
 CREATE FUNCTION cmdtrigger_notice
  (
+   IN cmd_tag        text,
    IN cmd_string     text,
    IN cmd_nodestring text,
    IN schemaname     text,
@@ -1473,8 +1474,8 @@ DETAIL:  Commands cannot have both AFTER and INSTEAD OF triggers.
 CREATE TABLE foo(a serial, b text, primary key (a, b));
 NOTICE:  CREATE TABLE will create implicit sequence "foo_a_seq" for serial column "foo.a"
 NOTICE:  CREATE TABLE / PRIMARY KEY will create implicit index "foo_pkey" for table "foo"
-NOTICE:  cmd_string: CREATE TABLE foo (a serial,b text, PRIMARY KEY(a,b));
+NOTICE:  cmd_string: CREATE TABLE public.foo (a serial,b text, PRIMARY KEY(a,b));
 DROP TABLE foo;
-NOTICE:  cmd_string: DROP TABLE foo RESTRICT;
+NOTICE:  cmd_string: DROP TABLE public.foo RESTRICT;
 DROP TRIGGER cmdtrigger_notice ON COMMAND CREATE TABLE;
 DROP TRIGGER cmdtrigger_notice ON COMMAND DROP TABLE;

@@ -986,6 +986,7 @@ SELECT description FROM pg_description, pg_constraint c WHERE classoid = 'pg_con
 
 CREATE TABLE t13_inh () INHERITS (t1, t3);
 NOTICE:  merging multiple inherited definitions of column "a"
+NOTICE:  cmd_string: CREATE TABLE public.t13_inh ();
 \d+ t13_inh
                       Table "public.t13_inh"
  Column | Type | Modifiers | Storage  | Stats target | Description 

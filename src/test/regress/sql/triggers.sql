@@ -964,6 +964,7 @@ DROP TABLE country_table;
 
 CREATE FUNCTION cmdtrigger_notice
  (
+   IN cmd_tag        text,
    IN cmd_string     text,
    IN cmd_nodestring text,
    IN schemaname     text,
