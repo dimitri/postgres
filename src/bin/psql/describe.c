@@ -2911,6 +2911,63 @@ listConversions(const char *pattern, bool verbose, bool showSystem)
 }
 
 /*
+ * \dcT
+ *
+ * Describes command triggers.
+ */
+bool
+listCmdTriggers(const char *pattern, bool verbose)
+{
+	PQExpBufferData buf;
+	PGresult   *res;
+	printQueryOpt myopt = pset.popt;
+	static const bool translate_columns[] = {true, true};
+
+	initPQExpBuffer(&buf);
+
+	printfPQExpBuffer(&buf,
+					  "SELECT ctgname as \"%s\", "
+					  "'CREATE TRIGGER ' || ctgname || ' ' || "
+					  "case ctgtype when 'A' then 'AFTER' "
+					  "             when 'B' then 'BEFORE' "
+					  "             when 'I' then 'INSTEAD OF' "
+					  "end || "
+					  "case ctgcommand when 'ANY' then ' ANY COMMAND '"
+					  "                else ' COMMAND ' || ctgcommand || ' '"
+					  "end ||"
+					  " 'EXECUTE PROCEDURE ' || proname || '();' as \"%s\" "
+					  "FROM pg_cmdtrigger c "
+					  "JOIN pg_proc p on c.ctgfoid = p.oid ",
+					  gettext_noop("Name"),
+					  gettext_noop("Definition"));
+
+	if (pattern)
+	{
+		processSQLNamePattern(pset.db, &buf, pattern, false, false,
+							  NULL, "ctgcommand", NULL, NULL);
+
+		appendPQExpBuffer(&buf, " OR ctgcommand = 'ANY' ");
+	}
+
+	appendPQExpBuffer(&buf, "ORDER BY c.oid");
+
+	res = PSQLexec(buf.data, false);
+	termPQExpBuffer(&buf);
+	if (!res)
+		return false;
+
+	myopt.nullPrint = NULL;
+	myopt.title = _("List of command triggers");
+	myopt.translate_header = true;
+	myopt.translate_columns = translate_columns;
+
+	printQuery(res, &myopt, pset.queryFout, pset.logfile);
+
+	PQclear(res);
+	return true;
+}
+
+/*
  * \dC
  *
  * Describes casts.

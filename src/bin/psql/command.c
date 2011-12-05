@@ -378,7 +378,18 @@ exec_command(const char *cmd,
 				success = describeTablespaces(pattern, show_verbose);
 				break;
 			case 'c':
-				success = listConversions(pattern, show_verbose, show_system);
+				switch (cmd[2])
+				{
+					case '\0':
+						success = listConversions(pattern, show_verbose, show_system);
+						break;
+					case 'T':
+						success = listCmdTriggers(pattern, show_verbose);
+						break;
+					default:
+						status = PSQL_CMD_UNKNOWN;
+						break;
+				}
 				break;
 			case 'C':
 				success = listCasts(pattern, show_verbose);

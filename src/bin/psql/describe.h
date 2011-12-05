@@ -66,6 +66,9 @@ extern bool listDomains(const char *pattern, bool verbose, bool showSystem);
 /* \dc */
 extern bool listConversions(const char *pattern, bool verbose, bool showSystem);
 
+/* \dcT */
+extern bool listCmdTriggers(const char *pattern, bool verbose);
+
 /* \dC */
 extern bool listCasts(const char *pattern, bool verbose);
 
