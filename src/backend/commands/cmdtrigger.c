@@ -126,6 +126,8 @@ CreateCmdTrigger(CreateCmdTrigStmt *stmt, const char *queryString)
 	Oid			funcoid;
 	Oid			funcrettype;
 	char        ctgtype;
+	ObjectAddress myself,
+				referenced;
 
 	CheckCmdTriggerPrivileges();
 
@@ -143,6 +145,7 @@ CreateCmdTrigger(CreateCmdTrigStmt *stmt, const char *queryString)
 
 	foreach(c, stmt->command)
 	{
+		Oid trigoid;
 		A_Const *con = (A_Const *) lfirst(c);
 		char    *command = strVal(&con->val);
 
@@ -218,7 +221,20 @@ CreateCmdTrigger(CreateCmdTrigStmt *stmt, const char *queryString)
 					 errmsg("function \"%s\" must return type \"void\"",
 							NameListToString(stmt->funcname))));
 
-		(void) InsertCmdTriggerTuple(tgrel, command, stmt->trigname, funcoid, ctgtype);
+		trigoid = InsertCmdTriggerTuple(tgrel, command, stmt->trigname, funcoid, ctgtype);
+
+		/*
+		 * Record dependencies for trigger.  Always place a normal dependency on
+		 * the function.
+		 */
+		myself.classId = CmdTriggerRelationId;
+		myself.objectId = trigoid;
+		myself.objectSubId = 0;
+
+		referenced.classId = ProcedureRelationId;
+		referenced.objectId = funcoid;
+		referenced.objectSubId = 0;
+		recordDependencyOn(&myself, &referenced, DEPENDENCY_NORMAL);
 	}
 	heap_close(tgrel, RowExclusiveLock);
 }
