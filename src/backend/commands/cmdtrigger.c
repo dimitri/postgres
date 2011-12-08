@@ -126,8 +126,6 @@ CreateCmdTrigger(CreateCmdTrigStmt *stmt, const char *queryString)
 	Oid			funcoid;
 	Oid			funcrettype;
 	char        ctgtype;
-	ObjectAddress myself,
-				referenced;
 
 	CheckCmdTriggerPrivileges();
 
@@ -222,19 +220,6 @@ CreateCmdTrigger(CreateCmdTrigStmt *stmt, const char *queryString)
 							NameListToString(stmt->funcname))));
 
 		trigoid = InsertCmdTriggerTuple(tgrel, command, stmt->trigname, funcoid, ctgtype);
-
-		/*
-		 * Record dependencies for trigger.  Always place a normal dependency on
-		 * the function.
-		 */
-		myself.classId = CmdTriggerRelationId;
-		myself.objectId = trigoid;
-		myself.objectSubId = 0;
-
-		referenced.classId = ProcedureRelationId;
-		referenced.objectId = funcoid;
-		referenced.objectSubId = 0;
-		recordDependencyOn(&myself, &referenced, DEPENDENCY_NORMAL);
 	}
 	heap_close(tgrel, RowExclusiveLock);
 }
