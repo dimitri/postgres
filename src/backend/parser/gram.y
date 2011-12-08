@@ -4211,7 +4211,7 @@ DropTrigStmt:
 
 CreateCmdTrigStmt:
 			CREATE TRIGGER name TriggerActionTime COMMAND trigger_command_list
-			EXECUTE PROCEDURE func_name '(' TriggerFuncArgs ')'
+			EXECUTE PROCEDURE func_name '(' ')'
 				{
 					CreateCmdTrigStmt *n = makeNode(CreateCmdTrigStmt);
 					n->trigname = $3;
@@ -4221,7 +4221,7 @@ CreateCmdTrigStmt:
 					$$ = (Node *)n;
 				}
 	      | CREATE TRIGGER name TriggerActionTime ANY COMMAND
-			EXECUTE PROCEDURE func_name '(' TriggerFuncArgs ')'
+			EXECUTE PROCEDURE func_name '(' ')'
 				{
 					CreateCmdTrigStmt *n = makeNode(CreateCmdTrigStmt);
 					n->trigname = $3;
