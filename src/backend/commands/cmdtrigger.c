@@ -344,7 +344,7 @@ AlterCmdTrigger(AlterCmdTrigStmt *stmt)
 	simple_heap_update(tgrel, &tup->t_self, tup);
 	CatalogUpdateIndexes(tgrel, tup);
 
-	heap_close(tgrel, AccessShareLock);
+	heap_close(tgrel, RowExclusiveLock);
 	heap_freetuple(tup);
 }
 
