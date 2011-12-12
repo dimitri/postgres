@@ -58,7 +58,7 @@
 #include "libpq/libpq-fs.h"
 
 #include "pg_backup_archiver.h"
-#include "common.h"
+#include "dumpmem.h"
 #include "dumputils.h"
 
 extern char *optarg;
@@ -5739,11 +5739,11 @@ getTableAttrs(TableInfo *tblinfo, int numTables)
 						"array_to_string(a.attoptions, ', ') AS attoptions, "
 							  "CASE WHEN a.attcollation <> t.typcollation "
 							"THEN a.attcollation ELSE 0 END AS attcollation, "
-				  "array_to_string(ARRAY("
-				  "  SELECT quote_ident(option_name) || ' ' || "
-				  "         quote_literal(option_value) "
-				  "  FROM pg_options_to_table(attfdwoptions)), ', ') "
-				  " AS attfdwoptions "
+							  "pg_catalog.array_to_string(ARRAY("
+							  "SELECT pg_catalog.quote_ident(option_name) || "
+							  "' ' || pg_catalog.quote_literal(option_value) "
+							  "FROM pg_catalog.pg_options_to_table(attfdwoptions)"
+							  "), ', ') AS attfdwoptions "
 			 "FROM pg_catalog.pg_attribute a LEFT JOIN pg_catalog.pg_type t "
 							  "ON a.atttypid = t.oid "
 							  "WHERE a.attrelid = '%u'::pg_catalog.oid "
@@ -6557,9 +6557,10 @@ getForeignDataWrappers(int *numForeignDataWrappers)
 						  "fdwhandler::pg_catalog.regproc, "
 						  "fdwvalidator::pg_catalog.regproc, fdwacl, "
 						  "array_to_string(ARRAY("
-						  "		SELECT quote_ident(option_name) || ' ' || "
-						  "            quote_literal(option_value) "
-						  "		FROM pg_options_to_table(fdwoptions)), ', ') AS fdwoptions "
+						  "SELECT quote_ident(option_name) || ' ' || "
+						  "quote_literal(option_value) "
+						  "FROM pg_options_to_table(fdwoptions)"
+						  "), ', ') AS fdwoptions "
 						  "FROM pg_foreign_data_wrapper",
 						  username_subquery);
 	}
@@ -6570,9 +6571,10 @@ getForeignDataWrappers(int *numForeignDataWrappers)
 						  "'-' AS fdwhandler, "
 						  "fdwvalidator::pg_catalog.regproc, fdwacl, "
 						  "array_to_string(ARRAY("
-						  "		SELECT quote_ident(option_name) || ' ' || "
-						  "            quote_literal(option_value) "
-						  "		FROM pg_options_to_table(fdwoptions)), ', ') AS fdwoptions "
+						  "SELECT quote_ident(option_name) || ' ' || "
+						  "quote_literal(option_value) "
+						  "FROM pg_options_to_table(fdwoptions)"
+						  "), ', ') AS fdwoptions "
 						  "FROM pg_foreign_data_wrapper",
 						  username_subquery);
 	}
@@ -6658,9 +6660,10 @@ getForeignServers(int *numForeignServers)
 					  "(%s srvowner) AS rolname, "
 					  "srvfdw, srvtype, srvversion, srvacl,"
 					  "array_to_string(ARRAY("
-		 "		SELECT quote_ident(option_name) || ' ' || "
-		 "             quote_literal(option_value) "
-	   "		FROM pg_options_to_table(srvoptions)), ', ') AS srvoptions "
+					  "SELECT quote_ident(option_name) || ' ' || "
+					  "quote_literal(option_value) "
+					  "FROM pg_options_to_table(srvoptions)"
+					  "), ', ') AS srvoptions "
 					  "FROM pg_foreign_server",
 					  username_subquery);
 
@@ -9964,6 +9967,8 @@ dumpOpclass(Archive *fout, OpclassInfo *opcinfo)
 	int			i_sortfamilynsp;
 	int			i_amprocnum;
 	int			i_amproc;
+	int			i_amproclefttype;
+	int			i_amprocrighttype;
 	char	   *opcintype;
 	char	   *opckeytype;
 	char	   *opcdefault;
@@ -9978,6 +9983,8 @@ dumpOpclass(Archive *fout, OpclassInfo *opcinfo)
 	char	   *sortfamilynsp;
 	char	   *amprocnum;
 	char	   *amproc;
+	char	   *amproclefttype;
+	char	   *amprocrighttype;
 	bool		needComma;
 	int			i;
 
@@ -10222,13 +10229,21 @@ dumpOpclass(Archive *fout, OpclassInfo *opcinfo)
 	 *
 	 * Print only those opfamily members that are tied to the opclass by
 	 * pg_depend entries.
+	 *
+	 * We print the amproclefttype/amprocrighttype even though in most cases
+	 * the backend could deduce the right values, because of the corner case
+	 * of a btree sort support function for a cross-type comparison.  That's
+	 * only allowed in 9.2 and later, but for simplicity print them in all
+	 * versions that have the columns.
 	 */
 	resetPQExpBuffer(query);
 
 	if (g_fout->remoteVersion >= 80300)
 	{
 		appendPQExpBuffer(query, "SELECT amprocnum, "
-						  "amproc::pg_catalog.regprocedure "
+						  "amproc::pg_catalog.regprocedure, "
+						  "amproclefttype::pg_catalog.regtype, "
+						  "amprocrighttype::pg_catalog.regtype "
 						"FROM pg_catalog.pg_amproc ap, pg_catalog.pg_depend "
 		   "WHERE refclassid = 'pg_catalog.pg_opclass'::pg_catalog.regclass "
 						  "AND refobjid = '%u'::pg_catalog.oid "
@@ -10240,7 +10255,9 @@ dumpOpclass(Archive *fout, OpclassInfo *opcinfo)
 	else
 	{
 		appendPQExpBuffer(query, "SELECT amprocnum, "
-						  "amproc::pg_catalog.regprocedure "
+						  "amproc::pg_catalog.regprocedure, "
+						  "'' AS amproclefttype, "
+						  "'' AS amprocrighttype "
 						  "FROM pg_catalog.pg_amproc "
 						  "WHERE amopclaid = '%u'::pg_catalog.oid "
 						  "ORDER BY amprocnum",
@@ -10254,17 +10271,25 @@ dumpOpclass(Archive *fout, OpclassInfo *opcinfo)
 
 	i_amprocnum = PQfnumber(res, "amprocnum");
 	i_amproc = PQfnumber(res, "amproc");
+	i_amproclefttype = PQfnumber(res, "amproclefttype");
+	i_amprocrighttype = PQfnumber(res, "amprocrighttype");
 
 	for (i = 0; i < ntups; i++)
 	{
 		amprocnum = PQgetvalue(res, i, i_amprocnum);
 		amproc = PQgetvalue(res, i, i_amproc);
+		amproclefttype = PQgetvalue(res, i, i_amproclefttype);
+		amprocrighttype = PQgetvalue(res, i, i_amprocrighttype);
 
 		if (needComma)
 			appendPQExpBuffer(q, " ,\n    ");
 
-		appendPQExpBuffer(q, "FUNCTION %s %s",
-						  amprocnum, amproc);
+		appendPQExpBuffer(q, "FUNCTION %s", amprocnum);
+
+		if (*amproclefttype && *amprocrighttype)
+			appendPQExpBuffer(q, " (%s, %s)", amproclefttype, amprocrighttype);
+
+		appendPQExpBuffer(q, " %s", amproc);
 
 		needComma = true;
 	}
@@ -11725,9 +11750,13 @@ dumpUserMappings(Archive *fout,
 
 	appendPQExpBuffer(query,
 					  "SELECT usename, "
-					  "array_to_string(ARRAY(SELECT quote_ident(option_name) || ' ' || quote_literal(option_value) FROM pg_options_to_table(umoptions)), ', ') AS umoptions\n"
+					  "array_to_string(ARRAY("
+					  "SELECT quote_ident(option_name) || ' ' || "
+					  "quote_literal(option_value) "
+					  "FROM pg_options_to_table(umoptions)"
+					  "), ', ') AS umoptions "
 					  "FROM pg_user_mappings "
-					  "WHERE srvid = %u",
+					  "WHERE srvid = '%u'",
 					  catalogId.oid);
 
 	res = PQexec(g_conn, query->data);
@@ -12287,12 +12316,12 @@ dumpTableSchema(Archive *fout, TableInfo *tbinfo)
 	int			numParents;
 	TableInfo **parents;
 	int			actual_atts;	/* number of attrs in this CREATE statment */
-	char	   *reltypename;
+	const char *reltypename;
 	char	   *storage;
+	char	   *srvname;
+	char	   *ftoptions;
 	int			j,
 				k;
-	char	   *srvname;
-	char	   *ftoptions = NULL;
 
 	/* Make sure we are in proper schema */
 	selectSourceSchema(tbinfo->dobj.namespace->dobj.name);
@@ -12378,15 +12407,27 @@ dumpTableSchema(Archive *fout, TableInfo *tbinfo)
 
 			/* retrieve name of foreign server and generic options */
 			appendPQExpBuffer(query,
-							  "SELECT fs.srvname, array_to_string(ARRAY("
-				"   SELECT quote_ident(option_name) || ' ' || "
-				"          quote_literal(option_value)"
-			   "   FROM pg_options_to_table(ftoptions)), ', ') AS ftoptions "
-						"FROM pg_foreign_table ft JOIN pg_foreign_server fs "
-							  "	ON (fs.oid = ft.ftserver) "
-							"WHERE ft.ftrelid = %u", tbinfo->dobj.catId.oid);
+							  "SELECT fs.srvname, "
+							  "pg_catalog.array_to_string(ARRAY("
+							  "SELECT pg_catalog.quote_ident(option_name) || "
+							  "' ' || pg_catalog.quote_literal(option_value) "
+							  "FROM pg_catalog.pg_options_to_table(ftoptions)"
+							  "), ', ') AS ftoptions "
+							  "FROM pg_catalog.pg_foreign_table ft "
+							  "JOIN pg_catalog.pg_foreign_server fs "
+							  "ON (fs.oid = ft.ftserver) "
+							  "WHERE ft.ftrelid = '%u'",
+							  tbinfo->dobj.catId.oid);
 			res = PQexec(g_conn, query->data);
 			check_sql_result(res, g_conn, query->data, PGRES_TUPLES_OK);
+			if (PQntuples(res) != 1)
+			{
+				write_msg(NULL, ngettext("query returned %d foreign server entry for foreign table \"%s\"\n",
+										 "query returned %d foreign server entries for foreign table \"%s\"\n",
+										 PQntuples(res)),
+						  PQntuples(res), tbinfo->dobj.name);
+				exit_nicely();
+			}
 			i_srvname = PQfnumber(res, "srvname");
 			i_ftoptions = PQfnumber(res, "ftoptions");
 			srvname = pg_strdup(PQgetvalue(res, 0, i_srvname));
@@ -12577,7 +12618,7 @@ dumpTableSchema(Archive *fout, TableInfo *tbinfo)
 		}
 
 		if (tbinfo->relkind == RELKIND_FOREIGN_TABLE)
-			appendPQExpBuffer(q, "\nSERVER %s", srvname);
+			appendPQExpBuffer(q, "\nSERVER %s", fmtId(srvname));
 
 		if ((tbinfo->reloptions && strlen(tbinfo->reloptions) > 0) ||
 		  (tbinfo->toast_reloptions && strlen(tbinfo->toast_reloptions) > 0))

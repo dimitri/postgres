@@ -14,7 +14,8 @@
  *-------------------------------------------------------------------------
  */
 #include "pg_backup_archiver.h"
-#include "common.h"
+#include "dumputils.h"
+#include "dumpmem.h"
 
 static const char *modulename = gettext_noop("sorter");
 
@@ -317,13 +318,13 @@ TopoSort(DumpableObject **objs,
 		obj = objs[i];
 		j = obj->dumpId;
 		if (j <= 0 || j > maxDumpId)
-			exit_horribly(NULL, modulename, "invalid dumpId %d\n", j);
+			exit_horribly(modulename, "invalid dumpId %d\n", j);
 		idMap[j] = i;
 		for (j = 0; j < obj->nDeps; j++)
 		{
 			k = obj->dependencies[j];
 			if (k <= 0 || k > maxDumpId)
-				exit_horribly(NULL, modulename, "invalid dependency %d\n", k);
+				exit_horribly(modulename, "invalid dependency %d\n", k);
 			beforeConstraints[k]++;
 		}
 	}
@@ -543,7 +544,7 @@ findDependencyLoops(DumpableObject **objs, int nObjs, int totObjs)
 
 	/* We'd better have fixed at least one loop */
 	if (!fixedloop)
-		exit_horribly(NULL, modulename, "could not identify dependency loop\n");
+		exit_horribly(modulename, "could not identify dependency loop\n");
 
 	free(workspace);
 }

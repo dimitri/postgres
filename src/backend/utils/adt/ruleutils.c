@@ -391,7 +391,7 @@ pg_get_viewdef_name(PG_FUNCTION_ARGS)
 
 	/* Look up view name.  Can't lock it - we might not have privileges. */
 	viewrel = makeRangeVarFromNameList(textToQualifiedNameList(viewname));
-	viewoid = RangeVarGetRelid(viewrel, NoLock, false, false);
+	viewoid = RangeVarGetRelid(viewrel, NoLock, false);
 
 	PG_RETURN_TEXT_P(string_to_text(pg_get_viewdef_worker(viewoid, 0)));
 }
@@ -411,7 +411,7 @@ pg_get_viewdef_name_ext(PG_FUNCTION_ARGS)
 
 	/* Look up view name.  Can't lock it - we might not have privileges. */
 	viewrel = makeRangeVarFromNameList(textToQualifiedNameList(viewname));
-	viewoid = RangeVarGetRelid(viewrel, NoLock, false, false);
+	viewoid = RangeVarGetRelid(viewrel, NoLock, false);
 
 	PG_RETURN_TEXT_P(string_to_text(pg_get_viewdef_worker(viewoid, prettyFlags)));
 }
@@ -1577,7 +1577,7 @@ pg_get_serial_sequence(PG_FUNCTION_ARGS)
 
 	/* Look up table name.  Can't lock it - we might not have privileges. */
 	tablerv = makeRangeVarFromNameList(textToQualifiedNameList(tablename));
-	tableOid = RangeVarGetRelid(tablerv, NoLock, false, false);
+	tableOid = RangeVarGetRelid(tablerv, NoLock, false);
 
 	/* Get the number of the column */
 	column = text_to_cstring(columnname);

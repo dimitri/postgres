@@ -23,13 +23,12 @@
 #include "getopt_long.h"
 
 #include "dumputils.h"
+#include "dumpmem.h"
 #include "pg_backup.h"
 
 /* version string we expect back from pg_dump */
 #define PGDUMP_VERSIONSTR "pg_dump (PostgreSQL) " PG_VERSION "\n"
 
-
-static const char *progname;
 
 static void help(void);
 
@@ -59,9 +58,6 @@ static PGconn *connectDatabase(const char *dbname, const char *pghost, const cha
 	  const char *pguser, enum trivalue prompt_password, bool fail_on_error);
 static PGresult *executeQuery(PGconn *conn, const char *query);
 static void executeCommand(PGconn *conn, const char *query);
-
-char *pg_strdup(const char *string);
-void *pg_malloc(size_t size);
 
 static char pg_dump_bin[MAXPGPATH];
 static PQExpBuffer pgdumpopts;
@@ -1001,7 +997,16 @@ dumpTablespaces(PGconn *conn)
 	 * Get all tablespaces except built-in ones (which we assume are named
 	 * pg_xxx)
 	 */
-	if (server_version >= 90000)
+	if (server_version >= 90200)
+		res = executeQuery(conn, "SELECT oid, spcname, "
+						 "pg_catalog.pg_get_userbyid(spcowner) AS spcowner, "
+						   "pg_catalog.pg_tablespace_location(oid), spcacl, "
+						   "array_to_string(spcoptions, ', '),"
+						"pg_catalog.shobj_description(oid, 'pg_tablespace') "
+						   "FROM pg_catalog.pg_tablespace "
+						   "WHERE spcname !~ '^pg_' "
+						   "ORDER BY 1");
+	else if (server_version >= 90000)
 		res = executeQuery(conn, "SELECT oid, spcname, "
 						 "pg_catalog.pg_get_userbyid(spcowner) AS spcowner, "
 						   "spclocation, spcacl, "
@@ -1907,42 +1912,4 @@ doShellQuoting(PQExpBuffer buf, const char *str)
 	}
 	appendPQExpBufferChar(buf, '"');
 #endif   /* WIN32 */
-}
-
-
-/*
- *	Simpler versions of common.c functions.
- */
-
-char *
-pg_strdup(const char *string)
-{
-	char	   *tmp;
-
-	if (!string)
-	{
-		fprintf(stderr, "cannot duplicate null pointer\n");
-		exit(1);
-	}
-	tmp = strdup(string);
-	if (!tmp)
-	{
-		fprintf(stderr, _("%s: out of memory\n"), progname);
-		exit(1);
-	}
-	return tmp;
-}
-
-void *
-pg_malloc(size_t size)
-{
-	void	   *tmp;
-
-	tmp = malloc(size);
-	if (!tmp)
-	{
-		fprintf(stderr, _("%s: out of memory\n"), progname);
-		exit(1);
-	}
-	return tmp;
 }
