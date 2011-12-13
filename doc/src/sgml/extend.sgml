@@ -463,9 +463,30 @@
       <term><varname>requires</varname> (<type>string</type>)</term>
       <listitem>
        <para>
-        A list of names of extensions that this extension depends on,
-        for example <literal>requires = 'foo, bar'</literal>.  Those
-        extensions must be installed before this one can be installed.
+        A list of features that this extension depends on, for
+        example <literal>requires = 'foo, bar'</literal>. Those features
+        must be provided by an already installed extension before this one
+        can be installed.
+       </para>
+      </listitem>
+     </varlistentry>
+
+     <varlistentry>
+      <term><varname>provides</varname> (<type>string</type>)</term>
+      <listitem>
+       <para>
+        A list of names of features that this extension provides, for
+        example <literal>provides = 'foo, extname_bugfix_12345'</literal>.
+        Those features can help providing finer dependencies: when updating
+        an existing extension you can add new features in this list so that
+        it's possible to depend on those new features. It also makes it
+        possible to deprecate features that an extension would no longer
+        provide.
+       </para>
+       <para>
+        The extension's name itself is always considered a member of
+        the <literal>provides</literal> list, so that you can entirely omit
+        this parameter.
        </para>
       </listitem>
      </varlistentry>

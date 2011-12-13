@@ -6804,8 +6804,14 @@
      <row>
       <entry><structfield>requires</structfield></entry>
       <entry><type>name[]</type></entry>
-      <entry>Names of prerequisite extensions,
+      <entry>Names of prerequisite features,
        or <literal>NULL</literal> if none</entry>
+     </row>
+
+     <row>
+      <entry><structfield>provides</structfield></entry>
+      <entry><type>name[]</type></entry>
+      <entry>Names of provided features</entry>
      </row>
 
      <row>
