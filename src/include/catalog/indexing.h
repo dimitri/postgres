@@ -303,6 +303,12 @@ DECLARE_UNIQUE_INDEX(pg_extension_oid_index, 3080, on pg_extension using btree(o
 DECLARE_UNIQUE_INDEX(pg_extension_name_index, 3081, on pg_extension using btree(extname name_ops));
 #define ExtensionNameIndexId 3081
 
+DECLARE_UNIQUE_INDEX(pg_extension_feature_oid_index, 3180, on pg_extension_feature using btree(oid oid_ops));
+#define ExtensionFeatureOidIndexId 3180
+
+DECLARE_UNIQUE_INDEX(pg_extension_feature_index, 3181, on pg_extension_feature using btree(extoid oid_ops, extfeature name_ops));
+#define ExtensionFeatureIndexId 3181
+
 DECLARE_UNIQUE_INDEX(pg_range_rngtypid_index, 3542, on pg_range using btree(rngtypid oid_ops));
 #define RangeTypidIndexId					3542
 

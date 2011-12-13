@@ -34,6 +34,7 @@
 #include "catalog/pg_default_acl.h"
 #include "catalog/pg_depend.h"
 #include "catalog/pg_extension.h"
+#include "catalog/pg_extension_feature.h"
 #include "catalog/pg_foreign_data_wrapper.h"
 #include "catalog/pg_foreign_server.h"
 #include "catalog/pg_language.h"
@@ -157,7 +158,8 @@ static const Oid object_classes[MAX_OCLASS] = {
 	ForeignServerRelationId,	/* OCLASS_FOREIGN_SERVER */
 	UserMappingRelationId,		/* OCLASS_USER_MAPPING */
 	DefaultAclRelationId,		/* OCLASS_DEFACL */
-	ExtensionRelationId			/* OCLASS_EXTENSION */
+	ExtensionRelationId,		/* OCLASS_EXTENSION */
+	ExtensionFeatureRelationId	/* OCLASS_EXTENSION_FEATURE */
 };
 
 
@@ -1159,6 +1161,10 @@ doDeletion(const ObjectAddress *object)
 
 		case OCLASS_EXTENSION:
 			RemoveExtensionById(object->objectId);
+			break;
+
+		case OCLASS_EXTENSION_FEATURE:
+			RemoveExtensionFeatureById(object->objectId);
 			break;
 
 		default:
@@ -2173,6 +2179,9 @@ getObjectClass(const ObjectAddress *object)
 
 		case ExtensionRelationId:
 			return OCLASS_EXTENSION;
+
+		case ExtensionFeatureRelationId:
+			return OCLASS_EXTENSION_FEATURE;
 	}
 
 	/* shouldn't get here */

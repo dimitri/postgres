@@ -151,6 +151,7 @@ create_empty_extension(PG_FUNCTION_ARGS)
 	Datum		extConfig;
 	Datum		extCondition;
 	List	   *requiredExtensions;
+	List       *features = NIL;	/* FIXME, get features from catalogs */
 
 	if (PG_ARGISNULL(4))
 		extConfig = PointerGetDatum(NULL);
@@ -190,7 +191,8 @@ create_empty_extension(PG_FUNCTION_ARGS)
 						 text_to_cstring(extVersion),
 						 extConfig,
 						 extCondition,
-						 requiredExtensions);
+						 requiredExtensions,
+						 features);
 
 	PG_RETURN_VOID();
 }
