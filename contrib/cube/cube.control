@@ -3,4 +3,3 @@ comment = 'data type for multidimensional cubes'
 default_version = '1.0'
 module_pathname = '$libdir/cube'
 relocatable = true
-provides = 'foo'
