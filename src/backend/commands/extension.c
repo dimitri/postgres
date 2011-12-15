@@ -232,26 +232,18 @@ get_extension_schema(Oid ext_oid)
 	return result;
 }
 
-
 /*
- * Utility function to find which already installed extension is providing
- * required feature, if any.
+ * Given a feature name, returns its pg_extension_feature oid.
  */
-static Oid
-get_extension_providing(const char *feature, bool missing_ok)
+static void
+get_extension_feature_oids(const char *feature, bool missing_ok,
+						   Oid *extoid, Oid *featoid)
 {
-	Oid			result;
 	Relation	rel;
 	SysScanDesc scandesc;
 	HeapTuple	tuple;
 	ScanKeyData entry[1];
 
-	/* first try an extension's name directly */
-	result = get_extension_oid(feature, true);
-	if (result != InvalidOid)
-		return result;
-
-	/* then try an extension's provided feature name */
 	rel = heap_open(ExtensionFeatureRelationId, AccessShareLock);
 
 	ScanKeyInit(&entry[0],
@@ -267,24 +259,24 @@ get_extension_providing(const char *feature, bool missing_ok)
 	/* We assume that there can be at most one matching tuple */
 	if (HeapTupleIsValid(tuple))
 	{
-		/* Form_pg_extension_feature f = (Form_pg_extension_feature) GETSTRUCT(tuple); */
-		/* result = f->extoid; */
-		result = ((Form_pg_extension_feature) GETSTRUCT(tuple))->extoid;
+		*extoid = ((Form_pg_extension_feature)tuple)->extoid;
+		*featoid = HeapTupleGetOid(tuple);
 	}
 	else
-		result = InvalidOid;
+	{
+		*extoid = InvalidOid;
+		*featoid = InvalidOid;
+	}
 
 	systable_endscan(scandesc);
 
 	heap_close(rel, AccessShareLock);
 
-	if (!OidIsValid(result) && !missing_ok)
+	if (!OidIsValid(featoid) && !missing_ok)
 		ereport(ERROR,
 				(errcode(ERRCODE_UNDEFINED_OBJECT),
-				 errmsg("required feature \"%s\" is not installed in any extension",
+				 errmsg("extension's feature \"%s\" is not installed",
 						feature)));
-
-	return result;
 }
 
 /*
@@ -292,25 +284,24 @@ get_extension_providing(const char *feature, bool missing_ok)
  * the OIDs of their target schemas.
  */
 static void
-get_required_extensions(List *requires,
-						List **requiredExtensions,
-						List **requiredSchemas)
+get_required_extension_features(List *requires,
+								List **requiredFeatures,
+								List **requiredSchemas)
 {
 	ListCell   *lc;
 
-	*requiredExtensions = NIL;
-	*requiredSchemas = NIL;
+	*requiredFeatures = NIL;
+	*requiredSchemas  = NIL;
 
 	foreach(lc, requires)
 	{
 		char	   *curreq = (char *) lfirst(lc);
-		Oid			reqext;
-		Oid			reqschema;
+		Oid			reqext, featoid, reqschema;
 
 		/* use get_extension_providing error message for missing requirements */
-		reqext = get_extension_providing(curreq, false);
+		get_extension_feature_oids(curreq, false, &reqext, &featoid);
 		reqschema = get_extension_schema(reqext);
-		*requiredExtensions = lappend_oid(*requiredExtensions, reqext);
+		*requiredFeatures = lappend_oid(*requiredFeatures, featoid);
 		*requiredSchemas = lappend_oid(*requiredSchemas, reqschema);
 	}
 }
@@ -1289,7 +1280,7 @@ CreateExtension(CreateExtensionStmt *stmt)
 	ExtensionControlFile *pcontrol;
 	ExtensionControlFile *control;
 	List	   *updateVersions;
-	List	   *requiredExtensions;
+	List	   *requiredFeatures;
 	List	   *requiredSchemas;
 	Oid			extensionOid;
 	ListCell   *lc;
@@ -1517,8 +1508,9 @@ CreateExtension(CreateExtensionStmt *stmt)
 	 * Look up the prerequisite extensions, and build lists of their OIDs and
 	 * the OIDs of their target schemas.
 	 */
-	get_required_extensions(control->requires,
-							&requiredExtensions, &requiredSchemas);
+	get_required_extension_features(control->requires,
+									&requiredFeatures,
+									&requiredSchemas);
 
 	/*
 	 * Insert new tuple into pg_extension, and create dependency entries.
@@ -1528,7 +1520,7 @@ CreateExtension(CreateExtensionStmt *stmt)
 										versionName,
 										PointerGetDatum(NULL),
 										PointerGetDatum(NULL),
-										requiredExtensions,
+										requiredFeatures,
 										control->provides);
 
 	/*
@@ -1570,7 +1562,7 @@ Oid
 InsertExtensionTuple(const char *extName, Oid extOwner,
 					 Oid schemaOid, bool relocatable, const char *extVersion,
 					 Datum extConfig, Datum extCondition,
-					 List *requiredExtensions, List *features)
+					 List *requiredFeatures, List *features)
 {
 	Oid			extensionOid;
 	Relation	rel;
@@ -1629,16 +1621,16 @@ InsertExtensionTuple(const char *extName, Oid extOwner,
 
 	recordDependencyOn(&myself, &nsp, DEPENDENCY_NORMAL);
 
-	foreach(lc, requiredExtensions)
+	foreach(lc, requiredFeatures)
 	{
-		Oid			reqext = lfirst_oid(lc);
-		ObjectAddress otherext;
+		Oid			reqfeat = lfirst_oid(lc);
+		ObjectAddress feature;
 
-		otherext.classId = ExtensionRelationId;
-		otherext.objectId = reqext;
-		otherext.objectSubId = 0;
+		feature.classId = ExtensionFeatureRelationId;
+		feature.objectId = reqfeat;
+		feature.objectSubId = 0;
 
-		recordDependencyOn(&myself, &otherext, DEPENDENCY_NORMAL);
+		recordDependencyOn(&myself, &feature, DEPENDENCY_NORMAL);
 	}
 	/*
 	 * Insert extension's features into pg_extension_feature catalog
@@ -1712,20 +1704,20 @@ insert_extension_features(const char *extName, ObjectAddress extObject,
 {
 	Relation	rel;
 	ListCell   *lc;
+	bool        provides_itself = false;
 
 	rel = heap_open(ExtensionFeatureRelationId, RowExclusiveLock);
 
 	foreach(lc, features)
 	{
 		char       *feature = (char *) lfirst(lc);
+		insert_extension_feature(rel, extObject, feature);
 
-		/*
-		 * Avoid inserting extension's name, an extension always provides at
-		 * least itself as a feature that you can require.
-		 */
-		if (strcmp(extName, feature) != 0)
-			insert_extension_feature(rel, extObject, feature);
+		provides_itself = (strcmp(feature, extName) == 0);
 	}
+
+	if (!provides_itself)
+		insert_extension_feature(rel, extObject, extName);
 
 	heap_close(rel, RowExclusiveLock);
 }
@@ -1766,6 +1758,140 @@ insert_extension_feature(Relation rel,
 	myself.objectSubId = 0;
 
 	recordDependencyOn(&myself, &extObject, DEPENDENCY_INTERNAL);
+}
+/*
+ * Data Structure to handle upgrading of extension features dependencies, and
+ * allow manage features that didn't change, added ones and removed ones.
+ */
+struct feats
+{
+	int nbfeats;				/* how many elements in arrays */
+	Oid *oids;					/* features Oid */
+	char **names;				/* features name */
+	int *counts;					/* features usage count */
+};
+
+/* Compare features by name */
+static int
+cmpfeatname(const void *a, const void *b)
+{
+	char  *p = (char *) a;
+	char  *f = *((char **) b);
+
+	return strcmp(p, f);
+}
+
+
+static struct feats *
+list_extension_features(Oid extoid)
+{
+	int nbfeats = 0, size = 10;
+	Relation	rel, irel;
+	SysScanDesc scandesc;
+	HeapTuple	tuple;
+	ScanKeyData entry[1];
+	struct feats *features = (struct feats *)palloc(sizeof(struct feats));
+
+	features->oids = (Oid *) palloc(size * sizeof(Oid));
+	features->names = (char **) palloc(size * sizeof(char *));
+	features->counts = (int *) palloc(size * sizeof(int));
+
+	rel = heap_open(ExtensionFeatureRelationId, AccessShareLock);
+	irel = index_open(ExtensionFeatureIndexId, AccessShareLock);
+
+	ScanKeyInit(&entry[0],
+				Anum_pg_extension_feature_extoid,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(extoid));
+
+	scandesc = systable_beginscan_ordered(rel, irel, SnapshotNow, 1, entry);
+
+	while (HeapTupleIsValid(tuple = systable_getnext_ordered(scandesc, ForwardScanDirection)))
+	{
+		Form_pg_extension_feature f = (Form_pg_extension_feature) GETSTRUCT(tuple);
+
+		if (nbfeats == size)
+		{
+			size += 10;
+			features->oids = repalloc(features->oids, size);
+			features->names = repalloc(features->names, size);
+			features->counts = repalloc(features->counts, size);
+		}
+		(features->oids)[nbfeats]   = HeapTupleGetOid(tuple);
+		(features->names)[nbfeats]  = pstrdup(NameStr(f->extfeature));
+		(features->counts)[nbfeats] = 0;
+		nbfeats++;
+	}
+	systable_endscan_ordered(scandesc);
+
+	index_close(irel, AccessShareLock);
+	heap_close(rel, AccessShareLock);
+
+	features->nbfeats = nbfeats;
+
+	return features;
+}
+
+/*
+ * Care about an extension's provided features changes:
+ *  - do nothing when the feature was already provided
+ *  - add new dependencies when a new feature is provided
+ *  - delete dependencies that are not provided anymore
+ */
+static void
+update_extension_feature_list(ExtensionControlFile *control,
+							  ObjectAddress ext)
+{
+	Relation    rel;
+	struct feats *features = list_extension_features(ext.objectId);
+	int         i;
+	ListCell   *lc;
+
+	rel = heap_open(ExtensionFeatureRelationId, RowExclusiveLock);
+
+	foreach(lc, control->provides)
+	{
+		char  *feat = (char *) lfirst(lc);
+		char  **found = NULL;
+
+		found = (char **) bsearch(feat, features->names, features->nbfeats,
+								  sizeof(char *), &cmpfeatname);
+
+		if (found)
+		{
+			int pos = *found - features->names[0];
+
+			if (features->counts[pos] > 0)
+				ereport(ERROR,
+						(errcode(ERRCODE_SYNTAX_ERROR),
+						 errmsg("conflicting or redundant options \"%s\"",
+								feat)));
+
+			features->counts[pos] += 1;
+		}
+		else
+			insert_extension_feature(rel, ext, feat);
+	}
+
+	/* upgrade is done, remove features not provided anymore, and avoid
+	 * removing the extension's name (will not appear in control->provides)
+	 */
+	for(i=0; i < features->nbfeats; i++)
+	{
+		if (features->counts[i] == 0
+			&& strcmp(features->names[i], control->name) != 0)
+		{
+			DropBehavior behavior = DROP_RESTRICT;
+			ObjectAddress feature;
+
+			feature.classId = ExtensionFeatureRelationId;
+			feature.objectId = features->oids[i];;
+			feature.objectSubId = 0;
+
+			performDeletion(&feature, behavior);
+		}
+	}
+	heap_close(rel, RowExclusiveLock);
 }
 
 /*
@@ -2733,7 +2859,7 @@ ApplyExtensionUpdates(Oid extensionOid,
 		ExtensionControlFile *control;
 		char	   *schemaName;
 		Oid			schemaOid;
-		List	   *requiredExtensions;
+		List	   *requiredFeatures;
 		List	   *requiredSchemas;
 		Relation	extRel;
 		ScanKeyData key[1];
@@ -2744,7 +2870,6 @@ ApplyExtensionUpdates(Oid extensionOid,
 		bool		nulls[Natts_pg_extension];
 		bool		repl[Natts_pg_extension];
 		ObjectAddress myself;
-		ListCell   *lc;
 
 		/*
 		 * Fetch parameters for specific version (pcontrol is not changed)
@@ -2801,38 +2926,21 @@ ApplyExtensionUpdates(Oid extensionOid,
 		heap_close(extRel, RowExclusiveLock);
 
 		/*
-		 * Look up the prerequisite extensions for this version, and build
-		 * lists of their OIDs and the OIDs of their target schemas.
+		 * Update extension features list and dependencies
 		 */
-		get_required_extensions(control->requires,
-								&requiredExtensions, &requiredSchemas);
-
-		/*
-		 * Remove and recreate dependencies on prerequisite extensions
-		 */
-		deleteDependencyRecordsForClass(ExtensionRelationId, extensionOid,
-										ExtensionRelationId,
-										DEPENDENCY_NORMAL);
-
 		myself.classId = ExtensionRelationId;
 		myself.objectId = extensionOid;
 		myself.objectSubId = 0;
 
-		foreach(lc, requiredExtensions)
-		{
-			Oid			reqext = lfirst_oid(lc);
-			ObjectAddress otherext;
-
-			otherext.classId = ExtensionRelationId;
-			otherext.objectId = reqext;
-			otherext.objectSubId = 0;
-
-			recordDependencyOn(&myself, &otherext, DEPENDENCY_NORMAL);
-		}
+		update_extension_feature_list(control, myself);
 
 		/*
 		 * Finally, execute the update script file
 		 */
+		get_required_extension_features(control->requires,
+										&requiredFeatures,
+										&requiredSchemas);
+
 		execute_extension_script(extensionOid, control,
 								 oldVersionName, versionName,
 								 requiredSchemas,
