@@ -91,6 +91,27 @@ typedef struct ExtensionVersionInfo
 	struct ExtensionVersionInfo *previous;		/* current best predecessor */
 } ExtensionVersionInfo;
 
+/*
+ * Data Structure to handle upgrading of extension features dependencies, and
+ * allow manage features that didn't change, added ones and removed ones.
+ */
+struct feature
+{
+	Oid   oid;				/* feature oid */
+	char *name;				/* feature name */
+	int   count;			/* feature usage count */
+};
+
+/* bsearch function to compare string and struct feature by name */
+static int
+cmpfeatname(const void *a, const void *b)
+{
+	char  *p = (char *) a;
+	struct feature *f = (struct feature *) b;
+
+	return strcmp(p, f->name);
+}
+
 /* Local functions */
 static List *find_update_path(List *evi_list,
 				 ExtensionVersionInfo *evi_start,
@@ -1696,6 +1717,46 @@ RemoveExtensionById(Oid extId)
 }
 
 /*
+ * Get an extension's feature name given its objectId
+ */
+char *
+get_extension_feature_name(Oid featoid)
+{
+	Relation rel;
+	SysScanDesc scandesc;
+	HeapTuple	tuple;
+	ScanKeyData entry[1];
+	char *name;
+
+	rel = heap_open(ExtensionFeatureRelationId, AccessShareLock);
+
+	ScanKeyInit(&entry[0],
+				ObjectIdAttributeNumber,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(featoid));
+
+	scandesc = systable_beginscan(rel, ExtensionFeatureOidIndexId, true,
+								  SnapshotNow, 1, entry);
+
+	tuple = systable_getnext(scandesc);
+
+	/* We assume that there can be at most one matching tuple */
+	if (HeapTupleIsValid(tuple))
+	{
+		Form_pg_extension_feature f = (Form_pg_extension_feature) GETSTRUCT(tuple);
+		name = pstrdup(NameStr(f->extfeature));
+	}
+	else
+		name = NULL;
+
+	systable_endscan(scandesc);
+
+	heap_close(rel, AccessShareLock);
+
+	return name;
+}
+
+/*
  * Insert provided features into the pg_extension_feature catalog
  */
 static void
@@ -1759,42 +1820,18 @@ insert_extension_feature(Relation rel,
 
 	recordDependencyOn(&myself, &extObject, DEPENDENCY_INTERNAL);
 }
-/*
- * Data Structure to handle upgrading of extension features dependencies, and
- * allow manage features that didn't change, added ones and removed ones.
- */
-struct feats
-{
-	int nbfeats;				/* how many elements in arrays */
-	Oid *oids;					/* features Oid */
-	char **names;				/* features name */
-	int *counts;					/* features usage count */
-};
 
-/* Compare features by name */
+/* static struct feature * */
 static int
-cmpfeatname(const void *a, const void *b)
-{
-	char  *p = (char *) a;
-	char  *f = *((char **) b);
-
-	return strcmp(p, f);
-}
-
-
-static struct feats *
-list_extension_features(Oid extoid)
+list_extension_features(Oid extoid, struct feature **features)
 {
 	int nbfeats = 0, size = 10;
 	Relation	rel, irel;
 	SysScanDesc scandesc;
 	HeapTuple	tuple;
 	ScanKeyData entry[1];
-	struct feats *features = (struct feats *)palloc(sizeof(struct feats));
 
-	features->oids = (Oid *) palloc(size * sizeof(Oid));
-	features->names = (char **) palloc(size * sizeof(char *));
-	features->counts = (int *) palloc(size * sizeof(int));
+	*features = (struct feature *) palloc(size * sizeof(struct feature));
 
 	rel = heap_open(ExtensionFeatureRelationId, AccessShareLock);
 	irel = index_open(ExtensionFeatureIndexId, AccessShareLock);
@@ -1813,13 +1850,12 @@ list_extension_features(Oid extoid)
 		if (nbfeats == size)
 		{
 			size += 10;
-			features->oids = repalloc(features->oids, size);
-			features->names = repalloc(features->names, size);
-			features->counts = repalloc(features->counts, size);
+			*features = repalloc(*features, size);
 		}
-		(features->oids)[nbfeats]   = HeapTupleGetOid(tuple);
-		(features->names)[nbfeats]  = pstrdup(NameStr(f->extfeature));
-		(features->counts)[nbfeats] = 0;
+		(*features)[nbfeats].oid   = HeapTupleGetOid(tuple);
+		(*features)[nbfeats].name  = pstrdup(NameStr(f->extfeature));
+		(*features)[nbfeats].count = 0;
+
 		nbfeats++;
 	}
 	systable_endscan_ordered(scandesc);
@@ -1827,9 +1863,7 @@ list_extension_features(Oid extoid)
 	index_close(irel, AccessShareLock);
 	heap_close(rel, AccessShareLock);
 
-	features->nbfeats = nbfeats;
-
-	return features;
+	return nbfeats;
 }
 
 /*
@@ -1843,7 +1877,8 @@ update_extension_feature_list(ExtensionControlFile *control,
 							  ObjectAddress ext)
 {
 	Relation    rel;
-	struct feats *features = list_extension_features(ext.objectId);
+	struct feature *features;
+    int         nbfeats = list_extension_features(ext.objectId, &features);
 	int         i;
 	ListCell   *lc;
 
@@ -1852,22 +1887,21 @@ update_extension_feature_list(ExtensionControlFile *control,
 	foreach(lc, control->provides)
 	{
 		char  *feat = (char *) lfirst(lc);
-		char  **found = NULL;
+		struct feature *found = NULL;
 
-		found = (char **) bsearch(feat, features->names, features->nbfeats,
-								  sizeof(char *), &cmpfeatname);
+		found = (struct feature *)
+			bsearch(feat, features, nbfeats, sizeof(struct feature), &cmpfeatname);
 
 		if (found)
 		{
-			int pos = *found - features->names[0];
-
-			if (features->counts[pos] > 0)
+			if (found->count > 0)
 				ereport(ERROR,
 						(errcode(ERRCODE_SYNTAX_ERROR),
 						 errmsg("conflicting or redundant options \"%s\"",
 								feat)));
 
-			features->counts[pos] += 1;
+			/* features->counts[pos] += 1; */
+			found->count++;
 		}
 		else
 			insert_extension_feature(rel, ext, feat);
@@ -1876,18 +1910,23 @@ update_extension_feature_list(ExtensionControlFile *control,
 	/* upgrade is done, remove features not provided anymore, and avoid
 	 * removing the extension's name (will not appear in control->provides)
 	 */
-	for(i=0; i < features->nbfeats; i++)
+	/* for(i=0; i < features->nbfeats; i++) */
+	for(i=0; i < nbfeats; i++)
 	{
-		if (features->counts[i] == 0
-			&& strcmp(features->names[i], control->name) != 0)
+		if (features[i].count == 0
+			&& strcmp(features[i].name, control->name) != 0)
 		{
 			DropBehavior behavior = DROP_RESTRICT;
 			ObjectAddress feature;
 
 			feature.classId = ExtensionFeatureRelationId;
-			feature.objectId = features->oids[i];;
+			feature.objectId = features[i].oid;
 			feature.objectSubId = 0;
 
+			/*
+			 * We can't just call performDeletion(&feature, DROP_RESTRICT) here
+			 * becase the extension object itself depends on the feature.
+			 */
 			performDeletion(&feature, behavior);
 		}
 	}

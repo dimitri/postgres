@@ -46,4 +46,6 @@ extern char *get_extension_name(Oid ext_oid);
 
 extern void AlterExtensionNamespace(List *names, const char *newschema);
 
+extern char * get_extension_feature_name(Oid featoid);
+
 #endif   /* EXTENSION_H */

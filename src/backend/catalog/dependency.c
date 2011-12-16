@@ -2816,6 +2816,18 @@ getObjectDescription(const ObjectAddress *object)
 				break;
 			}
 
+		case OCLASS_EXTENSION_FEATURE:
+			{
+				char	   *feature;
+
+				feature = get_extension_feature_name(object->objectId);
+				if (!feature)
+					elog(ERROR, "cache lookup failed for extension feature %u",
+						 object->objectId);
+				appendStringInfo(&buffer, _("extension feature %s"), feature);
+				break;
+			}
+
 		default:
 			appendStringInfo(&buffer, "unrecognized object %u %u %d",
 							 object->classId,
