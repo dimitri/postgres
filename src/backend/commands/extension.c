@@ -1818,7 +1818,7 @@ insert_extension_feature(Relation rel,
 	myself.objectId = featureOid;
 	myself.objectSubId = 0;
 
-	recordDependencyOn(&myself, &extObject, DEPENDENCY_INTERNAL);
+	recordDependencyOn(&extObject, &myself, DEPENDENCY_INTERNAL);
 }
 
 /* static struct feature * */
@@ -1882,6 +1882,20 @@ update_extension_feature_list(ExtensionControlFile *control,
 	int         i;
 	ListCell   *lc;
 
+	/*
+	 * Remove all this extension features dependencies, and add them again
+	 * while processing the new "provides" list. That allows to use the
+	 * pg_depend performDeletion() API to implement removing a feature from the
+	 * provide list: we have to skip the extension providing the feature itself
+	 * when following dependencies in DROP_RESTRICT mode.
+	 */
+	deleteDependencyRecordsForClass(ext.classId, ext.objectId,
+									ExtensionFeatureRelationId,
+									DEPENDENCY_INTERNAL);
+
+	/* Have that change visible now, for the performDeletion() call */
+	CommandCounterIncrement();
+
 	rel = heap_open(ExtensionFeatureRelationId, RowExclusiveLock);
 
 	foreach(lc, control->provides)
@@ -1900,7 +1914,6 @@ update_extension_feature_list(ExtensionControlFile *control,
 						 errmsg("conflicting or redundant options \"%s\"",
 								feat)));
 
-			/* features->counts[pos] += 1; */
 			found->count++;
 		}
 		else
@@ -1910,25 +1923,36 @@ update_extension_feature_list(ExtensionControlFile *control,
 	/* upgrade is done, remove features not provided anymore, and avoid
 	 * removing the extension's name (will not appear in control->provides)
 	 */
-	/* for(i=0; i < features->nbfeats; i++) */
 	for(i=0; i < nbfeats; i++)
 	{
-		if (features[i].count == 0
-			&& strcmp(features[i].name, control->name) != 0)
-		{
-			DropBehavior behavior = DROP_RESTRICT;
-			ObjectAddress feature;
+		ObjectAddress feature;
 
-			feature.classId = ExtensionFeatureRelationId;
-			feature.objectId = features[i].oid;
-			feature.objectSubId = 0;
+		feature.classId = ExtensionFeatureRelationId;
+		feature.objectId = features[i].oid;
+		feature.objectSubId = 0;
 
+		if (strcmp(features[i].name, control->name) == 0)
 			/*
-			 * We can't just call performDeletion(&feature, DROP_RESTRICT) here
-			 * becase the extension object itself depends on the feature.
+			 * The extension's name itself is not in the provide list but still
+			 * provided, we have to care about it separately.
 			 */
-			performDeletion(&feature, behavior);
-		}
+			recordDependencyOn(&ext, &feature, DEPENDENCY_INTERNAL);
+
+		else if (features[i].count == 0)
+			/*
+			 * Drop the extension's feature that is no longer provided, raising
+			 * an error instead if some other extensions are still depending on
+			 * it (control->requires installs pg_depend entries for this case).
+			 */
+			performDeletion(&feature, DROP_RESTRICT);
+
+		else if (features[i].count > 0)
+			/*
+			 * Re-install the dependency entry, we removed it only to allow
+			 * using DROP_RESTRICT.
+			 */
+			recordDependencyOn(&ext, &feature, DEPENDENCY_INTERNAL);
+
 	}
 	heap_close(rel, RowExclusiveLock);
 }
