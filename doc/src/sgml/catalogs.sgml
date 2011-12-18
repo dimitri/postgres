@@ -149,6 +149,11 @@
      </row>
 
      <row>
+      <entry><link linkend="catalog-pg-extension"><structname>pg_extension_feature</structname></link></entry>
+      <entry>features provided by installed extensions</entry>
+     </row>
+
+     <row>
       <entry><link linkend="catalog-pg-foreign-data-wrapper"><structname>pg_foreign_data_wrapper</structname></link></entry>
       <entry>foreign-data wrapper definitions</entry>
      </row>
@@ -3047,6 +3052,51 @@
   </para>
  </sect1>
 
+ <sect1 id="catalog-pg-extension-feature">
+  <title><structname>pg_extension_feature</structname></title>
+
+  <indexterm zone="catalog-pg-extension-feature">
+   <primary>pg_extension</primary>
+  </indexterm>
+
+  <para>
+   The catalog <structname>pg_extension_feature</structname> stores
+   information about the features provided by installed extensions.
+   See <xref linkend="extend-extensions"> for details about extensions.
+  </para>
+
+  <table>
+   <title><structname>pg_extension_features</> Columns</title>
+
+   <tgroup cols="4">
+    <thead>
+     <row>
+      <entry>Name</entry>
+      <entry>Type</entry>
+      <entry>References</entry>
+      <entry>Description</entry>
+     </row>
+    </thead>
+
+    <tbody>
+     <row>
+      <entry><structfield>extoid</structfield></entry>
+      <entry><type>oid</type></entry>
+      <entry><literal><link linkend="catalog-pg-extension"><structname>pg_extension</structname></link>.oid</literal></entry>
+      <entry>Oid of the extension that provides this feature</entry>
+     </row>
+
+     <row>
+      <entry><structfield>extfeature</structfield></entry>
+      <entry><type>name</type></entry>
+      <entry></entry>
+      <entry>Name of the feature</entry>
+     </row>
+
+    </tbody>
+   </tgroup>
+  </table>
+ </sect1>
 
  <sect1 id="catalog-pg-foreign-data-wrapper">
   <title><structname>pg_foreign_data_wrapper</structname></title>
