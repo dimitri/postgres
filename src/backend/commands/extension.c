@@ -1792,6 +1792,17 @@ insert_extension_feature(Relation rel,
 	bool		nulls[Natts_pg_extension_feature];
 	HeapTuple	tuple;
 	ObjectAddress myself;
+	Oid			ext, featoid;
+
+	/*
+	 * Build a nice error message when the feature is already installed..
+	 */
+	get_extension_feature_oids(feature, true, &ext, &featoid);
+	if (featoid != InvalidOid)
+		ereport(ERROR,
+				(errcode(ERRCODE_DUPLICATE_OBJECT),
+				 errmsg("extension feature \"%s\" already exists [%u]",
+						feature, featoid)));
 
 	/*
 	 * Build and insert the pg_extension_feature tuple
