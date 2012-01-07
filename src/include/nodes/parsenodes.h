@@ -1593,8 +1593,10 @@ typedef struct CreateExtensionStmt
 {
 	NodeTag		type;
 	char	   *extname;
+	bool        is_inline;		/* no files, SQL only extension */
 	bool		if_not_exists;	/* just do nothing if it already exists? */
 	List	   *options;		/* List of DefElem nodes */
+	char       *script;			/* inline extensions stuff the script here */
 } CreateExtensionStmt;
 
 /* Only used for ALTER EXTENSION UPDATE; later might need an action field */

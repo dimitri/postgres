@@ -242,8 +242,9 @@ static void processCASbits(int cas_bits, int location, const char *constrType,
 %type <list>	createdb_opt_list alterdb_opt_list copy_opt_list
 				transaction_mode_list
 				create_extension_opt_list alter_extension_opt_list
+                extension_feature_list create_extension_full_opt_list
 %type <defelt>	createdb_opt_item alterdb_opt_item copy_opt_item
-				transaction_mode_item
+				transaction_mode_item create_extension_full_opt_item
 				create_extension_opt_item alter_extension_opt_item
 
 %type <ival>	opt_lock lock_type cast_context
@@ -546,7 +547,7 @@ static void processCASbits(int cas_bits, int location, const char *constrType,
 	QUOTE
 
 	RANGE READ REAL REASSIGN RECHECK RECURSIVE REF REFERENCES REINDEX
-	RELATIVE_P RELEASE RENAME REPEATABLE REPLACE REPLICA
+	RELATIVE_P RELEASE RENAME REPEATABLE REPLACE REPLICA REQUIRES
 	RESET RESTART RESTRICT RETURNING RETURNS REVOKE RIGHT ROLE ROLLBACK
 	ROW ROWS RULE
 
@@ -3306,6 +3307,7 @@ CreateExtensionStmt: CREATE EXTENSION name opt_with create_extension_opt_list
 				{
 					CreateExtensionStmt *n = makeNode(CreateExtensionStmt);
 					n->extname = $3;
+					n->is_inline = false;
 					n->if_not_exists = false;
 					n->options = $5;
 					$$ = (Node *) n;
@@ -3314,10 +3316,36 @@ CreateExtensionStmt: CREATE EXTENSION name opt_with create_extension_opt_list
 				{
 					CreateExtensionStmt *n = makeNode(CreateExtensionStmt);
 					n->extname = $6;
+					n->is_inline = false;
 					n->if_not_exists = true;
 					n->options = $8;
 					$$ = (Node *) n;
 				}
+				/* we avoid shift/reduce using INLINE, the other way around
+				 * would be to accept the same option list for control file
+				 * based extension definitions and inline ones, and sort it out
+				 * in extension.c
+				 */
+				| CREATE EXTENSION name INLINE_P opt_with create_extension_full_opt_list
+				  AS Sconst
+				{
+					CreateExtensionStmt *n = makeNode(CreateExtensionStmt);
+					n->extname = $3;
+					n->is_inline = true;
+					n->if_not_exists = false;
+					n->options = $6;
+					n->script  = $8;
+					$$ = (Node *) n;
+				}
+		;
+
+create_extension_full_opt_list:
+			create_extension_full_opt_list create_extension_opt_item
+				{ $$ = lappend($1, $2); }
+			| create_extension_full_opt_list create_extension_full_opt_item
+				{ $$ = lappend($1, $2); }
+			| /* EMPTY */
+				{ $$ = NIL; }
 		;
 
 create_extension_opt_list:
@@ -3339,6 +3367,57 @@ create_extension_opt_item:
 			| FROM ColId_or_Sconst
 				{
 					$$ = makeDefElem("old_version", (Node *)makeString($2));
+				}
+		;
+
+create_extension_full_opt_item:
+			COMMENT Sconst
+				{
+					$$ = makeDefElem("comment", (Node *)makeString($2));
+				}
+			| REQUIRES extension_feature_list
+				{
+					$$ = makeDefElem("requires", (Node *)$2);
+				}
+			/*
+			 * We handle identifiers that aren't parser keywords with
+			 * the following special-case codes, to avoid bloating the
+			 * size of the main parser.
+			 */
+			| IDENT
+				{
+					if (strcasecmp($1, "superuser") == 0)
+						$$ = makeDefElem("superuser", (Node *)makeInteger(TRUE));
+					else if (strcasecmp($1, "relocatable") == 0)
+						$$ = makeDefElem("relocatable", (Node *)makeInteger(TRUE));
+					else
+						ereport(ERROR,
+								(errcode(ERRCODE_SYNTAX_ERROR),
+								 errmsg("unrecognized extension parameter \"%s\"", $1),
+									 parser_errposition(@1)));
+				}
+			| NOT IDENT
+				{
+					if (strcasecmp($2, "superuser") == 0)
+						$$ = makeDefElem("superuser", (Node *)makeInteger(FALSE));
+					else if (strcasecmp($2, "relocatable") == 0)
+						$$ = makeDefElem("relocatable", (Node *)makeInteger(FALSE));
+					else
+						ereport(ERROR,
+								(errcode(ERRCODE_SYNTAX_ERROR),
+								 errmsg("unrecognized extension parameter \"%s\"", $1),
+									 parser_errposition(@1)));
+				}
+		;
+
+extension_feature_list:
+			Sconst
+				{
+					$$ = list_make1($1);
+				}
+			| extension_feature_list ',' Sconst
+				{
+					$$ = lappend($1, $3);
 				}
 		;
 
@@ -12058,6 +12137,7 @@ unreserved_keyword:
 			| REPEATABLE
 			| REPLACE
 			| REPLICA
+			| REQUIRES
 			| RESET
 			| RESTART
 			| RESTRICT

@@ -73,6 +73,8 @@ typedef struct ExtensionControlFile
 	bool		superuser;		/* must be superuser to install? */
 	int			encoding;		/* encoding of the script file, or -1 */
 	List	   *requires;		/* names of prerequisite extensions */
+	bool		is_inline;		/* create extension inline */
+	char	   *script;			/* script when extension is inline */
 } ExtensionControlFile;
 
 /*
@@ -590,6 +592,7 @@ read_extension_control_file(const char *extname)
 	control->relocatable = false;
 	control->superuser = true;
 	control->encoding = -1;
+	control->is_inline = false;
 
 	/*
 	 * Parse the primary control file.
@@ -800,7 +803,10 @@ execute_extension_script(Oid extensionOid, ExtensionControlFile *control,
 					 errhint("Must be superuser to update this extension.")));
 	}
 
-	filename = get_extension_script_filename(control, from_version, version);
+	if (!control->is_inline)
+		filename = get_extension_script_filename(control, from_version, version);
+	else
+		filename = "INLINE";	/* make compiler happy */
 
 	/*
 	 * Force client_min_messages and log_min_messages to be at least WARNING,
@@ -856,11 +862,13 @@ execute_extension_script(Oid extensionOid, ExtensionControlFile *control,
 	CurrentExtensionObject = extensionOid;
 	PG_TRY();
 	{
-		char	   *c_sql = read_extension_script_file(control, filename);
 		Datum		t_sql;
 
+		if (!control->is_inline)
+			control->script = read_extension_script_file(control, filename);
+
 		/* We use various functions that want to operate on text datums */
-		t_sql = CStringGetTextDatum(c_sql);
+		t_sql = CStringGetTextDatum(control->script);
 
 		/*
 		 * Reduce any lines beginning with "\echo" to empty.  This allows
@@ -904,9 +912,9 @@ execute_extension_script(Oid extensionOid, ExtensionControlFile *control,
 		}
 
 		/* And now back to C string */
-		c_sql = text_to_cstring(DatumGetTextPP(t_sql));
+		control->script = text_to_cstring(DatumGetTextPP(t_sql));
 
-		execute_sql_string(c_sql, filename);
+		execute_sql_string(control->script, filename);
 	}
 	PG_CATCH();
 	{
@@ -1178,6 +1186,11 @@ CreateExtension(CreateExtensionStmt *stmt)
 	DefElem    *d_schema = NULL;
 	DefElem    *d_new_version = NULL;
 	DefElem    *d_old_version = NULL;
+	DefElem    *d_relocatable = NULL;
+	DefElem    *d_comment = NULL;
+	DefElem    *d_module_pathname = NULL;
+	DefElem    *d_requires = NULL;
+	DefElem    *d_superuser = NULL;
 	char	   *schemaName;
 	Oid			schemaOid;
 	char	   *versionName;
@@ -1231,7 +1244,18 @@ CreateExtension(CreateExtensionStmt *stmt)
 	 * any non-ASCII data, so there is no need to worry about encoding at this
 	 * point.
 	 */
-	pcontrol = read_extension_control_file(stmt->extname);
+	if (!stmt->is_inline)
+		pcontrol = read_extension_control_file(stmt->extname);
+	else
+	{
+		/* we still need to initialize a default empty primary control file */
+		pcontrol = (ExtensionControlFile *) palloc0(sizeof(ExtensionControlFile));
+		pcontrol->name = pstrdup(stmt->extname);
+		pcontrol->relocatable = false;
+		pcontrol->superuser = true;
+		pcontrol->encoding = -1;
+		pcontrol->is_inline = true;
+	}
 
 	/*
 	 * Read the statement option list
@@ -1263,6 +1287,46 @@ CreateExtension(CreateExtensionStmt *stmt)
 						(errcode(ERRCODE_SYNTAX_ERROR),
 						 errmsg("conflicting or redundant options")));
 			d_old_version = defel;
+		}
+		else if (strcmp(defel->defname, "relocatable") == 0)
+		{
+			if (d_relocatable || !stmt->is_inline)
+				ereport(ERROR,
+						(errcode(ERRCODE_SYNTAX_ERROR),
+						 errmsg("conflicting or redundant options")));
+			d_relocatable = defel;
+		}
+		else if (strcmp(defel->defname, "comment") == 0)
+		{
+			if (d_comment  || !stmt->is_inline)
+				ereport(ERROR,
+						(errcode(ERRCODE_SYNTAX_ERROR),
+						 errmsg("conflicting or redundant options")));
+			d_comment = defel;
+		}
+		else if (strcmp(defel->defname, "module_pathname") == 0)
+		{
+			if (d_module_pathname  || !stmt->is_inline)
+				ereport(ERROR,
+						(errcode(ERRCODE_SYNTAX_ERROR),
+						 errmsg("conflicting or redundant options")));
+			d_module_pathname = defel;
+		}
+		else if (strcmp(defel->defname, "requires") == 0)
+		{
+			if (d_requires  || !stmt->is_inline)
+				ereport(ERROR,
+						(errcode(ERRCODE_SYNTAX_ERROR),
+						 errmsg("conflicting or redundant options")));
+			d_requires = defel;
+		}
+		else if (strcmp(defel->defname, "superuser") == 0)
+		{
+			if (d_superuser  || !stmt->is_inline)
+				ereport(ERROR,
+						(errcode(ERRCODE_SYNTAX_ERROR),
+						 errmsg("conflicting or redundant options")));
+			d_superuser = defel;
 		}
 		else
 			elog(ERROR, "unrecognized option: %s", defel->defname);
@@ -1332,7 +1396,55 @@ CreateExtension(CreateExtensionStmt *stmt)
 	/*
 	 * Fetch control parameters for installation target version
 	 */
-	control = read_extension_aux_control_file(pcontrol, versionName);
+	if (!stmt->is_inline)
+		control = read_extension_aux_control_file(pcontrol, versionName);
+	else
+	{
+		/*
+		 * When the extension is inline we take the control parameters from the
+		 * statement
+		 */
+		control = (ExtensionControlFile *) palloc0(sizeof(ExtensionControlFile));
+		control->name = pstrdup(stmt->extname);
+		control->encoding = -1;
+		control->is_inline = true;
+		control->script = pstrdup(stmt->script);
+
+		if (d_relocatable)
+			control->relocatable = intVal(d_relocatable) != 0;
+
+		if (d_superuser)
+			control->superuser = intVal(d_superuser) != 0;
+
+		if (d_comment && d_comment->arg)
+			control->comment = strVal(d_comment->arg);
+
+		if (d_requires && d_requires->arg)
+		{
+			char *rawnames = pstrdup(strVal(d_requires->arg));
+
+			/* Parse string into list of identifiers */
+			if (!SplitIdentifierString(rawnames, ',', &pcontrol->requires))
+			{
+				/* syntax error in name list */
+				ereport(ERROR,
+						(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+				 errmsg("requires must be a list of extension names")));
+			}
+		}
+
+		if (d_schema && d_schema->arg)
+		{
+			/* CREATE EXTENSION ... INLINE WITH SCHEMA ... NOT RELOCATABLE
+			 *
+			 * In the case of an inline extension we need to consider the
+			 * schema given by the command to be the same one as the one we
+			 * otherwise find in the control file.
+			 */
+			control->schema = strVal(d_schema->arg);
+			d_schema = NULL;
+		}
+	}
 
 	/*
 	 * Determine the target schema to install the extension into
