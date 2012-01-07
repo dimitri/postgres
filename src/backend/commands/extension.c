@@ -2463,6 +2463,7 @@ void
 ExecAlterExtensionStmt(AlterExtensionStmt *stmt)
 {
 	DefElem    *d_new_version = NULL;
+	DefElem    *d_old_version = NULL;
 	char	   *versionName;
 	char	   *oldVersionName;
 	ExtensionControlFile *control;
@@ -2531,7 +2532,23 @@ ExecAlterExtensionStmt(AlterExtensionStmt *stmt)
 	 * any non-ASCII data, so there is no need to worry about encoding at this
 	 * point.
 	 */
-	control = read_extension_control_file(stmt->extname);
+	if (!stmt->is_inline)
+		control = read_extension_control_file(stmt->extname);
+	else
+	{
+		/*
+		 * When the extension is inline we take the control parameters from the
+		 * statement
+		 */
+		control = (ExtensionControlFile *) palloc0(sizeof(ExtensionControlFile));
+		control->name = pstrdup(stmt->extname);
+		control->encoding = -1;
+		control->is_inline = true;
+		control->script = pstrdup(stmt->script);
+
+		/* TODO: add support for all other control properties in the statement */
+		control->relocatable = false;
+	}
 
 	/*
 	 * Read the statement option list
@@ -2548,9 +2565,33 @@ ExecAlterExtensionStmt(AlterExtensionStmt *stmt)
 						 errmsg("conflicting or redundant options")));
 			d_new_version = defel;
 		}
+		else if (strcmp(defel->defname, "old_version") == 0)
+		{
+			if (d_old_version)
+				ereport(ERROR,
+						(errcode(ERRCODE_SYNTAX_ERROR),
+						 errmsg("conflicting or redundant options")));
+			d_old_version = defel;
+		}
 		else
 			elog(ERROR, "unrecognized option: %s", defel->defname);
 	}
+
+	/*
+	 * Check that we've been asked to upgrade from the current version
+	 */
+	if (control->is_inline && !d_old_version)
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+				 errmsg("missing \"FROM\" option"),
+				 errdetail("Inline update of extension requires the FROM option")));
+
+	if (d_old_version && d_old_version->arg)
+		if (strcmp(oldVersionName, strVal(d_old_version->arg)) != 0)
+			ereport(ERROR,
+					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+					 errmsg("FROM version does not match current version, \"%s\"",
+							oldVersionName)));
 
 	/*
 	 * Determine the version to update to
@@ -2582,9 +2623,23 @@ ExecAlterExtensionStmt(AlterExtensionStmt *stmt)
 	/*
 	 * Identify the series of update script files we need to execute
 	 */
-	updateVersions = identify_update_path(control,
-										  oldVersionName,
-										  versionName);
+	if (!control->is_inline)
+	{
+		updateVersions = identify_update_path(control,
+											  oldVersionName,
+											  versionName);
+	}
+	else
+	{
+		/*
+		 * In case of an inline update the script and control parameters are
+		 * all taken direcly from the statement itself. The origin version is
+		 * checked against the installed one.
+		 *
+		 * TODO: process all control properties from the statement.
+		 */
+		updateVersions = list_make1(versionName);
+	}
 
 	/*
 	 * Update the pg_extension row and execute the update scripts, one at a
@@ -2633,7 +2688,9 @@ ApplyExtensionUpdates(Oid extensionOid,
 		/*
 		 * Fetch parameters for specific version (pcontrol is not changed)
 		 */
-		control = read_extension_aux_control_file(pcontrol, versionName);
+		control = pcontrol;		/* make compiler happy */
+		if (!control->is_inline)
+			control = read_extension_aux_control_file(pcontrol, versionName);
 
 		/* Find the pg_extension tuple */
 		extRel = heap_open(ExtensionRelationId, RowExclusiveLock);

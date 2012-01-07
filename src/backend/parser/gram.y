@@ -3432,6 +3432,16 @@ AlterExtensionStmt: ALTER EXTENSION name UPDATE alter_extension_opt_list
 					AlterExtensionStmt *n = makeNode(AlterExtensionStmt);
 					n->extname = $3;
 					n->options = $5;
+					n->is_inline = false;
+					$$ = (Node *) n;
+				}
+				| ALTER EXTENSION name UPDATE alter_extension_opt_list WITH Sconst
+				{
+					AlterExtensionStmt *n = makeNode(AlterExtensionStmt);
+					n->extname = $3;
+					n->options = $5;
+					n->is_inline = true;
+					n->script  = $7;
 					$$ = (Node *) n;
 				}
 		;
@@ -3444,7 +3454,11 @@ alter_extension_opt_list:
 		;
 
 alter_extension_opt_item:
-			TO ColId_or_Sconst
+			FROM ColId_or_Sconst
+				{
+					$$ = makeDefElem("old_version", (Node *)makeString($2));
+				}
+			| TO ColId_or_Sconst
 				{
 					$$ = makeDefElem("new_version", (Node *)makeString($2));
 				}

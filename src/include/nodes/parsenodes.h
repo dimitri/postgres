@@ -1605,6 +1605,8 @@ typedef struct AlterExtensionStmt
 	NodeTag		type;
 	char	   *extname;
 	List	   *options;		/* List of DefElem nodes */
+	bool        is_inline;		/* no files, SQL only extension */
+	char       *script;			/* inline extensions stuff the script here */
 } AlterExtensionStmt;
 
 typedef struct AlterExtensionContentsStmt
