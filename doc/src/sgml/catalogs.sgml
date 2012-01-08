@@ -3020,6 +3020,13 @@
      </row>
 
      <row>
+      <entry><structfield>extinline</structfield></entry>
+      <entry><type>bool</type></entry>
+      <entry></entry>
+      <entry>True if extension has been created inline</entry>
+     </row>
+
+     <row>
       <entry><structfield>extversion</structfield></entry>
       <entry><type>text</type></entry>
       <entry></entry>

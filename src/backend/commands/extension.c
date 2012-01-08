@@ -1554,6 +1554,7 @@ CreateExtension(CreateExtensionStmt *stmt)
 	 */
 	extensionOid = InsertExtensionTuple(control->name, extowner,
 										schemaOid, control->relocatable,
+										control->is_inline,
 										versionName,
 										PointerGetDatum(NULL),
 										PointerGetDatum(NULL),
@@ -1596,7 +1597,8 @@ CreateExtension(CreateExtensionStmt *stmt)
  */
 Oid
 InsertExtensionTuple(const char *extName, Oid extOwner,
-					 Oid schemaOid, bool relocatable, const char *extVersion,
+					 Oid schemaOid, bool relocatable, bool is_inline,
+					 const char *extVersion,
 					 Datum extConfig, Datum extCondition,
 					 List *requiredExtensions)
 {
@@ -1622,6 +1624,7 @@ InsertExtensionTuple(const char *extName, Oid extOwner,
 	values[Anum_pg_extension_extowner - 1] = ObjectIdGetDatum(extOwner);
 	values[Anum_pg_extension_extnamespace - 1] = ObjectIdGetDatum(schemaOid);
 	values[Anum_pg_extension_extrelocatable - 1] = BoolGetDatum(relocatable);
+	values[Anum_pg_extension_extinline - 1] = BoolGetDatum(is_inline);
 	values[Anum_pg_extension_extversion - 1] = CStringGetTextDatum(extVersion);
 
 	if (extConfig == PointerGetDatum(NULL))
@@ -2508,6 +2511,26 @@ ExecAlterExtensionStmt(AlterExtensionStmt *stmt)
 						stmt->extname)));
 
 	extensionOid = HeapTupleGetOid(extTup);
+
+	/*
+	 * We can only update inline an inline extension
+	 */
+	datum = heap_getattr(extTup, Anum_pg_extension_extinline,
+						 RelationGetDescr(extRel), &isnull);
+	if (isnull)
+		elog(ERROR, "extversion is null");
+
+	if (DatumGetBool(datum) != stmt->is_inline)
+	{
+		if (stmt->is_inline)
+			ereport(ERROR,
+					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					 errmsg("inline update applies only to inline extension")));
+		else
+			ereport(ERROR,
+					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					 errmsg("inline extension can only be updated inline")));
+	}
 
 	/*
 	 * Determine the existing version we are updating from

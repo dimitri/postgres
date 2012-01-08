@@ -34,6 +34,7 @@ CATALOG(pg_extension,3079)
 	Oid			extowner;		/* extension owner */
 	Oid			extnamespace;	/* namespace of contained objects */
 	bool		extrelocatable; /* if true, allow ALTER EXTENSION SET SCHEMA */
+	bool		extinline;		/* if true, there's no control and script files */
 
 	/*
 	 * VARIABLE LENGTH FIELDS start here.
@@ -62,9 +63,10 @@ typedef FormData_pg_extension *Form_pg_extension;
 #define Anum_pg_extension_extowner			2
 #define Anum_pg_extension_extnamespace		3
 #define Anum_pg_extension_extrelocatable	4
-#define Anum_pg_extension_extversion		5
-#define Anum_pg_extension_extconfig			6
-#define Anum_pg_extension_extcondition		7
+#define Anum_pg_extension_extinline			5
+#define Anum_pg_extension_extversion		6
+#define Anum_pg_extension_extconfig			7
+#define Anum_pg_extension_extcondition		8
 
 /* ----------------
  *		pg_extension has no initial contents
