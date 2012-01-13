@@ -7966,7 +7966,7 @@ pg_get_cmddef(CommandContext cmd, void *parsetree)
 			break;
 
 		default:
-			elog(ERROR, "unrecognized node type: %d",
+			elog(DEBUG1, "unrecognized node type: %d",
 				 (int) nodeTag(parsetree));
 	}
 }

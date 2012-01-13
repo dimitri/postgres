@@ -509,7 +509,6 @@ check_cmdtrigger_name(const char *command, const char *trigname, Relation tgrel)
  *
  *   command tag, text
  *   command string, text
- *   command node string, text
  *   schemaname, text
  *   objectname, text
  *
@@ -520,8 +519,7 @@ check_cmdtrigger_name(const char *command, const char *trigname, Relation tgrel)
  * protocol, or something that comes from an EXECUTE evaluation in plpgsql.
  *
  * Also we need to be able to spit out a normalized (canonical?) SQL
- * command to ease DDL trigger code, and we even provide them with a
- * nodeToString() output.
+ * command to ease DDL trigger code.
  *
  */
 static RegProcedure *
