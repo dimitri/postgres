@@ -379,11 +379,8 @@ UPDATE OF <replaceable>column_name1</replaceable> [, <replaceable>column_name2</
      <para>
       The command trigger function is called with the
       parameters <literal>command string</literal> (normalized command
-      string rewritten by PostgreSQL), <literal>command node
-      string</literal> (the command syntax tree, in its text form, is easier
-      to deal with programmaticaly for more complex inquiries about the
-      command), <literal>schemaname</literal> (can be null)
-      and <literal>object name</literal>.
+      string rewritten by PostgreSQL), <literal>schemaname</literal> (can be
+      null) and <literal>object name</literal>.
      </para>
     </listitem>
    </varlistentry>
@@ -529,8 +526,8 @@ CREATE TRIGGER view_insert
 <programlisting>
 CREATE OR REPLACE FUNCTION enforce_local_style
  (
+   IN cmd_tag        text,
    IN cmd_string     text,
-   IN cmd_nodestring text,
    IN schemaname     text,
    IN relname        text
  )
