@@ -122,7 +122,7 @@ CreateCmdTrigger(CreateCmdTrigStmt *stmt, const char *queryString)
 	Relation	tgrel;
 	ListCell   *c;
 	/* cmd trigger args: cmd_string, cmd_nodestring, schemaname, objectname */
-	Oid			fargtypes[5] = {TEXTOID, TEXTOID, TEXTOID, TEXTOID, TEXTOID};
+	Oid			fargtypes[4] = {TEXTOID, TEXTOID, TEXTOID, TEXTOID};
 	Oid			funcoid;
 	Oid			funcrettype;
 	char        ctgtype;
@@ -132,7 +132,7 @@ CreateCmdTrigger(CreateCmdTrigStmt *stmt, const char *queryString)
 	/*
 	 * Find and validate the trigger function.
 	 */
-	funcoid = LookupFuncName(stmt->funcname, 5, fargtypes, false);
+	funcoid = LookupFuncName(stmt->funcname, 4, fargtypes, false);
 	funcrettype = get_func_rettype(funcoid);
 
 	/*
@@ -614,20 +614,16 @@ call_cmdtrigger_procedure(RegProcedure proc, CommandContext cmd,
 	if (cmd->cmdstr != NULL)
 		fcinfo.arg[1] = PointerGetDatum(cstring_to_text(pstrdup(cmd->cmdstr)));
 
-	if (cmd->nodestr != NULL)
-		fcinfo.arg[2] = PointerGetDatum(cstring_to_text(pstrdup(cmd->nodestr)));
-
 	if (cmd->schemaname != NULL)
-		fcinfo.arg[3] = PointerGetDatum(cstring_to_text(pstrdup(cmd->schemaname)));
+		fcinfo.arg[2] = PointerGetDatum(cstring_to_text(pstrdup(cmd->schemaname)));
 
 	if (cmd->objectname != NULL)
-		fcinfo.arg[4] = PointerGetDatum(cstring_to_text(pstrdup(cmd->objectname)));
+		fcinfo.arg[3] = PointerGetDatum(cstring_to_text(pstrdup(cmd->objectname)));
 
 	fcinfo.argnull[0] = cmd->tag == NULL;
 	fcinfo.argnull[1] = cmd->cmdstr == NULL;
-	fcinfo.argnull[2] = cmd->nodestr == NULL;
-	fcinfo.argnull[3] = cmd->schemaname == NULL;
-	fcinfo.argnull[4] = cmd->objectname == NULL;
+	fcinfo.argnull[2] = cmd->schemaname == NULL;
+	fcinfo.argnull[3] = cmd->objectname == NULL;
 
 	pgstat_init_function_usage(&fcinfo, &fcusage);
 

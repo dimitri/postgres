@@ -7940,40 +7940,33 @@ pg_get_cmddef(CommandContext cmd, void *parsetree)
 	 * firing, in that case we need to avoid trying to fill the CommandContext
 	 * for command we don't know how to back parse.
 	 */
-	cmd->nodestr = NULL;
 	cmd->objectname = NULL;
 	cmd->schemaname = NULL;
 
 	switch (nodeTag(parsetree))
 	{
 		case T_DropStmt:
-			cmd->nodestr = nodeToString(parsetree);
 			_rwDropStmt(cmd, parsetree);
 			break;
 
 		case T_CreateStmt:
-			cmd->nodestr = nodeToString(parsetree);
 			_rwCreateStmt(cmd, parsetree);
 			break;
 
 		case T_AlterTableStmt:
-			cmd->nodestr = nodeToString(parsetree);
 			_rwAlterTableStmt(cmd, parsetree);
 			break;
 
 		case T_ViewStmt:
-			cmd->nodestr = nodeToString(parsetree);
 			_rwViewStmt(cmd, parsetree);
 			break;
 
 		case T_CreateExtensionStmt:
-			cmd->nodestr = nodeToString(parsetree);
 			_rwCreateExtensionStmt(cmd, parsetree);
 			break;
 
 		default:
-			/* is it best to elog(ERROR)?  Not while in development :) */
-			elog(DEBUG2, "unrecognized node type: %d",
+			elog(ERROR, "unrecognized node type: %d",
 				 (int) nodeTag(parsetree));
 	}
 }

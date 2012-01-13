@@ -182,7 +182,6 @@ typedef struct CommandContextData
 {
 	char *tag;					/* Command Tag */
 	char *cmdstr;				/* Command String, rewritten by ruleutils */
-	char *nodestr;				/* nodeToString(parsetree) */
 	char *schemaname;			/* schemaname or NULL if not relevant */
 	char *objectname;			/* objectname */
 } CommandContextData;
