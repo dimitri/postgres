@@ -4,7 +4,7 @@
  *	  Functions to convert stored expressions/querytrees back to
  *	  source text
  *
- * Portions Copyright (c) 1996-2011, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2012, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -7676,9 +7676,9 @@ _rwCreateStmt(CommandContext cmd, CreateStmt *node)
 				_rwColQualList(&buf, c->constraints, node->relation->relname);
 				break;
 			}
-			case T_InhRelation:
+			case T_TableLikeClause:
 			{
-				InhRelation  *r = (InhRelation *) elmt;
+				TableLikeClause *r = (TableLikeClause *) elmt;
 				appendStringInfo(&buf, "%s", RangeVarToString(r->relation));
 				break;
 			}

@@ -11,7 +11,7 @@
  * be handled easily in a simple depth-first traversal.
  *
  *
- * Portions Copyright (c) 1996-2011, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2012, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
@@ -1965,6 +1965,7 @@ _copyRangeTblEntry(const RangeTblEntry *from)
 	COPY_SCALAR_FIELD(relid);
 	COPY_SCALAR_FIELD(relkind);
 	COPY_NODE_FIELD(subquery);
+	COPY_SCALAR_FIELD(security_barrier);
 	COPY_SCALAR_FIELD(jointype);
 	COPY_NODE_FIELD(joinaliasvars);
 	COPY_NODE_FIELD(funcexpr);
@@ -2567,6 +2568,7 @@ _copyAlterDomainStmt(const AlterDomainStmt *from)
 	COPY_STRING_FIELD(name);
 	COPY_NODE_FIELD(def);
 	COPY_SCALAR_FIELD(behavior);
+	COPY_SCALAR_FIELD(missing_ok);
 
 	return newnode;
 }
@@ -2725,10 +2727,10 @@ _copyCreateStmt(const CreateStmt *from)
 	return newnode;
 }
 
-static InhRelation *
-_copyInhRelation(const InhRelation *from)
+static TableLikeClause *
+_copyTableLikeClause(const TableLikeClause *from)
 {
-	InhRelation *newnode = makeNode(InhRelation);
+	TableLikeClause *newnode = makeNode(TableLikeClause);
 
 	COPY_NODE_FIELD(relation);
 	COPY_SCALAR_FIELD(options);
@@ -4184,8 +4186,8 @@ copyObject(const void *from)
 		case T_CreateStmt:
 			retval = _copyCreateStmt(from);
 			break;
-		case T_InhRelation:
-			retval = _copyInhRelation(from);
+		case T_TableLikeClause:
+			retval = _copyTableLikeClause(from);
 			break;
 		case T_DefineStmt:
 			retval = _copyDefineStmt(from);

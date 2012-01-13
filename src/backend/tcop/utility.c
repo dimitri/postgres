@@ -5,7 +5,7 @@
  *	  commands.  At one time acted as an interface between the Lisp and C
  *	  systems.
  *
- * Portions Copyright (c) 1996-2011, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2012, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -871,12 +871,23 @@ standard_ProcessUtility(Node *parsetree,
 
 		case T_AlterTableStmt:
 			{
+				AlterTableStmt *atstmt = (AlterTableStmt *) parsetree;
+				Oid			relid;
 				List	   *stmts;
 				ListCell   *l;
+				LOCKMODE	lockmode;
+
+				/*
+				 * Figure out lock mode, and acquire lock.  This also does
+				 * basic permissions checks, so that we won't wait for a lock
+				 * on (for example) a relation on which we have no
+				 * permissions.
+				 */
+				lockmode = AlterTableGetLockLevel(atstmt->cmds);
+				relid = AlterTableLookupRelation(atstmt, lockmode);
 
 				/* Run parse analysis ... */
-				stmts = transformAlterTableStmt((AlterTableStmt *) parsetree,
-												queryString);
+				stmts = transformAlterTableStmt(atstmt, queryString);
 
 				/* ... and do it */
 				foreach(l, stmts)
@@ -886,7 +897,7 @@ standard_ProcessUtility(Node *parsetree,
 					if (IsA(stmt, AlterTableStmt))
 					{
 						/* Do the table alteration proper */
-						AlterTable((AlterTableStmt *) stmt);
+						AlterTable(relid, lockmode, (AlterTableStmt *) stmt);
 					}
 					else
 					{
@@ -940,7 +951,8 @@ standard_ProcessUtility(Node *parsetree,
 					case 'X':	/* DROP CONSTRAINT */
 						AlterDomainDropConstraint(stmt->typeName,
 												  stmt->name,
-												  stmt->behavior);
+												  stmt->behavior,
+												  stmt->missing_ok);
 						break;
 					case 'V':	/* VALIDATE CONSTRAINT */
 						AlterDomainValidateConstraint(stmt->typeName,

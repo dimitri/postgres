@@ -3,7 +3,7 @@
  * outfuncs.c
  *	  Output functions for Postgres tree nodes.
  *
- * Portions Copyright (c) 1996-2011, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2012, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -1512,7 +1512,9 @@ _outIndexPath(StringInfo str, const IndexPath *node)
 	WRITE_NODE_FIELD(indexinfo);
 	WRITE_NODE_FIELD(indexclauses);
 	WRITE_NODE_FIELD(indexquals);
+	WRITE_NODE_FIELD(indexqualcols);
 	WRITE_NODE_FIELD(indexorderbys);
+	WRITE_NODE_FIELD(indexorderbycols);
 	WRITE_BOOL_FIELD(isjoininner);
 	WRITE_ENUM_FIELD(indexscandir, ScanDirection);
 	WRITE_FLOAT_FIELD(indextotalcost, "%.2f");
@@ -2358,26 +2360,9 @@ _outDefElem(StringInfo str, const DefElem *node)
 }
 
 static void
-_outPrivGrantee(StringInfo str, const PrivGrantee *node)
+_outTableLikeClause(StringInfo str, const TableLikeClause *node)
 {
-	WRITE_NODE_TYPE("PRIVGRANTEE");
-
-	WRITE_STRING_FIELD(rolname);
-}
-
-static void
-_outAccessPriv(StringInfo str, const AccessPriv *node)
-{
-	WRITE_NODE_TYPE("ACCESSPRIV");
-
-	WRITE_STRING_FIELD(priv_name);
-	WRITE_NODE_FIELD(cols);
-}
-
-static void
-_outInhRelation(StringInfo str, const InhRelation *node)
-{
-	WRITE_NODE_TYPE("INHRELATION");
+	WRITE_NODE_TYPE("TABLELIKECLAUSE");
 
 	WRITE_NODE_FIELD(relation);
 	WRITE_UINT_FIELD(options);
@@ -2653,6 +2638,7 @@ _outRangeTblEntry(StringInfo str, const RangeTblEntry *node)
 			break;
 		case RTE_SUBQUERY:
 			WRITE_NODE_FIELD(subquery);
+			WRITE_BOOL_FIELD(security_barrier);
 			break;
 		case RTE_JOIN:
 			WRITE_ENUM_FIELD(jointype, JoinType);
@@ -3565,14 +3551,8 @@ _outNode(StringInfo str, const void *obj)
 			case T_DefElem:
 				_outDefElem(str, obj);
 				break;
-			case T_PrivGrantee:
-				_outPrivGrantee(str, obj);
-				break;
-			case T_AccessPriv:
-				_outAccessPriv(str, obj);
-				break;
-			case T_InhRelation:
-				_outInhRelation(str, obj);
+			case T_TableLikeClause:
+				_outTableLikeClause(str, obj);
 				break;
 			case T_LockingClause:
 				_outLockingClause(str, obj);
