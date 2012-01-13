@@ -121,7 +121,7 @@ CreateCmdTrigger(CreateCmdTrigStmt *stmt, const char *queryString)
 {
 	Relation	tgrel;
 	ListCell   *c;
-	/* cmd trigger args: cmd_string, cmd_nodestring, schemaname, objectname */
+	/* cmd trigger args: cmd_string, schemaname, objectname */
 	Oid			fargtypes[4] = {TEXTOID, TEXTOID, TEXTOID, TEXTOID};
 	Oid			funcoid;
 	Oid			funcrettype;
