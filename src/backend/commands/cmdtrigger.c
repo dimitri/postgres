@@ -203,8 +203,12 @@ CreateCmdTrigger(CreateCmdTrigStmt *stmt, const char *queryString)
 							 errdetail("Commands cannot have both AFTER and INSTEAD OF triggers.")));
 				break;
 			}
+
 			default:
+			{
 				elog(ERROR, "unknown trigger type for COMMAND TRIGGER");
+				return;	/* make compiler happy */
+			}
 		}
 
 		if (ctgtype == CMD_TRIGGER_FIRED_BEFORE && funcrettype != BOOLOID)

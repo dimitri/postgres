@@ -20,6 +20,7 @@
 #include "catalog/pg_largeobject.h"
 #include "catalog/pg_namespace.h"
 #include "commands/alter.h"
+#include "commands/cmdtrigger.h"
 #include "commands/collationcmds.h"
 #include "commands/conversioncmds.h"
 #include "commands/dbcommands.h"

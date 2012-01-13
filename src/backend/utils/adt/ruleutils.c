@@ -7405,8 +7405,8 @@ relkindToString(ObjectType relkind)
 			break;
 
 		default:
-			elog(DEBUG2, "unrecognized relkind: %d", relkind);
-			break;
+			elog(ERROR, "unrecognized relkind: %d", relkind);
+			return NULL;				/* make compiler happy */
 	}
 	return kind;
 }
