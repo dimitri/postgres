@@ -19,6 +19,7 @@
 #include "catalog/indexing.h"
 #include "catalog/objectaccess.h"
 #include "catalog/pg_cmdtrigger.h"
+#include "catalog/pg_language.h"
 #include "catalog/pg_proc.h"
 #include "catalog/pg_trigger.h"
 #include "catalog/pg_type.h"
@@ -35,6 +36,7 @@
 #include "utils/memutils.h"
 #include "utils/rel.h"
 #include "utils/tqual.h"
+#include "utils/syscache.h"
 #include "tcop/utility.h"
 
 static void check_cmdtrigger_name(const char *command, const char *trigname, Relation tgrel);
@@ -123,6 +125,7 @@ CreateCmdTrigger(CreateCmdTrigStmt *stmt, const char *queryString)
 	ListCell   *c;
 	/* cmd trigger args: cmd_string, schemaname, objectname */
 	Oid			fargtypes[4] = {TEXTOID, TEXTOID, TEXTOID, TEXTOID};
+	Oid			fargtypes_c[5] = {TEXTOID, TEXTOID, TEXTOID, TEXTOID, INTERNALOID};
 	Oid			funcoid;
 	Oid			funcrettype;
 	char        ctgtype;
@@ -130,9 +133,15 @@ CreateCmdTrigger(CreateCmdTrigStmt *stmt, const char *queryString)
 	CheckCmdTriggerPrivileges();
 
 	/*
-	 * Find and validate the trigger function.
+	 * Find and validate the trigger function. When the function is coded in C
+	 * it receives an internal argument which is the parse tree as a Node *.
+	 *
+	 * Only C coded functions can accept an argument of type internal, so we
+	 * don't have to explicitely check about the prolang here.
 	 */
-	funcoid = LookupFuncName(stmt->funcname, 4, fargtypes, false);
+	funcoid = LookupFuncName(stmt->funcname, 5, fargtypes_c, true);
+	if (funcoid == InvalidOid)
+		funcoid = LookupFuncName(stmt->funcname, 4, fargtypes, false);
 	funcrettype = get_func_rettype(funcoid);
 
 	/*
@@ -592,18 +601,35 @@ list_triggers_for_command(const char *command, char type)
 }
 
 static bool
-call_cmdtrigger_procedure(RegProcedure proc, CommandContext cmd,
+call_cmdtrigger_procedure(RegProcedure proc,
+						  CommandContext cmd, Node *parsetree,
 						  MemoryContext per_command_context)
 {
 	FmgrInfo	flinfo;
 	FunctionCallInfoData fcinfo;
 	PgStat_FunctionCallUsage fcusage;
 	Datum		result;
+	HeapTuple	procedureTuple;
+	Form_pg_proc procedureStruct;
+	int         nargs = 4;
 
 	fmgr_info_cxt(proc, &flinfo, per_command_context);
 
+	/* we need the procedure's language here to know how many args to call it
+	 * with
+	 */
+	procedureTuple = SearchSysCache1(PROCOID, ObjectIdGetDatum(proc));
+	if (!HeapTupleIsValid(procedureTuple))
+		elog(ERROR, "cache lookup failed for function %u", proc);
+	procedureStruct = (Form_pg_proc) GETSTRUCT(procedureTuple);
+
+	if (procedureStruct->prolang == ClanguageId)
+		nargs = 5;
+
+	ReleaseSysCache(procedureTuple);
+
 	/* Can't use OidFunctionCallN because we might get a NULL result */
-	InitFunctionCallInfoData(fcinfo, &flinfo, 5, InvalidOid, NULL, NULL);
+	InitFunctionCallInfoData(fcinfo, &flinfo, nargs, InvalidOid, NULL, NULL);
 
 	/* We support triggers ON ANY COMMAND so all fields here are nullable. */
 	if (cmd->tag != NULL)
@@ -622,6 +648,12 @@ call_cmdtrigger_procedure(RegProcedure proc, CommandContext cmd,
 	fcinfo.argnull[1] = cmd->cmdstr == NULL;
 	fcinfo.argnull[2] = cmd->schemaname == NULL;
 	fcinfo.argnull[3] = cmd->objectname == NULL;
+
+	if (nargs == 5)
+	{
+		fcinfo.arg[4] = PointerGetDatum(parsetree);
+		fcinfo.argnull[4] = false;
+	}
 
 	pgstat_init_function_usage(&fcinfo, &fcusage);
 
@@ -701,7 +733,8 @@ ExecBeforeCommandTriggers(Node *parsetree, CommandContext cmd,
 
 	while (cont && InvalidOid != (proc = procs[cur++]))
 	{
-		cont = call_cmdtrigger_procedure(proc, cmd, per_command_context);
+		cont = call_cmdtrigger_procedure(proc, cmd, parsetree,
+										 per_command_context);
 
 		if (cont == false)
 			elog(WARNING,
@@ -742,7 +775,7 @@ ExecInsteadOfCommandTriggers(Node *parsetree, CommandContext cmd,
 	MemoryContextReset(per_command_context);
 
 	while (InvalidOid != (proc = procs[cur++]))
-		call_cmdtrigger_procedure(proc, cmd, per_command_context);
+		call_cmdtrigger_procedure(proc, cmd, parsetree, per_command_context);
 
 	MemoryContextSwitchTo(oldContext);
 	return cur-1;
@@ -782,7 +815,7 @@ ExecAfterCommandTriggers(Node *parsetree, CommandContext cmd)
 	oldContext = MemoryContextSwitchTo(per_command_context);
 
 	while (InvalidOid != (proc = procs[cur++]))
-		call_cmdtrigger_procedure(proc, cmd, per_command_context);
+		call_cmdtrigger_procedure(proc, cmd, parsetree, per_command_context);
 
 	/* Release working resources */
 	MemoryContextSwitchTo(oldContext);
