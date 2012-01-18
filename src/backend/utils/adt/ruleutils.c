@@ -4885,6 +4885,18 @@ get_rule_expr(Node *node, deparse_context *context,
 			get_const_expr((Const *) node, context, 0);
 			break;
 
+		case T_A_Const:
+			{
+				A_Const    *con = (A_Const *) node;
+				Value	   *val = &con->val;
+
+				if (val->type == T_Integer)
+					appendStringInfo(buf, "%ld", intVal(val));
+				else
+					appendStringInfo(buf, "%s", strVal(val));
+				break;
+			}
+
 		case T_Param:
 			get_parameter((Param *) node, context);
 			break;
@@ -7600,10 +7612,7 @@ _rwColQualList(StringInfo buf, List *constraints, const char *relname)
 			case CONSTR_CHECK:
 			{
 				char	   *consrc;
-				List	   *context;
-
-				context = deparse_context_for(relname, InvalidOid);
-				consrc = deparse_expression(c->raw_expr, context, false, false);
+				consrc = deparse_expression(c->raw_expr, NIL, false, false);
 				appendStringInfo(buf, " CHECK (%s)", consrc);
 				break;
 			}
@@ -7611,11 +7620,8 @@ _rwColQualList(StringInfo buf, List *constraints, const char *relname)
 			case CONSTR_DEFAULT:
 			{
 				char	   *consrc;
-				List	   *context;
-
-				context = deparse_context_for(relname, InvalidOid);
-				consrc = deparse_expression(c->raw_expr, context, false, false);
-				appendStringInfo(buf, " DEFAUT %s", consrc);
+				consrc = deparse_expression(c->raw_expr, NIL, false, false);
+				appendStringInfo(buf, " DEFAULT %s", consrc);
 				break;
 			}
 
