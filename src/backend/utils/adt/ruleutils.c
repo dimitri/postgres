@@ -4885,18 +4885,6 @@ get_rule_expr(Node *node, deparse_context *context,
 			get_const_expr((Const *) node, context, 0);
 			break;
 
-		case T_A_Const:
-			{
-				A_Const    *con = (A_Const *) node;
-				Value	   *val = &con->val;
-
-				if (val->type == T_Integer)
-					appendStringInfo(buf, "%ld", intVal(val));
-				else
-					appendStringInfo(buf, "%s", strVal(val));
-				break;
-			}
-
 		case T_Param:
 			get_parameter((Param *) node, context);
 			break;

@@ -152,16 +152,9 @@ CommandIsReadOnly(Node *parsetree)
 
 /*
  * Support function for calling the command triggers.
- *
- * That function is called in standard_ProcessUtility() before entering the
- * big'o'switch and before parse analysis have been done for commands that need
- * it done, with force set to false. Later in the switch, after parse analysis
- * has been done, force is set to true so that we actually call the command
- * triggers this time.
  */
 static int
-call_before_or_insteadof_cmdtriggers(Node *parsetree, CommandContext cmd,
-									 bool force)
+call_before_or_insteadof_cmdtriggers(Node *parsetree, CommandContext cmd)
 {
 	switch (nodeTag(parsetree))
 	{
@@ -174,6 +167,7 @@ call_before_or_insteadof_cmdtriggers(Node *parsetree, CommandContext cmd,
 		case T_AlterObjectSchemaStmt:
 		case T_AlterOwnerStmt:
 		case T_AlterSeqStmt:
+		case T_AlterTableStmt:
 		case T_RenameStmt:
 		case T_CommentStmt:
 		case T_DefineStmt:
@@ -185,6 +179,7 @@ call_before_or_insteadof_cmdtriggers(Node *parsetree, CommandContext cmd,
 		case T_CreateDomainStmt:
 		case T_CreateFunctionStmt:
 		case T_CreateRoleStmt:
+		case T_IndexStmt:
 		case T_CreatePLangStmt:
 		case T_CreateOpClassStmt:
 		case T_CreateOpFamilyStmt:
@@ -192,6 +187,8 @@ call_before_or_insteadof_cmdtriggers(Node *parsetree, CommandContext cmd,
 		case T_RuleStmt:
 		case T_CreateSchemaStmt:
 		case T_CreateSeqStmt:
+		case T_CreateStmt:
+		case T_CreateTableSpaceStmt:
 		case T_CreateTrigStmt:
 		case T_CompositeTypeStmt:
 		case T_CreateEnumStmt:
@@ -226,29 +223,14 @@ call_before_or_insteadof_cmdtriggers(Node *parsetree, CommandContext cmd,
 		case T_SecLabelStmt:
 			return ExecBeforeOrInsteadOfCommandTriggers(parsetree, cmd);
 
-		case T_CreateStmt:
-		case T_CreateTableSpaceStmt:
-		case T_AlterTableStmt:
-		case T_IndexStmt:
-			/* commands that transform the parse tree
-			 *
-			 * we deal with them in their standard_ProcessUtility() branch.
-			 */
-			if (force)
-				return ExecBeforeOrInsteadOfCommandTriggers(parsetree, cmd);
-			return 0;
-
 		default:
 			/* commands that don't support triggers */
 			return 0;
 	}
 }
 
-/*
- * See the description of call_before_or_insteadof_cmdtriggers() above.
- */
 static void
-call_after_cmdtriggers(Node *parsetree, CommandContext cmd, bool force)
+call_after_cmdtriggers(Node *parsetree, CommandContext cmd)
 {
 	switch (nodeTag(parsetree))
 	{
@@ -261,6 +243,7 @@ call_after_cmdtriggers(Node *parsetree, CommandContext cmd, bool force)
 		case T_AlterObjectSchemaStmt:
 		case T_AlterOwnerStmt:
 		case T_AlterSeqStmt:
+		case T_AlterTableStmt:
 		case T_RenameStmt:
 		case T_CommentStmt:
 		case T_DefineStmt:
@@ -272,6 +255,7 @@ call_after_cmdtriggers(Node *parsetree, CommandContext cmd, bool force)
 		case T_CreateDomainStmt:
 		case T_CreateFunctionStmt:
 		case T_CreateRoleStmt:
+		case T_IndexStmt:
 		case T_CreatePLangStmt:
 		case T_CreateOpClassStmt:
 		case T_CreateOpFamilyStmt:
@@ -279,6 +263,8 @@ call_after_cmdtriggers(Node *parsetree, CommandContext cmd, bool force)
 		case T_RuleStmt:
 		case T_CreateSchemaStmt:
 		case T_CreateSeqStmt:
+		case T_CreateStmt:
+		case T_CreateTableSpaceStmt:
 		case T_CreateTrigStmt:
 		case T_CompositeTypeStmt:
 		case T_CreateEnumStmt:
@@ -312,19 +298,6 @@ call_after_cmdtriggers(Node *parsetree, CommandContext cmd, bool force)
 		case T_CreateForeignTableStmt:
 		case T_SecLabelStmt:
 			ExecAfterCommandTriggers(parsetree, cmd);
-			return;
-
-		case T_CreateStmt:
-		case T_CreateTableSpaceStmt:
-		case T_AlterTableStmt:
-		case T_IndexStmt:
-			/* commands that transform the parse tree
-			 *
-			 * we deal with them in their standard_ProcessUtility() branch.
-			 */
-			if (force)
-				ExecAfterCommandTriggers(parsetree, cmd);
-			return;
 
 		default:
 			/* commands that don't support triggers */
@@ -545,7 +518,7 @@ standard_ProcessUtility(Node *parsetree,
 	cmd.tag = (char *) CreateCommandTag(parsetree);
 	cmd.objectname = cmd.schemaname = NULL;
 
-	if (call_before_or_insteadof_cmdtriggers(parsetree, &cmd, false) > 0)
+	if (call_before_or_insteadof_cmdtriggers(parsetree, &cmd) > 0)
 		return;
 
 	switch (nodeTag(parsetree))
@@ -724,10 +697,6 @@ standard_ProcessUtility(Node *parsetree,
 						Datum		toast_options;
 						static char *validnsps[] = HEAP_RELOPT_NAMESPACES;
 
-						/* care about command triggers if any */
-						if (call_before_or_insteadof_cmdtriggers(stmt, &cmd, true) > 0)
-							return;
-
 						/* Create the table itself */
 						relOid = DefineRelation((CreateStmt *) stmt,
 												RELKIND_RELATION,
@@ -749,25 +718,15 @@ standard_ProcessUtility(Node *parsetree,
 											   true);
 
 						AlterTableCreateToastTable(relOid, toast_options);
-
-						/* now care about after command triggers */
-						CommandCounterIncrement();
-						call_after_cmdtriggers(stmt, &cmd, true);
 					}
 					else if (IsA(stmt, CreateForeignTableStmt))
 					{
-						if (call_before_or_insteadof_cmdtriggers(stmt, &cmd, true) > 0)
-							return;
-
 						/* Create the table itself */
 						relOid = DefineRelation((CreateStmt *) stmt,
 												RELKIND_FOREIGN_TABLE,
 												InvalidOid);
 						CreateForeignTable((CreateForeignTableStmt *) stmt,
 										   relOid);
-
-						CommandCounterIncrement();
-						call_after_cmdtriggers(stmt, &cmd, true);
 					}
 					else
 					{
@@ -778,11 +737,11 @@ standard_ProcessUtility(Node *parsetree,
 									   false,
 									   None_Receiver,
 									   NULL);
-
-						/* Need CCI between commands */
-						if (lnext(l) != NULL)
-							CommandCounterIncrement();
 					}
+
+					/* Need CCI between commands */
+					if (lnext(l) != NULL)
+						CommandCounterIncrement();
 				}
 			}
 			break;
@@ -937,16 +896,8 @@ standard_ProcessUtility(Node *parsetree,
 
 					if (IsA(stmt, AlterTableStmt))
 					{
-						/* care about command triggers if any */
-						if (call_before_or_insteadof_cmdtriggers(stmt, &cmd, true) > 0)
-							return;
-
 						/* Do the table alteration proper */
 						AlterTable(relid, lockmode, (AlterTableStmt *) stmt);
-
-						/* after command trigger */
-						CommandCounterIncrement();
-						call_after_cmdtriggers(stmt, &cmd, true);
 					}
 					else
 					{
@@ -957,11 +908,11 @@ standard_ProcessUtility(Node *parsetree,
 									   false,
 									   None_Receiver,
 									   NULL);
-
-						/* Need CCI between commands */
-						if (lnext(l) != NULL)
-							CommandCounterIncrement();
 					}
+
+					/* Need CCI between commands */
+					if (lnext(l) != NULL)
+						CommandCounterIncrement();
 				}
 			}
 			break;
@@ -1128,10 +1079,6 @@ standard_ProcessUtility(Node *parsetree,
 				/* Run parse analysis ... */
 				stmt = transformIndexStmt(stmt, queryString);
 
-				/* care about command triggers if any */
-				if (call_before_or_insteadof_cmdtriggers((Node *)stmt, &cmd, true) > 0)
-					return;
-
 				/* ... and do it */
 				DefineIndex(stmt->relation,		/* relation */
 							stmt->idxname,		/* index name */
@@ -1153,10 +1100,6 @@ standard_ProcessUtility(Node *parsetree,
 							false,		/* skip_build */
 							false,		/* quiet */
 							stmt->concurrent);	/* concurrent */
-
-				/* after command trigger */
-				CommandCounterIncrement();
-				call_after_cmdtriggers((Node *)stmt, &cmd, true);
 			}
 			break;
 
@@ -1431,7 +1374,7 @@ standard_ProcessUtility(Node *parsetree,
 				 (int) nodeTag(parsetree));
 			break;
 	}
-	call_after_cmdtriggers(parsetree, &cmd, false);
+	call_after_cmdtriggers(parsetree, &cmd);
 }
 
 /*
