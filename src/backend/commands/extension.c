@@ -66,6 +66,7 @@ typedef struct ExtensionControlFile
 	char	   *name;			/* name of the extension */
 	char	   *directory;		/* directory for script files */
 	char	   *default_version;	/* default install target version, if any */
+	char	   *default_full_version;	/* default install source version, if any */
 	char	   *module_pathname;	/* string to substitute for MODULE_PATHNAME */
 	char	   *comment;		/* comment, if any */
 	char	   *schema;			/* target schema (allowed if !relocatable) */
@@ -504,6 +505,10 @@ parse_extension_control_file(ExtensionControlFile *control,
 								item->name)));
 
 			control->default_version = pstrdup(item->value);
+		}
+		else if (strcmp(item->name, "default_full_version") == 0)
+		{
+			control->default_full_version = pstrdup(item->value);
 		}
 		else if (strcmp(item->name, "module_pathname") == 0)
 		{
@@ -1288,9 +1293,15 @@ CreateExtension(CreateExtensionStmt *stmt)
 	 * Determine the (unpackaged) version to update from, if any, and then
 	 * figure out what sequence of update scripts we need to apply.
 	 */
-	if (d_old_version && d_old_version->arg)
+	if ((d_old_version && d_old_version->arg) || pcontrol->default_full_version)
 	{
-		oldVersionName = strVal(d_old_version->arg);
+		bool unpackaged = (d_old_version && d_old_version->arg);
+
+		if (unpackaged)
+			oldVersionName = strVal(d_old_version->arg);
+		else
+			oldVersionName = pcontrol->default_full_version;
+
 		check_valid_version_name(oldVersionName);
 
 		if (strcmp(oldVersionName, versionName) == 0)
@@ -1303,24 +1314,28 @@ CreateExtension(CreateExtensionStmt *stmt)
 											  oldVersionName,
 											  versionName);
 
-		if (list_length(updateVersions) == 1)
+		/* in the create from unpackaged case, redude the update list */
+		if (unpackaged)
 		{
-			/*
-			 * Simple case where there's just one update script to run. We
-			 * will not need any follow-on update steps.
-			 */
-			Assert(strcmp((char *) linitial(updateVersions), versionName) == 0);
-			updateVersions = NIL;
-		}
-		else
-		{
-			/*
-			 * Multi-step sequence.  We treat this as installing the version
-			 * that is the target of the first script, followed by successive
-			 * updates to the later versions.
-			 */
-			versionName = (char *) linitial(updateVersions);
-			updateVersions = list_delete_first(updateVersions);
+			if (list_length(updateVersions) == 1)
+			{
+				/*
+				 * Simple case where there's just one update script to run. We
+				 * will not need any follow-on update steps.
+				 */
+				Assert(strcmp((char *) linitial(updateVersions), versionName) == 0);
+				updateVersions = NIL;
+			}
+			else
+			{
+				/*
+				 * Multi-step sequence.  We treat this as installing the version
+				 * that is the target of the first script, followed by successive
+				 * updates to the later versions.
+				 */
+				versionName = (char *) linitial(updateVersions);
+				updateVersions = list_delete_first(updateVersions);
+			}
 		}
 	}
 	else
@@ -1455,18 +1470,30 @@ CreateExtension(CreateExtensionStmt *stmt)
 
 	/*
 	 * Execute the installation script file
-	 */
-	execute_extension_script(extensionOid, control,
-							 oldVersionName, versionName,
-							 requiredSchemas,
-							 schemaName, schemaOid);
-
-	/*
+	 *
 	 * If additional update scripts have to be executed, apply the updates as
 	 * though a series of ALTER EXTENSION UPDATE commands were given
 	 */
-	ApplyExtensionUpdates(extensionOid, pcontrol,
-						  versionName, updateVersions);
+	if (pcontrol->default_full_version)
+	{
+		execute_extension_script(extensionOid, control,
+								 NULL, oldVersionName,
+								 requiredSchemas,
+								 schemaName, schemaOid);
+
+		ApplyExtensionUpdates(extensionOid, pcontrol,
+							  oldVersionName, updateVersions);
+	}
+	else
+	{
+		execute_extension_script(extensionOid, control,
+								 oldVersionName, versionName,
+								 requiredSchemas,
+								 schemaName, schemaOid);
+
+		ApplyExtensionUpdates(extensionOid, pcontrol,
+							  versionName, updateVersions);
+	}
 }
 
 /*
