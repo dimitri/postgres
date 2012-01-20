@@ -181,7 +181,6 @@ extern DefElem *defWithOids(bool value);
 typedef struct CommandContextData
 {
 	char *tag;					/* Command Tag */
-	char *cmdstr;				/* Command String, rewritten by ruleutils */
 	char *schemaname;			/* schemaname or NULL if not relevant */
 	char *objectname;			/* objectname */
 } CommandContextData;

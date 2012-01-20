@@ -123,9 +123,9 @@ CreateCmdTrigger(CreateCmdTrigStmt *stmt, const char *queryString)
 {
 	Relation	tgrel;
 	ListCell   *c;
-	/* cmd trigger args: cmd_string, schemaname, objectname */
-	Oid			fargtypes[4] = {TEXTOID, TEXTOID, TEXTOID, TEXTOID};
-	Oid			fargtypes_c[5] = {TEXTOID, TEXTOID, TEXTOID, TEXTOID, INTERNALOID};
+	/* cmd trigger args: cmd_tag, schemaname, objectname [,parsetree] */
+	Oid			fargtypes[3] = {TEXTOID, TEXTOID, TEXTOID};
+	Oid			fargtypes_c[4] = {TEXTOID, TEXTOID, TEXTOID, INTERNALOID};
 	Oid			funcoid;
 	Oid			funcrettype;
 	char        ctgtype;
@@ -139,9 +139,9 @@ CreateCmdTrigger(CreateCmdTrigStmt *stmt, const char *queryString)
 	 * Only C coded functions can accept an argument of type internal, so we
 	 * don't have to explicitely check about the prolang here.
 	 */
-	funcoid = LookupFuncName(stmt->funcname, 5, fargtypes_c, true);
+	funcoid = LookupFuncName(stmt->funcname, 4, fargtypes_c, true);
 	if (funcoid == InvalidOid)
-		funcoid = LookupFuncName(stmt->funcname, 4, fargtypes, false);
+		funcoid = LookupFuncName(stmt->funcname, 3, fargtypes, false);
 	funcrettype = get_func_rettype(funcoid);
 
 	/*
@@ -517,18 +517,8 @@ check_cmdtrigger_name(const char *command, const char *trigname, Relation tgrel)
  * alphabetical order, and give them those arguments:
  *
  *   command tag, text
- *   command string, text
  *   schemaname, text
  *   objectname, text
- *
- * we rebuild the DDL command we're about to execute from the parsetree.
- *
- * The queryString comes from untrusted places: it could be a multiple
- * queries string that has been passed through psql -c or otherwise in the
- * protocol, or something that comes from an EXECUTE evaluation in plpgsql.
- *
- * Also we need to be able to spit out a normalized (canonical?) SQL
- * command to ease DDL trigger code.
  *
  */
 static RegProcedure *
@@ -611,7 +601,7 @@ call_cmdtrigger_procedure(RegProcedure proc,
 	Datum		result;
 	HeapTuple	procedureTuple;
 	Form_pg_proc procedureStruct;
-	int         nargs = 4;
+	int         nargs = 3;
 
 	fmgr_info_cxt(proc, &flinfo, per_command_context);
 
@@ -624,7 +614,7 @@ call_cmdtrigger_procedure(RegProcedure proc,
 	procedureStruct = (Form_pg_proc) GETSTRUCT(procedureTuple);
 
 	if (procedureStruct->prolang == ClanguageId)
-		nargs = 5;
+		nargs = 4;
 
 	ReleaseSysCache(procedureTuple);
 
@@ -635,24 +625,20 @@ call_cmdtrigger_procedure(RegProcedure proc,
 	if (cmd->tag != NULL)
 		fcinfo.arg[0] = PointerGetDatum(cstring_to_text(pstrdup(cmd->tag)));
 
-	if (cmd->cmdstr != NULL)
-		fcinfo.arg[1] = PointerGetDatum(cstring_to_text(pstrdup(cmd->cmdstr)));
-
 	if (cmd->schemaname != NULL)
-		fcinfo.arg[2] = PointerGetDatum(cstring_to_text(pstrdup(cmd->schemaname)));
+		fcinfo.arg[1] = PointerGetDatum(cstring_to_text(pstrdup(cmd->schemaname)));
 
 	if (cmd->objectname != NULL)
-		fcinfo.arg[3] = PointerGetDatum(cstring_to_text(pstrdup(cmd->objectname)));
+		fcinfo.arg[2] = PointerGetDatum(cstring_to_text(pstrdup(cmd->objectname)));
 
 	fcinfo.argnull[0] = cmd->tag == NULL;
-	fcinfo.argnull[1] = cmd->cmdstr == NULL;
-	fcinfo.argnull[2] = cmd->schemaname == NULL;
-	fcinfo.argnull[3] = cmd->objectname == NULL;
+	fcinfo.argnull[1] = cmd->schemaname == NULL;
+	fcinfo.argnull[2] = cmd->objectname == NULL;
 
-	if (nargs == 5)
+	if (nargs == 4)
 	{
-		fcinfo.arg[4] = PointerGetDatum(parsetree);
-		fcinfo.argnull[4] = false;
+		fcinfo.arg[3] = PointerGetDatum(parsetree);
+		fcinfo.argnull[3] = false;
 	}
 
 	pgstat_init_function_usage(&fcinfo, &fcusage);
@@ -722,10 +708,9 @@ ExecBeforeCommandTriggers(Node *parsetree, CommandContext cmd,
 	 * Do the functions evaluation in a per-command memory context, so that
 	 * leaked memory will be reclaimed once per command.
 	 *
-	 * Only back parse the command tree if we have at least one trigger
-	 * function to fire.
+	 * get schemaname and objectname only once per command at most
 	 */
-	if (procs[0] != InvalidOid && cmd->cmdstr == NULL)
+	if (procs[0] != InvalidOid && cmd->objectname == NULL)
 		pg_get_cmddef(cmd, parsetree);
 
 	oldContext = MemoryContextSwitchTo(per_command_context);
@@ -765,10 +750,9 @@ ExecInsteadOfCommandTriggers(Node *parsetree, CommandContext cmd,
 	 * Do the functions evaluation in a per-command memory context, so that
 	 * leaked memory will be reclaimed once per command.
 	 *
-	 * Only back parse the command tree if we have at least one trigger
-	 * function to fire.
+	 * get schemaname and objectname only once per command at most
 	 */
-	if (procs[0] != InvalidOid && cmd->cmdstr == NULL)
+	if (procs[0] != InvalidOid && cmd->objectname == NULL)
 		pg_get_cmddef(cmd, parsetree);
 
 	oldContext = MemoryContextSwitchTo(per_command_context);
@@ -805,11 +789,8 @@ ExecAfterCommandTriggers(Node *parsetree, CommandContext cmd)
 							  ALLOCSET_DEFAULT_INITSIZE,
 							  ALLOCSET_DEFAULT_MAXSIZE);
 
-	/*
-	 * Only back parse the command tree if we have at least one trigger
-	 * function to fire.
-	 */
-	if (procs[0] != InvalidOid && cmd->cmdstr == NULL)
+	/* get schemaname and objectname only once per command at most */
+	if (procs[0] != InvalidOid && cmd->objectname == NULL)
 		pg_get_cmddef(cmd, parsetree);
 
 	oldContext = MemoryContextSwitchTo(per_command_context);

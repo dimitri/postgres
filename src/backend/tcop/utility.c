@@ -543,7 +543,7 @@ standard_ProcessUtility(Node *parsetree,
 	 * CreateCommandTag() for our own business.
 	 */
 	cmd.tag = (char *) CreateCommandTag(parsetree);
-	cmd.cmdstr = NULL;
+	cmd.objectname = cmd.schemaname = NULL;
 
 	if (call_before_or_insteadof_cmdtriggers(parsetree, &cmd, false) > 0)
 		return;
