@@ -177,16 +177,4 @@ extern TypeName *defGetTypeName(DefElem *def);
 extern int	defGetTypeLength(DefElem *def);
 extern DefElem *defWithOids(bool value);
 
-/* utils/adt/ruleutils.c -- FIXME, find a better place */
-typedef struct CommandContextData
-{
-	char *tag;					/* Command Tag */
-	char *schemaname;			/* schemaname or NULL if not relevant */
-	char *objectname;			/* objectname */
-} CommandContextData;
-
-typedef struct CommandContextData *CommandContext;
-
-extern void pg_get_cmddef(CommandContext cmd, void *parsetree);
-
 #endif   /* DEFREM_H */

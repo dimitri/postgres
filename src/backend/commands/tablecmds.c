@@ -41,6 +41,7 @@
 #include "catalog/pg_type_fn.h"
 #include "catalog/storage.h"
 #include "catalog/toasting.h"
+#include "commands/cmdtrigger.h"
 #include "commands/cluster.h"
 #include "commands/comment.h"
 #include "commands/defrem.h"
@@ -806,6 +807,18 @@ RemoveRelations(DropStmt *drop)
 			continue;
 		}
 
+		/*
+		 * Call BEFORE DROP command triggers
+		 */
+		command_context->objectId = relOid;
+		command_context->objectname = get_rel_name(relOid);
+		command_context->schemaname = get_namespace_name(get_rel_namespace(relOid));
+		command_context->parsetree  = (Node *)drop;
+
+		if (ExecBeforeOrInsteadOfCommandTriggers())
+			/* locks are still on hold to the end of the transaction */
+			return;
+
 		/* OK, we're ready to delete this one */
 		obj.classId = RelationRelationId;
 		obj.objectId = relOid;
@@ -815,6 +828,13 @@ RemoveRelations(DropStmt *drop)
 	}
 
 	performMultipleDeletions(objects, drop->behavior);
+
+	/* Call AFTER DROP command triggers */
+	foreach(cell, drop->objects)
+	{
+		command_context->objectId = InvalidOid;
+		ExecAfterCommandTriggers();
+	}
 
 	free_object_addresses(objects);
 }

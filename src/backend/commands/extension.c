@@ -39,6 +39,7 @@
 #include "catalog/pg_namespace.h"
 #include "catalog/pg_type.h"
 #include "commands/alter.h"
+#include "commands/cmdtrigger.h"
 #include "commands/comment.h"
 #include "commands/extension.h"
 #include "commands/schemacmds.h"
@@ -1195,6 +1196,16 @@ CreateExtension(CreateExtensionStmt *stmt)
 	check_valid_extension_name(stmt->extname);
 
 	/*
+	 * Call BEFORE CREATE EXTENSION triggers
+	 */
+	command_context->objectname = stmt->extname;
+	command_context->schemaname = NULL;
+	command_context->parsetree  = (Node *)stmt;
+
+	if (ExecBeforeOrInsteadOfCommandTriggers())
+		return;
+
+	/*
 	 * Check for duplicate extension name.	The unique index on
 	 * pg_extension.extname would catch this anyway, and serves as a backstop
 	 * in case of race conditions; but this is a friendlier error message, and
@@ -1467,6 +1478,10 @@ CreateExtension(CreateExtensionStmt *stmt)
 	 */
 	ApplyExtensionUpdates(extensionOid, pcontrol,
 						  versionName, updateVersions);
+
+	/* Call AFTER CREATE EXTENSION triggers */
+	command_context->objectId = extensionOid;
+	ExecAfterCommandTriggers();
 }
 
 /*

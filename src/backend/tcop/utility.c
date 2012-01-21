@@ -59,8 +59,8 @@
 #include "tcop/utility.h"
 #include "utils/acl.h"
 #include "utils/guc.h"
+#include "utils/lsyscache.h"
 #include "utils/syscache.h"
-
 
 /* Hook for plugins to get control in ProcessUtility() */
 ProcessUtility_hook_type ProcessUtility_hook = NULL;
@@ -153,8 +153,8 @@ CommandIsReadOnly(Node *parsetree)
 /*
  * Support function for calling the command triggers.
  */
-static int
-call_before_or_insteadof_cmdtriggers(Node *parsetree, CommandContext cmd)
+static bool
+call_before_or_insteadof_cmdtriggers(Node *parsetree)
 {
 	switch (nodeTag(parsetree))
 	{
@@ -221,16 +221,16 @@ call_before_or_insteadof_cmdtriggers(Node *parsetree, CommandContext cmd)
 		case T_AlterTableSpaceOptionsStmt:
 		case T_CreateForeignTableStmt:
 		case T_SecLabelStmt:
-			return ExecBeforeOrInsteadOfCommandTriggers(parsetree, cmd);
+			return ExecBeforeOrInsteadOfAnyCommandTriggers();
 
 		default:
 			/* commands that don't support triggers */
-			return 0;
+			return false;
 	}
 }
 
 static void
-call_after_cmdtriggers(Node *parsetree, CommandContext cmd)
+call_after_cmdtriggers(Node *parsetree)
 {
 	switch (nodeTag(parsetree))
 	{
@@ -297,7 +297,7 @@ call_after_cmdtriggers(Node *parsetree, CommandContext cmd)
 		case T_AlterTableSpaceOptionsStmt:
 		case T_CreateForeignTableStmt:
 		case T_SecLabelStmt:
-			ExecAfterCommandTriggers(parsetree, cmd);
+			ExecAfterAnyCommandTriggers();
 
 		default:
 			/* commands that don't support triggers */
@@ -503,22 +503,26 @@ standard_ProcessUtility(Node *parsetree,
 						DestReceiver *dest,
 						char *completionTag)
 {
-	CommandContextData cmd;
-
 	check_xact_readonly(parsetree);
 
 	if (completionTag)
 		completionTag[0] = '\0';
 
 	/*
+	 * Command Triggers needs a global context to be maintained.
+	 *
 	 * we want a completion tag to identify which triggers to run, and that's
 	 * true whatever is given as completionTag here, so just call
 	 * CreateCommandTag() for our own business.
 	 */
-	cmd.tag = (char *) CreateCommandTag(parsetree);
-	cmd.objectname = cmd.schemaname = NULL;
+	command_context->objectId = InvalidOid;
+	command_context->tag = (char *) CreateCommandTag(parsetree);
+	command_context->objectname = NULL;
+	command_context->schemaname = NULL;
+	command_context->parsetree  = NULL;
 
-	if (call_before_or_insteadof_cmdtriggers(parsetree, &cmd) > 0)
+	/* call the BEFORE ANY COMMAND triggers first */
+	if (call_before_or_insteadof_cmdtriggers(parsetree))
 		return;
 
 	switch (nodeTag(parsetree))
@@ -681,11 +685,22 @@ standard_ProcessUtility(Node *parsetree,
 			{
 				List	   *stmts;
 				ListCell   *l;
-				Oid			relOid;
+				Oid			relOid = InvalidOid;
+				CreateStmt *stmt = (CreateStmt *) parsetree;
+
+				/*
+				 * Call BEFORE CREATE TABLE triggers
+				 */
+				command_context->objectname = stmt->relation->relname;
+				command_context->schemaname =
+					get_namespace_name(RangeVarGetCreationNamespace(stmt->relation));
+				command_context->parsetree  = parsetree;
+
+				if (ExecBeforeOrInsteadOfCommandTriggers())
+					return;
 
 				/* Run parse analysis ... */
-				stmts = transformCreateStmt((CreateStmt *) parsetree,
-											queryString);
+				stmts = transformCreateStmt(stmt, queryString);
 
 				/* ... and do it */
 				foreach(l, stmts)
@@ -743,6 +758,10 @@ standard_ProcessUtility(Node *parsetree,
 					if (lnext(l) != NULL)
 						CommandCounterIncrement();
 				}
+
+				/* Call AFTER CREATE TABLE triggers */
+				command_context->objectId = relOid;
+				ExecAfterCommandTriggers();
 			}
 			break;
 
@@ -1374,7 +1393,8 @@ standard_ProcessUtility(Node *parsetree,
 				 (int) nodeTag(parsetree));
 			break;
 	}
-	call_after_cmdtriggers(parsetree, &cmd);
+	/* call the AFTER ANY COMMAND triggers */
+	call_after_cmdtriggers(parsetree);
 }
 
 /*

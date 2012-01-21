@@ -39,13 +39,15 @@
 #include "utils/syscache.h"
 #include "tcop/utility.h"
 
+/* Globally visible state variables */
+CommandContextData command_context_data;
+CommandContext command_context = &command_context_data;
+
 static void check_cmdtrigger_name(const char *command, const char *trigname, Relation tgrel);
 static RegProcedure *list_triggers_for_command(const char *command, char type);
 static RegProcedure *list_all_triggers_for_command(const char *command, char type);
-static bool ExecBeforeCommandTriggers(Node *parsetree, CommandContext cmd,
-									  MemoryContext per_command_context);
-static int ExecInsteadOfCommandTriggers(Node *parsetree, CommandContext cmd,
-										MemoryContext per_command_context);
+static bool ExecBeforeCommandTriggers(MemoryContext per_command_context, RegProcedure *procs);
+static bool ExecInsteadOfCommandTriggers(MemoryContext per_command_context, RegProcedure *procs);
 
 
 /*
@@ -142,6 +144,8 @@ CreateCmdTrigger(CreateCmdTrigStmt *stmt, const char *queryString)
 	funcoid = LookupFuncName(stmt->funcname, 4, fargtypes_c, true);
 	if (funcoid == InvalidOid)
 		funcoid = LookupFuncName(stmt->funcname, 3, fargtypes, false);
+
+	/* we need the trigger type to validate the return type */
 	funcrettype = get_func_rettype(funcoid);
 
 	/*
@@ -591,9 +595,7 @@ list_triggers_for_command(const char *command, char type)
 }
 
 static bool
-call_cmdtrigger_procedure(RegProcedure proc,
-						  CommandContext cmd, Node *parsetree,
-						  MemoryContext per_command_context)
+call_cmdtrigger_procedure(RegProcedure proc, MemoryContext per_command_context)
 {
 	FmgrInfo	flinfo;
 	FunctionCallInfoData fcinfo;
@@ -616,28 +618,33 @@ call_cmdtrigger_procedure(RegProcedure proc,
 	if (procedureStruct->prolang == ClanguageId)
 		nargs = 4;
 
+	elog(NOTICE, "call_cmdtrigger_procedure: %s", NameStr(procedureStruct->proname));
+
 	ReleaseSysCache(procedureTuple);
 
 	/* Can't use OidFunctionCallN because we might get a NULL result */
 	InitFunctionCallInfoData(fcinfo, &flinfo, nargs, InvalidOid, NULL, NULL);
 
 	/* We support triggers ON ANY COMMAND so all fields here are nullable. */
-	if (cmd->tag != NULL)
-		fcinfo.arg[0] = PointerGetDatum(cstring_to_text(pstrdup(cmd->tag)));
+	if (command_context->tag != NULL)
+		fcinfo.arg[0] =
+			PointerGetDatum(cstring_to_text(pstrdup(command_context->tag)));
 
-	if (cmd->schemaname != NULL)
-		fcinfo.arg[1] = PointerGetDatum(cstring_to_text(pstrdup(cmd->schemaname)));
+	if (command_context->schemaname != NULL)
+		fcinfo.arg[1] =
+			PointerGetDatum(cstring_to_text(pstrdup(command_context->schemaname)));
 
-	if (cmd->objectname != NULL)
-		fcinfo.arg[2] = PointerGetDatum(cstring_to_text(pstrdup(cmd->objectname)));
+	if (command_context->objectname != NULL)
+		fcinfo.arg[2] =
+			PointerGetDatum(cstring_to_text(pstrdup(command_context->objectname)));
 
-	fcinfo.argnull[0] = cmd->tag == NULL;
-	fcinfo.argnull[1] = cmd->schemaname == NULL;
-	fcinfo.argnull[2] = cmd->objectname == NULL;
+	fcinfo.argnull[0] = command_context->tag == NULL;
+	fcinfo.argnull[1] = command_context->schemaname == NULL;
+	fcinfo.argnull[2] = command_context->objectname == NULL;
 
 	if (nargs == 4)
 	{
-		fcinfo.arg[3] = PointerGetDatum(parsetree);
+		fcinfo.arg[3] = PointerGetDatum(command_context->parsetree);
 		fcinfo.argnull[3] = false;
 	}
 
@@ -646,6 +653,7 @@ call_cmdtrigger_procedure(RegProcedure proc,
 	result = FunctionCallInvoke(&fcinfo);
 
 	pgstat_end_function_usage(&fcusage, true);
+
 
 	if (!fcinfo.isnull && DatumGetBool(result) == false)
 		return false;
@@ -657,14 +665,20 @@ call_cmdtrigger_procedure(RegProcedure proc,
  * Instead Of triggers, not both.
  *
  * Instead Of triggers have to run before the command and to cancel its
- * execution, hence this API where we return the number of InsteadOf trigger
- * procedures we fired.
+ * execution. ExecBeforeCommandTriggers() returns true when execution should
+ * stop here because an Instead OF trigger has been run.
  */
-int
-ExecBeforeOrInsteadOfCommandTriggers(Node *parsetree, CommandContext cmd)
+bool
+ExecBeforeOrInsteadOfCommandTriggers()
 {
+	bool stop = false;
 	MemoryContext per_command_context;
-	int nb = 0;
+	RegProcedure *before =
+		list_triggers_for_command(command_context->tag,
+								  CMD_TRIGGER_FIRED_BEFORE);
+	RegProcedure *instead =
+		list_triggers_for_command(command_context->tag,
+								  CMD_TRIGGER_FIRED_INSTEAD);
 
 	per_command_context =
 		AllocSetContextCreate(CurrentMemoryContext,
@@ -673,19 +687,47 @@ ExecBeforeOrInsteadOfCommandTriggers(Node *parsetree, CommandContext cmd)
 							  ALLOCSET_DEFAULT_INITSIZE,
 							  ALLOCSET_DEFAULT_MAXSIZE);
 
-	/*
-	 * You can't have both BEFORE and INSTEAD OF triggers registered on the
-	 * same command, so this function is not checking about that and just going
-	 * through an empty list in at least one of those cases.  The cost of doing
-	 * it this lazy way is an index scan on pg_catalog.pg_cmdtrigger.
-	 */
-	if (!ExecBeforeCommandTriggers(parsetree, cmd, per_command_context))
-		nb++;
-	nb += ExecInsteadOfCommandTriggers(parsetree, cmd, per_command_context);
+	if (before[0] != InvalidOid)
+		stop = ExecBeforeCommandTriggers(per_command_context, before);
+
+	else if (instead[0] != InvalidOid)
+		stop = ExecInsteadOfCommandTriggers(per_command_context, instead);
 
 	/* Release working resources */
 	MemoryContextDelete(per_command_context);
-	return nb;
+	return stop;
+}
+
+/*
+ * Same as ExecBeforeCommandTriggers() except that we apply the ANY command
+ * trigger rather than the triggers for the command_context->tag command.
+ */
+bool
+ExecBeforeOrInsteadOfAnyCommandTriggers()
+{
+	bool stop = false;
+	MemoryContext per_command_context;
+	RegProcedure *before =
+		list_triggers_for_command("ANY", CMD_TRIGGER_FIRED_BEFORE);
+	RegProcedure *instead =
+		list_triggers_for_command("ANY", CMD_TRIGGER_FIRED_INSTEAD);
+
+	per_command_context =
+		AllocSetContextCreate(CurrentMemoryContext,
+							  "BeforeOrInsteadOfTriggerCommandContext",
+							  ALLOCSET_DEFAULT_MINSIZE,
+							  ALLOCSET_DEFAULT_INITSIZE,
+							  ALLOCSET_DEFAULT_MAXSIZE);
+
+	if (before[0] != InvalidOid)
+		stop = ExecBeforeCommandTriggers(per_command_context, before);
+
+	else if (instead[0] != InvalidOid)
+		stop = ExecInsteadOfCommandTriggers(per_command_context, instead);
+
+	/* Release working resources */
+	MemoryContextDelete(per_command_context);
+	return stop;
 }
 
 /*
@@ -694,40 +736,28 @@ ExecBeforeOrInsteadOfCommandTriggers(Node *parsetree, CommandContext cmd)
  * is not exposed to other modules.
  */
 static bool
-ExecBeforeCommandTriggers(Node *parsetree, CommandContext cmd,
-						  MemoryContext per_command_context)
+ExecBeforeCommandTriggers(MemoryContext per_command_context,
+						  RegProcedure *procs)
 {
 	MemoryContext oldContext;
-	RegProcedure *procs =
-		list_all_triggers_for_command(cmd->tag, CMD_TRIGGER_FIRED_BEFORE);
 	RegProcedure proc;
-	int cur= 0;
+	int cur = 0;
 	bool cont = true;
 
 	/*
 	 * Do the functions evaluation in a per-command memory context, so that
 	 * leaked memory will be reclaimed once per command.
-	 *
-	 * get schemaname and objectname only once per command at most
 	 */
-	if (procs[0] != InvalidOid && cmd->objectname == NULL)
-		pg_get_cmddef(cmd, parsetree);
-
 	oldContext = MemoryContextSwitchTo(per_command_context);
 	MemoryContextReset(per_command_context);
 
 	while (cont && InvalidOid != (proc = procs[cur++]))
-	{
-		cont = call_cmdtrigger_procedure(proc, cmd, parsetree,
-										 per_command_context);
+		cont = call_cmdtrigger_procedure(proc, per_command_context);
 
-		if (cont == false)
-			elog(WARNING,
-				 "command \"%s %s...\" was cancelled by procedure \"%s\"",
-				 cmd->tag, cmd->objectname, get_func_name(proc));
-	}
 	MemoryContextSwitchTo(oldContext);
-	return cont;
+
+	/* return true when we want to stop executing this command */
+	return !cont;
 }
 
 /*
@@ -736,45 +766,38 @@ ExecBeforeCommandTriggers(Node *parsetree, CommandContext cmd,
  * called by ExecBeforeOrInsteadOfCommandTriggers() so is not exposed to other
  * modules.
  */
-static int
-ExecInsteadOfCommandTriggers(Node *parsetree, CommandContext cmd,
-							 MemoryContext per_command_context)
+static bool
+ExecInsteadOfCommandTriggers(MemoryContext per_command_context,
+							 RegProcedure *procs)
 {
 	MemoryContext oldContext;
-	RegProcedure *procs =
-		list_all_triggers_for_command(cmd->tag, CMD_TRIGGER_FIRED_INSTEAD);
 	RegProcedure proc;
 	int cur = 0;
 
 	/*
 	 * Do the functions evaluation in a per-command memory context, so that
 	 * leaked memory will be reclaimed once per command.
-	 *
-	 * get schemaname and objectname only once per command at most
 	 */
-	if (procs[0] != InvalidOid && cmd->objectname == NULL)
-		pg_get_cmddef(cmd, parsetree);
-
 	oldContext = MemoryContextSwitchTo(per_command_context);
 	MemoryContextReset(per_command_context);
 
 	while (InvalidOid != (proc = procs[cur++]))
-		call_cmdtrigger_procedure(proc, cmd, parsetree, per_command_context);
+		call_cmdtrigger_procedure(proc, per_command_context);
 
 	MemoryContextSwitchTo(oldContext);
-	return cur-1;
+
+	/* return true when we want to stop executing this command */
+	return cur > 1;
 }
 
 /*
  * An AFTER trigger will have no impact on the command, which already was
  * executed.
  */
-void
-ExecAfterCommandTriggers(Node *parsetree, CommandContext cmd)
+static void
+ExecAfterCommandTriggersInternal(RegProcedure *procs)
 {
 	MemoryContext oldContext, per_command_context;
-	RegProcedure *procs =
-		list_all_triggers_for_command(cmd->tag, CMD_TRIGGER_FIRED_AFTER);
 	RegProcedure proc;
 	int cur = 0;
 
@@ -789,18 +812,35 @@ ExecAfterCommandTriggers(Node *parsetree, CommandContext cmd)
 							  ALLOCSET_DEFAULT_INITSIZE,
 							  ALLOCSET_DEFAULT_MAXSIZE);
 
-	/* get schemaname and objectname only once per command at most */
-	if (procs[0] != InvalidOid && cmd->objectname == NULL)
-		pg_get_cmddef(cmd, parsetree);
-
 	oldContext = MemoryContextSwitchTo(per_command_context);
 
 	while (InvalidOid != (proc = procs[cur++]))
-		call_cmdtrigger_procedure(proc, cmd, parsetree, per_command_context);
+		call_cmdtrigger_procedure(proc, per_command_context);
 
 	/* Release working resources */
 	MemoryContextSwitchTo(oldContext);
 	MemoryContextDelete(per_command_context);
 
 	return;
+}
+
+void
+ExecAfterCommandTriggers()
+{
+	RegProcedure *after =
+		list_triggers_for_command(command_context->tag,
+								  CMD_TRIGGER_FIRED_AFTER);
+
+	if (after[0] != InvalidOid)
+		ExecAfterCommandTriggersInternal(after);
+}
+
+void
+ExecAfterAnyCommandTriggers()
+{
+	RegProcedure *after =
+		list_triggers_for_command("ANY", CMD_TRIGGER_FIRED_AFTER);
+
+	if (after[0] != InvalidOid)
+		ExecAfterCommandTriggersInternal(after);
 }
