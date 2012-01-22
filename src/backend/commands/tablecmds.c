@@ -74,6 +74,7 @@
 #include "storage/lock.h"
 #include "storage/predicate.h"
 #include "storage/smgr.h"
+#include "tcop/utility.h"
 #include "utils/acl.h"
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
@@ -813,6 +814,7 @@ RemoveRelations(DropStmt *drop)
 		/*
 		 * Call BEFORE DROP command triggers
 		 */
+		cmd.tag = (char *) CreateCommandTag((Node *)drop);
 		cmd.objectId = relOid;
 		cmd.objectname = get_rel_name(relOid);
 		cmd.schemaname = get_namespace_name(get_rel_namespace(relOid));
