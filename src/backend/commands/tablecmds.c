@@ -837,11 +837,10 @@ RemoveRelations(DropStmt *drop)
 	performMultipleDeletions(objects, drop->behavior);
 
 	/* Call AFTER DROP command triggers */
-	i = 0;
-	foreach(cell, drop->objects)
+	for(i = 0; i<n; i++)
 	{
 		cmds[i]->objectId = InvalidOid;
-		ExecAfterCommandTriggers(cmds[i++]);
+		ExecAfterCommandTriggers(cmds[i]);
 	}
 
 	free_object_addresses(objects);

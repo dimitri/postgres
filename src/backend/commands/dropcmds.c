@@ -21,12 +21,15 @@
 #include "catalog/objectaddress.h"
 #include "catalog/pg_class.h"
 #include "catalog/pg_proc.h"
+#include "commands/cmdtrigger.h"
 #include "commands/defrem.h"
 #include "miscadmin.h"
 #include "nodes/makefuncs.h"
 #include "parser/parse_type.h"
+#include "tcop/utility.h"
 #include "utils/acl.h"
 #include "utils/builtins.h"
+#include "utils/lsyscache.h"
 #include "utils/syscache.h"
 
 static void does_not_exist_skipping(ObjectType objtype,
@@ -49,6 +52,8 @@ RemoveObjects(DropStmt *stmt)
 	ObjectAddresses *objects;
 	ListCell   *cell1;
 	ListCell   *cell2 = NULL;
+	int i = 0, n = list_length(stmt->objects);
+	CommandContext *cmds = (CommandContext *) palloc(n * sizeof(CommandContext));
 
 	objects = new_object_addresses();
 
@@ -59,6 +64,7 @@ RemoveObjects(DropStmt *stmt)
 		List	   *objargs = NIL;
 		Relation	relation = NULL;
 		Oid			namespaceId;
+		CommandContextData cmd;
 
 		if (stmt->arguments)
 		{
@@ -77,6 +83,7 @@ RemoveObjects(DropStmt *stmt)
 		if (!OidIsValid(address.objectId))
 		{
 			does_not_exist_skipping(stmt->removeType, objname, objargs);
+			cmds[i++] = NULL;
 			continue;
 		}
 
@@ -115,12 +122,36 @@ RemoveObjects(DropStmt *stmt)
 		if (relation)
 			heap_close(relation, NoLock);
 
+		/*
+		 * Call BEFORE DROP command triggers
+		 */
+		cmd.tag = (char *) CreateCommandTag((Node *)stmt);
+		cmd.objectId = address.objectId;
+		cmd.objectname = strVal(list_nth(objname, list_length(objname)-1));
+		cmd.schemaname = get_namespace_name(namespaceId);
+		cmd.parsetree  = (Node *)stmt;
+
+		cmds[i++] = &cmd;
+
+		if (ExecBeforeOrInsteadOfCommandTriggers(&cmd))
+			/* locks are still on hold to the end of the transaction */
+			return;
+
 		add_exact_object_address(&address, objects);
 	}
 
 	/* Here we really delete them. */
 	performMultipleDeletions(objects, stmt->behavior);
 
+	/* Call AFTER DROP command triggers */
+	for(i = 0; i<n; i++)
+	{
+		if (cmds[i] == NULL)
+			continue;
+
+		cmds[i]->objectId = InvalidOid;
+		ExecAfterCommandTriggers(cmds[i]);
+	}
 	free_object_addresses(objects);
 }
 
