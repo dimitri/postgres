@@ -1191,6 +1191,7 @@ CreateExtension(CreateExtensionStmt *stmt)
 	List	   *requiredSchemas;
 	Oid			extensionOid;
 	ListCell   *lc;
+	CommandContextData cmd;
 
 	/* Check extension name validity before any filesystem access */
 	check_valid_extension_name(stmt->extname);
@@ -1198,11 +1199,13 @@ CreateExtension(CreateExtensionStmt *stmt)
 	/*
 	 * Call BEFORE CREATE EXTENSION triggers
 	 */
-	command_context->objectname = stmt->extname;
-	command_context->schemaname = NULL;
-	command_context->parsetree  = (Node *)stmt;
+	cmd.tag = (char *) CreateCommandTag((Node *)stmt);
+	cmd.objectId = InvalidOid;
+	cmd.objectname = stmt->extname;
+	cmd.schemaname = NULL;
+	cmd.parsetree  = (Node *)stmt;
 
-	if (ExecBeforeOrInsteadOfCommandTriggers())
+	if (ExecBeforeOrInsteadOfCommandTriggers(&cmd))
 		return;
 
 	/*
@@ -1480,8 +1483,8 @@ CreateExtension(CreateExtensionStmt *stmt)
 						  versionName, updateVersions);
 
 	/* Call AFTER CREATE EXTENSION triggers */
-	command_context->objectId = extensionOid;
-	ExecAfterCommandTriggers();
+	cmd.objectId = extensionOid;
+	ExecAfterCommandTriggers(&cmd);
 }
 
 /*

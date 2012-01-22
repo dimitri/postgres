@@ -733,6 +733,8 @@ RemoveRelations(DropStmt *drop)
 	ObjectAddresses *objects;
 	char		relkind;
 	ListCell   *cell;
+	int i = 0, n = list_length(drop->objects);
+	CommandContext *cmds = (CommandContext *) palloc(n * sizeof(CommandContext));
 
 	/*
 	 * First we identify all the relations, then we delete them in a single
@@ -779,6 +781,7 @@ RemoveRelations(DropStmt *drop)
 		Oid			relOid;
 		ObjectAddress obj;
 		struct DropRelationCallbackState	state;
+		CommandContextData cmd;
 
 		/*
 		 * These next few steps are a great deal like relation_openrv, but we
@@ -810,12 +813,14 @@ RemoveRelations(DropStmt *drop)
 		/*
 		 * Call BEFORE DROP command triggers
 		 */
-		command_context->objectId = relOid;
-		command_context->objectname = get_rel_name(relOid);
-		command_context->schemaname = get_namespace_name(get_rel_namespace(relOid));
-		command_context->parsetree  = (Node *)drop;
+		cmd.objectId = relOid;
+		cmd.objectname = get_rel_name(relOid);
+		cmd.schemaname = get_namespace_name(get_rel_namespace(relOid));
+		cmd.parsetree  = (Node *)drop;
 
-		if (ExecBeforeOrInsteadOfCommandTriggers())
+		cmds[i++] = &cmd;
+
+		if (ExecBeforeOrInsteadOfCommandTriggers(&cmd))
 			/* locks are still on hold to the end of the transaction */
 			return;
 
@@ -830,10 +835,11 @@ RemoveRelations(DropStmt *drop)
 	performMultipleDeletions(objects, drop->behavior);
 
 	/* Call AFTER DROP command triggers */
+	i = 0;
 	foreach(cell, drop->objects)
 	{
-		command_context->objectId = InvalidOid;
-		ExecAfterCommandTriggers();
+		cmds[i]->objectId = InvalidOid;
+		ExecAfterCommandTriggers(cmds[i++]);
 	}
 
 	free_object_addresses(objects);

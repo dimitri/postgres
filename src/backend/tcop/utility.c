@@ -154,7 +154,7 @@ CommandIsReadOnly(Node *parsetree)
  * Support function for calling the command triggers.
  */
 static bool
-call_before_or_insteadof_cmdtriggers(Node *parsetree)
+call_before_or_insteadof_cmdtriggers(Node *parsetree, CommandContext cmd)
 {
 	switch (nodeTag(parsetree))
 	{
@@ -221,7 +221,7 @@ call_before_or_insteadof_cmdtriggers(Node *parsetree)
 		case T_AlterTableSpaceOptionsStmt:
 		case T_CreateForeignTableStmt:
 		case T_SecLabelStmt:
-			return ExecBeforeOrInsteadOfAnyCommandTriggers();
+			return ExecBeforeOrInsteadOfAnyCommandTriggers(cmd);
 
 		default:
 			/* commands that don't support triggers */
@@ -230,7 +230,7 @@ call_before_or_insteadof_cmdtriggers(Node *parsetree)
 }
 
 static void
-call_after_cmdtriggers(Node *parsetree)
+call_after_cmdtriggers(Node *parsetree, CommandContext cmd)
 {
 	switch (nodeTag(parsetree))
 	{
@@ -297,7 +297,7 @@ call_after_cmdtriggers(Node *parsetree)
 		case T_AlterTableSpaceOptionsStmt:
 		case T_CreateForeignTableStmt:
 		case T_SecLabelStmt:
-			ExecAfterAnyCommandTriggers();
+			ExecAfterAnyCommandTriggers(cmd);
 
 		default:
 			/* commands that don't support triggers */
@@ -503,6 +503,7 @@ standard_ProcessUtility(Node *parsetree,
 						DestReceiver *dest,
 						char *completionTag)
 {
+	CommandContextData cmd;
 	check_xact_readonly(parsetree);
 
 	if (completionTag)
@@ -515,14 +516,14 @@ standard_ProcessUtility(Node *parsetree,
 	 * true whatever is given as completionTag here, so just call
 	 * CreateCommandTag() for our own business.
 	 */
-	command_context->objectId = InvalidOid;
-	command_context->tag = (char *) CreateCommandTag(parsetree);
-	command_context->objectname = NULL;
-	command_context->schemaname = NULL;
-	command_context->parsetree  = NULL;
+	cmd.objectId = InvalidOid;
+	cmd.tag = (char *) CreateCommandTag(parsetree);
+	cmd.objectname = NULL;
+	cmd.schemaname = NULL;
+	cmd.parsetree  = NULL;
 
 	/* call the BEFORE ANY COMMAND triggers first */
-	if (call_before_or_insteadof_cmdtriggers(parsetree))
+	if (call_before_or_insteadof_cmdtriggers(parsetree, &cmd))
 		return;
 
 	switch (nodeTag(parsetree))
@@ -687,16 +688,19 @@ standard_ProcessUtility(Node *parsetree,
 				ListCell   *l;
 				Oid			relOid = InvalidOid;
 				CreateStmt *stmt = (CreateStmt *) parsetree;
+				CommandContextData cmd;
 
 				/*
 				 * Call BEFORE CREATE TABLE triggers
 				 */
-				command_context->objectname = stmt->relation->relname;
-				command_context->schemaname =
-					get_namespace_name(RangeVarGetCreationNamespace(stmt->relation));
-				command_context->parsetree  = parsetree;
+				cmd.tag = (char *) CreateCommandTag(parsetree);
+				cmd.objectId = InvalidOid;
+				cmd.objectname = stmt->relation->relname;
+				cmd.schemaname = get_namespace_name(
+					RangeVarGetCreationNamespace(stmt->relation));
+				cmd.parsetree  = parsetree;
 
-				if (ExecBeforeOrInsteadOfCommandTriggers())
+				if (ExecBeforeOrInsteadOfCommandTriggers(&cmd))
 					return;
 
 				/* Run parse analysis ... */
@@ -760,8 +764,8 @@ standard_ProcessUtility(Node *parsetree,
 				}
 
 				/* Call AFTER CREATE TABLE triggers */
-				command_context->objectId = relOid;
-				ExecAfterCommandTriggers();
+				cmd.objectId = relOid;
+				ExecAfterCommandTriggers(&cmd);
 			}
 			break;
 
@@ -895,6 +899,7 @@ standard_ProcessUtility(Node *parsetree,
 				List	   *stmts;
 				ListCell   *l;
 				LOCKMODE	lockmode;
+				CommandContextData cmd;
 
 				/*
 				 * Figure out lock mode, and acquire lock.  This also does
@@ -904,6 +909,19 @@ standard_ProcessUtility(Node *parsetree,
 				 */
 				lockmode = AlterTableGetLockLevel(atstmt->cmds);
 				relid = AlterTableLookupRelation(atstmt, lockmode);
+
+				/*
+				 * Call BEFORE|INSTEAD OF ALTER TABLE triggers
+				 */
+				cmd.tag = (char *) CreateCommandTag(parsetree);
+				cmd.objectId = relid;
+				cmd.objectname = atstmt->relation->relname;
+				cmd.schemaname = get_namespace_name(
+					RangeVarGetCreationNamespace(atstmt->relation));
+				cmd.parsetree  = parsetree;
+
+				if (ExecBeforeOrInsteadOfCommandTriggers(&cmd))
+					return;
 
 				/* Run parse analysis ... */
 				stmts = transformAlterTableStmt(atstmt, queryString);
@@ -933,6 +951,9 @@ standard_ProcessUtility(Node *parsetree,
 					if (lnext(l) != NULL)
 						CommandCounterIncrement();
 				}
+
+				/* Call AFTER ALTER TABLE triggers */
+				ExecAfterCommandTriggers(&cmd);
 			}
 			break;
 
@@ -1394,7 +1415,7 @@ standard_ProcessUtility(Node *parsetree,
 			break;
 	}
 	/* call the AFTER ANY COMMAND triggers */
-	call_after_cmdtriggers(parsetree);
+	call_after_cmdtriggers(parsetree, &cmd);
 }
 
 /*

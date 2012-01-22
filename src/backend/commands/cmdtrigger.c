@@ -39,16 +39,16 @@
 #include "utils/syscache.h"
 #include "tcop/utility.h"
 
-/* Globally visible state variables */
-CommandContextData command_context_data;
-CommandContext command_context = &command_context_data;
-
 static void check_cmdtrigger_name(const char *command, const char *trigname, Relation tgrel);
 static RegProcedure *list_triggers_for_command(const char *command, char type);
 static RegProcedure *list_all_triggers_for_command(const char *command, char type);
-static bool ExecBeforeCommandTriggers(MemoryContext per_command_context, RegProcedure *procs);
-static bool ExecInsteadOfCommandTriggers(MemoryContext per_command_context, RegProcedure *procs);
 
+static bool ExecBeforeCommandTriggers(CommandContext cmd,
+										  MemoryContext per_command_context,
+										  RegProcedure *procs);
+static bool ExecInsteadOfCommandTriggers(CommandContext cmd,
+											 MemoryContext per_command_context,
+											 RegProcedure *procs);
 
 /*
  * Check permission: command triggers are only available for superusers and
@@ -595,7 +595,9 @@ list_triggers_for_command(const char *command, char type)
 }
 
 static bool
-call_cmdtrigger_procedure(RegProcedure proc, MemoryContext per_command_context)
+call_cmdtrigger_procedure(CommandContext cmd,
+						  RegProcedure proc,
+						  MemoryContext per_command_context)
 {
 	FmgrInfo	flinfo;
 	FunctionCallInfoData fcinfo;
@@ -618,33 +620,28 @@ call_cmdtrigger_procedure(RegProcedure proc, MemoryContext per_command_context)
 	if (procedureStruct->prolang == ClanguageId)
 		nargs = 4;
 
-	elog(NOTICE, "call_cmdtrigger_procedure: %s", NameStr(procedureStruct->proname));
-
 	ReleaseSysCache(procedureTuple);
 
 	/* Can't use OidFunctionCallN because we might get a NULL result */
 	InitFunctionCallInfoData(fcinfo, &flinfo, nargs, InvalidOid, NULL, NULL);
 
 	/* We support triggers ON ANY COMMAND so all fields here are nullable. */
-	if (command_context->tag != NULL)
-		fcinfo.arg[0] =
-			PointerGetDatum(cstring_to_text(pstrdup(command_context->tag)));
+	if (cmd->tag != NULL)
+		fcinfo.arg[0] = PointerGetDatum(cstring_to_text(pstrdup(cmd->tag)));
 
-	if (command_context->schemaname != NULL)
-		fcinfo.arg[1] =
-			PointerGetDatum(cstring_to_text(pstrdup(command_context->schemaname)));
+	if (cmd->schemaname != NULL)
+		fcinfo.arg[1] = PointerGetDatum(cstring_to_text(pstrdup(cmd->schemaname)));
 
-	if (command_context->objectname != NULL)
-		fcinfo.arg[2] =
-			PointerGetDatum(cstring_to_text(pstrdup(command_context->objectname)));
+	if (cmd->objectname != NULL)
+		fcinfo.arg[2] = PointerGetDatum(cstring_to_text(pstrdup(cmd->objectname)));
 
-	fcinfo.argnull[0] = command_context->tag == NULL;
-	fcinfo.argnull[1] = command_context->schemaname == NULL;
-	fcinfo.argnull[2] = command_context->objectname == NULL;
+	fcinfo.argnull[0] = cmd->tag == NULL;
+	fcinfo.argnull[1] = cmd->schemaname == NULL;
+	fcinfo.argnull[2] = cmd->objectname == NULL;
 
 	if (nargs == 4)
 	{
-		fcinfo.arg[3] = PointerGetDatum(command_context->parsetree);
+		fcinfo.arg[3] = PointerGetDatum(cmd->parsetree);
 		fcinfo.argnull[3] = false;
 	}
 
@@ -669,16 +666,14 @@ call_cmdtrigger_procedure(RegProcedure proc, MemoryContext per_command_context)
  * stop here because an Instead OF trigger has been run.
  */
 bool
-ExecBeforeOrInsteadOfCommandTriggers()
+ExecBeforeOrInsteadOfCommandTriggers(CommandContext cmd)
 {
 	bool stop = false;
 	MemoryContext per_command_context;
 	RegProcedure *before =
-		list_triggers_for_command(command_context->tag,
-								  CMD_TRIGGER_FIRED_BEFORE);
+		list_triggers_for_command(cmd->tag, CMD_TRIGGER_FIRED_BEFORE);
 	RegProcedure *instead =
-		list_triggers_for_command(command_context->tag,
-								  CMD_TRIGGER_FIRED_INSTEAD);
+		list_triggers_for_command(cmd->tag, CMD_TRIGGER_FIRED_INSTEAD);
 
 	per_command_context =
 		AllocSetContextCreate(CurrentMemoryContext,
@@ -688,10 +683,10 @@ ExecBeforeOrInsteadOfCommandTriggers()
 							  ALLOCSET_DEFAULT_MAXSIZE);
 
 	if (before[0] != InvalidOid)
-		stop = ExecBeforeCommandTriggers(per_command_context, before);
+		stop = ExecBeforeCommandTriggers(cmd, per_command_context, before);
 
 	else if (instead[0] != InvalidOid)
-		stop = ExecInsteadOfCommandTriggers(per_command_context, instead);
+		stop = ExecInsteadOfCommandTriggers(cmd, per_command_context, instead);
 
 	/* Release working resources */
 	MemoryContextDelete(per_command_context);
@@ -703,7 +698,7 @@ ExecBeforeOrInsteadOfCommandTriggers()
  * trigger rather than the triggers for the command_context->tag command.
  */
 bool
-ExecBeforeOrInsteadOfAnyCommandTriggers()
+ExecBeforeOrInsteadOfAnyCommandTriggers(CommandContext cmd)
 {
 	bool stop = false;
 	MemoryContext per_command_context;
@@ -720,10 +715,10 @@ ExecBeforeOrInsteadOfAnyCommandTriggers()
 							  ALLOCSET_DEFAULT_MAXSIZE);
 
 	if (before[0] != InvalidOid)
-		stop = ExecBeforeCommandTriggers(per_command_context, before);
+		stop = ExecBeforeCommandTriggers(cmd, per_command_context, before);
 
 	else if (instead[0] != InvalidOid)
-		stop = ExecInsteadOfCommandTriggers(per_command_context, instead);
+		stop = ExecInsteadOfCommandTriggers(cmd, per_command_context, instead);
 
 	/* Release working resources */
 	MemoryContextDelete(per_command_context);
@@ -736,7 +731,8 @@ ExecBeforeOrInsteadOfAnyCommandTriggers()
  * is not exposed to other modules.
  */
 static bool
-ExecBeforeCommandTriggers(MemoryContext per_command_context,
+ExecBeforeCommandTriggers(CommandContext cmd,
+						  MemoryContext per_command_context,
 						  RegProcedure *procs)
 {
 	MemoryContext oldContext;
@@ -752,7 +748,7 @@ ExecBeforeCommandTriggers(MemoryContext per_command_context,
 	MemoryContextReset(per_command_context);
 
 	while (cont && InvalidOid != (proc = procs[cur++]))
-		cont = call_cmdtrigger_procedure(proc, per_command_context);
+		cont = call_cmdtrigger_procedure(cmd, proc, per_command_context);
 
 	MemoryContextSwitchTo(oldContext);
 
@@ -767,7 +763,8 @@ ExecBeforeCommandTriggers(MemoryContext per_command_context,
  * modules.
  */
 static bool
-ExecInsteadOfCommandTriggers(MemoryContext per_command_context,
+ExecInsteadOfCommandTriggers(CommandContext cmd,
+							 MemoryContext per_command_context,
 							 RegProcedure *procs)
 {
 	MemoryContext oldContext;
@@ -782,7 +779,7 @@ ExecInsteadOfCommandTriggers(MemoryContext per_command_context,
 	MemoryContextReset(per_command_context);
 
 	while (InvalidOid != (proc = procs[cur++]))
-		call_cmdtrigger_procedure(proc, per_command_context);
+		call_cmdtrigger_procedure(cmd, proc, per_command_context);
 
 	MemoryContextSwitchTo(oldContext);
 
@@ -795,7 +792,7 @@ ExecInsteadOfCommandTriggers(MemoryContext per_command_context,
  * executed.
  */
 static void
-ExecAfterCommandTriggersInternal(RegProcedure *procs)
+ExecAfterCommandTriggersInternal(CommandContext cmd, RegProcedure *procs)
 {
 	MemoryContext oldContext, per_command_context;
 	RegProcedure proc;
@@ -815,7 +812,7 @@ ExecAfterCommandTriggersInternal(RegProcedure *procs)
 	oldContext = MemoryContextSwitchTo(per_command_context);
 
 	while (InvalidOid != (proc = procs[cur++]))
-		call_cmdtrigger_procedure(proc, per_command_context);
+		call_cmdtrigger_procedure(cmd, proc, per_command_context);
 
 	/* Release working resources */
 	MemoryContextSwitchTo(oldContext);
@@ -825,22 +822,21 @@ ExecAfterCommandTriggersInternal(RegProcedure *procs)
 }
 
 void
-ExecAfterCommandTriggers()
+ExecAfterCommandTriggers(CommandContext cmd)
 {
 	RegProcedure *after =
-		list_triggers_for_command(command_context->tag,
-								  CMD_TRIGGER_FIRED_AFTER);
+		list_triggers_for_command(cmd->tag, CMD_TRIGGER_FIRED_AFTER);
 
 	if (after[0] != InvalidOid)
-		ExecAfterCommandTriggersInternal(after);
+		ExecAfterCommandTriggersInternal(cmd, after);
 }
 
 void
-ExecAfterAnyCommandTriggers()
+ExecAfterAnyCommandTriggers(CommandContext cmd)
 {
 	RegProcedure *after =
 		list_triggers_for_command("ANY", CMD_TRIGGER_FIRED_AFTER);
 
 	if (after[0] != InvalidOid)
-		ExecAfterCommandTriggersInternal(after);
+		ExecAfterCommandTriggersInternal(cmd, after);
 }
