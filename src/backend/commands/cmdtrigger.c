@@ -273,7 +273,7 @@ DropCmdTrigger(DropCmdTrigStmt *stmt)
 		/*
 		 * Do the deletion
 		 */
-		performDeletion(&object, stmt->behavior);
+		performDeletion(&object, stmt->behavior, 0);
 	}
 }
 

@@ -406,14 +406,16 @@ run_named_permutations(TestSpec * testspec)
 		/* Find all the named steps from the lookup table */
 		for (j = 0; j < p->nsteps; j++)
 		{
-			steps[j] = *((Step **) bsearch(p->stepnames[j], allsteps, nallsteps,
-										 sizeof(Step *), &step_bsearch_cmp));
-			if (steps[j] == NULL)
+			Step	**this = (Step **) bsearch(p->stepnames[j], allsteps,
+											   nallsteps, sizeof(Step *),
+											   &step_bsearch_cmp);
+			if (this == NULL)
 			{
 				fprintf(stderr, "undefined step \"%s\" specified in permutation\n",
 						p->stepnames[j]);
 				exit_nicely();
 			}
+			steps[j] = *this;
 		}
 
 		run_permutation(testspec, p->nsteps, steps);
@@ -548,8 +550,53 @@ run_permutation(TestSpec * testspec, int nsteps, Step ** steps)
 	for (i = 0; i < nsteps; i++)
 	{
 		Step *step = steps[i];
+		PGconn *conn = conns[1 + step->session];
 
-		if (!PQsendQuery(conns[1 + step->session], step->sql))
+		if (waiting != NULL && step->session == waiting->session)
+		{
+			PGcancel *cancel;
+			PGresult *res;
+			int j;
+
+			/*
+			 * This permutation is invalid: it can never happen in real life.
+			 *
+			 * A session is blocked on an earlier step (waiting) and no further
+			 * steps from this session can run until it is unblocked, but it
+			 * can only be unblocked by running steps from other sessions.
+			 */
+			fprintf(stderr, "invalid permutation detected\n");
+
+			/* Cancel the waiting statement from this session. */
+			cancel = PQgetCancel(conn);
+			if (cancel != NULL)
+			{
+				char buf[256];
+
+				PQcancel(cancel, buf, sizeof(buf));
+
+				/* Be sure to consume the error message. */
+				while ((res = PQgetResult(conn)) != NULL)
+					PQclear(res);
+
+				PQfreeCancel(cancel);
+			}
+
+			/*
+			 * Now we really have to complete all the running transactions to
+			 * make sure teardown doesn't block.
+			 */
+			for (j = 1; j < nconns; j++)
+			{
+				res = PQexec(conns[j], "ROLLBACK");
+				if (res != NULL)
+					PQclear(res);
+			}
+
+			goto teardown;
+		}
+
+		if (!PQsendQuery(conn, step->sql))
 		{
 			fprintf(stdout, "failed to send query for step %s: %s\n",
 					step->name, PQerrorMessage(conns[1 + step->session]));
@@ -588,6 +635,7 @@ run_permutation(TestSpec * testspec, int nsteps, Step ** steps)
 		report_error_message(waiting);
 	}
 
+teardown:
 	/* Perform per-session teardown */
 	for (i = 0; i < testspec->nsessions; i++)
 	{

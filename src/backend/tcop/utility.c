@@ -910,50 +910,63 @@ standard_ProcessUtility(Node *parsetree,
 				lockmode = AlterTableGetLockLevel(atstmt->cmds);
 				relid = AlterTableLookupRelation(atstmt, lockmode);
 
-				/*
-				 * Call BEFORE|INSTEAD OF ALTER TABLE triggers
-				 */
-				cmd.tag = (char *) CreateCommandTag(parsetree);
-				cmd.objectId = relid;
-				cmd.objectname = atstmt->relation->relname;
-				cmd.schemaname = get_namespace_name(
-					RangeVarGetCreationNamespace(atstmt->relation));
-				cmd.parsetree  = parsetree;
-
-				if (ExecBeforeOrInsteadOfCommandTriggers(&cmd))
-					return;
-
-				/* Run parse analysis ... */
-				stmts = transformAlterTableStmt(atstmt, queryString);
-
-				/* ... and do it */
-				foreach(l, stmts)
+				if (OidIsValid(relid))
 				{
-					Node	   *stmt = (Node *) lfirst(l);
+					/*
+					 * Call BEFORE|INSTEAD OF ALTER TABLE triggers
+					 */
+					cmd.tag = (char *) CreateCommandTag(parsetree);
+					cmd.objectId = relid;
+					cmd.objectname = atstmt->relation->relname;
+					cmd.schemaname = get_namespace_name(
+						RangeVarGetCreationNamespace(atstmt->relation));
+					cmd.parsetree  = parsetree;
 
-					if (IsA(stmt, AlterTableStmt))
-					{
-						/* Do the table alteration proper */
-						AlterTable(relid, lockmode, (AlterTableStmt *) stmt);
-					}
-					else
-					{
-						/* Recurse for anything else */
-						ProcessUtility(stmt,
-									   queryString,
-									   params,
-									   false,
-									   None_Receiver,
-									   NULL);
-					}
+					if (ExecBeforeOrInsteadOfCommandTriggers(&cmd))
+						return;
 
-					/* Need CCI between commands */
-					if (lnext(l) != NULL)
-						CommandCounterIncrement();
+					/* Run parse analysis ... */
+					stmts = transformAlterTableStmt(atstmt, queryString);
+
+					/* ... and do it */
+					foreach(l, stmts)
+					{
+						/* Run parse analysis ... */
+						stmts = transformAlterTableStmt(atstmt, queryString);
+
+						/* ... and do it */
+						foreach(l, stmts)
+						{
+							Node	   *stmt = (Node *) lfirst(l);
+
+							if (IsA(stmt, AlterTableStmt))
+							{
+								/* Do the table alteration proper */
+								AlterTable(relid, lockmode, (AlterTableStmt *) stmt);
+							}
+							else
+							{
+								/* Recurse for anything else */
+								ProcessUtility(stmt,
+											   queryString,
+											   params,
+											   false,
+											   None_Receiver,
+											   NULL);
+							}
+
+							/* Need CCI between commands */
+							if (lnext(l) != NULL)
+								CommandCounterIncrement();
+						}
+					}
+					/* Call AFTER ALTER TABLE triggers */
+					ExecAfterCommandTriggers(&cmd);
 				}
-
-				/* Call AFTER ALTER TABLE triggers */
-				ExecAfterCommandTriggers(&cmd);
+				else
+					ereport(NOTICE,
+						(errmsg("relation \"%s\" does not exist, skipping",
+							atstmt->relation->relname)));
 			}
 			break;
 

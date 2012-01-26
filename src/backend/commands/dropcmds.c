@@ -141,7 +141,7 @@ RemoveObjects(DropStmt *stmt)
 	}
 
 	/* Here we really delete them. */
-	performMultipleDeletions(objects, stmt->behavior);
+	performMultipleDeletions(objects, stmt->behavior, 0);
 
 	/* Call AFTER DROP command triggers */
 	for(i = 0; i<n; i++)
