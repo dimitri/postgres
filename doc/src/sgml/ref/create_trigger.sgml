@@ -527,17 +527,17 @@ CREATE TRIGGER view_insert
 CREATE OR REPLACE FUNCTION enforce_local_style
  (
    IN cmd_tag        text,
-   IN cmd_string     text,
+   IN objectid       oid,
    IN schemaname     text,
-   IN relname        text
+   IN objectname     text
  )
  RETURNS bool
  LANGUAGE plpgsql
 AS $$
 BEGIN
-  IF substring(relname, 0, 4) NOT IN ('ab_', 'cz_', 'fr_')
+  IF substring(objectname, 0, 4) NOT IN ('ab_', 'cz_', 'fr_')
   THEN
-    RAISE WARNING 'invalid relation name: %', relname;
+    RAISE WARNING 'invalid relation name: %', objectname;
     RETURN FALSE;
   END IF;
   RETURN TRUE;
