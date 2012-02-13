@@ -4,7 +4,7 @@
  *	  prototypes for restrictinfo.c.
  *
  *
- * Portions Copyright (c) 1996-2011, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2012, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/optimizer/restrictinfo.h
@@ -40,8 +40,7 @@ extern List *extract_actual_clauses(List *restrictinfo_list,
 extern void extract_actual_join_clauses(List *restrictinfo_list,
 							List **joinquals,
 							List **otherquals);
-extern List *select_nonredundant_join_clauses(PlannerInfo *root,
-								 List *restrictinfo_list,
-								 Path *inner_path);
+extern List *select_nonredundant_join_clauses(List *restrictinfo_list,
+								 List *reference_list);
 
 #endif   /* RESTRICTINFO_H */

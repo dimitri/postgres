@@ -3,7 +3,7 @@
  * port.h
  *	  Header for src/port/ compatibility functions.
  *
- * Portions Copyright (c) 1996-2011, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2012, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/port.h
@@ -395,6 +395,10 @@ extern off_t ftello(FILE *stream);
 extern double pg_erand48(unsigned short xseed[3]);
 extern long pg_lrand48(void);
 extern void pg_srand48(long seed);
+
+#ifndef HAVE_FLS
+extern int fls(int mask);
+#endif
 
 #ifndef HAVE_FSEEKO
 #define fseeko(a, b, c) fseek(a, b, c)

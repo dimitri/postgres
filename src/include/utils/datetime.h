@@ -6,7 +6,7 @@
  *	   including abstime, reltime, date, and time.
  *
  *
- * Portions Copyright (c) 1996-2011, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2012, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/utils/datetime.h
@@ -16,6 +16,7 @@
 #ifndef DATETIME_H
 #define DATETIME_H
 
+#include "nodes/nodes.h"
 #include "utils/timestamp.h"
 
 /* this struct is declared in utils/tzparser.h: */
@@ -297,6 +298,8 @@ extern int	DecodeSpecial(int field, char *lowtoken, int *val);
 extern int	DecodeUnits(int field, char *lowtoken, int *val);
 
 extern int	j2day(int jd);
+
+extern Node *TemporalTransform(int32 max_precis, Node *node);
 
 extern bool CheckDateTokenTables(void);
 

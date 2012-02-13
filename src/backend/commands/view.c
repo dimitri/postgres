@@ -3,7 +3,7 @@
  * view.c
  *	  use rewrite rules to construct views
  *
- * Portions Copyright (c) 1996-2011, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2012, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -32,6 +32,7 @@
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
 #include "utils/rel.h"
+#include "utils/syscache.h"
 
 
 static void checkViewTupleDesc(TupleDesc newdesc, TupleDesc olddesc);
@@ -97,10 +98,11 @@ isViewOnTempTable_walker(Node *node, void *context)
  *---------------------------------------------------------------------
  */
 static Oid
-DefineVirtualRelation(const RangeVar *relation, List *tlist, bool replace,
-					  Oid namespaceId)
+DefineVirtualRelation(RangeVar *relation, List *tlist, bool replace,
+					  List *options)
 {
 	Oid			viewOid;
+	LOCKMODE	lockmode;
 	CreateStmt *createStmt = makeNode(CreateStmt);
 	List	   *attrList;
 	ListCell   *t;
@@ -158,32 +160,30 @@ DefineVirtualRelation(const RangeVar *relation, List *tlist, bool replace,
 				 errmsg("view must have at least one column")));
 
 	/*
-	 * Check to see if we want to replace an existing view.
+	 * Look up, check permissions on, and lock the creation namespace; also
+	 * check for a preexisting view with the same name.  This will also set
+	 * relation->relpersistence to RELPERSISTENCE_TEMP if the selected
+	 * namespace is temporary.
 	 */
-	viewOid = get_relname_relid(relation->relname, namespaceId);
+	lockmode = replace ? AccessExclusiveLock : NoLock;
+	(void) RangeVarGetAndCheckCreationNamespace(relation, lockmode, &viewOid);
 
 	if (OidIsValid(viewOid) && replace)
 	{
 		Relation	rel;
 		TupleDesc	descriptor;
+		List	   *atcmds = NIL;
+		AlterTableCmd *atcmd;
 
-		/*
-		 * Yes.  Get exclusive lock on the existing view ...
-		 */
-		rel = relation_open(viewOid, AccessExclusiveLock);
+		/* Relation is already locked, but we must build a relcache entry. */
+		rel = relation_open(viewOid, NoLock);
 
-		/*
-		 * Make sure it *is* a view, and do permissions checks.
-		 */
+		/* Make sure it *is* a view. */
 		if (rel->rd_rel->relkind != RELKIND_VIEW)
 			ereport(ERROR,
 					(errcode(ERRCODE_WRONG_OBJECT_TYPE),
 					 errmsg("\"%s\" is not a view",
 							RelationGetRelationName(rel))));
-
-		if (!pg_class_ownercheck(viewOid, GetUserId()))
-			aclcheck_error(ACLCHECK_NOT_OWNER, ACL_KIND_CLASS,
-						   RelationGetRelationName(rel));
 
 		/* Also check it's not in use already */
 		CheckTableNotInUse(rel, "CREATE OR REPLACE VIEW");
@@ -204,20 +204,26 @@ DefineVirtualRelation(const RangeVar *relation, List *tlist, bool replace,
 		checkViewTupleDesc(descriptor, rel->rd_att);
 
 		/*
+		 * The new options list replaces the existing options list, even
+		 * if it's empty.
+		 */
+		atcmd = makeNode(AlterTableCmd);
+		atcmd->subtype = AT_ReplaceRelOptions;
+		atcmd->def = (Node *) options;
+		atcmds = lappend(atcmds, atcmd);
+
+		/*
 		 * If new attributes have been added, we must add pg_attribute entries
 		 * for them.  It is convenient (although overkill) to use the ALTER
 		 * TABLE ADD COLUMN infrastructure for this.
 		 */
 		if (list_length(attrList) > rel->rd_att->natts)
 		{
-			List	   *atcmds = NIL;
 			ListCell   *c;
 			int			skip = rel->rd_att->natts;
 
 			foreach(c, attrList)
 			{
-				AlterTableCmd *atcmd;
-
 				if (skip > 0)
 				{
 					skip--;
@@ -228,8 +234,10 @@ DefineVirtualRelation(const RangeVar *relation, List *tlist, bool replace,
 				atcmd->def = (Node *) lfirst(c);
 				atcmds = lappend(atcmds, atcmd);
 			}
-			AlterTableInternal(viewOid, atcmds, true);
 		}
+
+		/* OK, let's do it. */
+		AlterTableInternal(viewOid, atcmds, true);
 
 		/*
 		 * Seems okay, so return the OID of the pre-existing view.
@@ -250,7 +258,8 @@ DefineVirtualRelation(const RangeVar *relation, List *tlist, bool replace,
 		createStmt->tableElts = attrList;
 		createStmt->inhRelations = NIL;
 		createStmt->constraints = NIL;
-		createStmt->options = list_make1(defWithOids(false));
+		createStmt->options = options;
+		createStmt->options = lappend(options, defWithOids(false));
 		createStmt->oncommit = ONCOMMIT_NOOP;
 		createStmt->tablespacename = NULL;
 		createStmt->if_not_exists = false;
@@ -416,7 +425,6 @@ DefineView(ViewStmt *stmt, const char *queryString)
 {
 	Query	   *viewParse;
 	Oid			viewOid;
-	Oid			namespaceId;
 	RangeVar   *view;
 
 	/*
@@ -502,10 +510,6 @@ DefineView(ViewStmt *stmt, const char *queryString)
 						view->relname)));
 	}
 
-	/* Might also need to make it temporary if placed in temp schema. */
-	namespaceId = RangeVarGetCreationNamespace(view);
-	RangeVarAdjustRelationPersistence(view, namespaceId);
-
 	/*
 	 * Create the view relation
 	 *
@@ -513,7 +517,7 @@ DefineView(ViewStmt *stmt, const char *queryString)
 	 * aborted.
 	 */
 	viewOid = DefineVirtualRelation(view, viewParse->targetList,
-									stmt->replace, namespaceId);
+									stmt->replace, stmt->options);
 
 	/*
 	 * The relation we have just created is not visible to any other commands

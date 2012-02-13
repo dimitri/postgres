@@ -4,7 +4,7 @@
  *	  postgres transaction system definitions
  *
  *
- * Portions Copyright (c) 1996-2011, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2012, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/access/xact.h
@@ -55,6 +55,7 @@ typedef enum
 {
 	SYNCHRONOUS_COMMIT_OFF,		/* asynchronous commit */
 	SYNCHRONOUS_COMMIT_LOCAL_FLUSH,		/* wait for local flush only */
+	SYNCHRONOUS_COMMIT_REMOTE_WRITE,		/* wait for local flush and remote write */
 	SYNCHRONOUS_COMMIT_REMOTE_FLUSH		/* wait for local and remote flush */
 }	SyncCommitLevel;
 

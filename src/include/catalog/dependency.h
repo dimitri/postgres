@@ -4,7 +4,7 @@
  *	  Routines to support inter-object dependencies.
  *
  *
- * Portions Copyright (c) 1996-2011, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2012, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/catalog/dependency.h
@@ -153,11 +153,13 @@ typedef enum ObjectClass
 
 /* in dependency.c */
 
+#define PERFORM_DELETION_INTERNAL			0x0001
+
 extern void performDeletion(const ObjectAddress *object,
-				DropBehavior behavior);
+				DropBehavior behavior, int flags);
 
 extern void performMultipleDeletions(const ObjectAddresses *objects,
-						 DropBehavior behavior);
+						 DropBehavior behavior, int flags);
 
 extern void deleteWhatDependsOn(const ObjectAddress *object,
 					bool showNotices);

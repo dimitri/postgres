@@ -9,6 +9,8 @@ COMMENT ON TABLE tmp_wrong IS 'table comment';
 COMMENT ON TABLE tmp IS 'table comment';
 COMMENT ON TABLE tmp IS NULL;
 
+ALTER TABLE tmp ADD COLUMN xmin integer; -- fails
+
 ALTER TABLE tmp ADD COLUMN a int4 default 3;
 
 ALTER TABLE tmp ADD COLUMN b name;
@@ -166,6 +168,9 @@ DROP TABLE tmp_new2;
 
 -- ALTER TABLE ... RENAME on non-table relations
 -- renaming indexes (FIXME: this should probably test the index's functionality)
+ALTER INDEX IF EXISTS __onek_unique1 RENAME TO tmp_onek_unique1;
+ALTER INDEX IF EXISTS __tmp_onek_unique1 RENAME TO onek_unique1;
+
 ALTER INDEX onek_unique1 RENAME TO tmp_onek_unique1;
 ALTER INDEX tmp_onek_unique1 RENAME TO onek_unique1;
 -- renaming views
@@ -450,20 +455,19 @@ select test2 from atacc2;
 drop table atacc2 cascade;
 drop table atacc1;
 
--- adding only to a parent is disallowed as of 8.4
+-- adding only to a parent is allowed as of 9.2
 
 create table atacc1 (test int);
 create table atacc2 (test2 int) inherits (atacc1);
--- fail:
-alter table only atacc1 add constraint foo check (test>0);
 -- ok:
-alter table only atacc2 add constraint foo check (test>0);
--- check constraint not there on parent
+alter table only atacc1 add constraint foo check (test>0);
+-- check constraint is not there on child
+insert into atacc2 (test) values (-3);
+-- check constraint is there on parent
 insert into atacc1 (test) values (-3);
 insert into atacc1 (test) values (3);
--- check constraint is there on child
-insert into atacc2 (test) values (-3);
-insert into atacc2 (test) values (3);
+-- fail, violating row:
+alter table only atacc2 add constraint foo check (test>0);
 drop table atacc2;
 drop table atacc1;
 
@@ -898,6 +902,10 @@ alter table only renameColumn rename column a to d;
 -- these should work
 alter table renameColumn rename column a to d;
 alter table renameColumnChild rename column b to a;
+
+-- these should work
+alter table if exists doesnt_exist_tab rename column a to d;
+alter table if exists doesnt_exist_tab rename column b to a;
 
 -- this should work
 alter table renameColumn add column w int;
@@ -1464,3 +1472,28 @@ ALTER TABLE ONLY test_drop_constr_parent DROP CONSTRAINT "test_drop_constr_paren
 -- should fail
 INSERT INTO test_drop_constr_child (c) VALUES (NULL);
 DROP TABLE test_drop_constr_parent CASCADE;
+
+--
+-- IF EXISTS test
+--
+ALTER TABLE IF EXISTS tt8 ADD COLUMN f int;
+ALTER TABLE IF EXISTS tt8 ADD CONSTRAINT xxx PRIMARY KEY(f);
+ALTER TABLE IF EXISTS tt8 ADD CHECK (f BETWEEN 0 AND 10);
+ALTER TABLE IF EXISTS tt8 ALTER COLUMN f SET DEFAULT 0;
+ALTER TABLE IF EXISTS tt8 RENAME COLUMN f TO f1;
+ALTER TABLE IF EXISTS tt8 SET SCHEMA alter2;
+
+CREATE TABLE tt8(a int);
+CREATE SCHEMA alter2;
+
+ALTER TABLE IF EXISTS tt8 ADD COLUMN f int;
+ALTER TABLE IF EXISTS tt8 ADD CONSTRAINT xxx PRIMARY KEY(f);
+ALTER TABLE IF EXISTS tt8 ADD CHECK (f BETWEEN 0 AND 10);
+ALTER TABLE IF EXISTS tt8 ALTER COLUMN f SET DEFAULT 0;
+ALTER TABLE IF EXISTS tt8 RENAME COLUMN f TO f1;
+ALTER TABLE IF EXISTS tt8 SET SCHEMA alter2;
+
+\d alter2.tt8
+
+DROP TABLE alter2.tt8;
+DROP SCHEMA alter2;

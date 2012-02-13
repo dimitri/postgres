@@ -38,7 +38,7 @@
  * by re-setting the page's page_dirty flag.
  *
  *
- * Portions Copyright (c) 1996-2011, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2012, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/backend/access/transam/slru.c
@@ -280,6 +280,8 @@ SimpleLruZeroPage(SlruCtl ctl, int pageno)
  * in a page from disk into an existing buffer.  (Such an old page cannot
  * have any interesting LSNs, since we'd have flushed them before writing
  * the page in the first place.)
+ *
+ * This assumes that InvalidXLogRecPtr is bitwise-all-0.
  */
 static void
 SimpleLruZeroLSNs(SlruCtl ctl, int slotno)

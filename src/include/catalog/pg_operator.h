@@ -5,7 +5,7 @@
  *	  along with the relation's initial contents.
  *
  *
- * Portions Copyright (c) 1996-2011, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2012, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/catalog/pg_operator.h
@@ -1115,6 +1115,13 @@ DATA(insert OID = 1224 (  ">"	   PGNSP PGUID b f f 829 829	 16 1222 1223 macaddr
 DESCR("greater than");
 DATA(insert OID = 1225 (  ">="	   PGNSP PGUID b f f 829 829	 16 1223 1222 macaddr_ge scalargtsel scalargtjoinsel ));
 DESCR("greater than or equal");
+
+DATA(insert OID = 3147 (  "~"	   PGNSP PGUID l f f	  0 829 829 0 0 macaddr_not - - ));
+DESCR("bitwise not");
+DATA(insert OID = 3148 (  "&"	   PGNSP PGUID b f f	829 829 829 0 0 macaddr_and - - ));
+DESCR("bitwise and");
+DATA(insert OID = 3149 (  "|"	   PGNSP PGUID b f f	829 829 829 0 0 macaddr_or - - ));
+DESCR("bitwise or");
 
 /* INET type (these also support CIDR via implicit cast) */
 DATA(insert OID = 1201 (  "="	   PGNSP PGUID b t t 869 869	 16 1201 1202 network_eq eqsel eqjoinsel ));

@@ -3,7 +3,7 @@
  * pl_comp.c		- Compiler part of the PL/pgSQL
  *			  procedural language
  *
- * Portions Copyright (c) 1996-2011, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2012, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -341,7 +341,7 @@ do_compile(FunctionCallInfo fcinfo,
 									 ALLOCSET_DEFAULT_MAXSIZE);
 	compile_tmp_cxt = MemoryContextSwitchTo(func_cxt);
 
-	function->fn_name = pstrdup(NameStr(procStruct->proname));
+	function->fn_signature = format_procedure(fcinfo->flinfo->fn_oid);
 	function->fn_oid = fcinfo->flinfo->fn_oid;
 	function->fn_xmin = HeapTupleHeaderGetXmin(procTup->t_data);
 	function->fn_tid = procTup->t_self;
@@ -802,7 +802,7 @@ plpgsql_compile_inline(char *proc_source)
 									 ALLOCSET_DEFAULT_MAXSIZE);
 	compile_tmp_cxt = MemoryContextSwitchTo(func_cxt);
 
-	function->fn_name = pstrdup(func_name);
+	function->fn_signature = pstrdup(func_name);
 	function->fn_is_trigger = false;
 	function->fn_input_collation = InvalidOid;
 	function->fn_cxt = func_cxt;

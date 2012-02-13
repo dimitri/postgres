@@ -4,7 +4,7 @@
  *	  WAL replay logic for inverted index.
  *
  *
- * Portions Copyright (c) 1996-2011, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2012, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * IDENTIFICATION
@@ -671,9 +671,10 @@ gin_redo(XLogRecPtr lsn, XLogRecord *record)
 	uint8		info = record->xl_info & ~XLR_INFO_MASK;
 
 	/*
-	 * GIN indexes do not require any conflict processing.
+	 * GIN indexes do not require any conflict processing. NB: If we ever
+	 * implement a similar optimization as we have in b-tree, and remove
+	 * killed tuples outside VACUUM, we'll need to handle that here.
 	 */
-
 	RestoreBkpBlocks(lsn, record, false);
 
 	topCtx = MemoryContextSwitchTo(opCtx);

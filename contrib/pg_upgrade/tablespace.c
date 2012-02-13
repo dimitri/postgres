@@ -3,7 +3,7 @@
  *
  *	tablespace functions
  *
- *	Copyright (c) 2010-2011, PostgreSQL Global Development Group
+ *	Copyright (c) 2010-2012, PostgreSQL Global Development Group
  *	contrib/pg_upgrade/tablespace.c
  */
 
@@ -53,7 +53,7 @@ get_tablespace_paths(void)
 			 "		spcname != 'pg_global'",
 	/* 9.2 removed the spclocation column */
 			(GET_MAJOR_VERSION(old_cluster.major_version) <= 901) ?
-			"t.spclocation" : "pg_catalog.pg_tablespace_location(oid) AS spclocation");
+			"spclocation" : "pg_catalog.pg_tablespace_location(oid) AS spclocation");
 
 	res = executeQueryOrDie(conn, "%s", query);
 

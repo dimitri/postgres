@@ -5,7 +5,7 @@
  *	  wherein you authenticate a user by seeing what IP address the system
  *	  says he comes from and choosing authentication method based on it).
  *
- * Portions Copyright (c) 1996-2011, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2012, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -1273,6 +1273,8 @@ parse_hba_line(List *line, int line_num)
 	 * SSPI authentication can never be enabled on ctLocal connections,
 	 * because it's only supported on Windows, where ctLocal isn't supported.
 	 */
+
+
 	if (parsedline->conntype != ctHostSSL &&
 		parsedline->auth_method == uaCert)
 	{

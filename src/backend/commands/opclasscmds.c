@@ -4,7 +4,7 @@
  *
  *	  Routines for opclass (and opfamily) manipulation commands
  *
- * Portions Copyright (c) 1996-2011, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2012, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -1519,7 +1519,7 @@ dropOperators(List *opfamilyname, Oid amoid, Oid opfamilyoid,
 		object.objectId = amopid;
 		object.objectSubId = 0;
 
-		performDeletion(&object, DROP_RESTRICT);
+		performDeletion(&object, DROP_RESTRICT, 0);
 	}
 }
 
@@ -1559,7 +1559,7 @@ dropProcedures(List *opfamilyname, Oid amoid, Oid opfamilyoid,
 		object.objectId = amprocid;
 		object.objectSubId = 0;
 
-		performDeletion(&object, DROP_RESTRICT);
+		performDeletion(&object, DROP_RESTRICT, 0);
 	}
 }
 

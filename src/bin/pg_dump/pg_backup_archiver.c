@@ -77,6 +77,9 @@ typedef struct _parallel_slot
 
 #define NO_SLOT (-1)
 
+#define TEXT_DUMP_HEADER "--\n-- PostgreSQL database dump\n--\n\n"
+#define TEXT_DUMPALL_HEADER "--\n-- PostgreSQL database cluster dump\n--\n\n"
+
 /* state needed to save/restore an archive's output target */
 typedef struct _outputContext
 {
@@ -120,10 +123,10 @@ static int	RestoringToDB(ArchiveHandle *AH);
 static void dump_lo_buf(ArchiveHandle *AH);
 static void vdie_horribly(ArchiveHandle *AH, const char *modulename,
 						  const char *fmt, va_list ap)
-	__attribute__((format(PG_PRINTF_ATTRIBUTE, 3, 0)));
+	__attribute__((format(PG_PRINTF_ATTRIBUTE, 3, 0), noreturn));
 
 static void dumpTimestamp(ArchiveHandle *AH, const char *msg, time_t tim);
-static void SetOutput(ArchiveHandle *AH, char *filename, int compression);
+static void SetOutput(ArchiveHandle *AH, const char *filename, int compression);
 static OutputContext SaveOutput(ArchiveHandle *AH);
 static void RestoreOutput(ArchiveHandle *AH, OutputContext savedContext);
 
@@ -617,20 +620,20 @@ restore_toc_entry(ArchiveHandle *AH, TocEntry *te,
 					if (te->copyStmt && strlen(te->copyStmt) > 0)
 					{
 						ahprintf(AH, "%s", te->copyStmt);
-						AH->writingCopyData = true;
+						AH->outputKind = OUTPUT_COPYDATA;
 					}
+					else
+						AH->outputKind = OUTPUT_OTHERDATA;
 
 					(*AH->PrintTocDataPtr) (AH, te, ropt);
 
 					/*
 					 * Terminate COPY if needed.
 					 */
-					if (AH->writingCopyData)
-					{
-						if (RestoringToDB(AH))
-							EndDBCopyMode(AH, te);
-						AH->writingCopyData = false;
-					}
+					if (AH->outputKind == OUTPUT_COPYDATA &&
+						RestoringToDB(AH))
+						EndDBCopyMode(AH, te);
+					AH->outputKind = OUTPUT_SQLCMDS;
 
 					/* close out the transaction started above */
 					if (is_parallel && te->created)
@@ -665,6 +668,7 @@ NewRestoreOptions(void)
 	/* set any fields that shouldn't default to zeroes */
 	opts->format = archUnknown;
 	opts->promptPassword = TRI_DEFAULT;
+	opts->dumpSections = DUMP_UNSECTIONED;
 
 	return opts;
 }
@@ -1169,7 +1173,7 @@ archprintf(Archive *AH, const char *fmt,...)
  *******************************/
 
 static void
-SetOutput(ArchiveHandle *AH, char *filename, int compression)
+SetOutput(ArchiveHandle *AH, const char *filename, int compression)
 {
 	int			fn;
 
@@ -1447,6 +1451,16 @@ die_horribly(ArchiveHandle *AH, const char *modulename, const char *fmt,...)
 	va_start(ap, fmt);
 	vdie_horribly(AH, modulename, fmt, ap);
 	va_end(ap);
+}
+
+/* As above, but with a complaint about a particular query. */
+void
+die_on_query_failure(ArchiveHandle *AH, const char *modulename,
+					 const char *query)
+{
+	write_msg(modulename, "query failed: %s",
+			  PQerrorMessage(AH->connection));
+	die_horribly(AH, modulename, "query was: %s\n", query);
 }
 
 /* on some error, we may decide to go on... */
@@ -1861,11 +1875,19 @@ _discoverArchiveFormat(ArchiveHandle *AH)
 	else
 	{
 		/*
-		 * *Maybe* we have a tar archive format file... So, read first 512
-		 * byte header...
+		 * *Maybe* we have a tar archive format file or a text dump ... 
+		 * So, read first 512 byte header...
 		 */
 		cnt = fread(&AH->lookahead[AH->lookaheadLen], 1, 512 - AH->lookaheadLen, fh);
 		AH->lookaheadLen += cnt;
+
+		if (AH->lookaheadLen >= strlen(TEXT_DUMPALL_HEADER) &&
+			(strncmp(AH->lookahead, TEXT_DUMP_HEADER, strlen(TEXT_DUMP_HEADER)) == 0 ||
+			 strncmp(AH->lookahead, TEXT_DUMPALL_HEADER, strlen(TEXT_DUMPALL_HEADER)) == 0))
+		{
+			/* looks like it's probably a text format dump. so suggest they try psql */
+			die_horribly(AH, modulename, "input file appears to be a text format dump. Please use psql.\n");
+		}
 
 		if (AH->lookaheadLen != 512)
 			die_horribly(AH, modulename, "input file does not appear to be a valid archive (too short?)\n");
@@ -1962,6 +1984,8 @@ _allocAH(const char *FileSpec, const ArchiveFormat fmt,
 
 	AH->mode = mode;
 	AH->compression = compression;
+
+	memset(&(AH->sqlparse), 0, sizeof(AH->sqlparse));
 
 	/* Open stdout with no compression for AH output handle */
 	AH->gzOut = 0;
@@ -2120,6 +2144,7 @@ ReadToc(ArchiveHandle *AH)
 	int			depIdx;
 	int			depSize;
 	TocEntry   *te;
+	bool        in_post_data = false;
 
 	AH->tocCount = ReadInt(AH);
 	AH->maxDumpId = 0;
@@ -2184,6 +2209,12 @@ ReadToc(ArchiveHandle *AH)
 			else
 				te->section = SECTION_PRE_DATA;
 		}
+
+		/* will stay true even for SECTION_NONE items */
+		if (te->section == SECTION_POST_DATA)
+			in_post_data = true;
+
+		te->inPostData = in_post_data;
 
 		te->defn = ReadStr(AH);
 		te->dropStmt = ReadStr(AH);
@@ -2333,6 +2364,17 @@ _tocEntryRequired(TocEntry *te, RestoreOptions *ropt, bool include_acls)
 	/* Ignore DATABASE entry unless we should create it */
 	if (!ropt->createDB && strcmp(te->desc, "DATABASE") == 0)
 		return 0;
+
+	/* skip (all but) post data section as required */
+	/* table data is filtered if necessary lower down */
+	if (ropt->dumpSections != DUMP_UNSECTIONED)
+	{
+		if (!(ropt->dumpSections & DUMP_POST_DATA) && te->inPostData)
+			return 0;
+		if (!(ropt->dumpSections & DUMP_PRE_DATA) && ! te->inPostData && strcmp(te->desc, "TABLE DATA") != 0)
+			return 0;
+	}
+
 
 	/* Check options for selective dump/restore */
 	if (ropt->schemaNames)
@@ -4164,7 +4206,8 @@ CloneArchive(ArchiveHandle *AH)
 	clone = (ArchiveHandle *) pg_malloc(sizeof(ArchiveHandle));
 	memcpy(clone, AH, sizeof(ArchiveHandle));
 
-	/* Handle format-independent fields ... none at the moment */
+	/* Handle format-independent fields */
+	memset(&(clone->sqlparse), 0, sizeof(clone->sqlparse));
 
 	/* The clone will have its own connection, so disregard connection state */
 	clone->connection = NULL;
@@ -4197,7 +4240,9 @@ DeCloneArchive(ArchiveHandle *AH)
 	/* Clear format-specific state */
 	(AH->DeClonePtr) (AH);
 
-	/* Clear state allocated by CloneArchive ... none at the moment */
+	/* Clear state allocated by CloneArchive */
+	if (AH->sqlparse.curCmd)
+		destroyPQExpBuffer(AH->sqlparse.curCmd);
 
 	/* Clear any connection-local state */
 	if (AH->currUser)

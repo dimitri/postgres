@@ -12,7 +12,7 @@
  * postgresql.conf and recovery.conf.  An extension also has an installation
  * script file, containing SQL commands to create the extension's objects.
  *
- * Portions Copyright (c) 1996-2011, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2012, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -1955,7 +1955,7 @@ update_extension_feature_list(ExtensionControlFile *control,
 			 * an error instead if some other extensions are still depending on
 			 * it (control->requires installs pg_depend entries for this case).
 			 */
-			performDeletion(&feature, DROP_RESTRICT);
+			performDeletion(&feature, DROP_RESTRICT, PERFORM_DELETION_INTERNAL);
 
 		else if (features[i].count > 0)
 			/*

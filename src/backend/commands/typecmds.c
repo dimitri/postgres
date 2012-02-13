@@ -3,7 +3,7 @@
  * typecmds.c
  *	  Routines for SQL commands that manipulate types (and domains).
  *
- * Portions Copyright (c) 1996-2011, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2012, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -755,6 +755,11 @@ DefineDomain(CreateDomainStmt *stmt)
 				(errcode(ERRCODE_DATATYPE_MISMATCH),
 				 errmsg("\"%s\" is not a valid base type for a domain",
 						TypeNameToString(stmt->typeName))));
+
+	aclresult = pg_type_aclcheck(basetypeoid, GetUserId(), ACL_USAGE);
+	if (aclresult != ACLCHECK_OK)
+		aclcheck_error(aclresult, ACL_KIND_TYPE,
+					   format_type_be(basetypeoid));
 
 	/*
 	 * Identify the collation if any
@@ -2000,7 +2005,8 @@ DefineCompositeType(const RangeVar *typevar, List *coldeflist)
 	 * check is here mainly to get a better error message about a "type"
 	 * instead of below about a "relation".
 	 */
-	typeNamespace = RangeVarGetCreationNamespace(createStmt->relation);
+	typeNamespace = RangeVarGetAndCheckCreationNamespace(createStmt->relation,
+														 NoLock, NULL);
 	RangeVarAdjustRelationPersistence(createStmt->relation, typeNamespace);
 	old_type_oid =
 		GetSysCacheOid2(TYPENAMENSP,
@@ -2259,7 +2265,7 @@ AlterDomainNotNull(List *names, bool notNull)
  */
 void
 AlterDomainDropConstraint(List *names, const char *constrName,
-						  DropBehavior behavior)
+						  DropBehavior behavior, bool missing_ok)
 {
 	TypeName   *typename;
 	Oid			domainoid;
@@ -2269,6 +2275,7 @@ AlterDomainDropConstraint(List *names, const char *constrName,
 	SysScanDesc conscan;
 	ScanKeyData key[1];
 	HeapTuple	contup;
+	bool		found = false;
 
 	/* Make a TypeName so we can use standard type lookup machinery */
 	typename = makeTypeNameFromNameList(names);
@@ -2311,7 +2318,8 @@ AlterDomainDropConstraint(List *names, const char *constrName,
 			conobj.objectId = HeapTupleGetOid(contup);
 			conobj.objectSubId = 0;
 
-			performDeletion(&conobj, behavior);
+			performDeletion(&conobj, behavior, 0);
+			found = true;
 		}
 	}
 	/* Clean up after the scan */
@@ -2319,6 +2327,19 @@ AlterDomainDropConstraint(List *names, const char *constrName,
 	heap_close(conrel, RowExclusiveLock);
 
 	heap_close(rel, NoLock);
+
+	if (!found)
+	{
+		if (!missing_ok)
+			ereport(ERROR,
+					(errcode(ERRCODE_UNDEFINED_OBJECT),
+					 errmsg("constraint \"%s\" of domain \"%s\" does not exist",
+					   constrName, TypeNameToString(typename))));
+		else
+			ereport(NOTICE,
+					(errmsg("constraint \"%s\" of domain \"%s\" does not exist, skipping",
+							constrName, TypeNameToString(typename))));
+	}
 }
 
 /*
@@ -2934,7 +2955,8 @@ domainAddConstraint(Oid domainOid, Oid domainNamespace, Oid baseTypeOid,
 						  ccbin,	/* Binary form of check constraint */
 						  ccsrc,	/* Source form of check constraint */
 						  true, /* is local */
-						  0);	/* inhcount */
+						  0,	/* inhcount */
+						  false);	/* is only */
 
 	/*
 	 * Return the compiled constraint expression so the calling routine can
@@ -3068,8 +3090,10 @@ GetDomainConstraints(Oid typeOid)
  * Execute ALTER TYPE RENAME
  */
 void
-RenameType(List *names, const char *newTypeName)
+RenameType(RenameStmt *stmt)
 {
+	List	   *names = stmt->object;
+	const char *newTypeName = stmt->newname;
 	TypeName   *typename;
 	Oid			typeOid;
 	Relation	rel;
@@ -3092,6 +3116,13 @@ RenameType(List *names, const char *newTypeName)
 	if (!pg_type_ownercheck(typeOid, GetUserId()))
 		aclcheck_error(ACLCHECK_NOT_OWNER, ACL_KIND_TYPE,
 					   format_type_be(typeOid));
+
+	/* ALTER DOMAIN used on a non-domain? */
+	if (stmt->renameType == OBJECT_DOMAIN && typTup->typtype != TYPTYPE_DOMAIN)
+		ereport(ERROR,
+				(errcode(ERRCODE_WRONG_OBJECT_TYPE),
+				 errmsg("\"%s\" is not a domain",
+						format_type_be(typeOid))));
 
 	/*
 	 * If it's a composite type, we need to check that it really is a
@@ -3121,8 +3152,7 @@ RenameType(List *names, const char *newTypeName)
 	 * RenameRelationInternal will call RenameTypeInternal automatically.
 	 */
 	if (typTup->typtype == TYPTYPE_COMPOSITE)
-		RenameRelationInternal(typTup->typrelid, newTypeName,
-							   typTup->typnamespace);
+		RenameRelationInternal(typTup->typrelid, newTypeName);
 	else
 		RenameTypeInternal(typeOid, newTypeName,
 						   typTup->typnamespace);
@@ -3135,7 +3165,7 @@ RenameType(List *names, const char *newTypeName)
  * Change the owner of a type.
  */
 void
-AlterTypeOwner(List *names, Oid newOwnerId)
+AlterTypeOwner(List *names, Oid newOwnerId, ObjectType objecttype)
 {
 	TypeName   *typename;
 	Oid			typeOid;
@@ -3164,6 +3194,13 @@ AlterTypeOwner(List *names, Oid newOwnerId)
 	ReleaseSysCache(tup);
 	tup = newtup;
 	typTup = (Form_pg_type) GETSTRUCT(tup);
+
+	/* Don't allow ALTER DOMAIN on a type */
+	if (objecttype == OBJECT_DOMAIN && typTup->typtype != TYPTYPE_DOMAIN)
+		ereport(ERROR,
+				(errcode(ERRCODE_WRONG_OBJECT_TYPE),
+				 errmsg("%s is not a domain",
+						format_type_be(typeOid))));
 
 	/*
 	 * If it's a composite type, we need to check that it really is a
@@ -3298,7 +3335,7 @@ AlterTypeOwnerInternal(Oid typeOid, Oid newOwnerId,
  * Execute ALTER TYPE SET SCHEMA
  */
 void
-AlterTypeNamespace(List *names, const char *newschema)
+AlterTypeNamespace(List *names, const char *newschema, ObjectType objecttype)
 {
 	TypeName   *typename;
 	Oid			typeOid;
@@ -3307,6 +3344,13 @@ AlterTypeNamespace(List *names, const char *newschema)
 	/* Make a TypeName so we can use standard type lookup machinery */
 	typename = makeTypeNameFromNameList(names);
 	typeOid = typenameTypeId(NULL, typename);
+
+	/* Don't allow ALTER DOMAIN on a type */
+	if (objecttype == OBJECT_DOMAIN && get_typtype(typeOid) != TYPTYPE_DOMAIN)
+		ereport(ERROR,
+				(errcode(ERRCODE_WRONG_OBJECT_TYPE),
+				 errmsg("%s is not a domain",
+						format_type_be(typeOid))));
 
 	/* get schema OID and check its permissions */
 	nspOid = LookupCreationNamespace(newschema);

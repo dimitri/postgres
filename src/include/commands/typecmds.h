@@ -4,7 +4,7 @@
  *	  prototypes for typecmds.c.
  *
  *
- * Portions Copyright (c) 1996-2011, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2012, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  * src/include/commands/typecmds.h
@@ -33,15 +33,15 @@ extern void AlterDomainNotNull(List *names, bool notNull);
 extern void AlterDomainAddConstraint(List *names, Node *constr);
 extern void AlterDomainValidateConstraint(List *names, char *constrName);
 extern void AlterDomainDropConstraint(List *names, const char *constrName,
-						  DropBehavior behavior);
+									  DropBehavior behavior, bool missing_ok);
 
 extern List *GetDomainConstraints(Oid typeOid);
 
-extern void RenameType(List *names, const char *newTypeName);
-extern void AlterTypeOwner(List *names, Oid newOwnerId);
+extern void RenameType(RenameStmt *stmt);
+extern void AlterTypeOwner(List *names, Oid newOwnerId, ObjectType objecttype);
 extern void AlterTypeOwnerInternal(Oid typeOid, Oid newOwnerId,
 					   bool hasDependEntry);
-extern void AlterTypeNamespace(List *names, const char *newschema);
+extern void AlterTypeNamespace(List *names, const char *newschema, ObjectType objecttype);
 extern Oid	AlterTypeNamespace_oid(Oid typeOid, Oid nspOid);
 extern Oid AlterTypeNamespaceInternal(Oid typeOid, Oid nspOid,
 						   bool isImplicitArray,

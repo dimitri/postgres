@@ -2,7 +2,7 @@
 #
 # Makefile for src/interfaces/libpq library
 #
-# Portions Copyright (c) 1996-2011, PostgreSQL Global Development Group
+# Portions Copyright (c) 1996-2012, PostgreSQL Global Development Group
 # Portions Copyright (c) 1994, Regents of the University of California
 #
 # src/interfaces/libpq/Makefile
@@ -109,6 +109,7 @@ libpq.rc libpq-dist.rc: libpq.rc.in
 libpq.rc: $(top_builddir)/src/Makefile.global
 
 fe-connect.o: fe-connect.c $(top_builddir)/src/port/pg_config_paths.h
+fe-misc.o: fe-misc.c $(top_builddir)/src/port/pg_config_paths.h
 
 $(top_builddir)/src/port/pg_config_paths.h:
 	$(MAKE) -C $(top_builddir)/src/port pg_config_paths.h

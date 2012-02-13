@@ -3,7 +3,7 @@
  * postgres.c
  *	  POSTGRES C Backend Interface
  *
- * Portions Copyright (c) 1996-2011, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2012, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -809,7 +809,7 @@ exec_simple_query(const char *query_string)
 	 */
 	debug_query_string = query_string;
 
-	pgstat_report_activity(query_string);
+	pgstat_report_activity(STATE_RUNNING, query_string);
 
 	TRACE_POSTGRESQL_QUERY_START(query_string);
 
@@ -943,10 +943,6 @@ exec_simple_query(const char *query_string)
 
 		plantree_list = pg_plan_queries(querytree_list, 0, NULL);
 
-		/* Done with the snapshot used for parsing/planning */
-		if (snapshot_set)
-			PopActiveSnapshot();
-
 		/* If we got a cancel signal in analysis or planning, quit */
 		CHECK_FOR_INTERRUPTS();
 
@@ -971,9 +967,19 @@ exec_simple_query(const char *query_string)
 						  NULL);
 
 		/*
-		 * Start the portal.  No parameters here.
+		 * Start the portal.
+		 * 
+		 * If we took a snapshot for parsing/planning, the portal may be
+		 * able to reuse it for the execution phase.  Currently, this will only
+		 * happen in PORTAL_ONE_SELECT mode.  But even if PortalStart doesn't
+		 * end up being able to do this, keeping the parse/plan snapshot around
+		 * until after we start the portal doesn't cost much.
 		 */
-		PortalStart(portal, NULL, InvalidSnapshot);
+		PortalStart(portal, NULL, snapshot_set);
+
+		/* Done with the snapshot used for parsing/planning */
+		if (snapshot_set)
+			PopActiveSnapshot();
 
 		/*
 		 * Select the appropriate output format: text unless we are doing a
@@ -1128,7 +1134,7 @@ exec_parse_message(const char *query_string,	/* string to execute */
 	 */
 	debug_query_string = query_string;
 
-	pgstat_report_activity(query_string);
+	pgstat_report_activity(STATE_RUNNING, query_string);
 
 	set_ps_display("PARSE", false);
 
@@ -1423,7 +1429,7 @@ exec_bind_message(StringInfo input_message)
 	 */
 	debug_query_string = psrc->query_string;
 
-	pgstat_report_activity(psrc->query_string);
+	pgstat_report_activity(STATE_RUNNING, psrc->query_string);
 
 	set_ps_display("BIND", false);
 
@@ -1696,14 +1702,18 @@ exec_bind_message(StringInfo input_message)
 					  cplan->stmt_list,
 					  cplan);
 
+	/*
+	 * And we're ready to start portal execution.
+	 *
+	 * If we took a snapshot for parsing/planning, we'll try to reuse it
+	 * for query execution (currently, reuse will only occur if
+	 * PORTAL_ONE_SELECT mode is chosen).
+	 */
+	PortalStart(portal, params, snapshot_set);
+
 	/* Done with the snapshot used for parameter I/O and parsing/planning */
 	if (snapshot_set)
 		PopActiveSnapshot();
-
-	/*
-	 * And we're ready to start portal execution.
-	 */
-	PortalStart(portal, params, InvalidSnapshot);
 
 	/*
 	 * Apply the result format requests to the portal.
@@ -1826,7 +1836,7 @@ exec_execute_message(const char *portal_name, long max_rows)
 	 */
 	debug_query_string = sourceText;
 
-	pgstat_report_activity(sourceText);
+	pgstat_report_activity(STATE_RUNNING, sourceText);
 
 	set_ps_display(portal->commandTag, false);
 
@@ -3801,12 +3811,12 @@ PostgresMain(int argc, char *argv[], const char *username)
 			if (IsAbortedTransactionBlockState())
 			{
 				set_ps_display("idle in transaction (aborted)", false);
-				pgstat_report_activity("<IDLE> in transaction (aborted)");
+				pgstat_report_activity(STATE_IDLEINTRANSACTION_ABORTED, NULL);
 			}
 			else if (IsTransactionOrTransactionBlock())
 			{
 				set_ps_display("idle in transaction", false);
-				pgstat_report_activity("<IDLE> in transaction");
+				pgstat_report_activity(STATE_IDLEINTRANSACTION, NULL);
 			}
 			else
 			{
@@ -3814,7 +3824,7 @@ PostgresMain(int argc, char *argv[], const char *username)
 				pgstat_report_stat(false);
 
 				set_ps_display("idle", false);
-				pgstat_report_activity("<IDLE>");
+				pgstat_report_activity(STATE_IDLE, NULL);
 			}
 
 			ReadyForQuery(whereToSendOutput);
@@ -3934,7 +3944,7 @@ PostgresMain(int argc, char *argv[], const char *username)
 				SetCurrentStatementStartTimestamp();
 
 				/* Report query to various monitoring facilities. */
-				pgstat_report_activity("<FASTPATH> function call");
+				pgstat_report_activity(STATE_FASTPATH, NULL);
 				set_ps_display("<FASTPATH>", false);
 
 				/* start an xact for this function invocation */

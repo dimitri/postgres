@@ -3,7 +3,7 @@
  * orindxpath.c
  *	  Routines to find index paths that match a set of OR clauses
  *
- * Portions Copyright (c) 1996-2011, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2012, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
  *
@@ -88,6 +88,10 @@ create_or_index_quals(PlannerInfo *root, RelOptInfo *rel)
 				orig_selec;
 	ListCell   *i;
 
+	/* Skip the whole mess if no indexes */
+	if (rel->indexlist == NIL)
+		return false;
+
 	/*
 	 * Find potentially interesting OR joinclauses.
 	 *
@@ -114,8 +118,8 @@ create_or_index_quals(PlannerInfo *root, RelOptInfo *rel)
 			 * Use the generate_bitmap_or_paths() machinery to estimate the
 			 * value of each OR clause.  We can use regular restriction
 			 * clauses along with the OR clause contents to generate
-			 * indexquals.	We pass outer_rel = NULL so that sub-clauses that
-			 * are actually joins will be ignored.
+			 * indexquals.  We pass restriction_only = true so that any
+			 * sub-clauses that are actually joins will be ignored.
 			 */
 			List	   *orpaths;
 			ListCell   *k;
@@ -123,7 +127,7 @@ create_or_index_quals(PlannerInfo *root, RelOptInfo *rel)
 			orpaths = generate_bitmap_or_paths(root, rel,
 											   list_make1(rinfo),
 											   rel->baserestrictinfo,
-											   NULL);
+											   true);
 
 			/* Locate the cheapest OR path */
 			foreach(k, orpaths)

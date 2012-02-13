@@ -3,7 +3,7 @@
  * date.c
  *	  implements DATE and TIME data types specified in SQL-92 standard
  *
- * Portions Copyright (c) 1996-2011, PostgreSQL Global Development Group
+ * Portions Copyright (c) 1996-2012, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994-5, Regents of the University of California
  *
  *
@@ -1209,6 +1209,17 @@ timetypmodout(PG_FUNCTION_ARGS)
 	PG_RETURN_CSTRING(anytime_typmodout(false, typmod));
 }
 
+
+/* time_transform()
+ * Flatten calls to time_scale() and timetz_scale() that solely represent
+ * increases in allowed precision.
+ */
+Datum
+time_transform(PG_FUNCTION_ARGS)
+{
+	PG_RETURN_POINTER(TemporalTransform(MAX_TIME_PRECISION,
+										(Node *) PG_GETARG_POINTER(0)));
+}
 
 /* time_scale()
  * Adjust time type for specified scale factor.

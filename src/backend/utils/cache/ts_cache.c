@@ -17,7 +17,7 @@
  * any database access.
  *
  *
- * Copyright (c) 2006-2011, PostgreSQL Global Development Group
+ * Copyright (c) 2006-2012, PostgreSQL Global Development Group
  *
  * IDENTIFICATION
  *	  src/backend/utils/cache/ts_cache.c
@@ -601,8 +601,25 @@ check_TSCurrentConfig(char **newval, void **extra, GucSource source)
 
 		cfgId = get_ts_config_oid(stringToQualifiedNameList(*newval), true);
 
+		/*
+		 * When source == PGC_S_TEST, we are checking the argument of an
+		 * ALTER DATABASE SET or ALTER USER SET command.  It could be that
+		 * the intended use of the setting is for some other database, so
+		 * we should not error out if the text search configuration is not
+		 * present in the current database.  We issue a NOTICE instead.
+		 */
 		if (!OidIsValid(cfgId))
-			return false;
+		{
+			if (source == PGC_S_TEST)
+			{
+				ereport(NOTICE,
+						(errcode(ERRCODE_UNDEFINED_OBJECT),
+						 errmsg("text search configuration \"%s\" does not exist", *newval)));
+				return true;
+			}
+			else
+				return false;
+		}
 
 		/*
 		 * Modify the actually stored value to be fully qualified, to ensure

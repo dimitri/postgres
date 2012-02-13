@@ -61,6 +61,7 @@ test: create_cast
 test: constraints
 test: triggers
 test: inherit
+test: create_table_like
 test: typed_table
 test: vacuum
 test: drop_if_exists
@@ -108,6 +109,7 @@ test: window
 test: xmlmap
 test: functional_deps
 test: advisory_lock
+test: json
 test: plancache
 test: limit
 test: plpgsql
