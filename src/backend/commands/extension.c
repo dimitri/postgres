@@ -1903,7 +1903,6 @@ update_extension_feature_list(ExtensionControlFile *control,
 	i = deleteDependencyRefRecordsForClass(ext.classId, ext.objectId,
 										   ExtensionFeatureRelationId,
 										   DEPENDENCY_INTERNAL);
-	elog(NOTICE, "update_extension_feature_list deleted %d features", i);
 
 	/* Have that change visible now, for the performDeletion() call */
 	CommandCounterIncrement();
