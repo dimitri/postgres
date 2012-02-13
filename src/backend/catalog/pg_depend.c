@@ -281,6 +281,53 @@ deleteDependencyRecordsForClass(Oid classId, Oid objectId,
 }
 
 /*
+ * deleteDependencyRefRecordsForClass -- delete all records with given dependee
+ * classId/objectId, depender classId, and deptype.
+ * Returns the number of records deleted.
+ */
+long
+deleteDependencyRefRecordsForClass(Oid refclassId, Oid refobjectId,
+								   Oid classId, char deptype)
+{
+	long		count = 0;
+	Relation	depRel;
+	ScanKeyData key[2];
+	SysScanDesc scan;
+	HeapTuple	tup;
+
+	depRel = heap_open(DependRelationId, RowExclusiveLock);
+
+	ScanKeyInit(&key[0],
+				Anum_pg_depend_refclassid,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(refclassId));
+	ScanKeyInit(&key[1],
+				Anum_pg_depend_refobjid,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(refobjectId));
+
+	scan = systable_beginscan(depRel, DependReferenceIndexId, true,
+							  SnapshotNow, 2, key);
+
+	while (HeapTupleIsValid(tup = systable_getnext(scan)))
+	{
+		Form_pg_depend depform = (Form_pg_depend) GETSTRUCT(tup);
+
+		if (depform->classid == classId && depform->deptype == deptype)
+		{
+			simple_heap_delete(depRel, &tup->t_self);
+			count++;
+		}
+	}
+
+	systable_endscan(scan);
+
+	heap_close(depRel, RowExclusiveLock);
+
+	return count;
+}
+
+/*
  * Adjust dependency record(s) to point to a different object of the same type
  *
  * classId/objectId specify the referencing object.

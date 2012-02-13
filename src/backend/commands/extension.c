@@ -1829,7 +1829,7 @@ insert_extension_feature(Relation rel,
 	myself.objectId = featureOid;
 	myself.objectSubId = 0;
 
-	recordDependencyOn(&extObject, &myself, DEPENDENCY_INTERNAL);
+	recordDependencyOn(&myself, &extObject, DEPENDENCY_INTERNAL);
 }
 
 /* static struct feature * */
@@ -1900,9 +1900,10 @@ update_extension_feature_list(ExtensionControlFile *control,
 	 * provide list: we have to skip the extension providing the feature itself
 	 * when following dependencies in DROP_RESTRICT mode.
 	 */
-	deleteDependencyRecordsForClass(ext.classId, ext.objectId,
-									ExtensionFeatureRelationId,
-									DEPENDENCY_INTERNAL);
+	i = deleteDependencyRefRecordsForClass(ext.classId, ext.objectId,
+										   ExtensionFeatureRelationId,
+										   DEPENDENCY_INTERNAL);
+	elog(NOTICE, "update_extension_feature_list deleted %d features", i);
 
 	/* Have that change visible now, for the performDeletion() call */
 	CommandCounterIncrement();
@@ -1947,7 +1948,7 @@ update_extension_feature_list(ExtensionControlFile *control,
 			 * The extension's name itself is not in the provide list but still
 			 * provided, we have to care about it separately.
 			 */
-			recordDependencyOn(&ext, &feature, DEPENDENCY_INTERNAL);
+			recordDependencyOn(&feature, &ext, DEPENDENCY_INTERNAL);
 
 		else if (features[i].count == 0)
 			/*
@@ -1962,8 +1963,7 @@ update_extension_feature_list(ExtensionControlFile *control,
 			 * Re-install the dependency entry, we removed it only to allow
 			 * using DROP_RESTRICT.
 			 */
-			recordDependencyOn(&ext, &feature, DEPENDENCY_INTERNAL);
-
+			recordDependencyOn(&feature, &ext, DEPENDENCY_INTERNAL);
 	}
 	heap_close(rel, RowExclusiveLock);
 }
