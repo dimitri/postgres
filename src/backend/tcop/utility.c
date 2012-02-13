@@ -931,34 +931,27 @@ standard_ProcessUtility(Node *parsetree,
 					/* ... and do it */
 					foreach(l, stmts)
 					{
-						/* Run parse analysis ... */
-						stmts = transformAlterTableStmt(atstmt, queryString);
+						Node	   *stmt = (Node *) lfirst(l);
 
-						/* ... and do it */
-						foreach(l, stmts)
+						if (IsA(stmt, AlterTableStmt))
 						{
-							Node	   *stmt = (Node *) lfirst(l);
-
-							if (IsA(stmt, AlterTableStmt))
-							{
-								/* Do the table alteration proper */
-								AlterTable(relid, lockmode, (AlterTableStmt *) stmt);
-							}
-							else
-							{
-								/* Recurse for anything else */
-								ProcessUtility(stmt,
-											   queryString,
-											   params,
-											   false,
-											   None_Receiver,
-											   NULL);
-							}
-
-							/* Need CCI between commands */
-							if (lnext(l) != NULL)
-								CommandCounterIncrement();
+							/* Do the table alteration proper */
+							AlterTable(relid, lockmode, (AlterTableStmt *) stmt);
 						}
+						else
+						{
+							/* Recurse for anything else */
+							ProcessUtility(stmt,
+										   queryString,
+										   params,
+										   false,
+										   None_Receiver,
+										   NULL);
+						}
+
+						/* Need CCI between commands */
+						if (lnext(l) != NULL)
+							CommandCounterIncrement();
 					}
 					/* Call AFTER ALTER TABLE triggers */
 					ExecAfterCommandTriggers(&cmd);
