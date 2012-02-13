@@ -2118,23 +2118,43 @@ XLogFlush(XLogRecPtr record)
 	/* initialize to given target; may increase below */
 	WriteRqstPtr = record;
 
-	/* read LogwrtResult and update local state */
+	/*
+	 * Now wait until we get the write lock, or someone else does the
+	 * flush for us.
+	 */
+	for (;;)
 	{
 		/* use volatile pointer to prevent code rearrangement */
 		volatile XLogCtlData *xlogctl = XLogCtl;
 
+		/* read LogwrtResult and update local state */
 		SpinLockAcquire(&xlogctl->info_lck);
 		if (XLByteLT(WriteRqstPtr, xlogctl->LogwrtRqst.Write))
 			WriteRqstPtr = xlogctl->LogwrtRqst.Write;
 		LogwrtResult = xlogctl->LogwrtResult;
 		SpinLockRelease(&xlogctl->info_lck);
-	}
 
-	/* done already? */
-	if (!XLByteLE(record, LogwrtResult.Flush))
-	{
-		/* now wait for the write lock */
-		LWLockAcquire(WALWriteLock, LW_EXCLUSIVE);
+		/* done already? */
+		if (XLByteLE(record, LogwrtResult.Flush))
+			break;
+
+		/*
+		 * Try to get the write lock. If we can't get it immediately, wait
+		 * until it's released, and recheck if we still need to do the flush
+		 * or if the backend that held the lock did it for us already. This
+		 * helps to maintain a good rate of group committing when the system
+		 * is bottlenecked by the speed of fsyncing.
+		 */
+		if (!LWLockAcquireOrWait(WALWriteLock, LW_EXCLUSIVE))
+		{
+			/*
+			 * The lock is now free, but we didn't acquire it yet. Before we
+			 * do, loop back to check if someone else flushed the record for
+			 * us already.
+			 */
+			continue;
+		}
+		/* Got the lock */
 		LogwrtResult = XLogCtl->Write.LogwrtResult;
 		if (!XLByteLE(record, LogwrtResult.Flush))
 		{
@@ -2163,6 +2183,8 @@ XLogFlush(XLogRecPtr record)
 			XLogWrite(WriteRqst, false, false);
 		}
 		LWLockRelease(WALWriteLock);
+		/* done */
+		break;
 	}
 
 	END_CRIT_SECTION();
@@ -3694,9 +3716,9 @@ RestoreBkpBlocks(XLogRecPtr lsn, XLogRecord *record, bool cleanup)
 		}
 		else
 		{
-			/* must zero-fill the hole */
-			MemSet((char *) page, 0, BLCKSZ);
 			memcpy((char *) page, blk, bkpb.hole_offset);
+			/* must zero-fill the hole */
+			MemSet((char *) page + bkpb.hole_offset, 0, bkpb.hole_length);
 			memcpy((char *) page + (bkpb.hole_offset + bkpb.hole_length),
 				   blk + bkpb.hole_offset,
 				   BLCKSZ - (bkpb.hole_offset + bkpb.hole_length));
@@ -6603,12 +6625,20 @@ StartupXLOG(void)
 				errcontext.previous = error_context_stack;
 				error_context_stack = &errcontext;
 
-				/* nextXid must be beyond record's xid */
+				/*
+				 * ShmemVariableCache->nextXid must be beyond record's xid.
+				 *
+				 * We don't expect anyone else to modify nextXid, hence we
+				 * don't need to hold a lock while examining it.  We still
+				 * acquire the lock to modify it, though.
+				 */
 				if (TransactionIdFollowsOrEquals(record->xl_xid,
 												 ShmemVariableCache->nextXid))
 				{
+					LWLockAcquire(XidGenLock, LW_EXCLUSIVE);
 					ShmemVariableCache->nextXid = record->xl_xid;
 					TransactionIdAdvance(ShmemVariableCache->nextXid);
+					LWLockRelease(XidGenLock);
 				}
 
 				/*
@@ -6634,6 +6664,7 @@ StartupXLOG(void)
 					TransactionIdIsValid(record->xl_xid))
 					RecordKnownAssignedTransactionIds(record->xl_xid);
 
+				/* Now apply the WAL record itself */
 				RmgrTable[record->xl_rmid].rm_redo(EndRecPtr, record);
 
 				/* Pop the error context stack */
@@ -6949,8 +6980,10 @@ StartupXLOG(void)
 	XLogCtl->ckptXid = ControlFile->checkPointCopy.nextXid;
 
 	/* also initialize latestCompletedXid, to nextXid - 1 */
+	LWLockAcquire(ProcArrayLock, LW_EXCLUSIVE);
 	ShmemVariableCache->latestCompletedXid = ShmemVariableCache->nextXid;
 	TransactionIdRetreat(ShmemVariableCache->latestCompletedXid);
+	LWLockRelease(ProcArrayLock);
 
 	/*
 	 * Start up the commit log and subtrans, if not already done for
@@ -8525,12 +8558,18 @@ xlog_redo(XLogRecPtr lsn, XLogRecord *record)
 	{
 		Oid			nextOid;
 
+		/*
+		 * We used to try to take the maximum of ShmemVariableCache->nextOid
+		 * and the recorded nextOid, but that fails if the OID counter wraps
+		 * around.  Since no OID allocation should be happening during replay
+		 * anyway, better to just believe the record exactly.  We still take
+		 * OidGenLock while setting the variable, just in case.
+		 */
 		memcpy(&nextOid, XLogRecGetData(record), sizeof(Oid));
-		if (ShmemVariableCache->nextOid < nextOid)
-		{
-			ShmemVariableCache->nextOid = nextOid;
-			ShmemVariableCache->oidCount = 0;
-		}
+		LWLockAcquire(OidGenLock, LW_EXCLUSIVE);
+		ShmemVariableCache->nextOid = nextOid;
+		ShmemVariableCache->oidCount = 0;
+		LWLockRelease(OidGenLock);
 	}
 	else if (info == XLOG_CHECKPOINT_SHUTDOWN)
 	{
@@ -8538,9 +8577,13 @@ xlog_redo(XLogRecPtr lsn, XLogRecord *record)
 
 		memcpy(&checkPoint, XLogRecGetData(record), sizeof(CheckPoint));
 		/* In a SHUTDOWN checkpoint, believe the counters exactly */
+		LWLockAcquire(XidGenLock, LW_EXCLUSIVE);
 		ShmemVariableCache->nextXid = checkPoint.nextXid;
+		LWLockRelease(XidGenLock);
+		LWLockAcquire(OidGenLock, LW_EXCLUSIVE);
 		ShmemVariableCache->nextOid = checkPoint.nextOid;
 		ShmemVariableCache->oidCount = 0;
+		LWLockRelease(OidGenLock);
 		MultiXactSetNextMXact(checkPoint.nextMulti,
 							  checkPoint.nextMultiOffset);
 		SetTransactionIdLimit(checkPoint.oldestXid, checkPoint.oldestXidDB);
@@ -8553,7 +8596,7 @@ xlog_redo(XLogRecPtr lsn, XLogRecord *record)
 		if (InArchiveRecovery &&
 			!XLogRecPtrIsInvalid(ControlFile->backupStartPoint) &&
 			XLogRecPtrIsInvalid(ControlFile->backupEndPoint))
-			ereport(ERROR,
+			ereport(PANIC,
 					(errmsg("online backup was canceled, recovery cannot continue")));
 
 		/*
@@ -8619,15 +8662,17 @@ xlog_redo(XLogRecPtr lsn, XLogRecord *record)
 		CheckPoint	checkPoint;
 
 		memcpy(&checkPoint, XLogRecGetData(record), sizeof(CheckPoint));
-		/* In an ONLINE checkpoint, treat the counters like NEXTOID */
+		/* In an ONLINE checkpoint, treat the XID counter as a minimum */
+		LWLockAcquire(XidGenLock, LW_EXCLUSIVE);
 		if (TransactionIdPrecedes(ShmemVariableCache->nextXid,
 								  checkPoint.nextXid))
 			ShmemVariableCache->nextXid = checkPoint.nextXid;
-		if (ShmemVariableCache->nextOid < checkPoint.nextOid)
-		{
-			ShmemVariableCache->nextOid = checkPoint.nextOid;
-			ShmemVariableCache->oidCount = 0;
-		}
+		LWLockRelease(XidGenLock);
+		/* ... but still treat OID counter as exact */
+		LWLockAcquire(OidGenLock, LW_EXCLUSIVE);
+		ShmemVariableCache->nextOid = checkPoint.nextOid;
+		ShmemVariableCache->oidCount = 0;
+		LWLockRelease(OidGenLock);
 		MultiXactAdvanceNextMXact(checkPoint.nextMulti,
 								  checkPoint.nextMultiOffset);
 		if (TransactionIdPrecedes(ShmemVariableCache->oldestXid,

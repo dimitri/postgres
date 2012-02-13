@@ -53,8 +53,9 @@ CATALOG(pg_proc,1255) BKI_BOOTSTRAP BKI_ROWTYPE_OID(81) BKI_SCHEMA_MACRO
 	int2		pronargdefaults;	/* number of arguments with defaults */
 	Oid			prorettype;		/* OID of result type */
 
-	/* VARIABLE LENGTH FIELDS: */
+	/* variable-length fields start here, but we allow direct access to proargtypes */
 	oidvector	proargtypes;	/* parameter types (excludes OUT params) */
+#ifdef CATALOG_VARLEN
 	Oid			proallargtypes[1];		/* all param types (NULL if IN only) */
 	char		proargmodes[1]; /* parameter modes (NULL if IN only) */
 	text		proargnames[1]; /* parameter names (NULL if no names) */
@@ -64,6 +65,7 @@ CATALOG(pg_proc,1255) BKI_BOOTSTRAP BKI_ROWTYPE_OID(81) BKI_SCHEMA_MACRO
 	text		probin;			/* secondary procedure info (can be NULL) */
 	text		proconfig[1];	/* procedure-local GUC settings */
 	aclitem		proacl[1];		/* access permissions */
+#endif
 } FormData_pg_proc;
 
 /* ----------------
@@ -1092,6 +1094,8 @@ DESCR("contains");
 DATA(insert OID = 1062 (  aclitemeq		   PGNSP PGUID 12 1 0 0 0 f f f t f i 2 0 16 "1033 1033" _null_ _null_ _null_ _null_ aclitem_eq _null_ _null_ _null_ ));
 DATA(insert OID = 1365 (  makeaclitem	   PGNSP PGUID 12 1 0 0 0 f f f t f i 4 0 1033 "26 26 25 16" _null_ _null_ _null_ _null_ makeaclitem _null_ _null_ _null_ ));
 DESCR("make ACL item");
+DATA(insert OID = 3943 (  acldefault	PGNSP PGUID 12 1 0 0 0 f f f t f i 2 0 1034 "18 26" _null_ _null_ _null_ _null_  acldefault_sql _null_ _null_ _null_ ));
+DESCR("TODO");
 DATA(insert OID = 1689 (  aclexplode	PGNSP PGUID 12 1 10 0 0 f f f t t s 1 0 2249 "1034" "{1034,26,26,25,16}" "{i,o,o,o,o}" "{acl,grantor,grantee,privilege_type,is_grantable}" _null_ aclexplode _null_ _null_ _null_ ));
 DESCR("convert ACL item array to table, for use by information schema");
 DATA(insert OID = 1044 (  bpcharin		   PGNSP PGUID 12 1 0 0 0 f f f t f i 3 0 1042 "2275 26 23" _null_ _null_ _null_ _null_ bpcharin _null_ _null_ _null_ ));
@@ -1253,7 +1257,9 @@ DESCR("date difference preserving months and years");
 
 /* OIDS 1200 - 1299 */
 
-DATA(insert OID = 1200 (  interval			PGNSP PGUID 12 1 0 0 0 f f f t f i 2 0 1186 "1186 23" _null_ _null_ _null_ _null_ interval_scale _null_ _null_ _null_ ));
+DATA(insert OID = 3918 (  interval_transform PGNSP PGUID 12 1 0 0 0 f f f t f i 1 0 2281 "2281" _null_ _null_ _null_ _null_ interval_transform _null_ _null_ _null_ ));
+DESCR("transform an interval length coercion");
+DATA(insert OID = 1200 (  interval			PGNSP PGUID 12 1 0 0 3918 f f f t f i 2 0 1186 "1186 23" _null_ _null_ _null_ _null_ interval_scale _null_ _null_ _null_ ));
 DESCR("adjust interval precision");
 
 DATA(insert OID = 1215 (  obj_description	PGNSP PGUID 14 100 0 0 0 f f f t f s 2 0 25 "26 19" _null_ _null_ _null_ _null_ "select description from pg_catalog.pg_description where objoid = $1 and classoid = (select oid from pg_catalog.pg_class where relname = $2 and relnamespace = PGNSP) and objsubid = 0" _null_ _null_ _null_ ));
@@ -2005,7 +2011,9 @@ DESCR("convert bitstring to int4");
 
 DATA(insert OID = 1685 (  bit			   PGNSP PGUID 12 1 0 0 0 f f f t f i 3 0 1560 "1560 23 16" _null_ _null_ _null_ _null_ bit _null_ _null_ _null_ ));
 DESCR("adjust bit() to typmod length");
-DATA(insert OID = 1687 (  varbit		   PGNSP PGUID 12 1 0 0 0 f f f t f i 3 0 1562 "1562 23 16" _null_ _null_ _null_ _null_ varbit _null_ _null_ _null_ ));
+DATA(insert OID = 3158 ( varbit_transform  PGNSP PGUID 12 1 0 0 0 f f f t f i 1 0 2281 "2281" _null_ _null_ _null_ _null_ varbit_transform _null_ _null_ _null_ ));
+DESCR("transform a varbit length coercion");
+DATA(insert OID = 1687 (  varbit		   PGNSP PGUID 12 1 0 0 3158 f f f t f i 3 0 1562 "1562 23 16" _null_ _null_ _null_ _null_ varbit _null_ _null_ _null_ ));
 DESCR("adjust varbit() to typmod length");
 
 DATA(insert OID = 1698 (  position		   PGNSP PGUID 12 1 0 0 0 f f f t f i 2 0 23 "1560 1560" _null_ _null_ _null_ _null_ bitposition _null_ _null_ _null_ ));
@@ -2138,8 +2146,10 @@ DATA(insert OID = 2917 (  numerictypmodin		PGNSP PGUID 12 1 0 0 0 f f f t f i 1 
 DESCR("I/O typmod");
 DATA(insert OID = 2918 (  numerictypmodout		PGNSP PGUID 12 1 0 0 0 f f f t f i 1 0 2275 "23" _null_ _null_ _null_ _null_	numerictypmodout _null_ _null_ _null_ ));
 DESCR("I/O typmod");
-DATA(insert OID = 1703 ( numeric				PGNSP PGUID 12 1 0 0 0 f f f t f i 2 0 1700 "1700 23" _null_ _null_ _null_ _null_ numeric _null_ _null_ _null_ ));
+DATA(insert OID = 1703 ( numeric				PGNSP PGUID 12 1 0 0 3157 f f f t f i 2 0 1700 "1700 23" _null_ _null_ _null_ _null_ numeric _null_ _null_ _null_ ));
 DESCR("adjust numeric to typmod precision/scale");
+DATA(insert OID = 3157 ( numeric_transform		PGNSP PGUID 12 1 0 0 0 f f f t f i 1 0 2281 "2281" _null_ _null_ _null_ _null_ numeric_transform _null_ _null_ _null_ ));
+DESCR("transform a numeric length coercion");
 DATA(insert OID = 1704 ( numeric_abs			PGNSP PGUID 12 1 0 0 0 f f f t f i 1 0 1700 "1700" _null_ _null_ _null_ _null_ numeric_abs _null_ _null_ _null_ ));
 DATA(insert OID = 1705 ( abs					PGNSP PGUID 12 1 0 0 0 f f f t f i 1 0 1700 "1700" _null_ _null_ _null_ _null_ numeric_abs _null_ _null_ _null_ ));
 DESCR("absolute value");
@@ -2263,11 +2273,11 @@ DATA(insert OID =  1282 ( quote_ident	   PGNSP PGUID 12 1 0 0 0 f f f t f i 1 0 
 DESCR("quote an identifier for usage in a querystring");
 DATA(insert OID =  1283 ( quote_literal    PGNSP PGUID 12 1 0 0 0 f f f t f i 1 0 25 "25" _null_ _null_ _null_ _null_ quote_literal _null_ _null_ _null_ ));
 DESCR("quote a literal for usage in a querystring");
-DATA(insert OID =  1285 ( quote_literal    PGNSP PGUID 14 1 0 0 0 f f f t f v 1 0 25 "2283" _null_ _null_ _null_ _null_ "select pg_catalog.quote_literal($1::pg_catalog.text)" _null_ _null_ _null_ ));
+DATA(insert OID =  1285 ( quote_literal    PGNSP PGUID 14 1 0 0 0 f f f t f s 1 0 25 "2283" _null_ _null_ _null_ _null_ "select pg_catalog.quote_literal($1::pg_catalog.text)" _null_ _null_ _null_ ));
 DESCR("quote a data value for usage in a querystring");
 DATA(insert OID =  1289 ( quote_nullable   PGNSP PGUID 12 1 0 0 0 f f f f f i 1 0 25 "25" _null_ _null_ _null_ _null_ quote_nullable _null_ _null_ _null_ ));
 DESCR("quote a possibly-null literal for usage in a querystring");
-DATA(insert OID =  1290 ( quote_nullable   PGNSP PGUID 14 1 0 0 0 f f f f f v 1 0 25 "2283" _null_ _null_ _null_ _null_ "select pg_catalog.quote_nullable($1::pg_catalog.text)" _null_ _null_ _null_ ));
+DATA(insert OID =  1290 ( quote_nullable   PGNSP PGUID 14 1 0 0 0 f f f f f s 1 0 25 "2283" _null_ _null_ _null_ _null_ "select pg_catalog.quote_nullable($1::pg_catalog.text)" _null_ _null_ _null_ ));
 DESCR("quote a possibly-null data value for usage in a querystring");
 
 DATA(insert OID = 1798 (  oidin			   PGNSP PGUID 12 1 0 0 0 f f f t f i 1 0 26 "2275" _null_ _null_ _null_ _null_ oidin _null_ _null_ _null_ ));
@@ -2724,7 +2734,9 @@ DATA(insert OID = 1953 (  byteane		   PGNSP PGUID 12 1 0 0 0 f f f t f i 2 0 16 
 DATA(insert OID = 1954 (  byteacmp		   PGNSP PGUID 12 1 0 0 0 f f f t f i 2 0 23 "17 17" _null_ _null_ _null_ _null_ byteacmp _null_ _null_ _null_ ));
 DESCR("less-equal-greater");
 
-DATA(insert OID = 1961 (  timestamp		   PGNSP PGUID 12 1 0 0 0 f f f t f i 2 0 1114 "1114 23" _null_ _null_ _null_ _null_ timestamp_scale _null_ _null_ _null_ ));
+DATA(insert OID = 3917 (  timestamp_transform PGNSP PGUID 12 1 0 0 0 f f f t f i 1 0 2281 "2281" _null_ _null_ _null_ _null_ timestamp_transform _null_ _null_ _null_ ));
+DESCR("transform a timestamp length coercion");
+DATA(insert OID = 1961 (  timestamp		   PGNSP PGUID 12 1 0 0 3917 f f f t f i 2 0 1114 "1114 23" _null_ _null_ _null_ _null_ timestamp_scale _null_ _null_ _null_ ));
 DESCR("adjust timestamp precision");
 
 DATA(insert OID = 1965 (  oidlarger		   PGNSP PGUID 12 1 0 0 0 f f f t f i 2 0 26 "26 26" _null_ _null_ _null_ _null_ oidlarger _null_ _null_ _null_ ));
@@ -2732,15 +2744,17 @@ DESCR("larger of two");
 DATA(insert OID = 1966 (  oidsmaller	   PGNSP PGUID 12 1 0 0 0 f f f t f i 2 0 26 "26 26" _null_ _null_ _null_ _null_ oidsmaller _null_ _null_ _null_ ));
 DESCR("smaller of two");
 
-DATA(insert OID = 1967 (  timestamptz	   PGNSP PGUID 12 1 0 0 0 f f f t f i 2 0 1184 "1184 23" _null_ _null_ _null_ _null_ timestamptz_scale _null_ _null_ _null_ ));
+DATA(insert OID = 1967 (  timestamptz	   PGNSP PGUID 12 1 0 0 3917 f f f t f i 2 0 1184 "1184 23" _null_ _null_ _null_ _null_ timestamptz_scale _null_ _null_ _null_ ));
 DESCR("adjust timestamptz precision");
-DATA(insert OID = 1968 (  time			   PGNSP PGUID 12 1 0 0 0 f f f t f i 2 0 1083 "1083 23" _null_ _null_ _null_ _null_ time_scale _null_ _null_ _null_ ));
+DATA(insert OID = 3944 (  time_transform   PGNSP PGUID 12 1 0 0 0 f f f t f i 1 0 2281 "2281" _null_ _null_ _null_ _null_ time_transform _null_ _null_ _null_ ));
+DESCR("transform a time length coercion");
+DATA(insert OID = 1968 (  time			   PGNSP PGUID 12 1 0 0 3944 f f f t f i 2 0 1083 "1083 23" _null_ _null_ _null_ _null_ time_scale _null_ _null_ _null_ ));
 DESCR("adjust time precision");
-DATA(insert OID = 1969 (  timetz		   PGNSP PGUID 12 1 0 0 0 f f f t f i 2 0 1266 "1266 23" _null_ _null_ _null_ _null_ timetz_scale _null_ _null_ _null_ ));
+DATA(insert OID = 1969 (  timetz		   PGNSP PGUID 12 1 0 0 3944 f f f t f i 2 0 1266 "1266 23" _null_ _null_ _null_ _null_ timetz_scale _null_ _null_ _null_ ));
 DESCR("adjust time with time zone precision");
 
-DATA(insert OID = 2003 (  textanycat	   PGNSP PGUID 14 1 0 0 0 f f f t f v 2 0 25 "25 2776" _null_ _null_ _null_ _null_ "select $1 || $2::pg_catalog.text" _null_ _null_ _null_ ));
-DATA(insert OID = 2004 (  anytextcat	   PGNSP PGUID 14 1 0 0 0 f f f t f v 2 0 25 "2776 25" _null_ _null_ _null_ _null_ "select $1::pg_catalog.text || $2" _null_ _null_ _null_ ));
+DATA(insert OID = 2003 (  textanycat	   PGNSP PGUID 14 1 0 0 0 f f f t f s 2 0 25 "25 2776" _null_ _null_ _null_ _null_ "select $1 || $2::pg_catalog.text" _null_ _null_ _null_ ));
+DATA(insert OID = 2004 (  anytextcat	   PGNSP PGUID 14 1 0 0 0 f f f t f s 2 0 25 "2776 25" _null_ _null_ _null_ _null_ "select $1::pg_catalog.text || $2" _null_ _null_ _null_ ));
 
 DATA(insert OID = 2005 (  bytealike		   PGNSP PGUID 12 1 0 0 0 f f f t f i 2 0 16 "17 17" _null_ _null_ _null_ _null_ bytealike _null_ _null_ _null_ ));
 DATA(insert OID = 2006 (  byteanlike	   PGNSP PGUID 12 1 0 0 0 f f f t f i 2 0 16 "17 17" _null_ _null_ _null_ _null_ byteanlike _null_ _null_ _null_ ));
@@ -4017,6 +4031,24 @@ DATA(insert OID = 3052 (  xml_is_well_formed_document	 PGNSP PGUID 12 1 0 0 0 f 
 DESCR("determine if a string is well formed XML document");
 DATA(insert OID = 3053 (  xml_is_well_formed_content	 PGNSP PGUID 12 1 0 0 0 f f f t f i 1 0 16 "25" _null_ _null_ _null_ _null_ xml_is_well_formed_content _null_ _null_ _null_ ));
 DESCR("determine if a string is well formed XML content");
+
+/* json */
+DATA(insert OID = 321 (  json_in		   PGNSP PGUID 12 1 0 0 0 f f f t f s 1 0 114 "2275" _null_ _null_ _null_ _null_ json_in _null_ _null_ _null_ ));
+DESCR("I/O");
+DATA(insert OID = 322 (  json_out		   PGNSP PGUID 12 1 0 0 0 f f f t f i 1 0 2275 "114" _null_ _null_ _null_ _null_ json_out _null_ _null_ _null_ ));
+DESCR("I/O");
+DATA(insert OID = 323 (  json_recv		   PGNSP PGUID 12 1 0 0 0 f f f t f s 1 0 114 "2281" _null_ _null_ _null_ _null_	json_recv _null_ _null_ _null_ ));
+DESCR("I/O");
+DATA(insert OID = 324 (  json_send		   PGNSP PGUID 12 1 0 0 0 f f f t f s 1 0 17 "114" _null_ _null_ _null_ _null_ json_send _null_ _null_ _null_ ));
+DESCR("I/O");
+DATA(insert OID = 3153 (  array_to_json	   PGNSP PGUID 12 1 0 0 0 f f f t f s 1 0 114 "2277" _null_ _null_ _null_ _null_ array_to_json _null_ _null_ _null_ ));
+DESCR("map array to json");
+DATA(insert OID = 3154 (  array_to_json	   PGNSP PGUID 12 1 0 0 0 f f f t f s 2 0 114 "2277 16" _null_ _null_ _null_ _null_ array_to_json_pretty _null_ _null_ _null_ ));
+DESCR("map array to json with optional pretty printing");
+DATA(insert OID = 3155 (  row_to_json	   PGNSP PGUID 12 1 0 0 0 f f f t f s 1 0 114 "2249" _null_ _null_ _null_ _null_ row_to_json _null_ _null_ _null_ ));
+DESCR("map row to json");
+DATA(insert OID = 3156 (  row_to_json	   PGNSP PGUID 12 1 0 0 0 f f f t f s 2 0 114 "2249 16" _null_ _null_ _null_ _null_ row_to_json_pretty _null_ _null_ _null_ ));
+DESCR("map row to json with optional pretty printing");
 
 /* uuid */
 DATA(insert OID = 2952 (  uuid_in		   PGNSP PGUID 12 1 0 0 0 f f f t f i 1 0 2950 "2275" _null_ _null_ _null_ _null_ uuid_in _null_ _null_ _null_ ));

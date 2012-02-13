@@ -12442,6 +12442,7 @@ unreserved_keyword:
 			| SHARE
 			| SHOW
 			| SIMPLE
+			| SNAPSHOT
 			| STABLE
 			| STANDALONE_P
 			| START
@@ -12465,6 +12466,7 @@ unreserved_keyword:
 			| TRUNCATE
 			| TRUSTED
 			| TYPE_P
+			| TYPES_P
 			| UNBOUNDED
 			| UNCOMMITTED
 			| UNENCRYPTED

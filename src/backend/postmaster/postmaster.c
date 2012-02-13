@@ -2311,13 +2311,18 @@ reaper(SIGNAL_ARGS)
 			}
 
 			/*
-			 * Any unexpected exit (including FATAL exit) of the startup
-			 * process is treated as a crash, except that we don't want to
-			 * reinitialize.
+			 * After PM_STARTUP, any unexpected exit (including FATAL exit) of
+			 * the startup process is catastrophic, so kill other children,
+			 * and set RecoveryError so we don't try to reinitialize after
+			 * they're gone.  Exception: if FatalError is already set, that
+			 * implies we previously sent the startup process a SIGQUIT, so
+			 * that's probably the reason it died, and we do want to try to
+			 * restart in that case.
 			 */
 			if (!EXIT_STATUS_0(exitstatus))
 			{
-				RecoveryError = true;
+				if (!FatalError)
+					RecoveryError = true;
 				HandleChildCrash(pid, exitstatus,
 								 _("startup process"));
 				continue;
@@ -4212,13 +4217,13 @@ sigusr1_handler(SIGNAL_ARGS)
 		FatalError = false;
 
 		/*
-		 * Crank up the background writer.	It doesn't matter if this fails,
+		 * Crank up the background writers.	It doesn't matter if this fails,
 		 * we'll just try again later.
 		 */
-		Assert(BgWriterPID == 0);
-		BgWriterPID = StartBackgroundWriter();
 		Assert(CheckpointerPID == 0);
 		CheckpointerPID = StartCheckpointer();
+		Assert(BgWriterPID == 0);
+		BgWriterPID = StartBackgroundWriter();
 
 		pmState = PM_RECOVERY;
 	}
