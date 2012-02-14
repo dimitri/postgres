@@ -4311,6 +4311,7 @@ trigger_command:
 			   | CREATE TABLE						{ $$ = "CREATE TABLE"; }
 			   | CREATE FOREIGN TABLE				{ $$ = "CREATE FOREIGN TABLE"; }
 			   | CREATE INDEX						{ $$ = "CREATE INDEX"; }
+			   | CREATE SEQUENCE					{ $$ = "CREATE SEQUENCE"; }
 			   | CREATE VIEW						{ $$ = "CREATE VIEW"; }
 			   | ALTER TABLE						{ $$ = "ALTER TABLE"; }
 			   | DROP TABLESPACE					{ $$ = "DROP TABLE"; }

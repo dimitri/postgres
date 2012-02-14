@@ -20,6 +20,7 @@
 #include "catalog/namespace.h"
 #include "catalog/pg_type.h"
 #include "commands/defrem.h"
+#include "commands/cmdtrigger.h"
 #include "commands/sequence.h"
 #include "commands/tablecmds.h"
 #include "funcapi.h"
@@ -28,6 +29,7 @@
 #include "storage/lmgr.h"
 #include "storage/proc.h"
 #include "storage/smgr.h"
+#include "tcop/utility.h"
 #include "utils/acl.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
@@ -115,13 +117,13 @@ DefineSequence(CreateSeqStmt *seq)
 	bool		null[SEQ_COL_LASTCOL];
 	int			i;
 	NameData	name;
+	CommandContextData cmd;
 
 	/* Unlogged sequences are not implemented -- not clear if useful. */
 	if (seq->sequence->relpersistence == RELPERSISTENCE_UNLOGGED)
 		ereport(ERROR,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 				 errmsg("unlogged sequences are not supported")));
-
 	/* Check and set all option values */
 	init_params(seq->options, true, &new, &owned_by);
 
@@ -211,6 +213,18 @@ DefineSequence(CreateSeqStmt *seq)
 	stmt->tablespacename = NULL;
 	stmt->if_not_exists = false;
 
+	/*
+	 * Call BEFORE CREATE SEQUENCE triggers
+	 */
+	cmd.tag = (char *) CreateCommandTag((Node *)seq);
+	cmd.objectId = InvalidOid;
+	cmd.objectname = NameStr(name);
+	cmd.schemaname = NULL;		/* can't publish it easily enough here */
+	cmd.parsetree  = (Node *)stmt;
+
+	if (ExecBeforeOrInsteadOfCommandTriggers(&cmd))
+		return;
+
 	seqoid = DefineRelation(stmt, RELKIND_SEQUENCE, seq->ownerId);
 	Assert(seqoid != InvalidOid);
 
@@ -226,6 +240,10 @@ DefineSequence(CreateSeqStmt *seq)
 		process_owned_by(rel, owned_by);
 
 	heap_close(rel, NoLock);
+
+	/* Call AFTER CREATE SEQUENCE triggers */
+	cmd.objectId = seqoid;
+	ExecAfterCommandTriggers(&cmd);
 }
 
 /*
