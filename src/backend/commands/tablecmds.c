@@ -5358,7 +5358,7 @@ ATExecAddIndex(AlteredTableInfo *tab, Relation rel,
 							check_rights,
 							skip_build,
 							quiet,
-							false);
+							false, NULL);
 
 	/*
 	 * If TryReuseIndex() stashed a relfilenode for us, we used it for the new

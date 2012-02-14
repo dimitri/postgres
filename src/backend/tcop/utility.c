@@ -1115,6 +1115,13 @@ standard_ProcessUtility(Node *parsetree,
 		case T_IndexStmt:		/* CREATE INDEX */
 			{
 				IndexStmt  *stmt = (IndexStmt *) parsetree;
+				CommandContextData cmd;
+
+				/*
+				 * Call BEFORE CREATE INDEX triggers
+				 */
+				cmd.tag = (char *) CreateCommandTag((Node *)stmt);
+				cmd.parsetree  = (Node *)stmt;
 
 				if (stmt->concurrent)
 					PreventTransactionChain(isTopLevel,
@@ -1145,7 +1152,8 @@ standard_ProcessUtility(Node *parsetree,
 							true,		/* check_rights */
 							false,		/* skip_build */
 							false,		/* quiet */
-							stmt->concurrent);	/* concurrent */
+							stmt->concurrent,	/* concurrent */
+							&cmd);
 			}
 			break;
 

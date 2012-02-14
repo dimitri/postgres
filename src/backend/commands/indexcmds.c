@@ -318,7 +318,8 @@ DefineIndex(RangeVar *heapRelation,
 			bool check_rights,
 			bool skip_build,
 			bool quiet,
-			bool concurrent)
+			bool concurrent,
+			CommandContext cmd)
 {
 	Oid		   *typeObjectId;
 	Oid		   *collationObjectId;
@@ -574,6 +575,24 @@ DefineIndex(RangeVar *heapRelation,
 		index_check_primary_key(rel, indexInfo, is_alter_table);
 
 	/*
+	 * Call BEFORE CREATE INDEX triggers
+	 *
+	 * cmd.tag and cmd.parseetree must have been prepared for us by the caller.
+	 *
+	 * Bootstrap code must be able to skip command triggers, it's passing NULL
+	 * as the CommandContext pointer.
+	 */
+	if (cmd != NULL)
+	{
+		cmd->objectId = InvalidOid;
+		cmd->objectname = indexRelationName;
+		cmd->schemaname = get_namespace_name(namespaceId);
+
+		if (ExecBeforeOrInsteadOfCommandTriggers(cmd))
+			return InvalidOid;
+	}
+
+	/*
 	 * Report index creation if appropriate (delay this till after most of the
 	 * error checks)
 	 */
@@ -625,6 +644,13 @@ DefineIndex(RangeVar *heapRelation,
 	{
 		/* Close the heap and we're done, in the non-concurrent case */
 		heap_close(rel, NoLock);
+
+		if (cmd != NULL)
+		{
+			/* Call AFTER CREATE INDEX triggers */
+			cmd->objectId = indexRelationId;
+			ExecAfterCommandTriggers(cmd);
+		}
 		return indexRelationId;
 	}
 
@@ -914,6 +940,12 @@ DefineIndex(RangeVar *heapRelation,
 	 */
 	UnlockRelationIdForSession(&heaprelid, ShareUpdateExclusiveLock);
 
+	if (cmd != NULL)
+	{
+		/* Call AFTER CREATE INDEX triggers */
+		cmd->objectId = indexRelationId;
+		ExecAfterCommandTriggers(cmd);
+	}
 	return indexRelationId;
 }
 

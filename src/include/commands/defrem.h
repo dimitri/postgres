@@ -14,6 +14,7 @@
 #ifndef DEFREM_H
 #define DEFREM_H
 
+#include "commands/cmdtrigger.h"
 #include "nodes/parsenodes.h"
 
 /* commands/dropcmds.c */
@@ -39,7 +40,8 @@ extern Oid DefineIndex(RangeVar *heapRelation,
 			bool check_rights,
 			bool skip_build,
 			bool quiet,
-			bool concurrent);
+			bool concurrent,
+			CommandContext cmd);
 extern void ReindexIndex(RangeVar *indexRelation);
 extern void ReindexTable(RangeVar *relation);
 extern void ReindexDatabase(const char *databaseName,
