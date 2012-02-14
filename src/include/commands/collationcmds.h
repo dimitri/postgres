@@ -15,9 +15,10 @@
 #ifndef COLLATIONCMDS_H
 #define COLLATIONCMDS_H
 
+#include "commands/cmdtrigger.h"
 #include "nodes/parsenodes.h"
 
-extern void DefineCollation(List *names, List *parameters);
+extern void DefineCollation(List *names, List *parameters, CommandContext cmd);
 extern void RenameCollation(List *name, const char *newname);
 extern void AlterCollationOwner(List *name, Oid newOwnerId);
 extern void AlterCollationOwner_oid(Oid collationOid, Oid newOwnerId);

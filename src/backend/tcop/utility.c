@@ -1030,40 +1030,48 @@ standard_ProcessUtility(Node *parsetree,
 		case T_DefineStmt:
 			{
 				DefineStmt *stmt = (DefineStmt *) parsetree;
+				CommandContextData cmd;
+
+				/*
+				 * prepare CommandContextData for the subcommands, avoiding to
+				 * add the statement itself to the DefineFunction called
+				 */
+				cmd.tag = (char *) CreateCommandTag((Node *)stmt);
+				cmd.parsetree  = (Node *)stmt;
 
 				switch (stmt->kind)
 				{
 					case OBJECT_AGGREGATE:
 						DefineAggregate(stmt->defnames, stmt->args,
-										stmt->oldstyle, stmt->definition);
+										stmt->oldstyle, stmt->definition, &cmd);
 						break;
 					case OBJECT_OPERATOR:
 						Assert(stmt->args == NIL);
-						DefineOperator(stmt->defnames, stmt->definition);
+						DefineOperator(stmt->defnames, stmt->definition, &cmd);
 						break;
 					case OBJECT_TYPE:
 						Assert(stmt->args == NIL);
-						DefineType(stmt->defnames, stmt->definition);
+						DefineType(stmt->defnames, stmt->definition, &cmd);
 						break;
 					case OBJECT_TSPARSER:
 						Assert(stmt->args == NIL);
-						DefineTSParser(stmt->defnames, stmt->definition);
+						DefineTSParser(stmt->defnames, stmt->definition, &cmd);
 						break;
 					case OBJECT_TSDICTIONARY:
 						Assert(stmt->args == NIL);
-						DefineTSDictionary(stmt->defnames, stmt->definition);
+						DefineTSDictionary(stmt->defnames, stmt->definition, &cmd);
 						break;
 					case OBJECT_TSTEMPLATE:
 						Assert(stmt->args == NIL);
-						DefineTSTemplate(stmt->defnames, stmt->definition);
+						DefineTSTemplate(stmt->defnames, stmt->definition, &cmd);
 						break;
 					case OBJECT_TSCONFIGURATION:
 						Assert(stmt->args == NIL);
-						DefineTSConfiguration(stmt->defnames, stmt->definition);
+						DefineTSConfiguration(stmt->defnames, stmt->definition, &cmd);
 						break;
 					case OBJECT_COLLATION:
 						Assert(stmt->args == NIL);
-						DefineCollation(stmt->defnames, stmt->definition);
+						DefineCollation(stmt->defnames, stmt->definition, &cmd);
 						break;
 					default:
 						elog(ERROR, "unrecognized define stmt type: %d",
@@ -1076,8 +1084,13 @@ standard_ProcessUtility(Node *parsetree,
 		case T_CompositeTypeStmt:		/* CREATE TYPE (composite) */
 			{
 				CompositeTypeStmt *stmt = (CompositeTypeStmt *) parsetree;
+				DefineStmt *stmt = (DefineStmt *) parsetree;
+				CommandContextData cmd;
 
-				DefineCompositeType(stmt->typevar, stmt->coldeflist);
+				cmd.tag = (char *) CreateCommandTag((Node *)stmt);
+				cmd.parsetree  = (Node *)stmt;
+
+				DefineCompositeType(stmt->typevar, stmt->coldeflist, &cmd);
 			}
 			break;
 
@@ -1118,7 +1131,9 @@ standard_ProcessUtility(Node *parsetree,
 				CommandContextData cmd;
 
 				/*
-				 * Call BEFORE CREATE INDEX triggers
+				 * prepare the CommandContextData for CREATE INDEX so as not to
+				 * add the IndexStmt in the DefineIndex API, which can get used
+				 * from places where no statement is available
 				 */
 				cmd.tag = (char *) CreateCommandTag((Node *)stmt);
 				cmd.parsetree  = (Node *)stmt;

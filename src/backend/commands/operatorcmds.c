@@ -62,7 +62,7 @@ static void AlterOperatorOwner_internal(Relation rel, Oid operOid, Oid newOwnerI
  * 'parameters' is a list of DefElem
  */
 void
-DefineOperator(List *names, List *parameters)
+DefineOperator(List *names, List *parameters, CommandContext cmd)
 {
 	char	   *oprName;
 	Oid			oprNamespace;
@@ -310,7 +310,8 @@ DefineOperator(List *names, List *parameters)
 				   restrictionOid,		/* optional restrict. sel. procedure */
 				   joinOid,		/* optional join sel. procedure name */
 				   canMerge,	/* operator merges */
-				   canHash);	/* operator hashes */
+				   canHash, 	/* operator hashes */
+				   cmd);
 }
 
 

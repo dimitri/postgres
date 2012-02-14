@@ -49,6 +49,7 @@
 #include "catalog/pg_range.h"
 #include "catalog/pg_type.h"
 #include "catalog/pg_type_fn.h"
+#include "commands/cmdtrigger.h"
 #include "commands/defrem.h"
 #include "commands/tablecmds.h"
 #include "commands/typecmds.h"
@@ -62,6 +63,7 @@
 #include "parser/parse_expr.h"
 #include "parser/parse_func.h"
 #include "parser/parse_type.h"
+#include "tcop/utility.h"
 #include "utils/acl.h"
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
@@ -111,7 +113,7 @@ static char *domainAddConstraint(Oid domainOid, Oid domainNamespace,
  *		Registers a new base type.
  */
 void
-DefineType(List *names, List *parameters)
+DefineType(List *names, List *parameters, CommandContext cmd)
 {
 	char	   *typeName;
 	Oid			typeNamespace;
@@ -542,6 +544,16 @@ DefineType(List *names, List *parameters)
 					   NameListToString(analyzeName));
 #endif
 
+	/*
+	 * Call BEFORE CREATE TYPE triggers
+	 */
+	cmd->objectId = InvalidOid;
+	cmd->objectname = (char *)typeName;
+	cmd->schemaname = get_namespace_name(typeNamespace);
+
+	if (ExecBeforeOrInsteadOfCommandTriggers(cmd))
+		return;
+
 	array_oid = AssignTypeArrayOid();
 
 	/*
@@ -625,6 +637,10 @@ DefineType(List *names, List *parameters)
 			   collation);		/* type's collation */
 
 	pfree(array_type);
+
+	/* Call AFTER CREATE AGGREGATE triggers */
+	cmd->objectId = typoid;
+	ExecAfterCommandTriggers(cmd);
 }
 
 /*
@@ -1053,6 +1069,7 @@ DefineEnum(CreateEnumStmt *stmt)
 	AclResult	aclresult;
 	Oid			old_type_oid;
 	Oid			enumArrayOid;
+	CommandContextData cmd;
 
 	/* Convert list of names to a name and namespace */
 	enumNamespace = QualifiedNameGetCreationNamespace(stmt->typeName,
@@ -1078,6 +1095,18 @@ DefineEnum(CreateEnumStmt *stmt)
 					(errcode(ERRCODE_DUPLICATE_OBJECT),
 					 errmsg("type \"%s\" already exists", enumName)));
 	}
+
+	/*
+	 * Call BEFORE CREATE (enum) TYPE triggers
+	 */
+	cmd.tag = (char *) CreateCommandTag((Node *)stmt);
+	cmd.objectId = InvalidOid;
+	cmd.objectname = enumName;
+	cmd.schemaname = get_namespace_name(enumNamespace);
+	cmd.parsetree  = (Node *)stmt;
+
+	if (ExecBeforeOrInsteadOfCommandTriggers(&cmd))
+		return;
 
 	enumArrayOid = AssignTypeArrayOid();
 
@@ -1156,6 +1185,10 @@ DefineEnum(CreateEnumStmt *stmt)
 			   InvalidOid);		/* type's collation */
 
 	pfree(enumArrayName);
+
+	/* Call AFTER CREATE (enum) TYPE triggers */
+	cmd.objectId = enumTypeOid;
+	ExecAfterCommandTriggers(&cmd);
 }
 
 /*
@@ -1240,6 +1273,7 @@ DefineRange(CreateRangeStmt *stmt)
 	char		alignment;
 	AclResult	aclresult;
 	ListCell   *lc;
+	CommandContextData cmd;
 
 	/* Convert list of names to a name and namespace */
 	typeNamespace = QualifiedNameGetCreationNamespace(stmt->typeName,
@@ -1387,6 +1421,18 @@ DefineRange(CreateRangeStmt *stmt)
 	/* alignment must be 'i' or 'd' for ranges */
 	alignment = (subtypalign == 'd') ? 'd' : 'i';
 
+	/*
+	 * Call BEFORE CREATE EXTENSION triggers
+	 */
+	cmd.tag = (char *) CreateCommandTag((Node *)stmt);
+	cmd.objectId = InvalidOid;
+	cmd.objectname = typeName;
+	cmd.schemaname = get_namespace_name(typeNamespace);
+	cmd.parsetree  = (Node *)stmt;
+
+	if (ExecBeforeOrInsteadOfCommandTriggers(&cmd))
+		return;
+
 	/* Allocate OID for array type */
 	rangeArrayOid = AssignTypeArrayOid();
 
@@ -1469,6 +1515,10 @@ DefineRange(CreateRangeStmt *stmt)
 
 	/* And create the constructor functions for this range type */
 	makeRangeConstructors(typeName, typeNamespace, typoid, rangeSubtype);
+
+	/* Call AFTER CREATE (range) TYPE triggers */
+	cmd.objectId = typoid;
+	ExecAfterCommandTriggers(&cmd);
 }
 
 /*
@@ -1979,7 +2029,8 @@ AssignTypeArrayOid(void)
  *-------------------------------------------------------------------
  */
 Oid
-DefineCompositeType(const RangeVar *typevar, List *coldeflist)
+DefineCompositeType(const RangeVar *typevar, List *coldeflist,
+					CommandContext cmd)
 {
 	CreateStmt *createStmt = makeNode(CreateStmt);
 	Oid			old_type_oid;
@@ -2021,10 +2072,25 @@ DefineCompositeType(const RangeVar *typevar, List *coldeflist)
 	}
 
 	/*
+	 * Call BEFORE CREATE (composite) TYPE triggers
+	 */
+	cmd->objectId = InvalidOid;
+	cmd->objectname = createStmt->relation->relname;
+	cmd->schemaname = get_namespace_name(typeNamespace);
+
+	if (ExecBeforeOrInsteadOfCommandTriggers(cmd))
+		return InvalidOid;
+
+	/*
 	 * Finally create the relation.  This also creates the type.
 	 */
 	relid = DefineRelation(createStmt, RELKIND_COMPOSITE_TYPE, InvalidOid);
 	Assert(relid != InvalidOid);
+
+	/* Call AFTER CREATE (composite) TYPE triggers */
+	cmd->objectId = relid;
+	ExecAfterCommandTriggers(cmd);
+
 	return relid;
 }
 

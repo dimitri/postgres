@@ -23,6 +23,7 @@
 #include "catalog/pg_proc.h"
 #include "catalog/pg_proc_fn.h"
 #include "catalog/pg_type.h"
+#include "commands/cmdtrigger.h"
 #include "miscadmin.h"
 #include "parser/parse_coerce.h"
 #include "parser/parse_func.h"
@@ -50,7 +51,8 @@ AggregateCreate(const char *aggName,
 				List *aggfinalfnName,
 				List *aggsortopName,
 				Oid aggTransType,
-				const char *agginitval)
+				const char *agginitval,
+				CommandContext cmd)
 {
 	Relation	aggdesc;
 	HeapTuple	tup;
@@ -222,6 +224,15 @@ AggregateCreate(const char *aggName,
 		aclcheck_error(aclresult, ACL_KIND_TYPE,
 					   format_type_be(finaltype));
 
+	/*
+	 * Call BEFORE CREATE AGGREGATE triggers
+	 */
+	cmd->objectId = InvalidOid;
+	cmd->objectname = (char *)aggName;
+	cmd->schemaname = get_namespace_name(aggNamespace);
+
+	if (ExecBeforeOrInsteadOfCommandTriggers(cmd))
+		return;
 
 	/*
 	 * Everything looks okay.  Try to create the pg_proc entry for the
@@ -316,6 +327,10 @@ AggregateCreate(const char *aggName,
 		referenced.objectSubId = 0;
 		recordDependencyOn(&myself, &referenced, DEPENDENCY_NORMAL);
 	}
+
+	/* Call AFTER CREATE AGGREGATE triggers */
+	cmd->objectId = procOid;
+	ExecAfterCommandTriggers(cmd);
 }
 
 /*

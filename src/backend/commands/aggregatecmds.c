@@ -28,6 +28,7 @@
 #include "catalog/pg_aggregate.h"
 #include "catalog/pg_proc.h"
 #include "catalog/pg_type.h"
+#include "commands/cmdtrigger.h"
 #include "commands/defrem.h"
 #include "miscadmin.h"
 #include "parser/parse_func.h"
@@ -46,7 +47,8 @@
  * "args" defines the input type(s).
  */
 void
-DefineAggregate(List *name, List *args, bool oldstyle, List *parameters)
+DefineAggregate(List *name, List *args, bool oldstyle, List *parameters,
+				CommandContext cmd)
 {
 	char	   *aggName;
 	Oid			aggNamespace;
@@ -203,7 +205,8 @@ DefineAggregate(List *name, List *args, bool oldstyle, List *parameters)
 					finalfuncName,		/* final function name */
 					sortoperatorName,	/* sort operator name */
 					transTypeId,	/* transition data type */
-					initval);	/* initial condition */
+					initval,	/* initial condition */
+					cmd);
 }
 
 

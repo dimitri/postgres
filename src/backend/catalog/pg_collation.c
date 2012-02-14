@@ -23,10 +23,12 @@
 #include "catalog/pg_collation.h"
 #include "catalog/pg_collation_fn.h"
 #include "catalog/pg_namespace.h"
+#include "commands/cmdtrigger.h"
 #include "mb/pg_wchar.h"
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
 #include "utils/rel.h"
+#include "utils/lsyscache.h"
 #include "utils/syscache.h"
 #include "utils/tqual.h"
 
@@ -40,7 +42,8 @@ Oid
 CollationCreate(const char *collname, Oid collnamespace,
 				Oid collowner,
 				int32 collencoding,
-				const char *collcollate, const char *collctype)
+				const char *collcollate, const char *collctype,
+				CommandContext cmd)
 {
 	Relation	rel;
 	TupleDesc	tupDesc;
@@ -89,6 +92,16 @@ CollationCreate(const char *collname, Oid collnamespace,
 				(errcode(ERRCODE_DUPLICATE_OBJECT),
 				 errmsg("collation \"%s\" already exists",
 						collname)));
+
+	/*
+	 * Call BEFORE CREATE COLLATION triggers
+	 */
+	cmd->objectId = InvalidOid;
+	cmd->objectname = (char *)collname;
+	cmd->schemaname = get_namespace_name(collnamespace);
+
+	if (ExecBeforeOrInsteadOfCommandTriggers(cmd))
+		return InvalidOid;
 
 	/* open pg_collation */
 	rel = heap_open(CollationRelationId, RowExclusiveLock);
@@ -140,6 +153,10 @@ CollationCreate(const char *collname, Oid collnamespace,
 
 	heap_freetuple(tup);
 	heap_close(rel, RowExclusiveLock);
+
+	/* Call AFTER CREATE AGGREGATE triggers */
+	cmd->objectId = oid;
+	ExecAfterCommandTriggers(cmd);
 
 	return oid;
 }

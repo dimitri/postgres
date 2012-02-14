@@ -79,7 +79,7 @@ extern void ExecuteDoStmt(DoStmt *stmt);
 extern Oid	get_cast_oid(Oid sourcetypeid, Oid targettypeid, bool missing_ok);
 
 /* commands/operatorcmds.c */
-extern void DefineOperator(List *names, List *parameters);
+extern void DefineOperator(List *names, List *parameters, CommandContext cmd);
 extern void RemoveOperatorById(Oid operOid);
 extern void AlterOperatorOwner(List *name, TypeName *typeName1,
 				   TypeName *typename2, Oid newOwnerId);
@@ -89,7 +89,7 @@ extern Oid	AlterOperatorNamespace_oid(Oid operOid, Oid newNspOid);
 
 /* commands/aggregatecmds.c */
 extern void DefineAggregate(List *name, List *args, bool oldstyle,
-				List *parameters);
+							List *parameters, CommandContext cmd);
 extern void RenameAggregate(List *name, List *args, const char *newname);
 extern void AlterAggregateOwner(List *name, List *args, Oid newOwnerId);
 
@@ -116,13 +116,13 @@ extern Oid	get_opclass_oid(Oid amID, List *opclassname, bool missing_ok);
 extern Oid	get_opfamily_oid(Oid amID, List *opfamilyname, bool missing_ok);
 
 /* commands/tsearchcmds.c */
-extern void DefineTSParser(List *names, List *parameters);
+extern void DefineTSParser(List *names, List *parameters, CommandContext cmd);
 extern void RenameTSParser(List *oldname, const char *newname);
 extern void AlterTSParserNamespace(List *name, const char *newschema);
 extern Oid	AlterTSParserNamespace_oid(Oid prsId, Oid newNspOid);
 extern void RemoveTSParserById(Oid prsId);
 
-extern void DefineTSDictionary(List *names, List *parameters);
+extern void DefineTSDictionary(List *names, List *parameters, CommandContext cmd);
 extern void RenameTSDictionary(List *oldname, const char *newname);
 extern void RemoveTSDictionaryById(Oid dictId);
 extern void AlterTSDictionary(AlterTSDictionaryStmt *stmt);
@@ -130,13 +130,13 @@ extern void AlterTSDictionaryOwner(List *name, Oid newOwnerId);
 extern void AlterTSDictionaryNamespace(List *name, const char *newschema);
 extern Oid	AlterTSDictionaryNamespace_oid(Oid dictId, Oid newNspOid);
 
-extern void DefineTSTemplate(List *names, List *parameters);
+extern void DefineTSTemplate(List *names, List *parameters, CommandContext cmd);
 extern void RenameTSTemplate(List *oldname, const char *newname);
 extern void AlterTSTemplateNamespace(List *name, const char *newschema);
 extern Oid	AlterTSTemplateNamespace_oid(Oid tmplId, Oid newNspOid);
 extern void RemoveTSTemplateById(Oid tmplId);
 
-extern void DefineTSConfiguration(List *names, List *parameters);
+extern void DefineTSConfiguration(List *names, List *parameters, CommandContext cmd);
 extern void RenameTSConfiguration(List *oldname, const char *newname);
 extern void RemoveTSConfigurationById(Oid cfgId);
 extern void AlterTSConfiguration(AlterTSConfigurationStmt *stmt);

@@ -14,18 +14,20 @@
 #ifndef TYPECMDS_H
 #define TYPECMDS_H
 
+#include "commands/cmdtrigger.h"
+#include "utils/lsyscache.h"
 #include "nodes/parsenodes.h"
 
 
 #define DEFAULT_TYPDELIM		','
 
-extern void DefineType(List *names, List *parameters);
+extern void DefineType(List *names, List *parameters, CommandContext cmd);
 extern void RemoveTypeById(Oid typeOid);
 extern void DefineDomain(CreateDomainStmt *stmt);
 extern void DefineEnum(CreateEnumStmt *stmt);
 extern void DefineRange(CreateRangeStmt *stmt);
 extern void AlterEnum(AlterEnumStmt *stmt);
-extern Oid	DefineCompositeType(const RangeVar *typevar, List *coldeflist);
+extern Oid	DefineCompositeType(const RangeVar *typevar, List *coldeflist, CommandContext cmd);
 extern Oid	AssignTypeArrayOid(void);
 
 extern void AlterDomainDefault(List *names, Node *defaultRaw);

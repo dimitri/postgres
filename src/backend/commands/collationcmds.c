@@ -22,6 +22,7 @@
 #include "catalog/pg_collation.h"
 #include "catalog/pg_collation_fn.h"
 #include "commands/alter.h"
+#include "commands/cmdtrigger.h"
 #include "commands/collationcmds.h"
 #include "commands/dbcommands.h"
 #include "commands/defrem.h"
@@ -40,7 +41,7 @@ static void AlterCollationOwner_internal(Relation rel, Oid collationOid,
  * CREATE COLLATION
  */
 void
-DefineCollation(List *names, List *parameters)
+DefineCollation(List *names, List *parameters, CommandContext cmd)
 {
 	char	   *collName;
 	Oid			collNamespace;
@@ -137,7 +138,8 @@ DefineCollation(List *names, List *parameters)
 							 GetUserId(),
 							 GetDatabaseEncoding(),
 							 collcollate,
-							 collctype);
+							 collctype,
+							 cmd);
 
 	/* check that the locales can be loaded */
 	CommandCounterIncrement();

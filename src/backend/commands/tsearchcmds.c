@@ -32,6 +32,7 @@
 #include "catalog/pg_ts_template.h"
 #include "catalog/pg_type.h"
 #include "commands/alter.h"
+#include "commands/cmdtrigger.h"
 #include "commands/defrem.h"
 #include "miscadmin.h"
 #include "nodes/makefuncs.h"
@@ -167,7 +168,7 @@ makeParserDependencies(HeapTuple tuple)
  * CREATE TEXT SEARCH PARSER
  */
 void
-DefineTSParser(List *names, List *parameters)
+DefineTSParser(List *names, List *parameters, CommandContext cmd)
 {
 	char	   *prsname;
 	ListCell   *pl;
@@ -258,6 +259,16 @@ DefineTSParser(List *names, List *parameters)
 				 errmsg("text search parser lextypes method is required")));
 
 	/*
+	 * Call BEFORE CREATE TEXT SEARCH PARSER triggers
+	 */
+	cmd->objectId = InvalidOid;
+	cmd->objectname = NameStr(pname);
+	cmd->schemaname = get_namespace_name(namespaceoid);
+
+	if (ExecBeforeOrInsteadOfCommandTriggers(cmd))
+		return;
+
+	/*
 	 * Looks good, insert
 	 */
 	prsRel = heap_open(TSParserRelationId, RowExclusiveLock);
@@ -276,6 +287,10 @@ DefineTSParser(List *names, List *parameters)
 	heap_freetuple(tup);
 
 	heap_close(prsRel, RowExclusiveLock);
+
+	/* Call AFTER CREATE TEXT SEARCH PARSER triggers */
+	cmd->objectId = prsOid;
+	ExecAfterCommandTriggers(cmd);
 }
 
 /*
@@ -484,7 +499,7 @@ verify_dictoptions(Oid tmplId, List *dictoptions)
  * CREATE TEXT SEARCH DICTIONARY
  */
 void
-DefineTSDictionary(List *names, List *parameters)
+DefineTSDictionary(List *names, List *parameters, CommandContext cmd)
 {
 	ListCell   *pl;
 	Relation	dictRel;
@@ -537,6 +552,16 @@ DefineTSDictionary(List *names, List *parameters)
 	verify_dictoptions(templId, dictoptions);
 
 	/*
+	 * Call BEFORE CREATE TEXT SEARCH DICTIONARY triggers
+	 */
+	cmd->objectId = InvalidOid;
+	cmd->objectname = NameStr(dname);
+	cmd->schemaname = get_namespace_name(namespaceoid);
+
+	if (ExecBeforeOrInsteadOfCommandTriggers(cmd))
+		return;
+
+	/*
 	 * Looks good, insert
 	 */
 	memset(values, 0, sizeof(values));
@@ -570,6 +595,10 @@ DefineTSDictionary(List *names, List *parameters)
 	heap_freetuple(tup);
 
 	heap_close(dictRel, RowExclusiveLock);
+
+	/* Call AFTER CREATE TEXT SEARCH DICTIONARY triggers */
+	cmd->objectId = dictOid;
+	ExecAfterCommandTriggers(cmd);
 }
 
 /*
@@ -956,7 +985,7 @@ makeTSTemplateDependencies(HeapTuple tuple)
  * CREATE TEXT SEARCH TEMPLATE
  */
 void
-DefineTSTemplate(List *names, List *parameters)
+DefineTSTemplate(List *names, List *parameters, CommandContext cmd)
 {
 	ListCell   *pl;
 	Relation	tmplRel;
@@ -1022,6 +1051,16 @@ DefineTSTemplate(List *names, List *parameters)
 				 errmsg("text search template lexize method is required")));
 
 	/*
+	 * Call BEFORE CREATE TEXT SEARCH TEMPLATE triggers
+	 */
+	cmd->objectId = InvalidOid;
+	cmd->objectname = NameStr(dname);
+	cmd->schemaname = get_namespace_name(namespaceoid);
+
+	if (ExecBeforeOrInsteadOfCommandTriggers(cmd))
+		return;
+
+	/*
 	 * Looks good, insert
 	 */
 
@@ -1041,6 +1080,10 @@ DefineTSTemplate(List *names, List *parameters)
 	heap_freetuple(tup);
 
 	heap_close(tmplRel, RowExclusiveLock);
+
+	/* Call AFTER CREATE TEXT SEARCH TEMPLATE triggers */
+	cmd->objectId = dictOid;
+	ExecAfterCommandTriggers(cmd);
 }
 
 /*
@@ -1274,7 +1317,7 @@ makeConfigurationDependencies(HeapTuple tuple, bool removeOld,
  * CREATE TEXT SEARCH CONFIGURATION
  */
 void
-DefineTSConfiguration(List *names, List *parameters)
+DefineTSConfiguration(List *names, List *parameters, CommandContext cmd)
 {
 	Relation	cfgRel;
 	Relation	mapRel = NULL;
@@ -1349,6 +1392,16 @@ DefineTSConfiguration(List *names, List *parameters)
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_OBJECT_DEFINITION),
 				 errmsg("text search parser is required")));
+
+	/*
+	 * Call BEFORE CREATE TEXT SEARCH CONFIGURATION triggers
+	 */
+	cmd->objectId = InvalidOid;
+	cmd->objectname = NameStr(cname);
+	cmd->schemaname = get_namespace_name(namespaceoid);
+
+	if (ExecBeforeOrInsteadOfCommandTriggers(cmd))
+		return;
 
 	/*
 	 * Looks good, build tuple and insert
@@ -1426,6 +1479,10 @@ DefineTSConfiguration(List *names, List *parameters)
 	if (mapRel)
 		heap_close(mapRel, RowExclusiveLock);
 	heap_close(cfgRel, RowExclusiveLock);
+
+	/* Call AFTER CREATE TEXT SEARCH PARSER triggers */
+	cmd->objectId = cfgOid;
+	ExecAfterCommandTriggers(cmd);
 }
 
 /*
