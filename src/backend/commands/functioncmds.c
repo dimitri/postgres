@@ -55,6 +55,7 @@
 #include "parser/parse_expr.h"
 #include "parser/parse_func.h"
 #include "parser/parse_type.h"
+#include "tcop/utility.h"
 #include "utils/acl.h"
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
@@ -789,6 +790,7 @@ CreateFunction(CreateFunctionStmt *stmt, const char *queryString)
 {
 	char	   *probin_str;
 	char	   *prosrc_str;
+	Oid			procOid;
 	Oid			prorettype;
 	bool		returnsSet;
 	char	   *language;
@@ -813,6 +815,7 @@ CreateFunction(CreateFunctionStmt *stmt, const char *queryString)
 	HeapTuple	languageTuple;
 	Form_pg_language languageStruct;
 	List	   *as_clause;
+	CommandContextData cmd;
 
 	/* Convert list of names to a name and namespace */
 	namespaceId = QualifiedNameGetCreationNamespace(stmt->funcname,
@@ -945,31 +948,47 @@ CreateFunction(CreateFunctionStmt *stmt, const char *queryString)
 				 errmsg("ROWS is not applicable when function does not return a set")));
 
 	/*
+	 * Call BEFORE CREATE FUNCTION triggers
+	 */
+	cmd.tag = (char *) CreateCommandTag((Node *)stmt);
+	cmd.objectId = InvalidOid;
+	cmd.objectname = (char *)funcname;
+	cmd.schemaname = get_namespace_name(namespaceId);
+	cmd.parsetree  = (Node *)stmt;
+
+	if (ExecBeforeOrInsteadOfCommandTriggers(&cmd))
+		return;
+
+	/*
 	 * And now that we have all the parameters, and know we're permitted to do
 	 * so, go ahead and create the function.
 	 */
-	ProcedureCreate(funcname,
-					namespaceId,
-					stmt->replace,
-					returnsSet,
-					prorettype,
-					languageOid,
-					languageValidator,
-					prosrc_str, /* converted to text later */
-					probin_str, /* converted to text later */
-					false,		/* not an aggregate */
-					isWindowFunc,
-					security,
-					isStrict,
-					volatility,
-					parameterTypes,
-					PointerGetDatum(allParameterTypes),
-					PointerGetDatum(parameterModes),
-					PointerGetDatum(parameterNames),
-					parameterDefaults,
-					PointerGetDatum(proconfig),
-					procost,
-					prorows);
+	procOid = ProcedureCreate(funcname,
+							  namespaceId,
+							  stmt->replace,
+							  returnsSet,
+							  prorettype,
+							  languageOid,
+							  languageValidator,
+							  prosrc_str, /* converted to text later */
+							  probin_str, /* converted to text later */
+							  false,		/* not an aggregate */
+							  isWindowFunc,
+							  security,
+							  isStrict,
+							  volatility,
+							  parameterTypes,
+							  PointerGetDatum(allParameterTypes),
+							  PointerGetDatum(parameterModes),
+							  PointerGetDatum(parameterNames),
+							  parameterDefaults,
+							  PointerGetDatum(proconfig),
+							  procost,
+							  prorows);
+
+	/* Call AFTER CREATE FUNCTION triggers */
+	cmd.objectId = procOid;
+	ExecAfterCommandTriggers(&cmd);
 }
 
 

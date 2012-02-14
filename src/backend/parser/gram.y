@@ -4308,6 +4308,7 @@ trigger_command:
                | CREATE SCHEMA						{ $$ = "CREATE SCHEMA"; }
 			   | CREATE EXTENSION					{ $$ = "CREATE EXTENSION"; }
 			   | CREATE TABLESPACE					{ $$ = "CREATE TABLE"; }
+			   | CREATE FUNCTION					{ $$ = "CREATE FUNCTION"; }
 			   | CREATE TABLE						{ $$ = "CREATE TABLE"; }
 			   | CREATE FOREIGN TABLE				{ $$ = "CREATE FOREIGN TABLE"; }
 			   | CREATE INDEX						{ $$ = "CREATE INDEX"; }
