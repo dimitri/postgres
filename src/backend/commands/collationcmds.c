@@ -141,9 +141,13 @@ DefineCollation(List *names, List *parameters, CommandContext cmd)
 							 collctype,
 							 cmd);
 
-	/* check that the locales can be loaded */
-	CommandCounterIncrement();
-	(void) pg_newlocale_from_collation(newoid);
+	/* before or instead of command trigger might have cancelled the command */
+	if (OidIsValid(newoid))
+	{
+		/* check that the locales can be loaded */
+		CommandCounterIncrement();
+		(void) pg_newlocale_from_collation(newoid);
+	}
 }
 
 /*
