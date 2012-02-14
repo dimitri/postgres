@@ -20,6 +20,7 @@
 #include "catalog/indexing.h"
 #include "catalog/namespace.h"
 #include "catalog/pg_namespace.h"
+#include "commands/cmdtrigger.h"
 #include "commands/dbcommands.h"
 #include "commands/schemacmds.h"
 #include "miscadmin.h"
@@ -49,6 +50,7 @@ CreateSchemaCommand(CreateSchemaStmt *stmt, const char *queryString)
 	Oid			saved_uid;
 	int			save_sec_context;
 	AclResult	aclresult;
+	CommandContextData cmd;
 
 	GetUserIdAndSecContext(&saved_uid, &save_sec_context);
 
@@ -80,6 +82,18 @@ CreateSchemaCommand(CreateSchemaStmt *stmt, const char *queryString)
 				(errcode(ERRCODE_RESERVED_NAME),
 				 errmsg("unacceptable schema name \"%s\"", schemaName),
 		   errdetail("The prefix \"pg_\" is reserved for system schemas.")));
+
+	/*
+	 * Call BEFORE CREATE SCHEMA triggers (before changing authorization)
+	 */
+	cmd.tag = (char *) CreateCommandTag((Node *)stmt);
+	cmd.objectId = InvalidOid;
+	cmd.objectname = (char *)schemaName;
+	cmd.schemaname = NULL;		/* a schema does not live in another schema */
+	cmd.parsetree  = (Node *)stmt;
+
+	if (ExecBeforeOrInsteadOfCommandTriggers(&cmd))
+		return;
 
 	/*
 	 * If the requested authorization is different from the current user,
@@ -144,6 +158,10 @@ CreateSchemaCommand(CreateSchemaStmt *stmt, const char *queryString)
 
 	/* Reset current user and security context */
 	SetUserIdAndSecContext(saved_uid, save_sec_context);
+
+	/* Call AFTER CREATE SCHEMA triggers */
+	cmd.objectId = namespaceId;
+	ExecAfterCommandTriggers(&cmd);
 }
 
 /*

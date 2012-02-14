@@ -36,6 +36,7 @@
 #include "catalog/pg_database.h"
 #include "catalog/pg_db_role_setting.h"
 #include "catalog/pg_tablespace.h"
+#include "commands/cmdtrigger.h"
 #include "commands/comment.h"
 #include "commands/dbcommands.h"
 #include "commands/seclabel.h"
@@ -49,6 +50,7 @@
 #include "storage/ipc.h"
 #include "storage/procarray.h"
 #include "storage/smgr.h"
+#include "tcop/utility.h"
 #include "utils/acl.h"
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
@@ -128,6 +130,7 @@ createdb(const CreatedbStmt *stmt)
 	int			notherbackends;
 	int			npreparedxacts;
 	createdb_failure_params fparms;
+	CommandContextData cmd;
 
 	/* Extract options from the statement node tree */
 	foreach(option, stmt->options)
@@ -451,6 +454,18 @@ createdb(const CreatedbStmt *stmt)
 				 errdetail_busy_db(notherbackends, npreparedxacts)));
 
 	/*
+	 * Call BEFORE CREATE DATABASE triggers
+	 */
+	cmd.tag = (char *) CreateCommandTag((Node *)stmt);
+	cmd.objectId = InvalidOid;
+	cmd.objectname = dbname;
+	cmd.schemaname = NULL;
+	cmd.parsetree  = (Node *)stmt;
+
+	if (ExecBeforeOrInsteadOfCommandTriggers(&cmd))
+		return;
+
+	/*
 	 * Select an OID for the new database, checking that it doesn't have a
 	 * filename conflict with anything already existing in the tablespace
 	 * directories.
@@ -649,6 +664,10 @@ createdb(const CreatedbStmt *stmt)
 	}
 	PG_END_ENSURE_ERROR_CLEANUP(createdb_failure_callback,
 								PointerGetDatum(&fparms));
+
+	/* Call AFTER CREATE DATABASE triggers */
+	cmd.objectId = dboid;
+	ExecAfterCommandTriggers(&cmd);
 }
 
 /*
@@ -732,14 +751,17 @@ createdb_failure_callback(int code, Datum arg)
  * DROP DATABASE
  */
 void
-dropdb(const char *dbname, bool missing_ok)
+dropdb(const DropdbStmt *stmt)
 {
+	const char *dbname = stmt->dbname;
+	bool missing_ok = stmt->missing_ok;
 	Oid			db_id;
 	bool		db_istemplate;
 	Relation	pgdbrel;
 	HeapTuple	tup;
 	int			notherbackends;
 	int			npreparedxacts;
+	CommandContextData cmd;
 
 	/*
 	 * Look up the target database's OID, and get exclusive lock on it. We
@@ -805,6 +827,18 @@ dropdb(const char *dbname, bool missing_ok)
 				 errmsg("database \"%s\" is being accessed by other users",
 						dbname),
 				 errdetail_busy_db(notherbackends, npreparedxacts)));
+
+	/*
+	 * Call BEFORE DROP DATABASE triggers
+	 */
+	cmd.tag = (char *) CreateCommandTag((Node *)stmt);
+	cmd.objectId = db_id;
+	cmd.objectname = stmt->dbname;
+	cmd.schemaname = NULL;
+	cmd.parsetree  = (Node *)stmt;
+
+	if (ExecBeforeOrInsteadOfCommandTriggers(&cmd))
+		return;
 
 	/*
 	 * Remove the database's tuple from pg_database.
@@ -879,6 +913,10 @@ dropdb(const char *dbname, bool missing_ok)
 	 * according to pg_database, which is not good.
 	 */
 	ForceSyncCommit();
+
+	/* Call AFTER DROP DATABASE triggers */
+	cmd.objectId = InvalidOid;;
+	ExecAfterCommandTriggers(&cmd);
 }
 
 

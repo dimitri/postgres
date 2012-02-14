@@ -1183,7 +1183,7 @@ standard_ProcessUtility(Node *parsetree,
 				DropdbStmt *stmt = (DropdbStmt *) parsetree;
 
 				PreventTransactionChain(isTopLevel, "DROP DATABASE");
-				dropdb(stmt->dbname, stmt->missing_ok);
+				dropdb(stmt);
 			}
 			break;
 

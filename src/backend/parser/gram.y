@@ -4300,17 +4300,44 @@ trigger_command_list:
  * that will get matched against what CreateCommandTag  returns
  *
  * we don't support Command Triggers on every possible command that PostgreSQL
- * supports, this list should match with the implementation of rewriting
- * utility statements in pg_get_cmddef() in src/backend/utils/adt/ruleutils.c
+ * supports, this list should match with the implementation.
  */
 trigger_command:
-			   CREATE TABLE						{ $$ = "CREATE TABLE"; }
-			   | ALTER TABLE					{ $$ = "ALTER TABLE"; }
-			   | DROP TABLE						{ $$ = "DROP TABLE"; }
-			   | CREATE VIEW					{ $$ = "CREATE VIEW"; }
-			   | DROP VIEW						{ $$ = "DROP VIEW"; }
+			   CREATE DATABASE					{ $$ = "CREATE DATABASE"; }
+			   | DROP DATABASE					{ $$ = "DROP DATABASE"; }
+               | CREATE SCHEMA					{ $$ = "CREATE SCHEMA"; }
 			   | CREATE EXTENSION				{ $$ = "CREATE EXTENSION"; }
+			   | CREATE TABLE					{ $$ = "CREATE TABLE"; }
+			   | CREATE FOREIGN TABLE			{ $$ = "CREATE FOREIGN TABLE"; }
+			   | ALTER TABLE					{ $$ = "ALTER TABLE"; }
+			   | CREATE VIEW					{ $$ = "CREATE VIEW"; }
+			   | DROP TABLE						{ $$ = "DROP TABLE"; }
+			   | DROP SEQUENCE					{ $$ = "DROP SEQUENCE"; }
+			   | DROP VIEW						{ $$ = "DROP VIEW"; }
+			   | DROP INDEX						{ $$ = "DROP INDEX"; }
+			   | DROP FOREIGN TABLE				{ $$ = "DROP FOREIGN TABLE"; }
+			   | DROP TYPE_P					{ $$ = "DROP TYPE"; }
+			   | DROP DOMAIN_P					{ $$ = "DROP DOMAIN"; }
+			   | DROP COLLATION					{ $$ = "DROP COLLATION"; }
+			   | DROP CONVERSION_P				{ $$ = "DROP CONVERSION_P"; }
+			   | DROP SCHEMA					{ $$ = "DROP SCHEMA"; }
 			   | DROP EXTENSION					{ $$ = "DROP EXTENSION"; }
+			   | TEXT_P SEARCH PARSER			{ $$ = "TEXT SEARCH PARSER"; }
+			   | TEXT_P SEARCH DICTIONARY		{ $$ = "TEXT SEARCH DICTIONARY"; }
+			   | TEXT_P SEARCH TEMPLATE			{ $$ = "TEXT SEARCH TEMPLATE"; }
+			   | TEXT_P SEARCH CONFIGURATION	{ $$ = "TEXT SEARCH CONFIGURATION"; }
+			   | DROP LANGUAGE					{ $$ = "DROP LANGUAGE"; }
+			   | DROP FOREIGN DATA_P WRAPPER	{ $$ = "DROP FOREIGN DATA WRAPPER"; }
+			   | DROP SERVER					{ $$ = "DROP SERVER"; }
+			   | DROP TRIGGER					{ $$ = "DROP TRIGGER"; }
+			   | DROP ASSERTION					{ $$ = "DROP ASSERTION"; }
+			   | DROP OPERATOR CLASS			{ $$ = "DROP OPERATOR CLASS"; }
+			   | DROP OPERATOR FAMILY			{ $$ = "DROP OPERATOR FAMILY"; }
+			   | DROP FUNCTION					{ $$ = "DROP FUNCTION"; }
+			   | DROP AGGREGATE					{ $$ = "DROP AGGREGATE"; }
+			   | DROP OPERATOR					{ $$ = "DROP OPERATOR"; }
+			   | DROP CAST						{ $$ = "DROP CAST"; }
+			   | DROP RULE						{ $$ = "DROP RULE"; }
 		;
 
 DropCmdTrigStmt:
