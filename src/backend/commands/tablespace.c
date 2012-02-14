@@ -60,6 +60,7 @@
 #include "catalog/indexing.h"
 #include "catalog/objectaccess.h"
 #include "catalog/pg_tablespace.h"
+#include "commands/cmdtrigger.h"
 #include "commands/comment.h"
 #include "commands/seclabel.h"
 #include "commands/tablespace.h"
@@ -67,6 +68,7 @@
 #include "postmaster/bgwriter.h"
 #include "storage/fd.h"
 #include "storage/standby.h"
+#include "tcop/utility.h"
 #include "utils/acl.h"
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
@@ -232,6 +234,7 @@ CreateTableSpace(CreateTableSpaceStmt *stmt)
 	Oid			tablespaceoid;
 	char	   *location;
 	Oid			ownerId;
+	CommandContextData cmd;
 
 	/* Must be super user */
 	if (!superuser())
@@ -302,6 +305,18 @@ CreateTableSpace(CreateTableSpaceStmt *stmt)
 						stmt->tablespacename)));
 
 	/*
+	 * Call BEFORE CREATE TABLESPACE triggers
+	 */
+	cmd.tag = (char *) CreateCommandTag((Node *)stmt);
+	cmd.objectId = InvalidOid;
+	cmd.objectname = stmt->tablespacename;
+	cmd.schemaname = NULL;
+	cmd.parsetree  = (Node *)stmt;
+
+	if (ExecBeforeOrInsteadOfCommandTriggers(&cmd))
+		return;
+
+	/*
 	 * Insert tuple into pg_tablespace.  The purpose of doing this first is to
 	 * lock the proposed tablename against other would-be creators. The
 	 * insertion will roll back if we find problems below.
@@ -365,6 +380,10 @@ CreateTableSpace(CreateTableSpaceStmt *stmt)
 
 	/* We keep the lock on pg_tablespace until commit */
 	heap_close(rel, NoLock);
+
+	/* Call AFTER CREATE TABLESPACE triggers */
+	cmd.objectId = tablespaceoid;
+	ExecAfterCommandTriggers(&cmd);
 #else							/* !HAVE_SYMLINK */
 	ereport(ERROR,
 			(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
@@ -387,6 +406,7 @@ DropTableSpace(DropTableSpaceStmt *stmt)
 	HeapTuple	tuple;
 	ScanKeyData entry[1];
 	Oid			tablespaceoid;
+	CommandContextData cmd;
 
 	/*
 	 * Find the target tuple
@@ -433,6 +453,18 @@ DropTableSpace(DropTableSpaceStmt *stmt)
 		tablespaceoid == DEFAULTTABLESPACE_OID)
 		aclcheck_error(ACLCHECK_NO_PRIV, ACL_KIND_TABLESPACE,
 					   tablespacename);
+
+	/*
+	 * Call BEFORE DROP TABLESPACE triggers
+	 */
+	cmd.tag = (char *) CreateCommandTag((Node *)stmt);
+	cmd.objectId = tablespaceoid;
+	cmd.objectname = tablespacename;
+	cmd.schemaname = NULL;
+	cmd.parsetree  = (Node *)stmt;
+
+	if (ExecBeforeOrInsteadOfCommandTriggers(&cmd))
+		return;
 
 	/*
 	 * Remove the pg_tablespace tuple (this will roll back if we fail below)
@@ -518,6 +550,10 @@ DropTableSpace(DropTableSpaceStmt *stmt)
 
 	/* We keep the lock on pg_tablespace until commit */
 	heap_close(rel, NoLock);
+
+	/* Call AFTER DROP TABLESPACE triggers */
+	cmd.objectId = InvalidOid;
+	ExecAfterCommandTriggers(&cmd);
 #else							/* !HAVE_SYMLINK */
 	ereport(ERROR,
 			(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),

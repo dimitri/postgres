@@ -4307,11 +4307,13 @@ trigger_command:
 			   | DROP DATABASE						{ $$ = "DROP DATABASE"; }
                | CREATE SCHEMA						{ $$ = "CREATE SCHEMA"; }
 			   | CREATE EXTENSION					{ $$ = "CREATE EXTENSION"; }
+			   | CREATE TABLESPACE					{ $$ = "CREATE TABLE"; }
 			   | CREATE TABLE						{ $$ = "CREATE TABLE"; }
 			   | CREATE FOREIGN TABLE				{ $$ = "CREATE FOREIGN TABLE"; }
 			   | CREATE INDEX						{ $$ = "CREATE INDEX"; }
 			   | CREATE VIEW						{ $$ = "CREATE VIEW"; }
 			   | ALTER TABLE						{ $$ = "ALTER TABLE"; }
+			   | DROP TABLESPACE					{ $$ = "DROP TABLE"; }
 			   | DROP TABLE							{ $$ = "DROP TABLE"; }
 			   | DROP SEQUENCE						{ $$ = "DROP SEQUENCE"; }
 			   | DROP VIEW							{ $$ = "DROP VIEW"; }
