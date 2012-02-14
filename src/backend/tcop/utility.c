@@ -1084,7 +1084,6 @@ standard_ProcessUtility(Node *parsetree,
 		case T_CompositeTypeStmt:		/* CREATE TYPE (composite) */
 			{
 				CompositeTypeStmt *stmt = (CompositeTypeStmt *) parsetree;
-				DefineStmt *stmt = (DefineStmt *) parsetree;
 				CommandContextData cmd;
 
 				cmd.tag = (char *) CreateCommandTag((Node *)stmt);
