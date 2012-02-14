@@ -4322,6 +4322,7 @@ trigger_command:
 			   | CREATE TEXT_P SEARCH TEMPLATE		{ $$ = "CREATE TEXT SEARCH TEMPLATE"; }
 			   | CREATE TEXT_P SEARCH CONFIGURATION	{ $$ = "CREATE TEXT SEARCH CONFIGURATION"; }
 			   | CREATE TYPE_P						{ $$ = "CREATE TYPE"; }
+			   | CREATE DOMAIN_P					{ $$ = "CREATE DOMAIN"; }
 			   | ALTER TABLE						{ $$ = "ALTER TABLE"; }
 			   | DROP TABLESPACE					{ $$ = "DROP TABLE"; }
 			   | DROP TABLE							{ $$ = "DROP TABLE"; }

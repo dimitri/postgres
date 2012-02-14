@@ -722,6 +722,7 @@ DefineDomain(CreateDomainStmt *stmt)
 	Form_pg_type baseType;
 	int32		basetypeMod;
 	Oid			baseColl;
+	CommandContextData cmd;
 
 	/* Convert list of names to a name and namespace */
 	domainNamespace = QualifiedNameGetCreationNamespace(stmt->domainname,
@@ -985,6 +986,19 @@ DefineDomain(CreateDomainStmt *stmt)
 		}
 	}
 
+
+	/*
+	 * Call BEFORE CREATE DOMAIN triggers
+	 */
+	cmd.tag = (char *) CreateCommandTag((Node *)stmt);
+	cmd.objectId = InvalidOid;
+	cmd.objectname = (char *)domainName;
+	cmd.schemaname = get_namespace_name(domainNamespace);
+	cmd.parsetree  = (Node *)stmt;
+
+	if (ExecBeforeOrInsteadOfCommandTriggers(&cmd))
+		return;
+
 	/*
 	 * Have TypeCreate do all the real work.
 	 */
@@ -1052,6 +1066,10 @@ DefineDomain(CreateDomainStmt *stmt)
 	 * Now we can clean up.
 	 */
 	ReleaseSysCache(typeTup);
+
+	/* Call AFTER CREATE DOMAIN triggers */
+	cmd.objectId = domainoid;
+	ExecAfterCommandTriggers(&cmd);
 }
 
 
