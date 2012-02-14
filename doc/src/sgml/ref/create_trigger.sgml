@@ -29,8 +29,11 @@ CREATE [ CONSTRAINT ] TRIGGER <replaceable class="PARAMETER">name</replaceable> 
     [ WHEN ( <replaceable class="parameter">condition</replaceable> ) ]
     EXECUTE PROCEDURE <replaceable class="PARAMETER">function_name</replaceable> ( <replaceable class="PARAMETER">arguments</replaceable> )
 
-CREATE TRIGGER <replaceable class="PARAMETER">name</replaceable> { BEFORE | AFTER | INSTEAD OF } COMMAND <replaceable class="PARAMETER">command</replaceable>
-    EXECUTE PROCEDURE <replaceable class="PARAMETER">function_name</replaceable> ( <replaceable class="PARAMETER">arguments</replaceable> )
+CREATE TRIGGER <replaceable class="PARAMETER">name</replaceable> { BEFORE | AFTER | INSTEAD OF } ANY COMMAND
+    EXECUTE PROCEDURE <replaceable class="PARAMETER">function_name</replaceable> ()
+
+CREATE TRIGGER <replaceable class="PARAMETER">name</replaceable> { BEFORE | AFTER | INSTEAD OF } COMMAND <replaceable class="PARAMETER">command</replaceable> [, ... ]
+    EXECUTE PROCEDURE <replaceable class="PARAMETER">function_name</replaceable> ()
 
 <phrase>where <replaceable class="parameter">event</replaceable> can be one of:</phrase>
 
@@ -41,14 +44,56 @@ CREATE TRIGGER <replaceable class="PARAMETER">name</replaceable> { BEFORE | AFTE
 
 <phrase>and where <replaceable class="parameter">command</replaceable> can be one of:</phrase>
 
-    CREATE TABLE
-    ALTER TABLE
-    DROP TABLE
-    CREATE VIEW
-    DROP VIEW
+    CREATE DATABASE
+    DROP DATABASE
+    CREATE SCHEMA
     CREATE EXTENSION
+    CREATE TABLESPACE
+    CREATE FUNCTION
+    CREATE TABLE
+    CREATE FOREIGN TABLE
+    CREATE INDEX
+    CREATE SEQUENCE
+    CREATE VIEW
+    CREATE AGGREGATE
+    CREATE OPERATOR
+    CREATE COLLATION
+    CREATE TEXT SEARCH PARSER
+    CREATE TEXT SEARCH DICTIONARY
+    CREATE TEXT SEARCH TEMPLATE
+    CREATE TEXT SEARCH CONFIGURATION
+    CREATE TYPE
+    CREATE DOMAIN
+    ALTER TABLE
+    DROP TABLESPACE
+    DROP TABLE
+    DROP SEQUENCE
+    DROP VIEW
+    DROP INDEX
+    DROP FOREIGN TABLE
+    DROP TYPE
+    DROP DOMAIN
+    DROP COLLATION
+    DROP CONVERSION
+    DROP SCHEMA
     DROP EXTENSION
-
+    DROP TEXT SEARCH PARSER
+    DROP TEXT SEARCH DICTIONARY
+    DROP TEXT SEARCH TEMPLATE
+    DROP TEXT SEARCH CONFIGURATION
+    DROP LANGUAGE
+    DROP FOREIGN DATA WRAPPER
+    DROP SERVER
+    DROP TRIGGER
+    DROP ASSERTION
+    DROP OPERATOR CLASS
+    DROP OPERATOR FAMILY
+    DROP FUNCTION
+    DROP AGGREGATE
+    DROP OPERATOR
+    DROP CAST
+    DROP RULE
+	
 </synopsis>
  </refsynopsisdiv>
 
@@ -371,16 +416,19 @@ UPDATE OF <replaceable>column_name1</replaceable> [, <replaceable>column_name2</
      </para>
      <para>
       In the case of a BEFORE COMMAND trigger, the user-supplied function
-      must be declared as taking 4 text arguments and returning a boolean.
-      In the case of an AFTER COMMAND trigger or an INSTEAD OF trigger, the
-      user-supplied function must be declare as taking 4 text arguments and
-      returning void.
+      must be declared as taking 4 arguments of type text, oid, text, text
+      and returning a boolean. In the case of an AFTER COMMAND trigger or an
+      INSTEAD OF trigger, the user-supplied function must be declare as
+      taking the same 4 arguments and returning void.
      </para>
      <para>
       The command trigger function is called with the
-      parameters <literal>command string</literal> (normalized command
-      string rewritten by PostgreSQL), <literal>schemaname</literal> (can be
-      null) and <literal>object name</literal>.
+      parameters <literal>command tag</literal>, <literal>objectid</literal>
+      (can be null in case of a BEFORE CREATE or an AFTER DROP command
+      trigger timing), <literal>schemaname</literal> (can be null for
+      objects not living in a schema, and for sequences due to an
+      implementation limit) and <literal>object name</literal> (can be null
+      for any command triggers).
      </para>
     </listitem>
    </varlistentry>
@@ -397,10 +445,6 @@ UPDATE OF <replaceable>column_name1</replaceable> [, <replaceable>column_name2</
       language of the trigger function to find out how these arguments
       can be accessed within the function; it might be different from
       normal function arguments.
-     </para>
-     <para>
-      Command triggers pay no attention to
-      the <replaceable class="parameter">arguments</replaceable>.
      </para>
     </listitem>
    </varlistentry>
@@ -520,6 +564,24 @@ CREATE TRIGGER view_insert
     EXECUTE PROCEDURE view_insert_row();
 </programlisting>
 
+   Forbids the execution of any DDL command:
+
+<programlisting>
+CREATE OR REPLACE FUNCTION abort_any_command
+ (IN cmd_tag text, IN objectid oid, IN schemaname text, IN objectname text)
+ RETURNS bool
+ LANGUAGE plpgsql
+AS $$
+BEGIN
+  RAISE EXCEPTION 'command % is disabled' % cmd_tag;
+END;
+$$;
+
+CREATE TRIGGER abort_ddl
+        BEFORE COMMAND CREATE TABLE
+       EXECUTE PROCEDURE abort_any_command();
+</programlisting>
+
    Execute the function <function>enforce_local_style</> each time
    a <literal>CREATE TABLE</literal> command is run:
 
@@ -628,6 +690,12 @@ CREATE TRIGGER check_style
 
   <para>
    <command>CREATE CONSTRAINT TRIGGER</command> is a
+   <productname>PostgreSQL</productname> extension of the <acronym>SQL</>
+   standard.
+  </para>
+
+  <para>
+   <command>CREATE TRIGGER ON COMMAND</command> is a
    <productname>PostgreSQL</productname> extension of the <acronym>SQL</>
    standard.
   </para>
