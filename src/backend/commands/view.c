@@ -28,6 +28,7 @@
 #include "rewrite/rewriteDefine.h"
 #include "rewrite/rewriteManip.h"
 #include "rewrite/rewriteSupport.h"
+#include "tcop/utility.h"
 #include "utils/acl.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
@@ -99,7 +100,7 @@ isViewOnTempTable_walker(Node *node, void *context)
  */
 static Oid
 DefineVirtualRelation(RangeVar *relation, List *tlist, bool replace,
-					  List *options)
+					  List *options, CommandContext cmd)
 {
 	Oid			viewOid;
 	LOCKMODE	lockmode;
@@ -167,6 +168,16 @@ DefineVirtualRelation(RangeVar *relation, List *tlist, bool replace,
 	 */
 	lockmode = replace ? AccessExclusiveLock : NoLock;
 	(void) RangeVarGetAndCheckCreationNamespace(relation, lockmode, &viewOid);
+
+	/*
+	 * Call BEFORE CREATE VIEW triggers
+	 */
+	cmd->objectId = InvalidOid;
+	cmd->objectname = relation->relname;
+	cmd->schemaname = relation->schemaname;
+
+	if (ExecBeforeOrInsteadOfCommandTriggers(cmd))
+		return InvalidOid;
 
 	if (OidIsValid(viewOid) && replace)
 	{
@@ -426,6 +437,7 @@ DefineView(ViewStmt *stmt, const char *queryString)
 	Query	   *viewParse;
 	Oid			viewOid;
 	RangeVar   *view;
+	CommandContextData cmd;
 
 	/*
 	 * Run parse analysis to convert the raw parse tree to a Query.  Note this
@@ -511,13 +523,22 @@ DefineView(ViewStmt *stmt, const char *queryString)
 	}
 
 	/*
+	 * Prepare BEFORE CREATE VIEW triggers
+	 */
+	cmd.tag = (char *) CreateCommandTag((Node *)stmt);
+	cmd.parsetree  = (Node *)stmt;
+
+	/*
 	 * Create the view relation
 	 *
 	 * NOTE: if it already exists and replace is false, the xact will be
 	 * aborted.
 	 */
 	viewOid = DefineVirtualRelation(view, viewParse->targetList,
-									stmt->replace, stmt->options);
+									stmt->replace, stmt->options, &cmd);
+
+	if (!OidIsValid(viewOid))
+		return;
 
 	/*
 	 * The relation we have just created is not visible to any other commands
@@ -536,4 +557,8 @@ DefineView(ViewStmt *stmt, const char *queryString)
 	 * Now create the rules associated with the view.
 	 */
 	DefineViewRules(viewOid, viewParse, stmt->replace);
+
+	/* Call AFTER CREATE VIEW triggers */
+	cmd.objectId = viewOid;
+	ExecAfterCommandTriggers(&cmd);
 }
