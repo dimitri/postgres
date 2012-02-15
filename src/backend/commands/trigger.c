@@ -144,6 +144,7 @@ CreateTrigger(CreateTrigStmt *stmt, const char *queryString,
 	Oid			constrrelid = InvalidOid;
 	ObjectAddress myself,
 				referenced;
+	CommandContextData cmd;
 
 	rel = heap_openrv(stmt->relation, AccessExclusiveLock);
 
@@ -416,6 +417,21 @@ CreateTrigger(CreateTrigStmt *stmt, const char *queryString,
 		ConvertTriggerToFK(stmt, funcoid);
 
 		return InvalidOid;
+	}
+
+	/*
+	 * Call BEFORE CREATE TRIGGER triggers
+	 */
+	if (!isInternal)
+	{
+		cmd.tag = (char *) CreateCommandTag((Node *)stmt);
+		cmd.objectId = InvalidOid;
+		cmd.objectname = stmt->trigname;
+		cmd.schemaname = get_namespace_name(RelationGetNamespace(rel));
+		cmd.parsetree  = (Node *)stmt;
+
+		if (ExecBeforeOrInsteadOfCommandTriggers(&cmd))
+			return InvalidOid;
 	}
 
 	/*
@@ -754,6 +770,12 @@ CreateTrigger(CreateTrigStmt *stmt, const char *queryString,
 	/* Keep lock on target rel until end of xact */
 	heap_close(rel, NoLock);
 
+	/* Call AFTER CREATE TRIGGER triggers */
+	if (!isInternal)
+	{
+		cmd.objectId = trigoid;
+		ExecAfterCommandTriggers(&cmd);
+	}
 	return trigoid;
 }
 
@@ -1201,7 +1223,7 @@ RangeVarCallbackForRenameTrigger(const RangeVar *rv, Oid relid, Oid oldrelid,
  *		update row in catalog
  */
 void
-renametrig(RenameStmt *stmt)
+renametrig(RenameStmt *stmt, CommandContext cmd)
 {
 	Relation	targetrel;
 	Relation	tgrel;
@@ -1268,6 +1290,19 @@ renametrig(RenameStmt *stmt)
 								SnapshotNow, 2, key);
 	if (HeapTupleIsValid(tuple = systable_getnext(tgscan)))
 	{
+		/* Call BEFORE ALTER TRIGGER triggers */
+		cmd->objectId = HeapTupleGetOid(tuple);
+		cmd->objectname = stmt->subname;
+		cmd->schemaname = get_namespace_name(RelationGetNamespace(targetrel));
+
+		if (ExecBeforeOrInsteadOfCommandTriggers(cmd))
+		{
+			systable_endscan(tgscan);
+			heap_close(tgrel, RowExclusiveLock);
+			relation_close(targetrel, NoLock);
+			return;
+		}
+
 		/*
 		 * Update pg_trigger tuple with new tgname.
 		 */
@@ -1304,6 +1339,10 @@ renametrig(RenameStmt *stmt)
 	 * Close rel, but keep exclusive lock!
 	 */
 	relation_close(targetrel, NoLock);
+
+	/* Call AFTER ALTER TRIGGER triggers */
+	cmd->objectname = stmt->newname;
+	ExecAfterCommandTriggers(cmd);
 }
 
 

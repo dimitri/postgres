@@ -924,7 +924,7 @@ dropdb(const DropdbStmt *stmt)
  * Rename database
  */
 void
-RenameDatabase(const char *oldname, const char *newname)
+RenameDatabase(const char *oldname, const char *newname, CommandContext cmd)
 {
 	Oid			db_id;
 	HeapTuple	newtup;
@@ -988,6 +988,17 @@ RenameDatabase(const char *oldname, const char *newname)
 						oldname),
 				 errdetail_busy_db(notherbackends, npreparedxacts)));
 
+	/* Call BEFORE ALTER DATABASE triggers */
+	cmd->objectId = db_id;
+	cmd->objectname = (char *)oldname;
+	cmd->schemaname = NULL;
+
+	if (ExecBeforeOrInsteadOfCommandTriggers(cmd))
+	{
+		heap_close(rel, NoLock);
+		return;
+	}
+
 	/* rename */
 	newtup = SearchSysCacheCopy1(DATABASEOID, ObjectIdGetDatum(db_id));
 	if (!HeapTupleIsValid(newtup))
@@ -1000,6 +1011,10 @@ RenameDatabase(const char *oldname, const char *newname)
 	 * Close pg_database, but keep lock till commit.
 	 */
 	heap_close(rel, NoLock);
+
+	/* Call AFTER ALTER DATABASE triggers */
+	cmd->objectname = (char *)newname;
+	ExecAfterCommandTriggers(cmd);
 }
 
 
@@ -1337,6 +1352,7 @@ AlterDatabase(AlterDatabaseStmt *stmt, bool isTopLevel)
 	Datum		new_record[Natts_pg_database];
 	bool		new_record_nulls[Natts_pg_database];
 	bool		new_record_repl[Natts_pg_database];
+	CommandContextData cmd;
 
 	/* Extract options from the statement node tree */
 	foreach(option, stmt->options)
@@ -1406,6 +1422,18 @@ AlterDatabase(AlterDatabaseStmt *stmt, bool isTopLevel)
 					   stmt->dbname);
 
 	/*
+	 * Call BEFORE ALTER DATABASE triggers
+	 */
+	cmd.tag = (char *) CreateCommandTag((Node *)stmt);
+	cmd.objectId = HeapTupleGetOid(tuple);
+	cmd.objectname = stmt->dbname;
+	cmd.schemaname = NULL;
+	cmd.parsetree  = (Node *)stmt;
+
+	if (ExecBeforeOrInsteadOfCommandTriggers(&cmd))
+		return;
+
+	/*
 	 * Build an updated tuple, perusing the information just obtained
 	 */
 	MemSet(new_record, 0, sizeof(new_record));
@@ -1429,6 +1457,9 @@ AlterDatabase(AlterDatabaseStmt *stmt, bool isTopLevel)
 
 	/* Close pg_database, but keep lock till commit */
 	heap_close(rel, NoLock);
+
+	/* Call AFTER ALTER DATABASE triggers */
+	ExecAfterCommandTriggers(&cmd);
 }
 
 
@@ -1439,6 +1470,7 @@ void
 AlterDatabaseSet(AlterDatabaseSetStmt *stmt)
 {
 	Oid			datid = get_database_oid(stmt->dbname, false);
+	CommandContextData cmd;
 
 	/*
 	 * Obtain a lock on the database and make sure it didn't go away in the
@@ -1450,9 +1482,27 @@ AlterDatabaseSet(AlterDatabaseSetStmt *stmt)
 		aclcheck_error(ACLCHECK_NOT_OWNER, ACL_KIND_DATABASE,
 					   stmt->dbname);
 
+	/*
+	 * Call BEFORE ALTER DATABASE triggers
+	 */
+	cmd.tag = (char *) CreateCommandTag((Node *)stmt);
+	cmd.objectId = datid;
+	cmd.objectname = stmt->dbname;
+	cmd.schemaname = NULL;
+	cmd.parsetree  = (Node *)stmt;
+
+	if (ExecBeforeOrInsteadOfCommandTriggers(&cmd))
+	{
+		UnlockSharedObject(DatabaseRelationId, datid, 0, AccessShareLock);
+		return;
+	}
+
 	AlterSetting(datid, InvalidOid, stmt->setstmt);
 
 	UnlockSharedObject(DatabaseRelationId, datid, 0, AccessShareLock);
+
+	/* Call AFTER ALTER DATABASE triggers */
+	ExecAfterCommandTriggers(&cmd);
 }
 
 
@@ -1460,7 +1510,7 @@ AlterDatabaseSet(AlterDatabaseSetStmt *stmt)
  * ALTER DATABASE name OWNER TO newowner
  */
 void
-AlterDatabaseOwner(const char *dbname, Oid newOwnerId)
+AlterDatabaseOwner(const char *dbname, Oid newOwnerId, CommandContext cmd)
 {
 	HeapTuple	tuple;
 	Relation	rel;
@@ -1525,6 +1575,19 @@ AlterDatabaseOwner(const char *dbname, Oid newOwnerId)
 					(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
 				   errmsg("permission denied to change owner of database")));
 
+		/* Call BEFORE ALTER DATABASE triggers */
+		cmd->objectId = HeapTupleGetOid(tuple);
+		cmd->objectname = (char *)dbname;
+		cmd->schemaname = NULL;
+
+		if (ExecBeforeOrInsteadOfCommandTriggers(cmd))
+		{
+			heap_freetuple(tuple);
+			systable_endscan(scan);
+			heap_close(rel, NoLock);
+			return;
+		}
+
 		memset(repl_null, false, sizeof(repl_null));
 		memset(repl_repl, false, sizeof(repl_repl));
 
@@ -1556,6 +1619,9 @@ AlterDatabaseOwner(const char *dbname, Oid newOwnerId)
 		/* Update owner dependency reference */
 		changeDependencyOnOwner(DatabaseRelationId, HeapTupleGetOid(tuple),
 								newOwnerId);
+
+		/* Call AFTER ALTER DATABASE triggers */
+		ExecAfterCommandTriggers(cmd);
 	}
 
 	systable_endscan(scan);

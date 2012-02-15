@@ -51,7 +51,8 @@
 #include "utils/syscache.h"
 
 
-static void AlterOperatorOwner_internal(Relation rel, Oid operOid, Oid newOwnerId);
+static void AlterOperatorOwner_internal(Relation rel, Oid operOid, Oid newOwnerId,
+										CommandContext cmd);
 
 /*
  * DefineOperator
@@ -344,7 +345,7 @@ AlterOperatorOwner_oid(Oid operOid, Oid newOwnerId)
 
 	rel = heap_open(OperatorRelationId, RowExclusiveLock);
 
-	AlterOperatorOwner_internal(rel, operOid, newOwnerId);
+	AlterOperatorOwner_internal(rel, operOid, newOwnerId, NULL);
 
 	heap_close(rel, NoLock);
 }
@@ -354,7 +355,7 @@ AlterOperatorOwner_oid(Oid operOid, Oid newOwnerId)
  */
 void
 AlterOperatorOwner(List *name, TypeName *typeName1, TypeName *typeName2,
-				   Oid newOwnerId)
+				   Oid newOwnerId, CommandContext cmd)
 {
 	Oid			operOid;
 	Relation	rel;
@@ -365,13 +366,14 @@ AlterOperatorOwner(List *name, TypeName *typeName1, TypeName *typeName2,
 									  typeName1, typeName2,
 									  false, -1);
 
-	AlterOperatorOwner_internal(rel, operOid, newOwnerId);
+	AlterOperatorOwner_internal(rel, operOid, newOwnerId, cmd);
 
 	heap_close(rel, NoLock);
 }
 
 static void
-AlterOperatorOwner_internal(Relation rel, Oid operOid, Oid newOwnerId)
+AlterOperatorOwner_internal(Relation rel, Oid operOid, Oid newOwnerId,
+							CommandContext cmd)
 {
 	HeapTuple	tup;
 	AclResult	aclresult;
@@ -411,6 +413,20 @@ AlterOperatorOwner_internal(Relation rel, Oid operOid, Oid newOwnerId)
 							   get_namespace_name(oprForm->oprnamespace));
 		}
 
+		/* Call BEFORE ALTER OPERATOR triggers */
+		if (cmd!=NULL)
+		{
+			cmd->objectId = operOid;
+			cmd->objectname = NameStr(oprForm->oprname);
+			cmd->schemaname = get_namespace_name(oprForm->oprnamespace);
+
+			if (ExecBeforeOrInsteadOfCommandTriggers(cmd))
+			{
+				heap_freetuple(tup);
+				return;
+			}
+		}
+
 		/*
 		 * Modify the owner --- okay to scribble on tup because it's a copy
 		 */
@@ -425,13 +441,18 @@ AlterOperatorOwner_internal(Relation rel, Oid operOid, Oid newOwnerId)
 	}
 
 	heap_freetuple(tup);
+
+	/* Call AFTER ALTER OPERATOR triggers */
+	if (cmd!=NULL)
+		ExecAfterCommandTriggers(cmd);
 }
 
 /*
  * Execute ALTER OPERATOR SET SCHEMA
  */
 void
-AlterOperatorNamespace(List *names, List *argtypes, const char *newschema)
+AlterOperatorNamespace(List *names, List *argtypes, const char *newschema,
+					   CommandContext cmd)
 {
 	List	   *operatorName = names;
 	TypeName   *typeName1 = (TypeName *) linitial(argtypes);
@@ -455,7 +476,7 @@ AlterOperatorNamespace(List *names, List *argtypes, const char *newschema)
 						 Anum_pg_operator_oprname,
 						 Anum_pg_operator_oprnamespace,
 						 Anum_pg_operator_oprowner,
-						 ACL_KIND_OPER);
+						 ACL_KIND_OPER, cmd);
 
 	heap_close(rel, RowExclusiveLock);
 }
@@ -473,7 +494,7 @@ AlterOperatorNamespace_oid(Oid operOid, Oid newNspOid)
 									 Anum_pg_operator_oprname,
 									 Anum_pg_operator_oprnamespace,
 									 Anum_pg_operator_oprowner,
-									 ACL_KIND_OPER);
+									 ACL_KIND_OPER, NULL);
 
 	heap_close(rel, RowExclusiveLock);
 

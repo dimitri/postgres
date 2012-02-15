@@ -2355,7 +2355,7 @@ renameatt(RenameStmt *stmt)
  * Execute ALTER TABLE/INDEX/SEQUENCE/VIEW/FOREIGN TABLE RENAME
  */
 void
-RenameRelation(RenameStmt *stmt)
+RenameRelation(RenameStmt *stmt, CommandContext cmd)
 {
 	Oid			relid;
 
@@ -2380,7 +2380,7 @@ RenameRelation(RenameStmt *stmt)
 	}
 
 	/* Do the work */
-	RenameRelationInternal(relid, stmt->newname);
+	RenameRelationInternal(relid, stmt->newname, cmd);
 }
 
 /*
@@ -2393,7 +2393,7 @@ RenameRelation(RenameStmt *stmt)
  *			  sequence, AFAIK there's no need for it to be there.
  */
 void
-RenameRelationInternal(Oid myrelid, const char *newrelname)
+RenameRelationInternal(Oid myrelid, const char *newrelname, CommandContext cmd)
 {
 	Relation	targetrelation;
 	Relation	relrelation;	/* for RELATION relation */
@@ -2424,6 +2424,22 @@ RenameRelationInternal(Oid myrelid, const char *newrelname)
 				 errmsg("relation \"%s\" already exists",
 						newrelname)));
 
+	/* Call BEFORE ALTER relation triggers */
+	if (cmd!=NULL)
+	{
+		cmd->objectId = HeapTupleGetOid(reltup);
+		cmd->objectname = NameStr(relform->relname);
+		cmd->schemaname = get_namespace_name(namespaceId);
+
+		if (ExecBeforeOrInsteadOfCommandTriggers(cmd))
+		{
+			heap_freetuple(reltup);
+			heap_close(relrelation, RowExclusiveLock);
+			relation_close(targetrelation, NoLock);
+			return;
+		}
+	}
+
 	/*
 	 * Update pg_class tuple with new relname.	(Scribbling on reltup is OK
 	 * because it's a copy...)
@@ -2443,7 +2459,7 @@ RenameRelationInternal(Oid myrelid, const char *newrelname)
 	 */
 	if (OidIsValid(targetrelation->rd_rel->reltype))
 		RenameTypeInternal(targetrelation->rd_rel->reltype,
-						   newrelname, namespaceId);
+						   newrelname, namespaceId, NULL);
 
 	/*
 	 * Also rename the associated constraint, if any.
@@ -2460,6 +2476,13 @@ RenameRelationInternal(Oid myrelid, const char *newrelname)
 	 * Close rel, but keep exclusive lock!
 	 */
 	relation_close(targetrelation, NoLock);
+
+	/* Call AFTER ALTER relation triggers */
+	if (cmd!=NULL)
+	{
+		cmd->objectname = (char *)newrelname;
+		ExecAfterCommandTriggers(cmd);
+	}
 }
 
 /*
@@ -5417,7 +5440,7 @@ ATExecAddIndexConstraint(AlteredTableInfo *tab, Relation rel,
 		ereport(NOTICE,
 				(errmsg("ALTER TABLE / ADD CONSTRAINT USING INDEX will rename index \"%s\" to \"%s\"",
 						indexName, constraintName)));
-		RenameRelationInternal(index_oid, constraintName);
+		RenameRelationInternal(index_oid, constraintName, NULL);
 	}
 
 	/* Extra checks needed if making primary key */
@@ -9506,6 +9529,7 @@ AlterTableNamespace(AlterObjectSchemaStmt *stmt)
 	Oid			nspOid;
 	Relation	classRel;
 	RangeVar   *newrv;
+	CommandContextData cmd;
 
 	relid = RangeVarGetRelidExtended(stmt->relation, AccessExclusiveLock,
 									 stmt->missing_ok, false,
@@ -9546,13 +9570,23 @@ AlterTableNamespace(AlterObjectSchemaStmt *stmt)
 	/* common checks on switching namespaces */
 	CheckSetNamespace(oldNspOid, nspOid, RelationRelationId, relid);
 
+	/* Call BEFORE ALTER TABLE triggers */
+	cmd.tag = (char *) CreateCommandTag((Node *)stmt);
+	cmd.objectId = relid;
+	cmd.objectname = stmt->relation->relname;
+	cmd.schemaname = get_namespace_name(oldNspOid);
+	cmd.parsetree  = (Node *)stmt;
+
+	if (ExecBeforeOrInsteadOfCommandTriggers(&cmd))
+		return;
+
 	/* OK, modify the pg_class row and pg_depend entry */
 	classRel = heap_open(RelationRelationId, RowExclusiveLock);
 
 	AlterRelationNamespaceInternal(classRel, relid, oldNspOid, nspOid, true);
 
 	/* Fix the table's row type too */
-	AlterTypeNamespaceInternal(rel->rd_rel->reltype, nspOid, false, false);
+	AlterTypeNamespaceInternal(rel->rd_rel->reltype, nspOid, false, false, NULL);
 
 	/* Fix other dependent stuff */
 	if (rel->rd_rel->relkind == RELKIND_RELATION)
@@ -9567,6 +9601,10 @@ AlterTableNamespace(AlterObjectSchemaStmt *stmt)
 
 	/* close rel, but keep lock until commit */
 	relation_close(rel, NoLock);
+
+	/* Call AFTER ALTER TABLE triggers */
+	cmd.schemaname = get_namespace_name(nspOid);
+	ExecAfterCommandTriggers(&cmd);
 }
 
 /*
@@ -9714,7 +9752,7 @@ AlterSeqNamespaces(Relation classRel, Relation rel,
 		 * them to the new namespace, too.
 		 */
 		AlterTypeNamespaceInternal(RelationGetForm(seqRel)->reltype,
-								   newNspOid, false, false);
+								   newNspOid, false, false, NULL);
 
 		/* Now we can close it.  Keep the lock till end of transaction. */
 		relation_close(seqRel, NoLock);

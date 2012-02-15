@@ -67,7 +67,7 @@
 
 
 static void AlterFunctionOwner_internal(Relation rel, HeapTuple tup,
-							Oid newOwnerId);
+										Oid newOwnerId, CommandContext cmd);
 
 
 /*
@@ -1046,7 +1046,7 @@ RemoveFunctionById(Oid funcOid)
  * Rename function
  */
 void
-RenameFunction(List *name, List *argtypes, const char *newname)
+RenameFunction(List *name, List *argtypes, const char *newname, CommandContext cmd)
 {
 	Oid			procOid;
 	Oid			namespaceOid;
@@ -1100,6 +1100,18 @@ RenameFunction(List *name, List *argtypes, const char *newname)
 		aclcheck_error(aclresult, ACL_KIND_NAMESPACE,
 					   get_namespace_name(namespaceOid));
 
+	/* Call BEFORE ALTER FUNCTION triggers */
+	cmd->objectId = procOid;
+	cmd->objectname = NameListToString(name);
+	cmd->schemaname = get_namespace_name(namespaceOid);
+
+	if (ExecBeforeOrInsteadOfCommandTriggers(cmd))
+	{
+		heap_close(rel, NoLock);
+		heap_freetuple(tup);
+		return;
+	}
+
 	/* rename */
 	namestrcpy(&(procForm->proname), newname);
 	simple_heap_update(rel, &tup->t_self, tup);
@@ -1107,13 +1119,18 @@ RenameFunction(List *name, List *argtypes, const char *newname)
 
 	heap_close(rel, NoLock);
 	heap_freetuple(tup);
+
+	/* Call AFTER ALTER FUNCTION triggers */
+	cmd->objectname = (char *)newname;
+	ExecAfterCommandTriggers(cmd);
 }
 
 /*
  * Change function owner by name and args
  */
 void
-AlterFunctionOwner(List *name, List *argtypes, Oid newOwnerId)
+AlterFunctionOwner(List *name, List *argtypes, Oid newOwnerId,
+				   CommandContext cmd)
 {
 	Relation	rel;
 	Oid			procOid;
@@ -1134,7 +1151,7 @@ AlterFunctionOwner(List *name, List *argtypes, Oid newOwnerId)
 						NameListToString(name)),
 				 errhint("Use ALTER AGGREGATE to change owner of aggregate functions.")));
 
-	AlterFunctionOwner_internal(rel, tup, newOwnerId);
+	AlterFunctionOwner_internal(rel, tup, newOwnerId, cmd);
 
 	heap_close(rel, NoLock);
 }
@@ -1143,7 +1160,7 @@ AlterFunctionOwner(List *name, List *argtypes, Oid newOwnerId)
  * Change function owner by Oid
  */
 void
-AlterFunctionOwner_oid(Oid procOid, Oid newOwnerId)
+AlterFunctionOwner_oid(Oid procOid, Oid newOwnerId, CommandContext cmd)
 {
 	Relation	rel;
 	HeapTuple	tup;
@@ -1153,13 +1170,14 @@ AlterFunctionOwner_oid(Oid procOid, Oid newOwnerId)
 	tup = SearchSysCache1(PROCOID, ObjectIdGetDatum(procOid));
 	if (!HeapTupleIsValid(tup)) /* should not happen */
 		elog(ERROR, "cache lookup failed for function %u", procOid);
-	AlterFunctionOwner_internal(rel, tup, newOwnerId);
+	AlterFunctionOwner_internal(rel, tup, newOwnerId, cmd);
 
 	heap_close(rel, NoLock);
 }
 
 static void
-AlterFunctionOwner_internal(Relation rel, HeapTuple tup, Oid newOwnerId)
+AlterFunctionOwner_internal(Relation rel, HeapTuple tup, Oid newOwnerId,
+							CommandContext cmd)
 {
 	Form_pg_proc procForm;
 	AclResult	aclresult;
@@ -1205,6 +1223,19 @@ AlterFunctionOwner_internal(Relation rel, HeapTuple tup, Oid newOwnerId)
 							   get_namespace_name(procForm->pronamespace));
 		}
 
+		/* Call BEFORE ALTER FUNCTION triggers */
+		if (cmd!=NULL)
+		{
+			cmd->objectId = procOid;
+			cmd->objectname = NameStr(procForm->proname);
+			cmd->schemaname = get_namespace_name(procForm->pronamespace);
+
+			if (ExecBeforeOrInsteadOfCommandTriggers(cmd))
+			{
+				ReleaseSysCache(tup);
+				return;
+			}
+		}
 		memset(repl_null, false, sizeof(repl_null));
 		memset(repl_repl, false, sizeof(repl_repl));
 
@@ -1236,6 +1267,10 @@ AlterFunctionOwner_internal(Relation rel, HeapTuple tup, Oid newOwnerId)
 
 		/* Update owner dependency reference */
 		changeDependencyOnOwner(ProcedureRelationId, procOid, newOwnerId);
+
+		/* Call AFTER ALTER FUNCTION triggers */
+		if (cmd!=NULL)
+			ExecAfterCommandTriggers(cmd);
 	}
 
 	ReleaseSysCache(tup);
@@ -1805,7 +1840,7 @@ DropCastById(Oid castOid)
  */
 void
 AlterFunctionNamespace(List *name, List *argtypes, bool isagg,
-					   const char *newschema)
+					   const char *newschema, CommandContext cmd)
 {
 	Oid			procOid;
 	Oid			nspOid;
@@ -1819,11 +1854,11 @@ AlterFunctionNamespace(List *name, List *argtypes, bool isagg,
 	/* get schema OID and check its permissions */
 	nspOid = LookupCreationNamespace(newschema);
 
-	AlterFunctionNamespace_oid(procOid, nspOid);
+	AlterFunctionNamespace_oid(procOid, nspOid, cmd);
 }
 
 Oid
-AlterFunctionNamespace_oid(Oid procOid, Oid nspOid)
+AlterFunctionNamespace_oid(Oid procOid, Oid nspOid, CommandContext cmd)
 {
 	Oid			oldNspOid;
 	HeapTuple	tup;
@@ -1858,6 +1893,17 @@ AlterFunctionNamespace_oid(Oid procOid, Oid nspOid)
 						NameStr(proc->proname),
 						get_namespace_name(nspOid))));
 
+	/* Call BEFORE ALTER FUNCTION triggers */
+	if (cmd!=NULL)
+	{
+		cmd->objectId = procOid;
+		cmd->objectname = NameStr(proc->proname);
+		cmd->schemaname = get_namespace_name(oldNspOid);
+
+		if (ExecBeforeOrInsteadOfCommandTriggers(cmd))
+			return oldNspOid;
+	}
+
 	/* OK, modify the pg_proc row */
 
 	/* tup is a copy, so we can scribble directly on it */
@@ -1876,6 +1922,11 @@ AlterFunctionNamespace_oid(Oid procOid, Oid nspOid)
 
 	heap_close(procRel, RowExclusiveLock);
 
+	if (cmd!=NULL)
+	{
+		cmd->schemaname = get_namespace_name(nspOid);
+		ExecAfterCommandTriggers(cmd);
+	}
 	return oldNspOid;
 }
 

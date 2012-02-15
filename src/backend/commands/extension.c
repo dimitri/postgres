@@ -2204,7 +2204,7 @@ pg_extension_config_dump(PG_FUNCTION_ARGS)
  * Execute ALTER EXTENSION SET SCHEMA
  */
 void
-AlterExtensionNamespace(List *names, const char *newschema)
+AlterExtensionNamespace(List *names, const char *newschema, CommandContext cmd)
 {
 	char	   *extensionName;
 	Oid			extensionOid;
@@ -2264,6 +2264,14 @@ AlterExtensionNamespace(List *names, const char *newschema)
 	extForm = (Form_pg_extension) GETSTRUCT(extTup);
 
 	systable_endscan(extScan);
+
+	/* Call BEFORE ALTER EXTENSION triggers */
+	cmd->objectId = extensionOid;
+	cmd->objectname = extensionName;
+	cmd->schemaname = NULL;
+
+	if (ExecBeforeOrInsteadOfCommandTriggers(cmd))
+		return;
 
 	/*
 	 * If the extension is already in the target schema, just silently do
@@ -2360,6 +2368,9 @@ AlterExtensionNamespace(List *names, const char *newschema)
 	/* update dependencies to point to the new schema */
 	changeDependencyFor(ExtensionRelationId, extensionOid,
 						NamespaceRelationId, oldNspOid, nspOid);
+
+	/* Call AFTER ALTER EXTENSION triggers */
+	ExecAfterCommandTriggers(cmd);
 }
 
 /*
@@ -2381,6 +2392,7 @@ ExecAlterExtensionStmt(AlterExtensionStmt *stmt)
 	Datum		datum;
 	bool		isnull;
 	ListCell   *lc;
+	CommandContextData cmd;
 
 	/*
 	 * We use global variables to track the extension being created, so we can
@@ -2431,6 +2443,18 @@ ExecAlterExtensionStmt(AlterExtensionStmt *stmt)
 	if (!pg_extension_ownercheck(extensionOid, GetUserId()))
 		aclcheck_error(ACLCHECK_NOT_OWNER, ACL_KIND_EXTENSION,
 					   stmt->extname);
+
+	/*
+	 * Call BEFORE ALTER EXTENSION triggers
+	 */
+	cmd.tag = (char *) CreateCommandTag((Node *)stmt);
+	cmd.objectId = extensionOid;
+	cmd.objectname = stmt->extname;
+	cmd.schemaname = NULL;
+	cmd.parsetree  = (Node *)stmt;
+
+	if (ExecBeforeOrInsteadOfCommandTriggers(&cmd))
+		return;
 
 	/*
 	 * Read the primary control file.  Note we assume that it does not contain
@@ -2498,6 +2522,9 @@ ExecAlterExtensionStmt(AlterExtensionStmt *stmt)
 	 */
 	ApplyExtensionUpdates(extensionOid, control,
 						  oldVersionName, updateVersions);
+
+	/* Call AFTER ALTER EXTENSION triggers */
+	ExecAfterCommandTriggers(&cmd);
 }
 
 /*

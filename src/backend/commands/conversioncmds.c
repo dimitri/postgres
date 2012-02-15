@@ -31,7 +31,7 @@
 #include "utils/syscache.h"
 
 static void AlterConversionOwner_internal(Relation rel, Oid conversionOid,
-							  Oid newOwnerId);
+							  Oid newOwnerId, CommandContext cmd);
 
 /*
  * CREATE CONVERSION
@@ -121,7 +121,7 @@ CreateConversionCommand(CreateConversionStmt *stmt)
  * Rename conversion
  */
 void
-RenameConversion(List *name, const char *newname)
+RenameConversion(List *name, const char *newname, CommandContext cmd)
 {
 	Oid			conversionOid;
 	Oid			namespaceOid;
@@ -159,6 +159,18 @@ RenameConversion(List *name, const char *newname)
 		aclcheck_error(aclresult, ACL_KIND_NAMESPACE,
 					   get_namespace_name(namespaceOid));
 
+	/* Call BEFORE ALTER CONVERSION triggers */
+	cmd->objectId = HeapTupleGetOid(tup);
+	cmd->objectname = NameStr((((Form_pg_conversion) GETSTRUCT(tup))->conname));
+	cmd->schemaname = get_namespace_name(namespaceOid);
+
+	if (ExecBeforeOrInsteadOfCommandTriggers(cmd))
+	{
+		heap_freetuple(tup);
+		heap_close(rel, NoLock);
+		return;
+	}
+
 	/* rename */
 	namestrcpy(&(((Form_pg_conversion) GETSTRUCT(tup))->conname), newname);
 	simple_heap_update(rel, &tup->t_self, tup);
@@ -166,13 +178,17 @@ RenameConversion(List *name, const char *newname)
 
 	heap_close(rel, NoLock);
 	heap_freetuple(tup);
+
+	/* Call AFTER ALTER CONVERSION triggers */
+	cmd->objectname = (char *)newname;
+	ExecAfterCommandTriggers(cmd);
 }
 
 /*
  * Change conversion owner, by name
  */
 void
-AlterConversionOwner(List *name, Oid newOwnerId)
+AlterConversionOwner(List *name, Oid newOwnerId, CommandContext cmd)
 {
 	Oid			conversionOid;
 	Relation	rel;
@@ -181,7 +197,7 @@ AlterConversionOwner(List *name, Oid newOwnerId)
 
 	conversionOid = get_conversion_oid(name, false);
 
-	AlterConversionOwner_internal(rel, conversionOid, newOwnerId);
+	AlterConversionOwner_internal(rel, conversionOid, newOwnerId, cmd);
 
 	heap_close(rel, NoLock);
 }
@@ -190,13 +206,13 @@ AlterConversionOwner(List *name, Oid newOwnerId)
  * Change conversion owner, by oid
  */
 void
-AlterConversionOwner_oid(Oid conversionOid, Oid newOwnerId)
+AlterConversionOwner_oid(Oid conversionOid, Oid newOwnerId, CommandContext cmd)
 {
 	Relation	rel;
 
 	rel = heap_open(ConversionRelationId, RowExclusiveLock);
 
-	AlterConversionOwner_internal(rel, conversionOid, newOwnerId);
+	AlterConversionOwner_internal(rel, conversionOid, newOwnerId, cmd);
 
 	heap_close(rel, NoLock);
 }
@@ -208,7 +224,8 @@ AlterConversionOwner_oid(Oid conversionOid, Oid newOwnerId)
  * open and suitably locked; it will not be closed.
  */
 static void
-AlterConversionOwner_internal(Relation rel, Oid conversionOid, Oid newOwnerId)
+AlterConversionOwner_internal(Relation rel, Oid conversionOid, Oid newOwnerId,
+							  CommandContext cmd)
 {
 	Form_pg_conversion convForm;
 	HeapTuple	tup;
@@ -249,6 +266,20 @@ AlterConversionOwner_internal(Relation rel, Oid conversionOid, Oid newOwnerId)
 							   get_namespace_name(convForm->connamespace));
 		}
 
+		/* Call BEFORE ALTER CONVERSION triggers */
+		if (cmd!=NULL)
+		{
+			cmd->objectId = HeapTupleGetOid(tup);
+			cmd->objectname = NameStr(convForm->conname);
+			cmd->schemaname = get_namespace_name(convForm->connamespace);
+
+			if (ExecBeforeOrInsteadOfCommandTriggers(cmd))
+			{
+				heap_freetuple(tup);
+				return;
+			}
+		}
+
 		/*
 		 * Modify the owner --- okay to scribble on tup because it's a copy
 		 */
@@ -261,6 +292,10 @@ AlterConversionOwner_internal(Relation rel, Oid conversionOid, Oid newOwnerId)
 		/* Update owner dependency reference */
 		changeDependencyOnOwner(ConversionRelationId, conversionOid,
 								newOwnerId);
+
+		/* Call AFTER ALTER CONVERSION triggers */
+		if (cmd!=NULL)
+			ExecAfterCommandTriggers(cmd);
 	}
 
 	heap_freetuple(tup);
@@ -270,7 +305,7 @@ AlterConversionOwner_internal(Relation rel, Oid conversionOid, Oid newOwnerId)
  * Execute ALTER CONVERSION SET SCHEMA
  */
 void
-AlterConversionNamespace(List *name, const char *newschema)
+AlterConversionNamespace(List *name, const char *newschema, CommandContext cmd)
 {
 	Oid			convOid,
 				nspOid;
@@ -288,7 +323,7 @@ AlterConversionNamespace(List *name, const char *newschema)
 						 Anum_pg_conversion_conname,
 						 Anum_pg_conversion_connamespace,
 						 Anum_pg_conversion_conowner,
-						 ACL_KIND_CONVERSION);
+						 ACL_KIND_CONVERSION, cmd);
 
 	heap_close(rel, RowExclusiveLock);
 }
@@ -309,7 +344,7 @@ AlterConversionNamespace_oid(Oid convOid, Oid newNspOid)
 									 Anum_pg_conversion_conname,
 									 Anum_pg_conversion_connamespace,
 									 Anum_pg_conversion_conowner,
-									 ACL_KIND_CONVERSION);
+									 ACL_KIND_CONVERSION, NULL);
 
 	heap_close(rel, RowExclusiveLock);
 

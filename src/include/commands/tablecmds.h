@@ -15,6 +15,7 @@
 #define TABLECMDS_H
 
 #include "access/htup.h"
+#include "commands/cmdtrigger.h"
 #include "nodes/parsenodes.h"
 #include "storage/lock.h"
 #include "utils/relcache.h"
@@ -48,10 +49,10 @@ extern void SetRelationHasSubclass(Oid relationId, bool relhassubclass);
 
 extern void renameatt(RenameStmt *stmt);
 
-extern void RenameRelation(RenameStmt *stmt);
+extern void RenameRelation(RenameStmt *stmt, CommandContext cmd);
 
 extern void RenameRelationInternal(Oid myrelid,
-					   const char *newrelname);
+								   const char *newrelname, CommandContext cmd);
 
 extern void find_composite_type_dependencies(Oid typeOid,
 								 Relation origRelation,

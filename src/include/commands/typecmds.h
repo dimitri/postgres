@@ -39,14 +39,17 @@ extern void AlterDomainDropConstraint(List *names, const char *constrName,
 
 extern List *GetDomainConstraints(Oid typeOid);
 
-extern void RenameType(RenameStmt *stmt);
-extern void AlterTypeOwner(List *names, Oid newOwnerId, ObjectType objecttype);
+extern void RenameType(RenameStmt *stmt, CommandContext cmd);
+extern void AlterTypeOwner(List *names, Oid newOwnerId, ObjectType objecttype,
+							   CommandContext cmd);
 extern void AlterTypeOwnerInternal(Oid typeOid, Oid newOwnerId,
 					   bool hasDependEntry);
-extern void AlterTypeNamespace(List *names, const char *newschema, ObjectType objecttype);
-extern Oid	AlterTypeNamespace_oid(Oid typeOid, Oid nspOid);
+extern void AlterTypeNamespace(List *names, const char *newschema,
+								   ObjectType objecttype, CommandContext cmd);
+extern Oid	AlterTypeNamespace_oid(Oid typeOid, Oid nspOid, CommandContext cmd);
 extern Oid AlterTypeNamespaceInternal(Oid typeOid, Oid nspOid,
 						   bool isImplicitArray,
-						   bool errorOnTableType);
+						   bool errorOnTableType,
+						   CommandContext cmd);
 
 #endif   /* TYPECMDS_H */

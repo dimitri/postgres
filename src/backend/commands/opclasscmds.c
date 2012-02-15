@@ -1919,7 +1919,8 @@ AlterOpClassOwner_internal(Relation rel, HeapTuple tup, Oid newOwnerId)
  * ALTER OPERATOR CLASS any_name USING access_method SET SCHEMA name
  */
 void
-AlterOpClassNamespace(List *name, char *access_method, const char *newschema)
+AlterOpClassNamespace(List *name, char *access_method, const char *newschema,
+					  CommandContext cmd)
 {
 	Oid			amOid;
 	Relation	rel;
@@ -1941,7 +1942,7 @@ AlterOpClassNamespace(List *name, char *access_method, const char *newschema)
 						 Anum_pg_opclass_opcname,
 						 Anum_pg_opclass_opcnamespace,
 						 Anum_pg_opclass_opcowner,
-						 ACL_KIND_OPCLASS);
+						 ACL_KIND_OPCLASS, cmd);
 
 	heap_close(rel, RowExclusiveLock);
 }
@@ -1960,7 +1961,7 @@ AlterOpClassNamespace_oid(Oid opclassOid, Oid newNspOid)
 							 Anum_pg_opclass_opcname,
 							 Anum_pg_opclass_opcnamespace,
 							 Anum_pg_opclass_opcowner,
-							 ACL_KIND_OPCLASS);
+							 ACL_KIND_OPCLASS, NULL);
 
 	heap_close(rel, RowExclusiveLock);
 
@@ -2128,7 +2129,8 @@ get_am_oid(const char *amname, bool missing_ok)
  * ALTER OPERATOR FAMILY any_name USING access_method SET SCHEMA name
  */
 void
-AlterOpFamilyNamespace(List *name, char *access_method, const char *newschema)
+AlterOpFamilyNamespace(List *name, char *access_method, const char *newschema,
+					   CommandContext cmd)
 {
 	Oid			amOid;
 	Relation	rel;
@@ -2150,7 +2152,7 @@ AlterOpFamilyNamespace(List *name, char *access_method, const char *newschema)
 						 Anum_pg_opfamily_opfname,
 						 Anum_pg_opfamily_opfnamespace,
 						 Anum_pg_opfamily_opfowner,
-						 ACL_KIND_OPFAMILY);
+						 ACL_KIND_OPFAMILY, cmd);
 
 	heap_close(rel, RowExclusiveLock);
 }
@@ -2169,7 +2171,7 @@ AlterOpFamilyNamespace_oid(Oid opfamilyOid, Oid newNspOid)
 							 Anum_pg_opfamily_opfname,
 							 Anum_pg_opfamily_opfnamespace,
 							 Anum_pg_opfamily_opfowner,
-							 ACL_KIND_OPFAMILY);
+							 ACL_KIND_OPFAMILY, NULL);
 
 	heap_close(rel, RowExclusiveLock);
 

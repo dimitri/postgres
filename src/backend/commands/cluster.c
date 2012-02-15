@@ -1486,13 +1486,13 @@ finish_heap_swap(Oid OIDOldHeap, Oid OIDNewHeap,
 			snprintf(NewToastName, NAMEDATALEN, "pg_toast_%u",
 					 OIDOldHeap);
 			RenameRelationInternal(newrel->rd_rel->reltoastrelid,
-								   NewToastName);
+								   NewToastName, NULL);
 
 			/* ... and its index too */
 			snprintf(NewToastName, NAMEDATALEN, "pg_toast_%u_index",
 					 OIDOldHeap);
 			RenameRelationInternal(toastidx,
-								   NewToastName);
+								   NewToastName, NULL);
 		}
 		relation_close(newrel, NoLock);
 	}

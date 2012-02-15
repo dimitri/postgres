@@ -215,7 +215,7 @@ DefineAggregate(List *name, List *args, bool oldstyle, List *parameters,
  *		Rename an aggregate.
  */
 void
-RenameAggregate(List *name, List *args, const char *newname)
+RenameAggregate(List *name, List *args, const char *newname, CommandContext cmd)
 {
 	Oid			procOid;
 	Oid			namespaceOid;
@@ -261,6 +261,18 @@ RenameAggregate(List *name, List *args, const char *newname)
 		aclcheck_error(aclresult, ACL_KIND_NAMESPACE,
 					   get_namespace_name(namespaceOid));
 
+	/* Call BEFORE ALTER AGGREGATE triggers */
+	cmd->objectId = HeapTupleGetOid(tup);
+	cmd->objectname = NameStr(procForm->proname);
+	cmd->schemaname = get_namespace_name(namespaceOid);
+
+	if (ExecBeforeOrInsteadOfCommandTriggers(cmd))
+	{
+		heap_close(rel, NoLock);
+		heap_freetuple(tup);
+		return;
+	}
+
 	/* rename */
 	namestrcpy(&(((Form_pg_proc) GETSTRUCT(tup))->proname), newname);
 	simple_heap_update(rel, &tup->t_self, tup);
@@ -268,13 +280,17 @@ RenameAggregate(List *name, List *args, const char *newname)
 
 	heap_close(rel, NoLock);
 	heap_freetuple(tup);
+
+	/* Call AFTER ALTER AGGREGATE triggers */
+	cmd->objectname = (char *)newname;
+	ExecAfterCommandTriggers(cmd);
 }
 
 /*
  * Change aggregate owner
  */
 void
-AlterAggregateOwner(List *name, List *args, Oid newOwnerId)
+AlterAggregateOwner(List *name, List *args, Oid newOwnerId, CommandContext cmd)
 {
 	Oid			procOid;
 
@@ -282,5 +298,5 @@ AlterAggregateOwner(List *name, List *args, Oid newOwnerId)
 	procOid = LookupAggNameTypeNames(name, args, false);
 
 	/* The rest is just like a function */
-	AlterFunctionOwner_oid(procOid, newOwnerId);
+	AlterFunctionOwner_oid(procOid, newOwnerId, cmd);
 }

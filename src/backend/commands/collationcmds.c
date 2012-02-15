@@ -35,7 +35,7 @@
 #include "utils/syscache.h"
 
 static void AlterCollationOwner_internal(Relation rel, Oid collationOid,
-							 Oid newOwnerId);
+										 Oid newOwnerId, CommandContext cmd);
 
 /*
  * CREATE COLLATION
@@ -154,7 +154,7 @@ DefineCollation(List *names, List *parameters, CommandContext cmd)
  * Rename collation
  */
 void
-RenameCollation(List *name, const char *newname)
+RenameCollation(List *name, const char *newname, CommandContext cmd)
 {
 	Oid			collationOid;
 	Oid			namespaceOid;
@@ -206,21 +206,36 @@ RenameCollation(List *name, const char *newname)
 		aclcheck_error(aclresult, ACL_KIND_NAMESPACE,
 					   get_namespace_name(namespaceOid));
 
+	/* Call BEFORE ALTER COLLATION triggers */
+	cmd->objectId = HeapTupleGetOid(tup);
+	cmd->objectname = NameStr((((Form_pg_collation) GETSTRUCT(tup))->collname));
+	cmd->schemaname = get_namespace_name(namespaceOid);
+
+	if (ExecBeforeOrInsteadOfCommandTriggers(cmd))
+	{
+		heap_freetuple(tup);
+		heap_close(rel, NoLock);
+		return;
+	}
+
 	/* rename */
 	namestrcpy(&(((Form_pg_collation) GETSTRUCT(tup))->collname), newname);
 	simple_heap_update(rel, &tup->t_self, tup);
 	CatalogUpdateIndexes(rel, tup);
 
 	heap_freetuple(tup);
-
 	heap_close(rel, RowExclusiveLock);
+
+	/* Call AFTER ALTER COLLATION triggers */
+	cmd->objectname = (char *)newname;
+	ExecAfterCommandTriggers(cmd);
 }
 
 /*
  * Change collation owner, by name
  */
 void
-AlterCollationOwner(List *name, Oid newOwnerId)
+AlterCollationOwner(List *name, Oid newOwnerId, CommandContext cmd)
 {
 	Oid			collationOid;
 	Relation	rel;
@@ -229,7 +244,7 @@ AlterCollationOwner(List *name, Oid newOwnerId)
 
 	collationOid = get_collation_oid(name, false);
 
-	AlterCollationOwner_internal(rel, collationOid, newOwnerId);
+	AlterCollationOwner_internal(rel, collationOid, newOwnerId, cmd);
 
 	heap_close(rel, RowExclusiveLock);
 }
@@ -238,13 +253,13 @@ AlterCollationOwner(List *name, Oid newOwnerId)
  * Change collation owner, by oid
  */
 void
-AlterCollationOwner_oid(Oid collationOid, Oid newOwnerId)
+AlterCollationOwner_oid(Oid collationOid, Oid newOwnerId, CommandContext cmd)
 {
 	Relation	rel;
 
 	rel = heap_open(CollationRelationId, RowExclusiveLock);
 
-	AlterCollationOwner_internal(rel, collationOid, newOwnerId);
+	AlterCollationOwner_internal(rel, collationOid, newOwnerId, cmd);
 
 	heap_close(rel, RowExclusiveLock);
 }
@@ -256,7 +271,8 @@ AlterCollationOwner_oid(Oid collationOid, Oid newOwnerId)
  * open and suitably locked; it will not be closed.
  */
 static void
-AlterCollationOwner_internal(Relation rel, Oid collationOid, Oid newOwnerId)
+AlterCollationOwner_internal(Relation rel, Oid collationOid, Oid newOwnerId,
+							 CommandContext cmd)
 {
 	Form_pg_collation collForm;
 	HeapTuple	tup;
@@ -297,6 +313,20 @@ AlterCollationOwner_internal(Relation rel, Oid collationOid, Oid newOwnerId)
 							   get_namespace_name(collForm->collnamespace));
 		}
 
+		/* Call BEFORE ALTER COLLATION triggers */
+		if (cmd!=NULL)
+		{
+			cmd->objectId = HeapTupleGetOid(tup);
+			cmd->objectname = NameStr(collForm->collname);
+			cmd->schemaname = get_namespace_name(collForm->collnamespace);
+
+			if (ExecBeforeOrInsteadOfCommandTriggers(cmd))
+			{
+				heap_freetuple(tup);
+				return;
+			}
+		}
+
 		/*
 		 * Modify the owner --- okay to scribble on tup because it's a copy
 		 */
@@ -309,8 +339,11 @@ AlterCollationOwner_internal(Relation rel, Oid collationOid, Oid newOwnerId)
 		/* Update owner dependency reference */
 		changeDependencyOnOwner(CollationRelationId, collationOid,
 								newOwnerId);
-	}
 
+		/* Call AFTER ALTER COLLATION triggers */
+		if (cmd!=NULL)
+			ExecAfterCommandTriggers(cmd);
+	}
 	heap_freetuple(tup);
 }
 
@@ -318,7 +351,7 @@ AlterCollationOwner_internal(Relation rel, Oid collationOid, Oid newOwnerId)
  * Execute ALTER COLLATION SET SCHEMA
  */
 void
-AlterCollationNamespace(List *name, const char *newschema)
+AlterCollationNamespace(List *name, const char *newschema, CommandContext cmd)
 {
 	Oid			collOid,
 				nspOid;
@@ -327,14 +360,14 @@ AlterCollationNamespace(List *name, const char *newschema)
 
 	nspOid = LookupCreationNamespace(newschema);
 
-	AlterCollationNamespace_oid(collOid, nspOid);
+	AlterCollationNamespace_oid(collOid, nspOid, cmd);
 }
 
 /*
  * Change collation schema, by oid
  */
 Oid
-AlterCollationNamespace_oid(Oid collOid, Oid newNspOid)
+AlterCollationNamespace_oid(Oid collOid, Oid newNspOid, CommandContext cmd)
 {
 	Oid			oldNspOid;
 	Relation	rel;
@@ -380,7 +413,7 @@ AlterCollationNamespace_oid(Oid collOid, Oid newNspOid)
 									 Anum_pg_collation_collname,
 									 Anum_pg_collation_collnamespace,
 									 Anum_pg_collation_collowner,
-									 ACL_KIND_COLLATION);
+									 ACL_KIND_COLLATION, cmd);
 
 	heap_close(rel, RowExclusiveLock);
 

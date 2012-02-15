@@ -3174,7 +3174,7 @@ GetDomainConstraints(Oid typeOid)
  * Execute ALTER TYPE RENAME
  */
 void
-RenameType(RenameStmt *stmt)
+RenameType(RenameStmt *stmt, CommandContext cmd)
 {
 	List	   *names = stmt->object;
 	const char *newTypeName = stmt->newname;
@@ -3236,10 +3236,10 @@ RenameType(RenameStmt *stmt)
 	 * RenameRelationInternal will call RenameTypeInternal automatically.
 	 */
 	if (typTup->typtype == TYPTYPE_COMPOSITE)
-		RenameRelationInternal(typTup->typrelid, newTypeName);
+		RenameRelationInternal(typTup->typrelid, newTypeName, cmd);
 	else
 		RenameTypeInternal(typeOid, newTypeName,
-						   typTup->typnamespace);
+						   typTup->typnamespace, cmd);
 
 	/* Clean up */
 	heap_close(rel, RowExclusiveLock);
@@ -3249,7 +3249,8 @@ RenameType(RenameStmt *stmt)
  * Change the owner of a type.
  */
 void
-AlterTypeOwner(List *names, Oid newOwnerId, ObjectType objecttype)
+AlterTypeOwner(List *names, Oid newOwnerId, ObjectType objecttype,
+			   CommandContext cmd)
 {
 	TypeName   *typename;
 	Oid			typeOid;
@@ -3335,6 +3336,17 @@ AlterTypeOwner(List *names, Oid newOwnerId, ObjectType objecttype)
 							   get_namespace_name(typTup->typnamespace));
 		}
 
+		/* Call BEFORE ALTER TYPE triggers */
+		cmd->objectId = typeOid;
+		cmd->objectname = (char *)typename;
+		cmd->schemaname = get_namespace_name(typTup->typnamespace);
+
+		if (ExecBeforeOrInsteadOfCommandTriggers(cmd))
+		{
+			heap_close(rel, RowExclusiveLock);
+			return;
+		}
+
 		/*
 		 * If it's a composite type, invoke ATExecChangeOwner so that we fix
 		 * up the pg_class entry properly.	That will call back to
@@ -3362,6 +3374,9 @@ AlterTypeOwner(List *names, Oid newOwnerId, ObjectType objecttype)
 			if (OidIsValid(typTup->typarray))
 				AlterTypeOwnerInternal(typTup->typarray, newOwnerId, false);
 		}
+
+		/* Call AFTER ALTER TYPE triggers */
+		ExecAfterCommandTriggers(cmd);
 	}
 
 	/* Clean up */
@@ -3419,7 +3434,8 @@ AlterTypeOwnerInternal(Oid typeOid, Oid newOwnerId,
  * Execute ALTER TYPE SET SCHEMA
  */
 void
-AlterTypeNamespace(List *names, const char *newschema, ObjectType objecttype)
+AlterTypeNamespace(List *names, const char *newschema, ObjectType objecttype,
+				   CommandContext cmd)
 {
 	TypeName   *typename;
 	Oid			typeOid;
@@ -3439,11 +3455,11 @@ AlterTypeNamespace(List *names, const char *newschema, ObjectType objecttype)
 	/* get schema OID and check its permissions */
 	nspOid = LookupCreationNamespace(newschema);
 
-	AlterTypeNamespace_oid(typeOid, nspOid);
+	AlterTypeNamespace_oid(typeOid, nspOid, cmd);
 }
 
 Oid
-AlterTypeNamespace_oid(Oid typeOid, Oid nspOid)
+AlterTypeNamespace_oid(Oid typeOid, Oid nspOid, CommandContext cmd)
 {
 	Oid			elemOid;
 
@@ -3463,7 +3479,7 @@ AlterTypeNamespace_oid(Oid typeOid, Oid nspOid)
 						 format_type_be(elemOid))));
 
 	/* and do the work */
-	return AlterTypeNamespaceInternal(typeOid, nspOid, false, true);
+	return AlterTypeNamespaceInternal(typeOid, nspOid, false, true, cmd);
 }
 
 /*
@@ -3484,7 +3500,8 @@ AlterTypeNamespace_oid(Oid typeOid, Oid nspOid)
 Oid
 AlterTypeNamespaceInternal(Oid typeOid, Oid nspOid,
 						   bool isImplicitArray,
-						   bool errorOnTableType)
+						   bool errorOnTableType,
+						   CommandContext cmd)
 {
 	Relation	rel;
 	HeapTuple	tup;
@@ -3529,6 +3546,17 @@ AlterTypeNamespaceInternal(Oid typeOid, Oid nspOid,
 				 errmsg("%s is a table's row type",
 						format_type_be(typeOid)),
 				 errhint("Use ALTER TABLE instead.")));
+
+	/* Call BEFORE ALTER TYPE triggers */
+	if (cmd!=NULL)
+	{
+		cmd->objectId = typeOid;
+		cmd->objectname = NameStr(typform->typname);
+		cmd->schemaname = get_namespace_name(oldNspOid);
+
+		if (ExecBeforeOrInsteadOfCommandTriggers(cmd))
+			return oldNspOid;
+	}
 
 	/* OK, modify the pg_type row */
 
@@ -3587,7 +3615,12 @@ AlterTypeNamespaceInternal(Oid typeOid, Oid nspOid,
 
 	/* Recursively alter the associated array type, if any */
 	if (OidIsValid(arrayOid))
-		AlterTypeNamespaceInternal(arrayOid, nspOid, true, true);
+		AlterTypeNamespaceInternal(arrayOid, nspOid, true, true, NULL);
 
+	if (cmd!=NULL)
+	{
+		cmd->schemaname = get_namespace_name(nspOid);
+		ExecAfterCommandTriggers(cmd);
+	}
 	return oldNspOid;
 }

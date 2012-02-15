@@ -19,10 +19,12 @@
 #include "nodes/parsenodes.h"
 
 extern void DefineCollation(List *names, List *parameters, CommandContext cmd);
-extern void RenameCollation(List *name, const char *newname);
-extern void AlterCollationOwner(List *name, Oid newOwnerId);
-extern void AlterCollationOwner_oid(Oid collationOid, Oid newOwnerId);
-extern void AlterCollationNamespace(List *name, const char *newschema);
-extern Oid	AlterCollationNamespace_oid(Oid collOid, Oid newNspOid);
+extern void RenameCollation(List *name, const char *newname, CommandContext cmd);
+extern void AlterCollationOwner(List *name, Oid newOwnerId, CommandContext cmd);
+extern void AlterCollationOwner_oid(Oid collationOid, Oid newOwnerId, CommandContext cmd);
+extern void AlterCollationNamespace(List *name, const char *newschema,
+										CommandContext cmd);
+extern Oid	AlterCollationNamespace_oid(Oid collOid, Oid newNspOid,
+											CommandContext cmd);
 
 #endif   /* COLLATIONCMDS_H */

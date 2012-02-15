@@ -841,13 +841,14 @@ directory_is_empty(const char *path)
  * Rename a tablespace
  */
 void
-RenameTableSpace(const char *oldname, const char *newname)
+RenameTableSpace(const char *oldname, const char *newname, CommandContext cmd)
 {
 	Relation	rel;
 	ScanKeyData entry[1];
 	HeapScanDesc scan;
 	HeapTuple	tup;
 	HeapTuple	newtuple;
+	Oid  oid;
 	Form_pg_tablespace newform;
 
 	/* Search pg_tablespace */
@@ -865,6 +866,7 @@ RenameTableSpace(const char *oldname, const char *newname)
 				 errmsg("tablespace \"%s\" does not exist",
 						oldname)));
 
+	oid = HeapTupleGetOid(tup);
 	newtuple = heap_copytuple(tup);
 	newform = (Form_pg_tablespace) GETSTRUCT(newtuple);
 
@@ -896,6 +898,17 @@ RenameTableSpace(const char *oldname, const char *newname)
 
 	heap_endscan(scan);
 
+	/* Call BEFORE ALTER TABLESPACE triggers */
+	cmd->objectId = oid;
+	cmd->objectname = (char *)oldname;
+	cmd->schemaname = NULL;
+
+	if (ExecBeforeOrInsteadOfCommandTriggers(cmd))
+	{
+		heap_close(rel, NoLock);
+		return;
+	}
+
 	/* OK, update the entry */
 	namestrcpy(&(newform->spcname), newname);
 
@@ -903,13 +916,17 @@ RenameTableSpace(const char *oldname, const char *newname)
 	CatalogUpdateIndexes(rel, newtuple);
 
 	heap_close(rel, NoLock);
+
+	/* Call AFTER ALTER TABLESPACE triggers */
+	cmd->objectname = (char *)newname;
+	ExecAfterCommandTriggers(cmd);
 }
 
 /*
  * Change tablespace owner
  */
 void
-AlterTableSpaceOwner(const char *name, Oid newOwnerId)
+AlterTableSpaceOwner(const char *name, Oid newOwnerId, CommandContext cmd)
 {
 	Relation	rel;
 	ScanKeyData entry[1];
@@ -965,6 +982,19 @@ AlterTableSpaceOwner(const char *name, Oid newOwnerId)
 		 * anyway.
 		 */
 
+		/* Call BEFORE ALTER TABLESPACE triggers */
+		cmd->objectId = HeapTupleGetOid(tup);
+		cmd->objectname = (char *)name;
+		cmd->schemaname = NULL;
+
+		if (ExecBeforeOrInsteadOfCommandTriggers(cmd))
+		{
+			heap_freetuple(tup);
+			heap_endscan(scandesc);
+			heap_close(rel, NoLock);
+			return;
+		}
+
 		memset(repl_null, false, sizeof(repl_null));
 		memset(repl_repl, false, sizeof(repl_repl));
 
@@ -997,6 +1027,9 @@ AlterTableSpaceOwner(const char *name, Oid newOwnerId)
 		/* Update owner dependency reference */
 		changeDependencyOnOwner(TableSpaceRelationId, HeapTupleGetOid(tup),
 								newOwnerId);
+
+		/* Call AFTER ALTER TABLESPACE triggers */
+		ExecAfterCommandTriggers(cmd);
 	}
 
 	heap_endscan(scandesc);
