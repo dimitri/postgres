@@ -14023,8 +14023,6 @@ dumpCmdTrigger(Archive *fout, CmdTriggerInfo *ctginfo)
 		appendPQExpBuffer(query, " BEFORE");
 	else if (ctginfo->ctgtype == CMD_TRIGGER_FIRED_AFTER)
 		appendPQExpBuffer(query, " AFTER");
-	else if (ctginfo->ctgtype == CMD_TRIGGER_FIRED_INSTEAD)
-		appendPQExpBuffer(query, " INSTEAD OF");
 	else
 	{
 		write_msg(NULL, "unexpected ctgtype value: %d\n", ctginfo->ctgtype);

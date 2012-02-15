@@ -60,7 +60,6 @@
 #include "catalog/indexing.h"
 #include "catalog/objectaccess.h"
 #include "catalog/pg_tablespace.h"
-#include "commands/cmdtrigger.h"
 #include "commands/comment.h"
 #include "commands/seclabel.h"
 #include "commands/tablespace.h"
@@ -234,7 +233,6 @@ CreateTableSpace(CreateTableSpaceStmt *stmt)
 	Oid			tablespaceoid;
 	char	   *location;
 	Oid			ownerId;
-	CommandContextData cmd;
 
 	/* Must be super user */
 	if (!superuser())
@@ -305,18 +303,6 @@ CreateTableSpace(CreateTableSpaceStmt *stmt)
 						stmt->tablespacename)));
 
 	/*
-	 * Call BEFORE CREATE TABLESPACE triggers
-	 */
-	cmd.tag = (char *) CreateCommandTag((Node *)stmt);
-	cmd.objectId = InvalidOid;
-	cmd.objectname = stmt->tablespacename;
-	cmd.schemaname = NULL;
-	cmd.parsetree  = (Node *)stmt;
-
-	if (ExecBeforeOrInsteadOfCommandTriggers(&cmd))
-		return;
-
-	/*
 	 * Insert tuple into pg_tablespace.  The purpose of doing this first is to
 	 * lock the proposed tablename against other would-be creators. The
 	 * insertion will roll back if we find problems below.
@@ -381,9 +367,6 @@ CreateTableSpace(CreateTableSpaceStmt *stmt)
 	/* We keep the lock on pg_tablespace until commit */
 	heap_close(rel, NoLock);
 
-	/* Call AFTER CREATE TABLESPACE triggers */
-	cmd.objectId = tablespaceoid;
-	ExecAfterCommandTriggers(&cmd);
 #else							/* !HAVE_SYMLINK */
 	ereport(ERROR,
 			(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
@@ -406,7 +389,6 @@ DropTableSpace(DropTableSpaceStmt *stmt)
 	HeapTuple	tuple;
 	ScanKeyData entry[1];
 	Oid			tablespaceoid;
-	CommandContextData cmd;
 
 	/*
 	 * Find the target tuple
@@ -453,18 +435,6 @@ DropTableSpace(DropTableSpaceStmt *stmt)
 		tablespaceoid == DEFAULTTABLESPACE_OID)
 		aclcheck_error(ACLCHECK_NO_PRIV, ACL_KIND_TABLESPACE,
 					   tablespacename);
-
-	/*
-	 * Call BEFORE DROP TABLESPACE triggers
-	 */
-	cmd.tag = (char *) CreateCommandTag((Node *)stmt);
-	cmd.objectId = tablespaceoid;
-	cmd.objectname = tablespacename;
-	cmd.schemaname = NULL;
-	cmd.parsetree  = (Node *)stmt;
-
-	if (ExecBeforeOrInsteadOfCommandTriggers(&cmd))
-		return;
 
 	/*
 	 * Remove the pg_tablespace tuple (this will roll back if we fail below)
@@ -551,9 +521,6 @@ DropTableSpace(DropTableSpaceStmt *stmt)
 	/* We keep the lock on pg_tablespace until commit */
 	heap_close(rel, NoLock);
 
-	/* Call AFTER DROP TABLESPACE triggers */
-	cmd.objectId = InvalidOid;
-	ExecAfterCommandTriggers(&cmd);
 #else							/* !HAVE_SYMLINK */
 	ereport(ERROR,
 			(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
@@ -841,7 +808,7 @@ directory_is_empty(const char *path)
  * Rename a tablespace
  */
 void
-RenameTableSpace(const char *oldname, const char *newname, CommandContext cmd)
+RenameTableSpace(const char *oldname, const char *newname)
 {
 	Relation	rel;
 	ScanKeyData entry[1];
@@ -898,17 +865,6 @@ RenameTableSpace(const char *oldname, const char *newname, CommandContext cmd)
 
 	heap_endscan(scan);
 
-	/* Call BEFORE ALTER TABLESPACE triggers */
-	cmd->objectId = oid;
-	cmd->objectname = (char *)oldname;
-	cmd->schemaname = NULL;
-
-	if (ExecBeforeOrInsteadOfCommandTriggers(cmd))
-	{
-		heap_close(rel, NoLock);
-		return;
-	}
-
 	/* OK, update the entry */
 	namestrcpy(&(newform->spcname), newname);
 
@@ -916,17 +872,13 @@ RenameTableSpace(const char *oldname, const char *newname, CommandContext cmd)
 	CatalogUpdateIndexes(rel, newtuple);
 
 	heap_close(rel, NoLock);
-
-	/* Call AFTER ALTER TABLESPACE triggers */
-	cmd->objectname = (char *)newname;
-	ExecAfterCommandTriggers(cmd);
 }
 
 /*
  * Change tablespace owner
  */
 void
-AlterTableSpaceOwner(const char *name, Oid newOwnerId, CommandContext cmd)
+AlterTableSpaceOwner(const char *name, Oid newOwnerId)
 {
 	Relation	rel;
 	ScanKeyData entry[1];
@@ -982,19 +934,6 @@ AlterTableSpaceOwner(const char *name, Oid newOwnerId, CommandContext cmd)
 		 * anyway.
 		 */
 
-		/* Call BEFORE ALTER TABLESPACE triggers */
-		cmd->objectId = HeapTupleGetOid(tup);
-		cmd->objectname = (char *)name;
-		cmd->schemaname = NULL;
-
-		if (ExecBeforeOrInsteadOfCommandTriggers(cmd))
-		{
-			heap_freetuple(tup);
-			heap_endscan(scandesc);
-			heap_close(rel, NoLock);
-			return;
-		}
-
 		memset(repl_null, false, sizeof(repl_null));
 		memset(repl_repl, false, sizeof(repl_repl));
 
@@ -1027,9 +966,6 @@ AlterTableSpaceOwner(const char *name, Oid newOwnerId, CommandContext cmd)
 		/* Update owner dependency reference */
 		changeDependencyOnOwner(TableSpaceRelationId, HeapTupleGetOid(tup),
 								newOwnerId);
-
-		/* Call AFTER ALTER TABLESPACE triggers */
-		ExecAfterCommandTriggers(cmd);
 	}
 
 	heap_endscan(scandesc);

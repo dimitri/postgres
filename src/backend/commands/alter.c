@@ -53,6 +53,8 @@ ExecRenameStmt(RenameStmt *stmt)
 	cmd.tag = (char *) CreateCommandTag((Node *)stmt);
 	cmd.parsetree  = (Node *)stmt;
 
+	(void) ListCommandTriggers(&cmd);
+
 	switch (stmt->renameType)
 	{
 		case OBJECT_AGGREGATE:
@@ -72,7 +74,7 @@ ExecRenameStmt(RenameStmt *stmt)
 			break;
 
 		case OBJECT_DATABASE:
-			RenameDatabase(stmt->subname, stmt->newname, &cmd);
+			RenameDatabase(stmt->subname, stmt->newname);
 			break;
 
 		case OBJECT_FDW:
@@ -108,7 +110,7 @@ ExecRenameStmt(RenameStmt *stmt)
 			break;
 
 		case OBJECT_TABLESPACE:
-			RenameTableSpace(stmt->subname, stmt->newname, &cmd);
+			RenameTableSpace(stmt->subname, stmt->newname);
 			break;
 
 		case OBJECT_TABLE:
@@ -166,6 +168,8 @@ ExecAlterObjectSchemaStmt(AlterObjectSchemaStmt *stmt)
 
 	cmd.tag = (char *) CreateCommandTag((Node *)stmt);
 	cmd.parsetree  = (Node *)stmt;
+
+	(void) ListCommandTriggers(&cmd);
 
 	switch (stmt->objectType)
 	{
@@ -438,14 +442,13 @@ AlterObjectNamespace(Relation rel, int oidCacheId, int nameCacheId,
 						get_namespace_name(nspOid))));
 
 	/* Call BEFORE ALTER OBJECT triggers */
-	if (cmd!=NULL)
+	if (cmd!=NULL && (cmd->before != NIL || cmd->after != NIL))
 	{
 		cmd->objectId = objid;
 		cmd->objectname = NameStr(*(DatumGetName(name)));
 		cmd->schemaname = get_namespace_name(oldNspOid);
 
-		if (ExecBeforeOrInsteadOfCommandTriggers(cmd))
-			return oldNspOid;
+		ExecBeforeCommandTriggers(cmd);
 	}
 
 	/* Build modified tuple */
@@ -471,7 +474,7 @@ AlterObjectNamespace(Relation rel, int oidCacheId, int nameCacheId,
 						NamespaceRelationId, oldNspOid, nspOid);
 
 	/* Call AFTER ALTER OBJECT triggers */
-	if (cmd!=NULL)
+	if (cmd!=NULL && cmd->after != NIL)
 	{
 		cmd->schemaname = get_namespace_name(nspOid);
 		ExecAfterCommandTriggers(cmd);
@@ -493,6 +496,8 @@ ExecAlterOwnerStmt(AlterOwnerStmt *stmt)
 	cmd.tag = (char *) CreateCommandTag((Node *)stmt);
 	cmd.parsetree  = (Node *)stmt;
 
+	(void) ListCommandTriggers(&cmd);
+
 	switch (stmt->objectType)
 	{
 		case OBJECT_AGGREGATE:
@@ -508,7 +513,7 @@ ExecAlterOwnerStmt(AlterOwnerStmt *stmt)
 			break;
 
 		case OBJECT_DATABASE:
-			AlterDatabaseOwner(strVal(linitial(stmt->object)), newowner, &cmd);
+			AlterDatabaseOwner(strVal(linitial(stmt->object)), newowner);
 			break;
 
 		case OBJECT_FUNCTION:
@@ -544,7 +549,7 @@ ExecAlterOwnerStmt(AlterOwnerStmt *stmt)
 			break;
 
 		case OBJECT_TABLESPACE:
-			AlterTableSpaceOwner(strVal(linitial(stmt->object)), newowner, &cmd);
+			AlterTableSpaceOwner(strVal(linitial(stmt->object)), newowner);
 			break;
 
 		case OBJECT_TYPE:

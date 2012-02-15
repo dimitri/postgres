@@ -262,15 +262,13 @@ RenameAggregate(List *name, List *args, const char *newname, CommandContext cmd)
 					   get_namespace_name(namespaceOid));
 
 	/* Call BEFORE ALTER AGGREGATE triggers */
-	cmd->objectId = HeapTupleGetOid(tup);
-	cmd->objectname = NameStr(procForm->proname);
-	cmd->schemaname = get_namespace_name(namespaceOid);
-
-	if (ExecBeforeOrInsteadOfCommandTriggers(cmd))
+	if (cmd->before != NIL || cmd->after != NIL)
 	{
-		heap_close(rel, NoLock);
-		heap_freetuple(tup);
-		return;
+		cmd->objectId = HeapTupleGetOid(tup);
+		cmd->objectname = NameStr(procForm->proname);
+		cmd->schemaname = get_namespace_name(namespaceOid);
+
+		ExecBeforeCommandTriggers(cmd);
 	}
 
 	/* rename */
@@ -282,8 +280,11 @@ RenameAggregate(List *name, List *args, const char *newname, CommandContext cmd)
 	heap_freetuple(tup);
 
 	/* Call AFTER ALTER AGGREGATE triggers */
-	cmd->objectname = (char *)newname;
-	ExecAfterCommandTriggers(cmd);
+	if (cmd->after != NIL)
+	{
+		cmd->objectname = (char *)newname;
+		ExecAfterCommandTriggers(cmd);
+	}
 }
 
 /*

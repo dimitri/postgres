@@ -705,15 +705,13 @@ RenameTypeInternal(Oid typeOid, const char *newTypeName, Oid typeNamespace,
 				 errmsg("type \"%s\" already exists", newTypeName)));
 
 	/* Call BEFORE ALTER TYPE triggers */
-	cmd->objectId = typeOid;
-	cmd->objectname = NameStr(typ->typname);
-	cmd->schemaname = get_namespace_name(typeNamespace);
-
-	if (ExecBeforeOrInsteadOfCommandTriggers(cmd))
+	if (cmd->before != NIL || cmd->after != NIL)
 	{
-		heap_freetuple(tuple);
-		heap_close(pg_type_desc, RowExclusiveLock);
-		return;
+		cmd->objectId = typeOid;
+		cmd->objectname = NameStr(typ->typname);
+		cmd->schemaname = get_namespace_name(typeNamespace);
+
+		ExecBeforeCommandTriggers(cmd);
 	}
 
 	/* OK, do the rename --- tuple is a copy, so OK to scribble on it */
@@ -737,8 +735,11 @@ RenameTypeInternal(Oid typeOid, const char *newTypeName, Oid typeNamespace,
 	}
 
 	/* Call AFTER ALTER TYPE triggers */
-	cmd->objectname = (char *)newTypeName;
-	ExecAfterCommandTriggers(cmd);
+	if (cmd->after != NIL)
+	{
+		cmd->objectname = (char *)newTypeName;
+		ExecAfterCommandTriggers(cmd);
+	}
 }
 
 

@@ -818,16 +818,17 @@ RemoveRelations(DropStmt *drop)
 		 * Call BEFORE DROP command triggers
 		 */
 		cmd.tag = (char *) CreateCommandTag((Node *)drop);
-		cmd.objectId = relOid;
-		cmd.objectname = get_rel_name(relOid);
-		cmd.schemaname = get_namespace_name(get_rel_namespace(relOid));
-		cmd.parsetree  = (Node *)drop;
 
-		cmds[i++] = &cmd;
+		if (ListCommandTriggers(&cmd))
+		{
+			cmd.objectId = relOid;
+			cmd.objectname = get_rel_name(relOid);
+			cmd.schemaname = get_namespace_name(get_rel_namespace(relOid));
+			cmd.parsetree  = (Node *)drop;
 
-		if (ExecBeforeOrInsteadOfCommandTriggers(&cmd))
-			/* locks are still on hold to the end of the transaction */
-			return;
+			ExecBeforeCommandTriggers(&cmd);
+		}
+		cmds[i++] = &cmd;		/* cmd.after is set by ListCommandTriggers() */
 
 		/* OK, we're ready to delete this one */
 		obj.classId = RelationRelationId;
@@ -842,8 +843,11 @@ RemoveRelations(DropStmt *drop)
 	/* Call AFTER DROP command triggers */
 	for(i = 0; i<n; i++)
 	{
-		cmds[i]->objectId = InvalidOid;
-		ExecAfterCommandTriggers(cmds[i]);
+		if (cmds[i]->after)
+		{
+			cmds[i]->objectId = InvalidOid;
+			ExecAfterCommandTriggers(cmds[i]);
+		}
 	}
 
 	free_object_addresses(objects);
@@ -2425,19 +2429,13 @@ RenameRelationInternal(Oid myrelid, const char *newrelname, CommandContext cmd)
 						newrelname)));
 
 	/* Call BEFORE ALTER relation triggers */
-	if (cmd!=NULL)
+	if (cmd!=NULL && (cmd->before != NIL || cmd->after != NIL))
 	{
 		cmd->objectId = HeapTupleGetOid(reltup);
 		cmd->objectname = NameStr(relform->relname);
 		cmd->schemaname = get_namespace_name(namespaceId);
 
-		if (ExecBeforeOrInsteadOfCommandTriggers(cmd))
-		{
-			heap_freetuple(reltup);
-			heap_close(relrelation, RowExclusiveLock);
-			relation_close(targetrelation, NoLock);
-			return;
-		}
+		ExecBeforeCommandTriggers(cmd);
 	}
 
 	/*
@@ -2478,7 +2476,7 @@ RenameRelationInternal(Oid myrelid, const char *newrelname, CommandContext cmd)
 	relation_close(targetrelation, NoLock);
 
 	/* Call AFTER ALTER relation triggers */
-	if (cmd!=NULL)
+	if (cmd!=NULL && cmd->after != NIL)
 	{
 		cmd->objectname = (char *)newrelname;
 		ExecAfterCommandTriggers(cmd);
@@ -9572,13 +9570,16 @@ AlterTableNamespace(AlterObjectSchemaStmt *stmt)
 
 	/* Call BEFORE ALTER TABLE triggers */
 	cmd.tag = (char *) CreateCommandTag((Node *)stmt);
-	cmd.objectId = relid;
-	cmd.objectname = stmt->relation->relname;
-	cmd.schemaname = get_namespace_name(oldNspOid);
-	cmd.parsetree  = (Node *)stmt;
 
-	if (ExecBeforeOrInsteadOfCommandTriggers(&cmd))
-		return;
+	if (ListCommandTriggers(&cmd))
+	{
+		cmd.objectId = relid;
+		cmd.objectname = stmt->relation->relname;
+		cmd.schemaname = get_namespace_name(oldNspOid);
+		cmd.parsetree  = (Node *)stmt;
+
+		ExecBeforeCommandTriggers(&cmd);
+	}
 
 	/* OK, modify the pg_class row and pg_depend entry */
 	classRel = heap_open(RelationRelationId, RowExclusiveLock);
@@ -9603,8 +9604,11 @@ AlterTableNamespace(AlterObjectSchemaStmt *stmt)
 	relation_close(rel, NoLock);
 
 	/* Call AFTER ALTER TABLE triggers */
-	cmd.schemaname = get_namespace_name(nspOid);
-	ExecAfterCommandTriggers(&cmd);
+	if (cmd.after != NIL)
+	{
+		cmd.schemaname = get_namespace_name(nspOid);
+		ExecAfterCommandTriggers(&cmd);
+	}
 }
 
 /*

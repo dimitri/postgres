@@ -153,7 +153,7 @@ CommandIsReadOnly(Node *parsetree)
 /*
  * Support function for calling the command triggers.
  */
-static bool
+static void
 call_before_or_insteadof_cmdtriggers(Node *parsetree, CommandContext cmd)
 {
 	switch (nodeTag(parsetree))
@@ -221,11 +221,11 @@ call_before_or_insteadof_cmdtriggers(Node *parsetree, CommandContext cmd)
 		case T_AlterTableSpaceOptionsStmt:
 		case T_CreateForeignTableStmt:
 		case T_SecLabelStmt:
-			return ExecBeforeOrInsteadOfAnyCommandTriggers(cmd);
+			ExecBeforeAnyCommandTriggers(cmd);
 
 		default:
 			/* commands that don't support triggers */
-			return false;
+			return;
 	}
 }
 
@@ -523,8 +523,7 @@ standard_ProcessUtility(Node *parsetree,
 	cmd.parsetree  = NULL;
 
 	/* call the BEFORE ANY COMMAND triggers first */
-	if (call_before_or_insteadof_cmdtriggers(parsetree, &cmd))
-		return;
+	call_before_or_insteadof_cmdtriggers(parsetree, &cmd);
 
 	switch (nodeTag(parsetree))
 	{
@@ -694,14 +693,17 @@ standard_ProcessUtility(Node *parsetree,
 				 * Call BEFORE CREATE TABLE triggers
 				 */
 				cmd.tag = (char *) CreateCommandTag(parsetree);
-				cmd.objectId = InvalidOid;
-				cmd.objectname = stmt->relation->relname;
-				cmd.schemaname = get_namespace_name(
-					RangeVarGetCreationNamespace(stmt->relation));
-				cmd.parsetree  = parsetree;
 
-				if (ExecBeforeOrInsteadOfCommandTriggers(&cmd))
-					return;
+				if (ListCommandTriggers(&cmd))
+				{
+					cmd.objectId = InvalidOid;
+					cmd.objectname = stmt->relation->relname;
+					cmd.schemaname = get_namespace_name(
+						RangeVarGetCreationNamespace(stmt->relation));
+					cmd.parsetree  = parsetree;
+
+					ExecBeforeCommandTriggers(&cmd);
+				}
 
 				/* Run parse analysis ... */
 				stmts = transformCreateStmt(stmt, queryString);
@@ -764,8 +766,11 @@ standard_ProcessUtility(Node *parsetree,
 				}
 
 				/* Call AFTER CREATE TABLE triggers */
-				cmd.objectId = relOid;
-				ExecAfterCommandTriggers(&cmd);
+				if (cmd.after != NIL)
+				{
+					cmd.objectId = relOid;
+					ExecAfterCommandTriggers(&cmd);
+				}
 			}
 			break;
 
@@ -916,14 +921,17 @@ standard_ProcessUtility(Node *parsetree,
 					 * Call BEFORE|INSTEAD OF ALTER TABLE triggers
 					 */
 					cmd.tag = (char *) CreateCommandTag(parsetree);
-					cmd.objectId = relid;
-					cmd.objectname = atstmt->relation->relname;
-					cmd.schemaname = get_namespace_name(
-						RangeVarGetCreationNamespace(atstmt->relation));
-					cmd.parsetree  = parsetree;
 
-					if (ExecBeforeOrInsteadOfCommandTriggers(&cmd))
-						return;
+					if (ListCommandTriggers(&cmd))
+					{
+						cmd.objectId = relid;
+						cmd.objectname = atstmt->relation->relname;
+						cmd.schemaname = get_namespace_name(
+							RangeVarGetCreationNamespace(atstmt->relation));
+						cmd.parsetree  = parsetree;
+
+						ExecBeforeCommandTriggers(&cmd);
+					}
 
 					/* Run parse analysis ... */
 					stmts = transformAlterTableStmt(atstmt, queryString);
@@ -954,7 +962,8 @@ standard_ProcessUtility(Node *parsetree,
 							CommandCounterIncrement();
 					}
 					/* Call AFTER ALTER TABLE triggers */
-					ExecAfterCommandTriggers(&cmd);
+					if (cmd.after != NIL)
+						ExecAfterCommandTriggers(&cmd);
 				}
 				else
 					ereport(NOTICE,

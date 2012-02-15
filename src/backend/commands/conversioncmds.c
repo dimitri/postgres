@@ -160,15 +160,13 @@ RenameConversion(List *name, const char *newname, CommandContext cmd)
 					   get_namespace_name(namespaceOid));
 
 	/* Call BEFORE ALTER CONVERSION triggers */
-	cmd->objectId = HeapTupleGetOid(tup);
-	cmd->objectname = NameStr((((Form_pg_conversion) GETSTRUCT(tup))->conname));
-	cmd->schemaname = get_namespace_name(namespaceOid);
-
-	if (ExecBeforeOrInsteadOfCommandTriggers(cmd))
+	if (cmd->before != NIL || cmd->after != NIL)
 	{
-		heap_freetuple(tup);
-		heap_close(rel, NoLock);
-		return;
+		cmd->objectId = HeapTupleGetOid(tup);
+		cmd->objectname = NameStr((((Form_pg_conversion) GETSTRUCT(tup))->conname));
+		cmd->schemaname = get_namespace_name(namespaceOid);
+
+		ExecBeforeCommandTriggers(cmd);
 	}
 
 	/* rename */
@@ -180,8 +178,11 @@ RenameConversion(List *name, const char *newname, CommandContext cmd)
 	heap_freetuple(tup);
 
 	/* Call AFTER ALTER CONVERSION triggers */
-	cmd->objectname = (char *)newname;
-	ExecAfterCommandTriggers(cmd);
+	if (cmd->after != NIL)
+	{
+		cmd->objectname = (char *)newname;
+		ExecAfterCommandTriggers(cmd);
+	}
 }
 
 /*
@@ -267,17 +268,13 @@ AlterConversionOwner_internal(Relation rel, Oid conversionOid, Oid newOwnerId,
 		}
 
 		/* Call BEFORE ALTER CONVERSION triggers */
-		if (cmd!=NULL)
+		if (cmd!=NULL && (cmd->before != NIL || cmd->after != NIL))
 		{
 			cmd->objectId = HeapTupleGetOid(tup);
 			cmd->objectname = NameStr(convForm->conname);
 			cmd->schemaname = get_namespace_name(convForm->connamespace);
 
-			if (ExecBeforeOrInsteadOfCommandTriggers(cmd))
-			{
-				heap_freetuple(tup);
-				return;
-			}
+			ExecBeforeCommandTriggers(cmd);
 		}
 
 		/*
@@ -294,7 +291,7 @@ AlterConversionOwner_internal(Relation rel, Oid conversionOid, Oid newOwnerId,
 								newOwnerId);
 
 		/* Call AFTER ALTER CONVERSION triggers */
-		if (cmd!=NULL)
+		if (cmd!=NULL && cmd->after != NIL)
 			ExecAfterCommandTriggers(cmd);
 	}
 

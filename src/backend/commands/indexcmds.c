@@ -582,14 +582,13 @@ DefineIndex(RangeVar *heapRelation,
 	 * Bootstrap code must be able to skip command triggers, it's passing NULL
 	 * as the CommandContext pointer.
 	 */
-	if (cmd != NULL)
+	if (cmd != NULL && (cmd->before != NIL || cmd->after != NIL))
 	{
 		cmd->objectId = InvalidOid;
 		cmd->objectname = indexRelationName;
 		cmd->schemaname = get_namespace_name(namespaceId);
 
-		if (ExecBeforeOrInsteadOfCommandTriggers(cmd))
-			return InvalidOid;
+		ExecBeforeCommandTriggers(cmd);
 	}
 
 	/*
@@ -940,7 +939,7 @@ DefineIndex(RangeVar *heapRelation,
 	 */
 	UnlockRelationIdForSession(&heaprelid, ShareUpdateExclusiveLock);
 
-	if (cmd != NULL)
+	if (cmd != NULL && cmd->after != NIL)
 	{
 		/* Call AFTER CREATE INDEX triggers */
 		cmd->objectId = indexRelationId;

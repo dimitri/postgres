@@ -414,17 +414,13 @@ AlterOperatorOwner_internal(Relation rel, Oid operOid, Oid newOwnerId,
 		}
 
 		/* Call BEFORE ALTER OPERATOR triggers */
-		if (cmd!=NULL)
+		if (cmd!=NULL && (cmd->before != NIL || cmd->after != NIL))
 		{
 			cmd->objectId = operOid;
 			cmd->objectname = NameStr(oprForm->oprname);
 			cmd->schemaname = get_namespace_name(oprForm->oprnamespace);
 
-			if (ExecBeforeOrInsteadOfCommandTriggers(cmd))
-			{
-				heap_freetuple(tup);
-				return;
-			}
+			ExecBeforeCommandTriggers(cmd);
 		}
 
 		/*
@@ -443,7 +439,7 @@ AlterOperatorOwner_internal(Relation rel, Oid operOid, Oid newOwnerId,
 	heap_freetuple(tup);
 
 	/* Call AFTER ALTER OPERATOR triggers */
-	if (cmd!=NULL)
+	if (cmd!=NULL && cmd->after != NIL)
 		ExecAfterCommandTriggers(cmd);
 }
 

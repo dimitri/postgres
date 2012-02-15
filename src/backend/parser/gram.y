@@ -4303,11 +4303,8 @@ trigger_command_list:
  * supports, this list should match with the implementation.
  */
 trigger_command:
-			   CREATE DATABASE						{ $$ = "CREATE DATABASE"; }
-			   | DROP DATABASE						{ $$ = "DROP DATABASE"; }
                | CREATE SCHEMA						{ $$ = "CREATE SCHEMA"; }
 			   | CREATE EXTENSION					{ $$ = "CREATE EXTENSION"; }
-			   | CREATE TABLESPACE					{ $$ = "CREATE TABLE"; }
 			   | CREATE FUNCTION					{ $$ = "CREATE FUNCTION"; }
 			   | CREATE TABLE						{ $$ = "CREATE TABLE"; }
 			   | CREATE FOREIGN TABLE				{ $$ = "CREATE FOREIGN TABLE"; }
@@ -4324,10 +4321,8 @@ trigger_command:
 			   | CREATE TYPE_P						{ $$ = "CREATE TYPE"; }
 			   | CREATE DOMAIN_P					{ $$ = "CREATE DOMAIN"; }
 			   | CREATE TRIGGER						{ $$ = "CREATE TRIGGER"; }
-			   | ALTER DATABASE						{ $$ = "ALTER DATABASE"; }
                | ALTER SCHEMA						{ $$ = "ALTER SCHEMA"; }
 			   | ALTER EXTENSION					{ $$ = "ALTER EXTENSION"; }
-			   | ALTER TABLESPACE					{ $$ = "ALTER TABLE"; }
 			   | ALTER FUNCTION						{ $$ = "ALTER FUNCTION"; }
 			   | ALTER TABLE						{ $$ = "ALTER TABLE"; }
 			   | ALTER AGGREGATE					{ $$ = "ALTER AGGREGATE"; }
@@ -4340,7 +4335,6 @@ trigger_command:
 			   | ALTER TYPE_P						{ $$ = "ALTER TYPE"; }
 			   | ALTER DOMAIN_P						{ $$ = "ALTER DOMAIN"; }
 			   | ALTER TRIGGER						{ $$ = "ALTER TRIGGER"; }
-			   | DROP TABLESPACE					{ $$ = "DROP TABLE"; }
 			   | DROP TABLE							{ $$ = "DROP TABLE"; }
 			   | DROP SEQUENCE						{ $$ = "DROP SEQUENCE"; }
 			   | DROP VIEW							{ $$ = "DROP VIEW"; }

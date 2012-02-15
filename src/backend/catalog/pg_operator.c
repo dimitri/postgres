@@ -436,12 +436,14 @@ OperatorCreate(const char *operatorName,
 	/*
 	 * Call BEFORE CREATE AGGREGARE triggers
 	 */
-	cmd->objectId = InvalidOid;
-	cmd->objectname = (char *)operatorName;
-	cmd->schemaname = get_namespace_name(operatorNamespace);
+	if (cmd->before != NIL || cmd->after != NIL)
+	{
+		cmd->objectId = InvalidOid;
+		cmd->objectname = (char *)operatorName;
+		cmd->schemaname = get_namespace_name(operatorNamespace);
 
-	if (ExecBeforeOrInsteadOfCommandTriggers(cmd))
-		return;
+		ExecBeforeCommandTriggers(cmd);
+	}
 
 	/*
 	 * Set up the other operators.	If they do not currently exist, create
@@ -577,8 +579,11 @@ OperatorCreate(const char *operatorName,
 		OperatorUpd(operatorObjectId, commutatorId, negatorId);
 
 	/* Call AFTER CREATE OPERATOR triggers */
-	cmd->objectId = operatorObjectId;
-	ExecAfterCommandTriggers(cmd);
+	if (cmd->after != NIL)
+	{
+		cmd->objectId = operatorObjectId;
+		ExecAfterCommandTriggers(cmd);
+	}
 }
 
 /*

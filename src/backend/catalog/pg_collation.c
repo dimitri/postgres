@@ -96,12 +96,14 @@ CollationCreate(const char *collname, Oid collnamespace,
 	/*
 	 * Call BEFORE CREATE COLLATION triggers
 	 */
-	cmd->objectId = InvalidOid;
-	cmd->objectname = (char *)collname;
-	cmd->schemaname = get_namespace_name(collnamespace);
+	if (cmd->before != NIL || cmd->after != NIL)
+	{
+		cmd->objectId = InvalidOid;
+		cmd->objectname = (char *)collname;
+		cmd->schemaname = get_namespace_name(collnamespace);
 
-	if (ExecBeforeOrInsteadOfCommandTriggers(cmd))
-		return InvalidOid;
+		ExecBeforeCommandTriggers(cmd);
+	}
 
 	/* open pg_collation */
 	rel = heap_open(CollationRelationId, RowExclusiveLock);
@@ -155,9 +157,11 @@ CollationCreate(const char *collname, Oid collnamespace,
 	heap_close(rel, RowExclusiveLock);
 
 	/* Call AFTER CREATE AGGREGATE triggers */
-	cmd->objectId = oid;
-	ExecAfterCommandTriggers(cmd);
-
+	if (cmd->after != NIL)
+	{
+		cmd->objectId = oid;
+		ExecAfterCommandTriggers(cmd);
+	}
 	return oid;
 }
 

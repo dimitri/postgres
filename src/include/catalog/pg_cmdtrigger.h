@@ -33,7 +33,7 @@ CATALOG(pg_cmdtrigger,3466)
 	NameData    ctgcommand;		/* trigger's command */
 	NameData	ctgname;		/* trigger's name */
 	Oid			ctgfoid;		/* OID of function to be called */
-	char		ctgtype;		/* BEFORE/AFTER/INSTEAD */
+	char		ctgtype;		/* BEFORE/AFTER */
 	char		ctgenabled;		/* trigger's firing configuration WRT
 								 * session_replication_role */
 } FormData_pg_cmdtrigger;
@@ -66,6 +66,5 @@ typedef FormData_pg_cmdtrigger *Form_pg_cmdtrigger;
  */
 #define CMD_TRIGGER_FIRED_BEFORE			'B'
 #define CMD_TRIGGER_FIRED_AFTER				'A'
-#define CMD_TRIGGER_FIRED_INSTEAD			'I'
 
 #endif   /* PG_CMDTRIGGER_H */

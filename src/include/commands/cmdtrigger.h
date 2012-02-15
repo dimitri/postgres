@@ -24,11 +24,13 @@
  */
 typedef struct CommandContextData
 {
-	char *tag;					/* Command Tag */
-	Oid   objectId;				/* oid of the existing object, if any */
-	char *schemaname;			/* schemaname or NULL if not relevant */
-	char *objectname;			/* objectname */
-	Node *parsetree;			/* command parsetree, given as an internal */
+	char *tag;			/* Command Tag */
+	Oid   objectId;		/* oid of the existing object, if any */
+	char *schemaname;	/* schemaname or NULL if not relevant */
+	char *objectname;	/* objectname */
+	Node *parsetree;	/* command parsetree, given as an internal */
+	List *before;		/* procedures to call before the command */
+	List *after;		/* procedures to call after the command */
 } CommandContextData;
 
 typedef struct CommandContextData *CommandContext;
@@ -42,8 +44,9 @@ extern Oid	get_cmdtrigger_oid(const char *command, const char *trigname, bool mi
 extern void AlterCmdTrigger(AlterCmdTrigStmt *stmt);
 extern void RenameCmdTrigger(List *command, const char *trigname, const char *newname);
 
-extern bool ExecBeforeOrInsteadOfCommandTriggers(CommandContext cmd);
-extern bool ExecBeforeOrInsteadOfAnyCommandTriggers(CommandContext cmd);
+extern bool ListCommandTriggers(CommandContext cmd);
+extern void ExecBeforeCommandTriggers(CommandContext cmd);
+extern void ExecBeforeAnyCommandTriggers(CommandContext cmd);
 extern void ExecAfterCommandTriggers(CommandContext cmd);
 extern void ExecAfterAnyCommandTriggers(CommandContext cmd);
 

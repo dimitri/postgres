@@ -217,13 +217,16 @@ DefineSequence(CreateSeqStmt *seq)
 	 * Call BEFORE CREATE SEQUENCE triggers
 	 */
 	cmd.tag = (char *) CreateCommandTag((Node *)seq);
-	cmd.objectId = InvalidOid;
-	cmd.objectname = NameStr(name);
-	cmd.schemaname = NULL;		/* can't publish it easily enough here */
-	cmd.parsetree  = (Node *)stmt;
 
-	if (ExecBeforeOrInsteadOfCommandTriggers(&cmd))
-		return;
+	if (ListCommandTriggers(&cmd))
+	{
+		cmd.objectId = InvalidOid;
+		cmd.objectname = NameStr(name);
+		cmd.schemaname = NULL;		/* can't publish it easily enough here */
+		cmd.parsetree  = (Node *)stmt;
+
+		ExecBeforeCommandTriggers(&cmd);
+	}
 
 	seqoid = DefineRelation(stmt, RELKIND_SEQUENCE, seq->ownerId);
 	Assert(seqoid != InvalidOid);
@@ -242,8 +245,11 @@ DefineSequence(CreateSeqStmt *seq)
 	heap_close(rel, NoLock);
 
 	/* Call AFTER CREATE SEQUENCE triggers */
-	cmd.objectId = seqoid;
-	ExecAfterCommandTriggers(&cmd);
+	if (cmd.after != NIL)
+	{
+		cmd.objectId = seqoid;
+		ExecAfterCommandTriggers(&cmd);
+	}
 }
 
 /*

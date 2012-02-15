@@ -547,13 +547,14 @@ DefineType(List *names, List *parameters, CommandContext cmd)
 	/*
 	 * Call BEFORE CREATE TYPE triggers
 	 */
-	cmd->objectId = InvalidOid;
-	cmd->objectname = (char *)typeName;
-	cmd->schemaname = get_namespace_name(typeNamespace);
+	if (cmd->before != NIL || cmd->after != NIL)
+	{
+		cmd->objectId = InvalidOid;
+		cmd->objectname = (char *)typeName;
+		cmd->schemaname = get_namespace_name(typeNamespace);
 
-	if (ExecBeforeOrInsteadOfCommandTriggers(cmd))
-		return;
-
+		ExecBeforeCommandTriggers(cmd);
+	}
 	array_oid = AssignTypeArrayOid();
 
 	/*
@@ -639,8 +640,11 @@ DefineType(List *names, List *parameters, CommandContext cmd)
 	pfree(array_type);
 
 	/* Call AFTER CREATE AGGREGATE triggers */
-	cmd->objectId = typoid;
-	ExecAfterCommandTriggers(cmd);
+	if (cmd->after != NIL)
+	{
+		cmd->objectId = typoid;
+		ExecAfterCommandTriggers(cmd);
+	}
 }
 
 /*
@@ -991,13 +995,16 @@ DefineDomain(CreateDomainStmt *stmt)
 	 * Call BEFORE CREATE DOMAIN triggers
 	 */
 	cmd.tag = (char *) CreateCommandTag((Node *)stmt);
-	cmd.objectId = InvalidOid;
-	cmd.objectname = (char *)domainName;
-	cmd.schemaname = get_namespace_name(domainNamespace);
-	cmd.parsetree  = (Node *)stmt;
 
-	if (ExecBeforeOrInsteadOfCommandTriggers(&cmd))
-		return;
+	if (ListCommandTriggers(&cmd))
+	{
+		cmd.objectId = InvalidOid;
+		cmd.objectname = (char *)domainName;
+		cmd.schemaname = get_namespace_name(domainNamespace);
+		cmd.parsetree  = (Node *)stmt;
+
+		ExecBeforeCommandTriggers(&cmd);
+	}
 
 	/*
 	 * Have TypeCreate do all the real work.
@@ -1068,8 +1075,11 @@ DefineDomain(CreateDomainStmt *stmt)
 	ReleaseSysCache(typeTup);
 
 	/* Call AFTER CREATE DOMAIN triggers */
-	cmd.objectId = domainoid;
-	ExecAfterCommandTriggers(&cmd);
+	if (cmd.after != NIL)
+	{
+		cmd.objectId = domainoid;
+		ExecAfterCommandTriggers(&cmd);
+	}
 }
 
 
@@ -1118,13 +1128,16 @@ DefineEnum(CreateEnumStmt *stmt)
 	 * Call BEFORE CREATE (enum) TYPE triggers
 	 */
 	cmd.tag = (char *) CreateCommandTag((Node *)stmt);
-	cmd.objectId = InvalidOid;
-	cmd.objectname = enumName;
-	cmd.schemaname = get_namespace_name(enumNamespace);
-	cmd.parsetree  = (Node *)stmt;
 
-	if (ExecBeforeOrInsteadOfCommandTriggers(&cmd))
-		return;
+	if (ListCommandTriggers(&cmd))
+	{
+		cmd.objectId = InvalidOid;
+		cmd.objectname = enumName;
+		cmd.schemaname = get_namespace_name(enumNamespace);
+		cmd.parsetree  = (Node *)stmt;
+
+		ExecBeforeCommandTriggers(&cmd);
+	}
 
 	enumArrayOid = AssignTypeArrayOid();
 
@@ -1205,8 +1218,11 @@ DefineEnum(CreateEnumStmt *stmt)
 	pfree(enumArrayName);
 
 	/* Call AFTER CREATE (enum) TYPE triggers */
-	cmd.objectId = enumTypeOid;
-	ExecAfterCommandTriggers(&cmd);
+	if (cmd.after != NIL)
+	{
+		cmd.objectId = enumTypeOid;
+		ExecAfterCommandTriggers(&cmd);
+	}
 }
 
 /*
@@ -1443,13 +1459,16 @@ DefineRange(CreateRangeStmt *stmt)
 	 * Call BEFORE CREATE EXTENSION triggers
 	 */
 	cmd.tag = (char *) CreateCommandTag((Node *)stmt);
-	cmd.objectId = InvalidOid;
-	cmd.objectname = typeName;
-	cmd.schemaname = get_namespace_name(typeNamespace);
-	cmd.parsetree  = (Node *)stmt;
 
-	if (ExecBeforeOrInsteadOfCommandTriggers(&cmd))
-		return;
+	if (ListCommandTriggers(&cmd))
+	{
+		cmd.objectId = InvalidOid;
+		cmd.objectname = typeName;
+		cmd.schemaname = get_namespace_name(typeNamespace);
+		cmd.parsetree  = (Node *)stmt;
+
+		ExecBeforeCommandTriggers(&cmd);
+	}
 
 	/* Allocate OID for array type */
 	rangeArrayOid = AssignTypeArrayOid();
@@ -1535,8 +1554,11 @@ DefineRange(CreateRangeStmt *stmt)
 	makeRangeConstructors(typeName, typeNamespace, typoid, rangeSubtype);
 
 	/* Call AFTER CREATE (range) TYPE triggers */
-	cmd.objectId = typoid;
-	ExecAfterCommandTriggers(&cmd);
+	if (cmd.after != NIL)
+	{
+		cmd.objectId = typoid;
+		ExecAfterCommandTriggers(&cmd);
+	}
 }
 
 /*
@@ -2092,12 +2114,14 @@ DefineCompositeType(const RangeVar *typevar, List *coldeflist,
 	/*
 	 * Call BEFORE CREATE (composite) TYPE triggers
 	 */
-	cmd->objectId = InvalidOid;
-	cmd->objectname = createStmt->relation->relname;
-	cmd->schemaname = get_namespace_name(typeNamespace);
+	if (ListCommandTriggers(cmd))
+	{
+		cmd->objectId = InvalidOid;
+		cmd->objectname = createStmt->relation->relname;
+		cmd->schemaname = get_namespace_name(typeNamespace);
 
-	if (ExecBeforeOrInsteadOfCommandTriggers(cmd))
-		return InvalidOid;
+		ExecBeforeCommandTriggers(cmd);
+	}
 
 	/*
 	 * Finally create the relation.  This also creates the type.
@@ -2106,9 +2130,11 @@ DefineCompositeType(const RangeVar *typevar, List *coldeflist,
 	Assert(relid != InvalidOid);
 
 	/* Call AFTER CREATE (composite) TYPE triggers */
-	cmd->objectId = relid;
-	ExecAfterCommandTriggers(cmd);
-
+	if (cmd->after != NIL)
+	{
+		cmd->objectId = relid;
+		ExecAfterCommandTriggers(cmd);
+	}
 	return relid;
 }
 
@@ -3337,14 +3363,13 @@ AlterTypeOwner(List *names, Oid newOwnerId, ObjectType objecttype,
 		}
 
 		/* Call BEFORE ALTER TYPE triggers */
-		cmd->objectId = typeOid;
-		cmd->objectname = (char *)typename;
-		cmd->schemaname = get_namespace_name(typTup->typnamespace);
-
-		if (ExecBeforeOrInsteadOfCommandTriggers(cmd))
+		if (cmd->before != NIL || cmd->after != NIL)
 		{
-			heap_close(rel, RowExclusiveLock);
-			return;
+			cmd->objectId = typeOid;
+			cmd->objectname = (char *)typename;
+			cmd->schemaname = get_namespace_name(typTup->typnamespace);
+
+			ExecBeforeCommandTriggers(cmd);
 		}
 
 		/*
@@ -3376,7 +3401,8 @@ AlterTypeOwner(List *names, Oid newOwnerId, ObjectType objecttype,
 		}
 
 		/* Call AFTER ALTER TYPE triggers */
-		ExecAfterCommandTriggers(cmd);
+		if (cmd->after != NIL)
+			ExecAfterCommandTriggers(cmd);
 	}
 
 	/* Clean up */
@@ -3548,14 +3574,13 @@ AlterTypeNamespaceInternal(Oid typeOid, Oid nspOid,
 				 errhint("Use ALTER TABLE instead.")));
 
 	/* Call BEFORE ALTER TYPE triggers */
-	if (cmd!=NULL)
+	if (cmd!=NULL && (cmd->before != NIL || cmd->after != NIL))
 	{
 		cmd->objectId = typeOid;
 		cmd->objectname = NameStr(typform->typname);
 		cmd->schemaname = get_namespace_name(oldNspOid);
 
-		if (ExecBeforeOrInsteadOfCommandTriggers(cmd))
-			return oldNspOid;
+		ExecBeforeCommandTriggers(cmd);
 	}
 
 	/* OK, modify the pg_type row */
@@ -3617,7 +3642,7 @@ AlterTypeNamespaceInternal(Oid typeOid, Oid nspOid,
 	if (OidIsValid(arrayOid))
 		AlterTypeNamespaceInternal(arrayOid, nspOid, true, true, NULL);
 
-	if (cmd!=NULL)
+	if (cmd!=NULL && cmd->after != NIL)
 	{
 		cmd->schemaname = get_namespace_name(nspOid);
 		ExecAfterCommandTriggers(cmd);

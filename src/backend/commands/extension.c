@@ -1200,14 +1200,16 @@ CreateExtension(CreateExtensionStmt *stmt)
 	 * Call BEFORE CREATE EXTENSION triggers
 	 */
 	cmd.tag = (char *) CreateCommandTag((Node *)stmt);
-	cmd.objectId = InvalidOid;
-	cmd.objectname = stmt->extname;
-	cmd.schemaname = NULL;
-	cmd.parsetree  = (Node *)stmt;
 
-	if (ExecBeforeOrInsteadOfCommandTriggers(&cmd))
-		return;
+	if (ListCommandTriggers(&cmd))
+	{
+		cmd.objectId = InvalidOid;
+		cmd.objectname = stmt->extname;
+		cmd.schemaname = NULL;
+		cmd.parsetree  = (Node *)stmt;
 
+		ExecBeforeCommandTriggers(&cmd);
+	}
 	/*
 	 * Check for duplicate extension name.	The unique index on
 	 * pg_extension.extname would catch this anyway, and serves as a backstop
@@ -1483,8 +1485,11 @@ CreateExtension(CreateExtensionStmt *stmt)
 						  versionName, updateVersions);
 
 	/* Call AFTER CREATE EXTENSION triggers */
-	cmd.objectId = extensionOid;
-	ExecAfterCommandTriggers(&cmd);
+	if (cmd.after != NIL)
+	{
+		cmd.objectId = extensionOid;
+		ExecAfterCommandTriggers(&cmd);
+	}
 }
 
 /*
@@ -2266,12 +2271,14 @@ AlterExtensionNamespace(List *names, const char *newschema, CommandContext cmd)
 	systable_endscan(extScan);
 
 	/* Call BEFORE ALTER EXTENSION triggers */
-	cmd->objectId = extensionOid;
-	cmd->objectname = extensionName;
-	cmd->schemaname = NULL;
+	if (cmd->before != NIL || cmd->after != NIL)
+	{
+		cmd->objectId = extensionOid;
+		cmd->objectname = extensionName;
+		cmd->schemaname = NULL;
 
-	if (ExecBeforeOrInsteadOfCommandTriggers(cmd))
-		return;
+		ExecBeforeCommandTriggers(cmd);
+	}
 
 	/*
 	 * If the extension is already in the target schema, just silently do
@@ -2370,7 +2377,8 @@ AlterExtensionNamespace(List *names, const char *newschema, CommandContext cmd)
 						NamespaceRelationId, oldNspOid, nspOid);
 
 	/* Call AFTER ALTER EXTENSION triggers */
-	ExecAfterCommandTriggers(cmd);
+	if (cmd->after != NIL)
+		ExecAfterCommandTriggers(cmd);
 }
 
 /*
@@ -2448,14 +2456,16 @@ ExecAlterExtensionStmt(AlterExtensionStmt *stmt)
 	 * Call BEFORE ALTER EXTENSION triggers
 	 */
 	cmd.tag = (char *) CreateCommandTag((Node *)stmt);
-	cmd.objectId = extensionOid;
-	cmd.objectname = stmt->extname;
-	cmd.schemaname = NULL;
-	cmd.parsetree  = (Node *)stmt;
 
-	if (ExecBeforeOrInsteadOfCommandTriggers(&cmd))
-		return;
+	if (ListCommandTriggers(&cmd))
+	{
+		cmd.objectId = extensionOid;
+		cmd.objectname = stmt->extname;
+		cmd.schemaname = NULL;
+		cmd.parsetree  = (Node *)stmt;
 
+		ExecBeforeCommandTriggers(&cmd);
+	}
 	/*
 	 * Read the primary control file.  Note we assume that it does not contain
 	 * any non-ASCII data, so there is no need to worry about encoding at this
@@ -2524,7 +2534,8 @@ ExecAlterExtensionStmt(AlterExtensionStmt *stmt)
 						  oldVersionName, updateVersions);
 
 	/* Call AFTER ALTER EXTENSION triggers */
-	ExecAfterCommandTriggers(&cmd);
+	if (cmd.after != NIL)
+		ExecAfterCommandTriggers(&cmd);
 }
 
 /*

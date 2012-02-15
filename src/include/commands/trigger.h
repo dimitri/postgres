@@ -13,6 +13,7 @@
 #ifndef TRIGGER_H
 #define TRIGGER_H
 
+#include "commands/cmdtrigger.h"
 #include "nodes/execnodes.h"
 #include "nodes/parsenodes.h"
 

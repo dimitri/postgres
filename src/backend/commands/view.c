@@ -172,12 +172,14 @@ DefineVirtualRelation(RangeVar *relation, List *tlist, bool replace,
 	/*
 	 * Call BEFORE CREATE VIEW triggers
 	 */
-	cmd->objectId = InvalidOid;
-	cmd->objectname = relation->relname;
-	cmd->schemaname = relation->schemaname;
+	if (cmd->before != NIL || cmd->after != NIL)
+	{
+		cmd->objectId = InvalidOid;
+		cmd->objectname = relation->relname;
+		cmd->schemaname = relation->schemaname;
 
-	if (ExecBeforeOrInsteadOfCommandTriggers(cmd))
-		return InvalidOid;
+		ExecBeforeCommandTriggers(cmd);
+	}
 
 	if (OidIsValid(viewOid) && replace)
 	{
@@ -559,6 +561,9 @@ DefineView(ViewStmt *stmt, const char *queryString)
 	DefineViewRules(viewOid, viewParse, stmt->replace);
 
 	/* Call AFTER CREATE VIEW triggers */
-	cmd.objectId = viewOid;
-	ExecAfterCommandTriggers(&cmd);
+	if (cmd.after != NIL)
+	{
+		cmd.objectId = viewOid;
+		ExecAfterCommandTriggers(&cmd);
+	}
 }

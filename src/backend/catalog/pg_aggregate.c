@@ -227,12 +227,14 @@ AggregateCreate(const char *aggName,
 	/*
 	 * Call BEFORE CREATE AGGREGATE triggers
 	 */
-	cmd->objectId = InvalidOid;
-	cmd->objectname = (char *)aggName;
-	cmd->schemaname = get_namespace_name(aggNamespace);
+	if (cmd->before != NIL || cmd->after != NIL)
+	{
+		cmd->objectId = InvalidOid;
+		cmd->objectname = (char *)aggName;
+		cmd->schemaname = get_namespace_name(aggNamespace);
 
-	if (ExecBeforeOrInsteadOfCommandTriggers(cmd))
-		return;
+		ExecBeforeCommandTriggers(cmd);
+	}
 
 	/*
 	 * Everything looks okay.  Try to create the pg_proc entry for the
@@ -329,8 +331,11 @@ AggregateCreate(const char *aggName,
 	}
 
 	/* Call AFTER CREATE AGGREGATE triggers */
-	cmd->objectId = procOid;
-	ExecAfterCommandTriggers(cmd);
+	if (cmd->after != NIL)
+	{
+		cmd->objectId = procOid;
+		ExecAfterCommandTriggers(cmd);
+	}
 }
 
 /*

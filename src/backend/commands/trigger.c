@@ -425,13 +425,16 @@ CreateTrigger(CreateTrigStmt *stmt, const char *queryString,
 	if (!isInternal)
 	{
 		cmd.tag = (char *) CreateCommandTag((Node *)stmt);
-		cmd.objectId = InvalidOid;
-		cmd.objectname = stmt->trigname;
-		cmd.schemaname = get_namespace_name(RelationGetNamespace(rel));
-		cmd.parsetree  = (Node *)stmt;
 
-		if (ExecBeforeOrInsteadOfCommandTriggers(&cmd))
-			return InvalidOid;
+		if (ListCommandTriggers(&cmd))
+		{
+			cmd.objectId = InvalidOid;
+			cmd.objectname = stmt->trigname;
+			cmd.schemaname = get_namespace_name(RelationGetNamespace(rel));
+			cmd.parsetree  = (Node *)stmt;
+
+			ExecBeforeCommandTriggers(&cmd);
+		}
 	}
 
 	/*
@@ -771,7 +774,7 @@ CreateTrigger(CreateTrigStmt *stmt, const char *queryString,
 	heap_close(rel, NoLock);
 
 	/* Call AFTER CREATE TRIGGER triggers */
-	if (!isInternal)
+	if (!isInternal && cmd.after != NIL)
 	{
 		cmd.objectId = trigoid;
 		ExecAfterCommandTriggers(&cmd);
@@ -1291,16 +1294,13 @@ renametrig(RenameStmt *stmt, CommandContext cmd)
 	if (HeapTupleIsValid(tuple = systable_getnext(tgscan)))
 	{
 		/* Call BEFORE ALTER TRIGGER triggers */
-		cmd->objectId = HeapTupleGetOid(tuple);
-		cmd->objectname = stmt->subname;
-		cmd->schemaname = get_namespace_name(RelationGetNamespace(targetrel));
-
-		if (ExecBeforeOrInsteadOfCommandTriggers(cmd))
+		if (cmd->before != NIL || cmd->after != NIL)
 		{
-			systable_endscan(tgscan);
-			heap_close(tgrel, RowExclusiveLock);
-			relation_close(targetrel, NoLock);
-			return;
+			cmd->objectId = HeapTupleGetOid(tuple);
+			cmd->objectname = stmt->subname;
+			cmd->schemaname = get_namespace_name(RelationGetNamespace(targetrel));
+
+			ExecBeforeCommandTriggers(cmd);
 		}
 
 		/*
@@ -1341,8 +1341,11 @@ renametrig(RenameStmt *stmt, CommandContext cmd)
 	relation_close(targetrel, NoLock);
 
 	/* Call AFTER ALTER TRIGGER triggers */
-	cmd->objectname = stmt->newname;
-	ExecAfterCommandTriggers(cmd);
+	if (cmd->after != NIL)
+	{
+		cmd->objectname = stmt->newname;
+		ExecAfterCommandTriggers(cmd);
+	}
 }
 
 
