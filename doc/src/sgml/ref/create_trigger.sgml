@@ -29,10 +29,10 @@ CREATE [ CONSTRAINT ] TRIGGER <replaceable class="PARAMETER">name</replaceable> 
     [ WHEN ( <replaceable class="parameter">condition</replaceable> ) ]
     EXECUTE PROCEDURE <replaceable class="PARAMETER">function_name</replaceable> ( <replaceable class="PARAMETER">arguments</replaceable> )
 
-CREATE TRIGGER <replaceable class="PARAMETER">name</replaceable> { BEFORE | AFTER | INSTEAD OF } ANY COMMAND
+CREATE TRIGGER <replaceable class="PARAMETER">name</replaceable> { BEFORE | AFTER  } ANY COMMAND
     EXECUTE PROCEDURE <replaceable class="PARAMETER">function_name</replaceable> ()
 
-CREATE TRIGGER <replaceable class="PARAMETER">name</replaceable> { BEFORE | AFTER | INSTEAD OF } COMMAND <replaceable class="PARAMETER">command</replaceable> [, ... ]
+CREATE TRIGGER <replaceable class="PARAMETER">name</replaceable> { BEFORE | AFTER  } COMMAND <replaceable class="PARAMETER">command</replaceable> [, ... ]
     EXECUTE PROCEDURE <replaceable class="PARAMETER">function_name</replaceable> ()
 
 <phrase>where <replaceable class="parameter">event</replaceable> can be one of:</phrase>
@@ -44,11 +44,8 @@ CREATE TRIGGER <replaceable class="PARAMETER">name</replaceable> { BEFORE | AFTE
 
 <phrase>and where <replaceable class="parameter">command</replaceable> can be one of:</phrase>
 
-    CREATE DATABASE
-    DROP DATABASE
     CREATE SCHEMA
     CREATE EXTENSION
-    CREATE TABLESPACE
     CREATE FUNCTION
     CREATE TABLE
     CREATE FOREIGN TABLE
@@ -65,10 +62,8 @@ CREATE TRIGGER <replaceable class="PARAMETER">name</replaceable> { BEFORE | AFTE
     CREATE TYPE
     CREATE DOMAIN
     ALTER TABLE
-    ALTER DATABASE
     ALTER SCHEMA
     ALTER EXTENSION
-    ALTER TABLESPACE
     ALTER FUNCTION
     ALTER TABLE
     ALTER AGGREGATE
@@ -81,7 +76,6 @@ CREATE TRIGGER <replaceable class="PARAMETER">name</replaceable> { BEFORE | AFTE
     ALTER TYPE_P
     ALTER DOMAIN_P
     ALTER TRIGGER
-    DROP TABLESPACE
     DROP TABLE
     DROP SEQUENCE
     DROP VIEW
@@ -126,11 +120,8 @@ CREATE TRIGGER <replaceable class="PARAMETER">name</replaceable> { BEFORE | AFTE
 
   <para>
    The command trigger can be specified to fire before or after the command
-   is executed, or instead of executing the command. A before trigger's
-   function must return a boolean, returning <literal>False</literal> allows
-   the procedure to prevent the command execution. AFTER and INSTEAD OF
-   triggers return value is not used, such trigger's function must then
-   return <literal>void</literal>.
+   is executed, or instead of executing the command. A command trigger's
+   function must return <literal>void</literal>.
   </para>
 
   <para>
@@ -431,11 +422,9 @@ UPDATE OF <replaceable>column_name1</replaceable> [, <replaceable>column_name2</
       the trigger fires, for table and view triggers.
      </para>
      <para>
-      In the case of a BEFORE COMMAND trigger, the user-supplied function
-      must be declared as taking 4 arguments of type text, oid, text, text
-      and returning a boolean. In the case of an AFTER COMMAND trigger or an
-      INSTEAD OF trigger, the user-supplied function must be declare as
-      taking the same 4 arguments and returning void.
+      In the case of a <literal>COMMAND</literal> trigger, the user-supplied
+      function must be declared as taking 4 arguments of type text, oid,
+      text, text and returning void.
      </para>
      <para>
       The command trigger function is called with the
@@ -585,9 +574,7 @@ CREATE TRIGGER view_insert
 <programlisting>
 CREATE OR REPLACE FUNCTION abort_any_command
  (IN cmd_tag text, IN objectid oid, IN schemaname text, IN objectname text)
- RETURNS bool
- LANGUAGE plpgsql
-AS $$
+ RETURNS void LANGUAGE plpgsql AS $$
 BEGIN
   RAISE EXCEPTION 'command % is disabled' % cmd_tag;
 END;
@@ -603,22 +590,13 @@ CREATE TRIGGER abort_ddl
 
 <programlisting>
 CREATE OR REPLACE FUNCTION enforce_local_style
- (
-   IN cmd_tag        text,
-   IN objectid       oid,
-   IN schemaname     text,
-   IN objectname     text
- )
- RETURNS bool
- LANGUAGE plpgsql
-AS $$
+ (IN cmd_tag text, IN objectid oid, IN schemaname text, IN objectname text)
+ RETURNS bool LANGUAGE plpgsql AS $$
 BEGIN
   IF substring(objectname, 0, 4) NOT IN ('ab_', 'cz_', 'fr_')
   THEN
-    RAISE WARNING 'invalid relation name: %', objectname;
-    RETURN FALSE;
+    RAISE EXCEPTION 'invalid relation name: %', objectname;
   END IF;
-  RETURN TRUE;
 END;
 $$;
 
