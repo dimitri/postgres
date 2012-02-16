@@ -1,0 +1,61 @@
+--
+-- COMMAND TRIGGERS
+--
+create or replace function snitch
+ (in cmd_tag text, in objectid oid, in schemaname text, in objectname text)
+ returns void language plpgsql
+as $$
+begin
+  -- can't output the objectid here that would break pg_regress
+  raise notice 'snitch: % % %', cmd_tag, schemaname, objectname;
+end;
+$$;
+create trigger snitch_before before any command execute procedure snitch();
+create trigger snitch_after  after  any command execute procedure snitch();
+NOTICE:  snitch: CREATE COMMAND TRIGGER <NULL> <NULL>
+create trigger snitch_some_more
+         after command create table, alter table, create function
+       execute procedure snitch();
+NOTICE:  snitch: CREATE COMMAND TRIGGER <NULL> <NULL>
+NOTICE:  snitch: CREATE COMMAND TRIGGER <NULL> <NULL>
+create schema cmd;
+NOTICE:  snitch: CREATE SCHEMA <NULL> <NULL>
+NOTICE:  snitch: CREATE SCHEMA <NULL> <NULL>
+create table cmd.foo(id bigserial primary key);
+NOTICE:  CREATE TABLE will create implicit sequence "foo_id_seq" for serial column "foo.id"
+NOTICE:  snitch: CREATE SEQUENCE <NULL> <NULL>
+NOTICE:  snitch: CREATE SEQUENCE <NULL> <NULL>
+NOTICE:  CREATE TABLE / PRIMARY KEY will create implicit index "foo_pkey" for table "foo"
+NOTICE:  snitch: CREATE INDEX <NULL> <NULL>
+NOTICE:  snitch: CREATE INDEX <NULL> <NULL>
+NOTICE:  snitch: ALTER SEQUENCE <NULL> <NULL>
+NOTICE:  snitch: ALTER SEQUENCE <NULL> <NULL>
+NOTICE:  snitch: CREATE TABLE cmd foo
+NOTICE:  snitch: CREATE TABLE <NULL> <NULL>
+NOTICE:  snitch: CREATE TABLE <NULL> <NULL>
+create view cmd.v as select * from cmd.foo;
+NOTICE:  snitch: CREATE VIEW <NULL> <NULL>
+NOTICE:  snitch: CREATE VIEW <NULL> <NULL>
+alter table cmd.foo add column t text;
+NOTICE:  snitch: ALTER TABLE cmd foo
+NOTICE:  snitch: ALTER TABLE <NULL> <NULL>
+NOTICE:  snitch: ALTER TABLE <NULL> <NULL>
+create index on cmd.foo(t);
+NOTICE:  snitch: CREATE INDEX <NULL> <NULL>
+NOTICE:  snitch: CREATE INDEX <NULL> <NULL>
+create function cmd.fun(int) returns text language sql
+as $$ select t from cmd.foo where id = $1; $$;
+NOTICE:  snitch: CREATE FUNCTION cmd fun
+NOTICE:  snitch: CREATE FUNCTION <NULL> <NULL>
+NOTICE:  snitch: CREATE FUNCTION <NULL> <NULL>
+drop schema cmd cascade;
+NOTICE:  drop cascades to 3 other objects
+DETAIL:  drop cascades to table cmd.foo
+drop cascades to view cmd.v
+drop cascades to function cmd.fun(integer)
+NOTICE:  snitch: DROP SCHEMA <NULL> <NULL>
+NOTICE:  snitch: DROP SCHEMA <NULL> <NULL>
+drop trigger snitch_before on any command;
+NOTICE:  snitch: DROP COMMAND TRIGGER <NULL> <NULL>
+drop trigger snitch_after  on any command;
+drop trigger snitch_some_more on command create table, alter table, create function;
