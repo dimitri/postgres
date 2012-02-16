@@ -96,7 +96,7 @@ CollationCreate(const char *collname, Oid collnamespace,
 	/*
 	 * Call BEFORE CREATE COLLATION triggers
 	 */
-	if (cmd->before != NIL || cmd->after != NIL)
+	if (CommandFiresTriggers(cmd))
 	{
 		cmd->objectId = InvalidOid;
 		cmd->objectname = (char *)collname;
@@ -157,7 +157,7 @@ CollationCreate(const char *collname, Oid collnamespace,
 	heap_close(rel, RowExclusiveLock);
 
 	/* Call AFTER CREATE COLLATION triggers */
-	if (cmd->after != NIL)
+	if (CommandFiresAfterTriggers(cmd))
 	{
 		cmd->objectId = oid;
 		ExecAfterCommandTriggers(cmd);

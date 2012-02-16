@@ -2429,7 +2429,7 @@ RenameRelationInternal(Oid myrelid, const char *newrelname, CommandContext cmd)
 						newrelname)));
 
 	/* Call BEFORE ALTER relation triggers */
-	if (cmd!=NULL && (cmd->before != NIL || cmd->after != NIL))
+	if (CommandFiresTriggers(cmd))
 	{
 		cmd->objectId = HeapTupleGetOid(reltup);
 		cmd->objectname = NameStr(relform->relname);
@@ -2476,7 +2476,7 @@ RenameRelationInternal(Oid myrelid, const char *newrelname, CommandContext cmd)
 	relation_close(targetrelation, NoLock);
 
 	/* Call AFTER ALTER relation triggers */
-	if (cmd!=NULL && cmd->after != NIL)
+	if (CommandFiresAfterTriggers(cmd))
 	{
 		cmd->objectname = (char *)newrelname;
 		ExecAfterCommandTriggers(cmd);
