@@ -2,12 +2,12 @@
 -- COMMAND TRIGGERS
 --
 create or replace function snitch
- (in cmd_tag text, in objectid oid, in schemaname text, in objectname text)
+ (in tg_when text, in cmd_tag text, in objectid oid, in schemaname text, in objectname text)
  returns void language plpgsql
 as $$
 begin
   -- can't output the objectid here that would break pg_regress
-  raise notice 'snitch: % % %', cmd_tag, schemaname, objectname;
+  raise notice 'snitch: % % % %', tg_when, cmd_tag, schemaname, objectname;
 end;
 $$;
 

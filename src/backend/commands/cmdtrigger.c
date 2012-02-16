@@ -116,9 +116,9 @@ CreateCmdTrigger(CreateCmdTrigStmt *stmt, const char *queryString)
 {
 	Relation	tgrel;
 	ListCell   *c;
-	/* cmd trigger args: cmd_tag, objectId, schemaname, objectname [,parsetree] */
-	Oid			fargtypes[4] = {TEXTOID, OIDOID, TEXTOID, TEXTOID};
-	Oid			fargtypes_c[5] = {TEXTOID, OIDOID, TEXTOID, TEXTOID, INTERNALOID};
+	/* cmd trigger args: when, cmd_tag, objectId, schemaname, objectname [,parsetree] */
+	Oid			fargtypes[5] = {TEXTOID, TEXTOID, OIDOID, TEXTOID, TEXTOID};
+	Oid			fargtypes_c[6] = {TEXTOID, TEXTOID, OIDOID, TEXTOID, TEXTOID, INTERNALOID};
 	Oid			funcoid;
 	Oid			funcrettype;
 	char        ctgtype;
@@ -132,9 +132,9 @@ CreateCmdTrigger(CreateCmdTrigStmt *stmt, const char *queryString)
 	 * Only C coded functions can accept an argument of type internal, so we
 	 * don't have to explicitely check about the prolang here.
 	 */
-	funcoid = LookupFuncName(stmt->funcname, 5, fargtypes_c, true);
+	funcoid = LookupFuncName(stmt->funcname, 6, fargtypes_c, true);
 	if (funcoid == InvalidOid)
-		funcoid = LookupFuncName(stmt->funcname, 4, fargtypes, false);
+		funcoid = LookupFuncName(stmt->funcname, 5, fargtypes, false);
 
 	/* we need the trigger type to validate the return type */
 	funcrettype = get_func_rettype(funcoid);
@@ -531,6 +531,7 @@ ListCommandTriggers(CommandContext cmd)
 static bool
 call_cmdtrigger_procedure(CommandContext cmd,
 						  RegProcedure proc,
+						  const char *when,
 						  MemoryContext per_command_context)
 {
 	FmgrInfo	flinfo;
@@ -539,7 +540,7 @@ call_cmdtrigger_procedure(CommandContext cmd,
 	Datum		result;
 	HeapTuple	procedureTuple;
 	Form_pg_proc procedureStruct;
-	int         nargs = 4;
+	int         nargs = 5;
 
 	fmgr_info_cxt(proc, &flinfo, per_command_context);
 
@@ -552,34 +553,37 @@ call_cmdtrigger_procedure(CommandContext cmd,
 	procedureStruct = (Form_pg_proc) GETSTRUCT(procedureTuple);
 
 	if (procedureStruct->prolang == ClanguageId)
-		nargs = 5;
+		nargs = 6;
 
 	ReleaseSysCache(procedureTuple);
 
 	/* Can't use OidFunctionCallN because we might get a NULL result */
 	InitFunctionCallInfoData(fcinfo, &flinfo, nargs, InvalidOid, NULL, NULL);
 
+	fcinfo.arg[0] = PointerGetDatum(cstring_to_text(pstrdup(when)));
+
 	/* We support triggers ON ANY COMMAND so all fields here are nullable. */
 	if (cmd->tag != NULL)
-		fcinfo.arg[0] = PointerGetDatum(cstring_to_text(pstrdup(cmd->tag)));
+		fcinfo.arg[1] = PointerGetDatum(cstring_to_text(pstrdup(cmd->tag)));
 
-	fcinfo.arg[1] = ObjectIdGetDatum(cmd->objectId);
+	fcinfo.arg[2] = ObjectIdGetDatum(cmd->objectId);
 
 	if (cmd->schemaname != NULL)
-		fcinfo.arg[2] = PointerGetDatum(cstring_to_text(pstrdup(cmd->schemaname)));
+		fcinfo.arg[3] = PointerGetDatum(cstring_to_text(pstrdup(cmd->schemaname)));
 
 	if (cmd->objectname != NULL)
-		fcinfo.arg[3] = PointerGetDatum(cstring_to_text(pstrdup(cmd->objectname)));
+		fcinfo.arg[4] = PointerGetDatum(cstring_to_text(pstrdup(cmd->objectname)));
 
-	fcinfo.argnull[0] = cmd->tag == NULL;
-	fcinfo.argnull[1] = cmd->objectId == InvalidOid;
-	fcinfo.argnull[2] = cmd->schemaname == NULL;
-	fcinfo.argnull[3] = cmd->objectname == NULL;
+	fcinfo.argnull[0] = false;
+	fcinfo.argnull[1] = cmd->tag == NULL;
+	fcinfo.argnull[2] = cmd->objectId == InvalidOid;
+	fcinfo.argnull[3] = cmd->schemaname == NULL;
+	fcinfo.argnull[4] = cmd->objectname == NULL;
 
-	if (nargs == 5)
+	if (nargs == 6)
 	{
-		fcinfo.arg[4] = PointerGetDatum(cmd->parsetree);
-		fcinfo.argnull[4] = false;
+		fcinfo.arg[5] = PointerGetDatum(cmd->parsetree);
+		fcinfo.argnull[5] = false;
 	}
 
 	pgstat_init_function_usage(&fcinfo, &fcusage);
@@ -600,7 +604,7 @@ call_cmdtrigger_procedure(CommandContext cmd,
  * is not exposed to other modules.
  */
 static void
-exec_command_triggers_internal(CommandContext cmd, List *procs)
+exec_command_triggers_internal(CommandContext cmd, List *procs, const char *when)
 {
 	MemoryContext per_command_context, oldContext;
 	ListCell   *cell;
@@ -622,7 +626,7 @@ exec_command_triggers_internal(CommandContext cmd, List *procs)
 	foreach(cell, procs)
 	{
 		Oid proc = lfirst_oid(cell);
-		call_cmdtrigger_procedure(cmd, (RegProcedure)proc, per_command_context);
+		call_cmdtrigger_procedure(cmd, (RegProcedure)proc, when, per_command_context);
 	}
 	MemoryContextSwitchTo(oldContext);
 }
@@ -686,7 +690,7 @@ void
 ExecBeforeCommandTriggers(CommandContext cmd)
 {
 	if (cmd != NULL && cmd->before != NIL)
-		exec_command_triggers_internal(cmd, cmd->before);
+		exec_command_triggers_internal(cmd, cmd->before, "BEFORE");
 }
 
 void
@@ -697,14 +701,14 @@ ExecBeforeAnyCommandTriggers(CommandContext cmd)
 	ListCommandTriggers(&any);
 
 	if (any.before != NIL)
-		exec_command_triggers_internal(cmd, any.before);
+		exec_command_triggers_internal(cmd, any.before, "BEFORE");
 }
 
 void
 ExecAfterCommandTriggers(CommandContext cmd)
 {
 	if (cmd != NULL && cmd->after != NIL)
-		exec_command_triggers_internal(cmd, cmd->after);
+		exec_command_triggers_internal(cmd, cmd->after, "AFTER");
 }
 
 void
@@ -715,5 +719,5 @@ ExecAfterAnyCommandTriggers(CommandContext cmd)
 	ListCommandTriggers(&any);
 
 	if (any.after != NIL)
-		exec_command_triggers_internal(cmd, any.after);
+		exec_command_triggers_internal(cmd, any.after, "AFTER");
 }

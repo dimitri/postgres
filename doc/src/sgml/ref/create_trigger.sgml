@@ -423,17 +423,25 @@ UPDATE OF <replaceable>column_name1</replaceable> [, <replaceable>column_name2</
      </para>
      <para>
       In the case of a <literal>COMMAND</literal> trigger, the user-supplied
-      function must be declared as taking 4 arguments of type text, oid,
-      text, text and returning void.
+      function must be declared as taking 5 arguments of type text, text,
+      oid, text, text and returning void.
+     </para>
+     <para>
+      If your command trigger is implemented in <literal>C</literal> then it
+      will be called with yet another argument, of
+      type <literal>internal</literal>, which is a pointer to
+      the <literal>Node *</literal> parse tree.
      </para>
      <para>
       The command trigger function is called with the
-      parameters <literal>command tag</literal>, <literal>objectid</literal>
-      (can be null in case of a BEFORE CREATE or an AFTER DROP command
-      trigger timing), <literal>schemaname</literal> (can be null for
-      objects not living in a schema, and for sequences due to an
-      implementation limit) and <literal>object name</literal> (can be null
-      for any command triggers).
+      parameters <literal>tg_when</literal> (which is set to either 'BEFORE'
+      or 'AFTER'), <literal>command
+      tag</literal>, <literal>objectid</literal> (can be null in case of a
+      BEFORE CREATE or an AFTER DROP command trigger
+      timing), <literal>schemaname</literal> (can be null for objects not
+      living in a schema, and for sequences due to an implementation limit)
+      and <literal>object name</literal> (can be null for any command
+      triggers).
      </para>
     </listitem>
    </varlistentry>
@@ -573,7 +581,7 @@ CREATE TRIGGER view_insert
 
 <programlisting>
 CREATE OR REPLACE FUNCTION abort_any_command
- (IN cmd_tag text, IN objectid oid, IN schemaname text, IN objectname text)
+ (tg_when text, cmd_tag text, objectid oid, schemaname text, objectname text)
  RETURNS void LANGUAGE plpgsql AS $$
 BEGIN
   RAISE EXCEPTION 'command % is disabled' % cmd_tag;
@@ -590,7 +598,7 @@ CREATE TRIGGER abort_ddl
 
 <programlisting>
 CREATE OR REPLACE FUNCTION enforce_local_style
- (IN cmd_tag text, IN objectid oid, IN schemaname text, IN objectname text)
+ (tg_when text, cmd_tag text, objectid oid, schemaname text, objectname text)
  RETURNS bool LANGUAGE plpgsql AS $$
 BEGIN
   IF substring(objectname, 0, 4) NOT IN ('ab_', 'cz_', 'fr_')
