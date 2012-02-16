@@ -811,6 +811,7 @@ RemoveRelations(DropStmt *drop)
 		if (!OidIsValid(relOid))
 		{
 			DropErrorMsgNonExistent(rel->relname, relkind, drop->missing_ok);
+			cmds[i++] = NULL;
 			continue;
 		}
 
