@@ -705,7 +705,7 @@ RenameTypeInternal(Oid typeOid, const char *newTypeName, Oid typeNamespace,
 				 errmsg("type \"%s\" already exists", newTypeName)));
 
 	/* Call BEFORE ALTER TYPE triggers */
-	if (cmd->before != NIL || cmd->after != NIL)
+	if (CommandFiresTriggers(cmd))
 	{
 		cmd->objectId = typeOid;
 		cmd->objectname = NameStr(typ->typname);
@@ -735,7 +735,7 @@ RenameTypeInternal(Oid typeOid, const char *newTypeName, Oid typeNamespace,
 	}
 
 	/* Call AFTER ALTER TYPE triggers */
-	if (cmd->after != NIL)
+	if (CommandFiresAfterTriggers(cmd))
 	{
 		cmd->objectname = (char *)newTypeName;
 		ExecAfterCommandTriggers(cmd);

@@ -424,9 +424,9 @@ CreateTrigger(CreateTrigStmt *stmt, const char *queryString,
 	 */
 	if (!isInternal)
 	{
-		cmd.tag = (char *) CreateCommandTag((Node *)stmt);
+		InitCommandContext(&cmd, (Node *)stmt, true);
 
-		if (ListCommandTriggers(&cmd))
+		if (CommandFiresTriggers(&cmd))
 		{
 			cmd.objectId = InvalidOid;
 			cmd.objectname = stmt->trigname;
@@ -774,7 +774,7 @@ CreateTrigger(CreateTrigStmt *stmt, const char *queryString,
 	heap_close(rel, NoLock);
 
 	/* Call AFTER CREATE TRIGGER triggers */
-	if (!isInternal && cmd.after != NIL)
+	if (!isInternal && CommandFiresAfterTriggers(&cmd))
 	{
 		cmd.objectId = trigoid;
 		ExecAfterCommandTriggers(&cmd);
@@ -1294,7 +1294,7 @@ renametrig(RenameStmt *stmt, CommandContext cmd)
 	if (HeapTupleIsValid(tuple = systable_getnext(tgscan)))
 	{
 		/* Call BEFORE ALTER TRIGGER triggers */
-		if (cmd->before != NIL || cmd->after != NIL)
+		if (CommandFiresTriggers(cmd))
 		{
 			cmd->objectId = HeapTupleGetOid(tuple);
 			cmd->objectname = stmt->subname;
@@ -1341,7 +1341,7 @@ renametrig(RenameStmt *stmt, CommandContext cmd)
 	relation_close(targetrel, NoLock);
 
 	/* Call AFTER ALTER TRIGGER triggers */
-	if (cmd->after != NIL)
+	if (CommandFiresAfterTriggers(cmd))
 	{
 		cmd->objectname = stmt->newname;
 		ExecAfterCommandTriggers(cmd);

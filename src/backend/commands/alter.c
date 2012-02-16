@@ -49,11 +49,7 @@ void
 ExecRenameStmt(RenameStmt *stmt)
 {
 	CommandContextData cmd;
-
-	cmd.tag = (char *) CreateCommandTag((Node *)stmt);
-	cmd.parsetree  = (Node *)stmt;
-
-	(void) ListCommandTriggers(&cmd);
+	InitCommandContext(&cmd, (Node *)stmt, true);
 
 	switch (stmt->renameType)
 	{
@@ -165,11 +161,7 @@ void
 ExecAlterObjectSchemaStmt(AlterObjectSchemaStmt *stmt)
 {
 	CommandContextData cmd;
-
-	cmd.tag = (char *) CreateCommandTag((Node *)stmt);
-	cmd.parsetree  = (Node *)stmt;
-
-	(void) ListCommandTriggers(&cmd);
+	InitCommandContext(&cmd, (Node *)stmt, true);
 
 	switch (stmt->objectType)
 	{
@@ -442,7 +434,7 @@ AlterObjectNamespace(Relation rel, int oidCacheId, int nameCacheId,
 						get_namespace_name(nspOid))));
 
 	/* Call BEFORE ALTER OBJECT triggers */
-	if (cmd!=NULL && (cmd->before != NIL || cmd->after != NIL))
+	if (CommandFiresTriggers(cmd))
 	{
 		cmd->objectId = objid;
 		cmd->objectname = NameStr(*(DatumGetName(name)));
@@ -474,7 +466,7 @@ AlterObjectNamespace(Relation rel, int oidCacheId, int nameCacheId,
 						NamespaceRelationId, oldNspOid, nspOid);
 
 	/* Call AFTER ALTER OBJECT triggers */
-	if (cmd!=NULL && cmd->after != NIL)
+	if (CommandFiresAfterTriggers(cmd))
 	{
 		cmd->schemaname = get_namespace_name(nspOid);
 		ExecAfterCommandTriggers(cmd);
@@ -493,10 +485,7 @@ ExecAlterOwnerStmt(AlterOwnerStmt *stmt)
 	Oid			newowner = get_role_oid(stmt->newowner, false);
 	CommandContextData cmd;
 
-	cmd.tag = (char *) CreateCommandTag((Node *)stmt);
-	cmd.parsetree  = (Node *)stmt;
-
-	(void) ListCommandTriggers(&cmd);
+	InitCommandContext(&cmd, (Node *)stmt, true);
 
 	switch (stmt->objectType)
 	{

@@ -261,7 +261,7 @@ DefineTSParser(List *names, List *parameters, CommandContext cmd)
 	/*
 	 * Call BEFORE CREATE TEXT SEARCH PARSER triggers
 	 */
-	if (cmd->before != NIL || cmd->after != NIL)
+	if (CommandFiresTriggers(cmd))
 	{
 		cmd->objectId = InvalidOid;
 		cmd->objectname = NameStr(pname);
@@ -291,7 +291,7 @@ DefineTSParser(List *names, List *parameters, CommandContext cmd)
 	heap_close(prsRel, RowExclusiveLock);
 
 	/* Call AFTER CREATE TEXT SEARCH PARSER triggers */
-	if (cmd->after != NIL)
+	if (CommandFiresAfterTriggers(cmd))
 	{
 		cmd->objectId = prsOid;
 		ExecAfterCommandTriggers(cmd);
@@ -357,7 +357,7 @@ RenameTSParser(List *oldname, const char *newname, CommandContext cmd)
 						newname)));
 
 	/* Call BEFORE ALTER TEXT SEARCH PARSER triggers */
-	if (cmd->before != NIL || cmd->after != NIL)
+	if (CommandFiresTriggers(cmd))
 	{
 		cmd->objectId = prsId;
 		cmd->objectname = NameStr(((Form_pg_ts_parser) GETSTRUCT(tup))->prsname);
@@ -374,7 +374,7 @@ RenameTSParser(List *oldname, const char *newname, CommandContext cmd)
 	heap_freetuple(tup);
 
 	/* Call AFTER ALTER TEXT SEARCH PARSER triggers */
-	if (cmd->after != NIL)
+	if (CommandFiresAfterTriggers(cmd))
 	{
 		cmd->objectname = (char *)newname;
 		ExecAfterCommandTriggers(cmd);
@@ -576,7 +576,7 @@ DefineTSDictionary(List *names, List *parameters, CommandContext cmd)
 	/*
 	 * Call BEFORE CREATE TEXT SEARCH DICTIONARY triggers
 	 */
-	if (cmd->before != NIL || cmd->after != NIL)
+	if (CommandFiresTriggers(cmd))
 	{
 		cmd->objectId = InvalidOid;
 		cmd->objectname = NameStr(dname);
@@ -621,7 +621,7 @@ DefineTSDictionary(List *names, List *parameters, CommandContext cmd)
 	heap_close(dictRel, RowExclusiveLock);
 
 	/* Call AFTER CREATE TEXT SEARCH DICTIONARY triggers */
-	if (cmd->after != NIL)
+	if (CommandFiresAfterTriggers(cmd))
 	{
 		cmd->objectId = dictOid;
 		ExecAfterCommandTriggers(cmd);
@@ -672,7 +672,7 @@ RenameTSDictionary(List *oldname, const char *newname, CommandContext cmd)
 					   get_namespace_name(namespaceOid));
 
 	/* Call BEFORE ALTER TEXT SEARCH DICTIONARY triggers */
-	if (cmd->before != NIL || cmd->after != NIL)
+	if (CommandFiresTriggers(cmd))
 	{
 		cmd->objectId = dictId;
 		cmd->objectname = NameStr(((Form_pg_ts_dict) GETSTRUCT(tup))->dictname);
@@ -689,7 +689,7 @@ RenameTSDictionary(List *oldname, const char *newname, CommandContext cmd)
 	heap_freetuple(tup);
 
 	/* Call AFTER ALTER TEXT SEARCH DICTIONARY triggers */
-	if (cmd->after != NIL)
+	if (CommandFiresAfterTriggers(cmd))
 	{
 		cmd->objectname = (char *)newname;
 		ExecAfterCommandTriggers(cmd);
@@ -928,7 +928,7 @@ AlterTSDictionaryOwner(List *name, Oid newOwnerId, CommandContext cmd)
 		}
 
 		/* Call BEFORE ALTER TEXT SEARCH DICTIONARY triggers */
-		if (cmd->before != NIL || cmd->after != NIL)
+		if (CommandFiresTriggers(cmd))
 		{
 			cmd->objectId = dictId;
 			cmd->objectname = NameStr(form->dictname);
@@ -947,10 +947,8 @@ AlterTSDictionaryOwner(List *name, Oid newOwnerId, CommandContext cmd)
 								newOwnerId);
 
 		/* Call AFTER ALTER TEXT SEARCH DICTIONARY triggers */
-		if (cmd->after != NIL)
-		{
+		if (CommandFiresAfterTriggers(cmd))
 			ExecAfterCommandTriggers(cmd);
-		}
 	}
 
 	heap_close(rel, NoLock);
@@ -1113,7 +1111,7 @@ DefineTSTemplate(List *names, List *parameters, CommandContext cmd)
 	/*
 	 * Call BEFORE CREATE TEXT SEARCH TEMPLATE triggers
 	 */
-	if (cmd->before != NIL || cmd->after != NIL)
+	if (CommandFiresTriggers(cmd))
 	{
 		cmd->objectId = InvalidOid;
 		cmd->objectname = NameStr(dname);
@@ -1144,7 +1142,7 @@ DefineTSTemplate(List *names, List *parameters, CommandContext cmd)
 	heap_close(tmplRel, RowExclusiveLock);
 
 	/* Call AFTER CREATE TEXT SEARCH TEMPLATE triggers */
-	if (cmd->after != NIL)
+	if (CommandFiresAfterTriggers(cmd))
 	{
 		cmd->objectId = dictOid;
 		ExecAfterCommandTriggers(cmd);
@@ -1188,7 +1186,7 @@ RenameTSTemplate(List *oldname, const char *newname, CommandContext cmd)
 						newname)));
 
 	/* Call BEFORE ALTER TEXT SEARCH TEMPLATE triggers */
-	if (cmd->before != NIL || cmd->after != NIL)
+	if (CommandFiresTriggers(cmd))
 	{
 		cmd->objectId = tmplId;
 		cmd->objectname = NameStr(((Form_pg_ts_template) GETSTRUCT(tup))->tmplname);
@@ -1205,7 +1203,7 @@ RenameTSTemplate(List *oldname, const char *newname, CommandContext cmd)
 	heap_freetuple(tup);
 
 	/* Call AFTER ALTER TEXT SEARCH TEMPLATE triggers */
-	if (cmd->after != NIL)
+	if (CommandFiresAfterTriggers(cmd))
 	{
 		cmd->objectname = (char *)newname;
 		ExecAfterCommandTriggers(cmd);
@@ -1478,7 +1476,7 @@ DefineTSConfiguration(List *names, List *parameters, CommandContext cmd)
 	/*
 	 * Call BEFORE CREATE TEXT SEARCH CONFIGURATION triggers
 	 */
-	if (cmd->before != NIL || cmd->after != NIL)
+	if (CommandFiresTriggers(cmd))
 	{
 		cmd->objectId = InvalidOid;
 		cmd->objectname = NameStr(cname);
@@ -1565,7 +1563,7 @@ DefineTSConfiguration(List *names, List *parameters, CommandContext cmd)
 	heap_close(cfgRel, RowExclusiveLock);
 
 	/* Call AFTER CREATE TEXT SEARCH PARSER triggers */
-	if (cmd->after != NIL)
+	if (CommandFiresAfterTriggers(cmd))
 	{
 		cmd->objectId = cfgOid;
 		ExecAfterCommandTriggers(cmd);
@@ -1615,7 +1613,7 @@ RenameTSConfiguration(List *oldname, const char *newname, CommandContext cmd)
 				   get_namespace_name(namespaceOid));
 
 	/* Call BEFORE ALTER TEXT SEARCH CONFIGURATION triggers */
-	if (cmd->before != NIL || cmd->after != NIL)
+	if (CommandFiresTriggers(cmd))
 	{
 		cmd->objectId = cfgId;
 		cmd->objectname = NameStr(((Form_pg_ts_config) GETSTRUCT(tup))->cfgname);
@@ -1632,7 +1630,7 @@ RenameTSConfiguration(List *oldname, const char *newname, CommandContext cmd)
 	heap_freetuple(tup);
 
 	/* Call AFTER ALTER TEXT SEARCH CONFIGURATION triggers */
-	if (cmd->after != NIL)
+	if (CommandFiresAfterTriggers(cmd))
 	{
 		cmd->objectname = (char *)newname;
 		ExecAfterCommandTriggers(cmd);
@@ -1782,7 +1780,7 @@ AlterTSConfigurationOwner(List *name, Oid newOwnerId, CommandContext cmd)
 		}
 
 		/* Call BEFORE ALTER TEXT SEARCH CONFIGURATION triggers */
-		if (cmd->before != NIL || cmd->after != NIL)
+		if (CommandFiresTriggers(cmd))
 		{
 			cmd->objectId = cfgId;
 			cmd->objectname = NameStr(form->cfgname);
@@ -1801,7 +1799,7 @@ AlterTSConfigurationOwner(List *name, Oid newOwnerId, CommandContext cmd)
 								newOwnerId);
 
 		/* Call AFTER ALTER TEXT SEARCH CONFIGURATION triggers */
-		if (cmd->after != NIL)
+		if (CommandFiresAfterTriggers(cmd))
 			ExecAfterCommandTriggers(cmd);
 	}
 	heap_close(rel, NoLock);

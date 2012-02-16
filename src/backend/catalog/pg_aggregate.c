@@ -227,7 +227,7 @@ AggregateCreate(const char *aggName,
 	/*
 	 * Call BEFORE CREATE AGGREGATE triggers
 	 */
-	if (cmd->before != NIL || cmd->after != NIL)
+	if (CommandFiresTriggers(cmd))
 	{
 		cmd->objectId = InvalidOid;
 		cmd->objectname = (char *)aggName;
@@ -331,7 +331,7 @@ AggregateCreate(const char *aggName,
 	}
 
 	/* Call AFTER CREATE AGGREGATE triggers */
-	if (cmd->after != NIL)
+	if (CommandFiresAfterTriggers(cmd))
 	{
 		cmd->objectId = procOid;
 		ExecAfterCommandTriggers(cmd);

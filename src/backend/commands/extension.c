@@ -1199,9 +1199,9 @@ CreateExtension(CreateExtensionStmt *stmt)
 	/*
 	 * Call BEFORE CREATE EXTENSION triggers
 	 */
-	cmd.tag = (char *) CreateCommandTag((Node *)stmt);
+	InitCommandContext(&cmd, (Node *)stmt, true);
 
-	if (ListCommandTriggers(&cmd))
+	if (CommandFiresTriggers(&cmd))
 	{
 		cmd.objectId = InvalidOid;
 		cmd.objectname = stmt->extname;
@@ -1485,7 +1485,7 @@ CreateExtension(CreateExtensionStmt *stmt)
 						  versionName, updateVersions);
 
 	/* Call AFTER CREATE EXTENSION triggers */
-	if (cmd.after != NIL)
+	if (CommandFiresAfterTriggers(&cmd))
 	{
 		cmd.objectId = extensionOid;
 		ExecAfterCommandTriggers(&cmd);
@@ -2271,7 +2271,7 @@ AlterExtensionNamespace(List *names, const char *newschema, CommandContext cmd)
 	systable_endscan(extScan);
 
 	/* Call BEFORE ALTER EXTENSION triggers */
-	if (cmd->before != NIL || cmd->after != NIL)
+	if (CommandFiresTriggers(cmd))
 	{
 		cmd->objectId = extensionOid;
 		cmd->objectname = extensionName;
@@ -2377,7 +2377,7 @@ AlterExtensionNamespace(List *names, const char *newschema, CommandContext cmd)
 						NamespaceRelationId, oldNspOid, nspOid);
 
 	/* Call AFTER ALTER EXTENSION triggers */
-	if (cmd->after != NIL)
+	if (CommandFiresAfterTriggers(cmd))
 		ExecAfterCommandTriggers(cmd);
 }
 
@@ -2455,9 +2455,9 @@ ExecAlterExtensionStmt(AlterExtensionStmt *stmt)
 	/*
 	 * Call BEFORE ALTER EXTENSION triggers
 	 */
-	cmd.tag = (char *) CreateCommandTag((Node *)stmt);
+	InitCommandContext(&cmd, (Node *)stmt, true);
 
-	if (ListCommandTriggers(&cmd))
+	if (CommandFiresTriggers(&cmd))
 	{
 		cmd.objectId = extensionOid;
 		cmd.objectname = stmt->extname;
@@ -2534,7 +2534,7 @@ ExecAlterExtensionStmt(AlterExtensionStmt *stmt)
 						  oldVersionName, updateVersions);
 
 	/* Call AFTER ALTER EXTENSION triggers */
-	if (cmd.after != NIL)
+	if (CommandFiresAfterTriggers(&cmd))
 		ExecAfterCommandTriggers(&cmd);
 }
 

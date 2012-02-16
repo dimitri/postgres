@@ -817,9 +817,9 @@ RemoveRelations(DropStmt *drop)
 		/*
 		 * Call BEFORE DROP command triggers
 		 */
-		cmd.tag = (char *) CreateCommandTag((Node *)drop);
+		InitCommandContext(&cmd, (Node *)drop, true);
 
-		if (ListCommandTriggers(&cmd))
+		if (CommandFiresTriggers(&cmd))
 		{
 			cmd.objectId = relOid;
 			cmd.objectname = get_rel_name(relOid);
@@ -828,7 +828,7 @@ RemoveRelations(DropStmt *drop)
 
 			ExecBeforeCommandTriggers(&cmd);
 		}
-		cmds[i++] = &cmd;		/* cmd.after is set by ListCommandTriggers() */
+		cmds[i++] = &cmd;
 
 		/* OK, we're ready to delete this one */
 		obj.classId = RelationRelationId;
@@ -843,7 +843,7 @@ RemoveRelations(DropStmt *drop)
 	/* Call AFTER DROP command triggers */
 	for(i = 0; i<n; i++)
 	{
-		if (cmds[i]->after)
+		if (CommandFiresAfterTriggers(cmds[i]))
 		{
 			cmds[i]->objectId = InvalidOid;
 			ExecAfterCommandTriggers(cmds[i]);
@@ -9569,9 +9569,9 @@ AlterTableNamespace(AlterObjectSchemaStmt *stmt)
 	CheckSetNamespace(oldNspOid, nspOid, RelationRelationId, relid);
 
 	/* Call BEFORE ALTER TABLE triggers */
-	cmd.tag = (char *) CreateCommandTag((Node *)stmt);
+	InitCommandContext(&cmd, (Node *)stmt, true);
 
-	if (ListCommandTriggers(&cmd))
+	if (CommandFiresTriggers(&cmd))
 	{
 		cmd.objectId = relid;
 		cmd.objectname = stmt->relation->relname;
@@ -9604,7 +9604,7 @@ AlterTableNamespace(AlterObjectSchemaStmt *stmt)
 	relation_close(rel, NoLock);
 
 	/* Call AFTER ALTER TABLE triggers */
-	if (cmd.after != NIL)
+	if (CommandFiresAfterTriggers(&cmd))
 	{
 		cmd.schemaname = get_namespace_name(nspOid);
 		ExecAfterCommandTriggers(&cmd);

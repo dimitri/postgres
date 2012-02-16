@@ -547,7 +547,7 @@ DefineType(List *names, List *parameters, CommandContext cmd)
 	/*
 	 * Call BEFORE CREATE TYPE triggers
 	 */
-	if (cmd->before != NIL || cmd->after != NIL)
+	if (CommandFiresTriggers(cmd))
 	{
 		cmd->objectId = InvalidOid;
 		cmd->objectname = (char *)typeName;
@@ -640,7 +640,7 @@ DefineType(List *names, List *parameters, CommandContext cmd)
 	pfree(array_type);
 
 	/* Call AFTER CREATE AGGREGATE triggers */
-	if (cmd->after != NIL)
+	if (CommandFiresAfterTriggers(cmd))
 	{
 		cmd->objectId = typoid;
 		ExecAfterCommandTriggers(cmd);
@@ -994,9 +994,9 @@ DefineDomain(CreateDomainStmt *stmt)
 	/*
 	 * Call BEFORE CREATE DOMAIN triggers
 	 */
-	cmd.tag = (char *) CreateCommandTag((Node *)stmt);
+	InitCommandContext(&cmd, (Node *)stmt, true);
 
-	if (ListCommandTriggers(&cmd))
+	if (CommandFiresTriggers(&cmd))
 	{
 		cmd.objectId = InvalidOid;
 		cmd.objectname = (char *)domainName;
@@ -1075,7 +1075,7 @@ DefineDomain(CreateDomainStmt *stmt)
 	ReleaseSysCache(typeTup);
 
 	/* Call AFTER CREATE DOMAIN triggers */
-	if (cmd.after != NIL)
+	if (CommandFiresAfterTriggers(&cmd))
 	{
 		cmd.objectId = domainoid;
 		ExecAfterCommandTriggers(&cmd);
@@ -1127,9 +1127,9 @@ DefineEnum(CreateEnumStmt *stmt)
 	/*
 	 * Call BEFORE CREATE (enum) TYPE triggers
 	 */
-	cmd.tag = (char *) CreateCommandTag((Node *)stmt);
+	InitCommandContext(&cmd, (Node *)stmt, true);
 
-	if (ListCommandTriggers(&cmd))
+	if (CommandFiresTriggers(&cmd))
 	{
 		cmd.objectId = InvalidOid;
 		cmd.objectname = enumName;
@@ -1218,7 +1218,7 @@ DefineEnum(CreateEnumStmt *stmt)
 	pfree(enumArrayName);
 
 	/* Call AFTER CREATE (enum) TYPE triggers */
-	if (cmd.after != NIL)
+	if (CommandFiresAfterTriggers(&cmd))
 	{
 		cmd.objectId = enumTypeOid;
 		ExecAfterCommandTriggers(&cmd);
@@ -1458,9 +1458,9 @@ DefineRange(CreateRangeStmt *stmt)
 	/*
 	 * Call BEFORE CREATE EXTENSION triggers
 	 */
-	cmd.tag = (char *) CreateCommandTag((Node *)stmt);
+	InitCommandContext(&cmd, (Node *)stmt, true);
 
-	if (ListCommandTriggers(&cmd))
+	if (CommandFiresTriggers(&cmd))
 	{
 		cmd.objectId = InvalidOid;
 		cmd.objectname = typeName;
@@ -1554,7 +1554,7 @@ DefineRange(CreateRangeStmt *stmt)
 	makeRangeConstructors(typeName, typeNamespace, typoid, rangeSubtype);
 
 	/* Call AFTER CREATE (range) TYPE triggers */
-	if (cmd.after != NIL)
+	if (CommandFiresAfterTriggers(&cmd))
 	{
 		cmd.objectId = typoid;
 		ExecAfterCommandTriggers(&cmd);
@@ -2114,7 +2114,7 @@ DefineCompositeType(const RangeVar *typevar, List *coldeflist,
 	/*
 	 * Call BEFORE CREATE (composite) TYPE triggers
 	 */
-	if (ListCommandTriggers(cmd))
+	if (CommandFiresTriggers(cmd))
 	{
 		cmd->objectId = InvalidOid;
 		cmd->objectname = createStmt->relation->relname;
@@ -2130,7 +2130,7 @@ DefineCompositeType(const RangeVar *typevar, List *coldeflist,
 	Assert(relid != InvalidOid);
 
 	/* Call AFTER CREATE (composite) TYPE triggers */
-	if (cmd->after != NIL)
+	if (CommandFiresAfterTriggers(cmd))
 	{
 		cmd->objectId = relid;
 		ExecAfterCommandTriggers(cmd);
@@ -3363,7 +3363,7 @@ AlterTypeOwner(List *names, Oid newOwnerId, ObjectType objecttype,
 		}
 
 		/* Call BEFORE ALTER TYPE triggers */
-		if (cmd->before != NIL || cmd->after != NIL)
+		if (CommandFiresTriggers(cmd))
 		{
 			cmd->objectId = typeOid;
 			cmd->objectname = (char *)typename;
@@ -3401,7 +3401,7 @@ AlterTypeOwner(List *names, Oid newOwnerId, ObjectType objecttype,
 		}
 
 		/* Call AFTER ALTER TYPE triggers */
-		if (cmd->after != NIL)
+		if (CommandFiresAfterTriggers(cmd))
 			ExecAfterCommandTriggers(cmd);
 	}
 
@@ -3574,7 +3574,7 @@ AlterTypeNamespaceInternal(Oid typeOid, Oid nspOid,
 				 errhint("Use ALTER TABLE instead.")));
 
 	/* Call BEFORE ALTER TYPE triggers */
-	if (cmd!=NULL && (cmd->before != NIL || cmd->after != NIL))
+	if (CommandFiresTriggers(cmd))
 	{
 		cmd->objectId = typeOid;
 		cmd->objectname = NameStr(typform->typname);
@@ -3642,7 +3642,7 @@ AlterTypeNamespaceInternal(Oid typeOid, Oid nspOid,
 	if (OidIsValid(arrayOid))
 		AlterTypeNamespaceInternal(arrayOid, nspOid, true, true, NULL);
 
-	if (cmd!=NULL && cmd->after != NIL)
+	if (CommandFiresAfterTriggers(cmd))
 	{
 		cmd->schemaname = get_namespace_name(nspOid);
 		ExecAfterCommandTriggers(cmd);

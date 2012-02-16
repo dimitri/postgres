@@ -414,7 +414,7 @@ AlterOperatorOwner_internal(Relation rel, Oid operOid, Oid newOwnerId,
 		}
 
 		/* Call BEFORE ALTER OPERATOR triggers */
-		if (cmd!=NULL && (cmd->before != NIL || cmd->after != NIL))
+		if (CommandFiresTriggers(cmd))
 		{
 			cmd->objectId = operOid;
 			cmd->objectname = NameStr(oprForm->oprname);
@@ -439,7 +439,7 @@ AlterOperatorOwner_internal(Relation rel, Oid operOid, Oid newOwnerId,
 	heap_freetuple(tup);
 
 	/* Call AFTER ALTER OPERATOR triggers */
-	if (cmd!=NULL && cmd->after != NIL)
+	if (CommandFiresAfterTriggers(cmd))
 		ExecAfterCommandTriggers(cmd);
 }
 

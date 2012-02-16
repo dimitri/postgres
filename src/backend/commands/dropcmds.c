@@ -125,18 +125,17 @@ RemoveObjects(DropStmt *stmt)
 		/*
 		 * Call BEFORE DROP command triggers
 		 */
-		cmd.tag = (char *) CreateCommandTag((Node *)stmt);
+		InitCommandContext(&cmd, (Node *)stmt, true);
 
-		if (ListCommandTriggers(&cmd))
+		if (CommandFiresTriggers(&cmd))
 		{
 			cmd.objectId = address.objectId;
 			cmd.objectname = strVal(list_nth(objname, list_length(objname)-1));
 			cmd.schemaname = get_namespace_name(namespaceId);
-			cmd.parsetree  = (Node *)stmt;
 
 			ExecBeforeCommandTriggers(&cmd);
 		}
-		cmds[i++] = &cmd;		/* cmd->after is set by ListCommandTriggers() */
+		cmds[i++] = &cmd;
 
 		add_exact_object_address(&address, objects);
 	}
@@ -147,11 +146,11 @@ RemoveObjects(DropStmt *stmt)
 	/* Call AFTER DROP command triggers */
 	for(i = 0; i<n; i++)
 	{
-		if (cmds[i] == NULL || cmds[i]->after == NIL)
-			continue;
-
-		cmds[i]->objectId = InvalidOid;
-		ExecAfterCommandTriggers(cmds[i]);
+		if (CommandFiresAfterTriggers(cmds[i]))
+		{
+			cmds[i]->objectId = InvalidOid;
+			ExecAfterCommandTriggers(cmds[i]);
+		}
 	}
 	free_object_addresses(objects);
 }

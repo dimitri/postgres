@@ -216,9 +216,9 @@ DefineSequence(CreateSeqStmt *seq)
 	/*
 	 * Call BEFORE CREATE SEQUENCE triggers
 	 */
-	cmd.tag = (char *) CreateCommandTag((Node *)seq);
+	InitCommandContext(&cmd, (Node *)seq, true);
 
-	if (ListCommandTriggers(&cmd))
+	if (CommandFiresTriggers(&cmd))
 	{
 		cmd.objectId = InvalidOid;
 		cmd.objectname = NameStr(name);
@@ -245,7 +245,7 @@ DefineSequence(CreateSeqStmt *seq)
 	heap_close(rel, NoLock);
 
 	/* Call AFTER CREATE SEQUENCE triggers */
-	if (cmd.after != NIL)
+	if (CommandFiresAfterTriggers(&cmd))
 	{
 		cmd.objectId = seqoid;
 		ExecAfterCommandTriggers(&cmd);

@@ -436,7 +436,7 @@ OperatorCreate(const char *operatorName,
 	/*
 	 * Call BEFORE CREATE AGGREGARE triggers
 	 */
-	if (cmd->before != NIL || cmd->after != NIL)
+	if (CommandFiresTriggers(cmd))
 	{
 		cmd->objectId = InvalidOid;
 		cmd->objectname = (char *)operatorName;
@@ -579,7 +579,7 @@ OperatorCreate(const char *operatorName,
 		OperatorUpd(operatorObjectId, commutatorId, negatorId);
 
 	/* Call AFTER CREATE OPERATOR triggers */
-	if (cmd->after != NIL)
+	if (CommandFiresAfterTriggers(cmd))
 	{
 		cmd->objectId = operatorObjectId;
 		ExecAfterCommandTriggers(cmd);

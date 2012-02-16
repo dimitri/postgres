@@ -154,9 +154,9 @@ CommandIsReadOnly(Node *parsetree)
  * Support function for calling the command triggers.
  */
 static void
-call_before_or_insteadof_cmdtriggers(Node *parsetree, CommandContext cmd)
+call_before_or_insteadof_cmdtriggers(CommandContext cmd)
 {
-	switch (nodeTag(parsetree))
+	switch (nodeTag(cmd->parsetree))
 	{
 		case T_AlterDatabaseStmt:
 		case T_AlterDatabaseSetStmt:
@@ -230,9 +230,9 @@ call_before_or_insteadof_cmdtriggers(Node *parsetree, CommandContext cmd)
 }
 
 static void
-call_after_cmdtriggers(Node *parsetree, CommandContext cmd)
+call_after_cmdtriggers(CommandContext cmd)
 {
-	switch (nodeTag(parsetree))
+	switch (nodeTag(cmd->parsetree))
 	{
 		case T_AlterDatabaseStmt:
 		case T_AlterDatabaseSetStmt:
@@ -509,21 +509,9 @@ standard_ProcessUtility(Node *parsetree,
 	if (completionTag)
 		completionTag[0] = '\0';
 
-	/*
-	 * Command Triggers needs a global context to be maintained.
-	 *
-	 * we want a completion tag to identify which triggers to run, and that's
-	 * true whatever is given as completionTag here, so just call
-	 * CreateCommandTag() for our own business.
-	 */
-	cmd.objectId = InvalidOid;
-	cmd.tag = (char *) CreateCommandTag(parsetree);
-	cmd.objectname = NULL;
-	cmd.schemaname = NULL;
-	cmd.parsetree  = NULL;
-
 	/* call the BEFORE ANY COMMAND triggers first */
-	call_before_or_insteadof_cmdtriggers(parsetree, &cmd);
+	InitCommandContext(&cmd, parsetree, false);
+	call_before_or_insteadof_cmdtriggers(&cmd);
 
 	switch (nodeTag(parsetree))
 	{
@@ -692,9 +680,9 @@ standard_ProcessUtility(Node *parsetree,
 				/*
 				 * Call BEFORE CREATE TABLE triggers
 				 */
-				cmd.tag = (char *) CreateCommandTag(parsetree);
+				InitCommandContext(&cmd, parsetree, true);
 
-				if (ListCommandTriggers(&cmd))
+				if (CommandFiresTriggers(&cmd))
 				{
 					cmd.objectId = InvalidOid;
 					cmd.objectname = stmt->relation->relname;
@@ -766,7 +754,7 @@ standard_ProcessUtility(Node *parsetree,
 				}
 
 				/* Call AFTER CREATE TABLE triggers */
-				if (cmd.after != NIL)
+				if (CommandFiresAfterTriggers(&cmd))
 				{
 					cmd.objectId = relOid;
 					ExecAfterCommandTriggers(&cmd);
@@ -920,7 +908,7 @@ standard_ProcessUtility(Node *parsetree,
 					/*
 					 * Call BEFORE|INSTEAD OF ALTER TABLE triggers
 					 */
-					cmd.tag = (char *) CreateCommandTag(parsetree);
+					InitCommandContext(&cmd, parsetree, true);
 
 					if (ListCommandTriggers(&cmd))
 					{
@@ -1041,12 +1029,7 @@ standard_ProcessUtility(Node *parsetree,
 				DefineStmt *stmt = (DefineStmt *) parsetree;
 				CommandContextData cmd;
 
-				/*
-				 * prepare CommandContextData for the subcommands, avoiding to
-				 * add the statement itself to the DefineFunction called
-				 */
-				cmd.tag = (char *) CreateCommandTag((Node *)stmt);
-				cmd.parsetree  = (Node *)stmt;
+				InitCommandContext(&cmd, parsetree, true);
 
 				switch (stmt->kind)
 				{
@@ -1095,9 +1078,7 @@ standard_ProcessUtility(Node *parsetree,
 				CompositeTypeStmt *stmt = (CompositeTypeStmt *) parsetree;
 				CommandContextData cmd;
 
-				cmd.tag = (char *) CreateCommandTag((Node *)stmt);
-				cmd.parsetree  = (Node *)stmt;
-
+				InitCommandContext(&cmd, parsetree, true);
 				DefineCompositeType(stmt->typevar, stmt->coldeflist, &cmd);
 			}
 			break;
@@ -1138,13 +1119,7 @@ standard_ProcessUtility(Node *parsetree,
 				IndexStmt  *stmt = (IndexStmt *) parsetree;
 				CommandContextData cmd;
 
-				/*
-				 * prepare the CommandContextData for CREATE INDEX so as not to
-				 * add the IndexStmt in the DefineIndex API, which can get used
-				 * from places where no statement is available
-				 */
-				cmd.tag = (char *) CreateCommandTag((Node *)stmt);
-				cmd.parsetree  = (Node *)stmt;
+				InitCommandContext(&cmd, parsetree, true);
 
 				if (stmt->concurrent)
 					PreventTransactionChain(isTopLevel,
@@ -1452,7 +1427,7 @@ standard_ProcessUtility(Node *parsetree,
 			break;
 	}
 	/* call the AFTER ANY COMMAND triggers */
-	call_after_cmdtriggers(parsetree, &cmd);
+	call_after_cmdtriggers(&cmd);
 }
 
 /*

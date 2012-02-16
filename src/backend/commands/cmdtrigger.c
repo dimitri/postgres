@@ -150,7 +150,6 @@ CreateCmdTrigger(CreateCmdTrigStmt *stmt, const char *queryString)
 		Oid trigoid;
 		A_Const *con = (A_Const *) lfirst(c);
 		char    *command = strVal(&con->val);
-		CommandContextData cmd, any;
 
 		/*
 		 * Scan pg_cmdtrigger for existing triggers on command. We do this only
@@ -162,13 +161,6 @@ CreateCmdTrigger(CreateCmdTrigStmt *stmt, const char *queryString)
 		 * the relation, so the trigger set won't be changing underneath us.
 		 */
 		check_cmdtrigger_name(command, stmt->trigname, tgrel);
-
-		/* check for exclusive timing triggers */
-		cmd.tag = command;
-		ListCommandTriggers(&cmd);
-
-		any.tag = "ANY";
-		ListCommandTriggers(&any);
 
 		switch (stmt->timing)
 		{
@@ -635,10 +627,66 @@ exec_command_triggers_internal(CommandContext cmd, List *procs)
 	MemoryContextSwitchTo(oldContext);
 }
 
+/*
+ * Routine to call to setup a CommandContextData structure.
+ *
+ * This ensures that cmd->before and cmd->after are set to meaningful values,
+ * always NIL when list_triggers is false.
+ *
+ * In case of ANY trigger init we don't want to list triggers associated with
+ * the real command tag, we have another API to do that, see
+ * ExecBeforeAnyCommandTriggers() and ExecAfterAnyCommandTriggers().
+ */
+void
+InitCommandContext(CommandContext cmd, const Node *stmt, bool list_triggers)
+{
+	cmd->tag = (char *) CreateCommandTag((Node *)stmt);
+	cmd->parsetree  = (Node *)stmt;
+	cmd->objectId   = InvalidOid;
+	cmd->objectname = NULL;
+	cmd->schemaname = NULL;
+	cmd->before     = NIL;
+	cmd->after      = NIL;
+
+	if (list_triggers)
+		ListCommandTriggers(cmd);
+}
+
+/*
+ * InitCommandContext() must have been called when CommandFiresTriggers() is
+ * called. When CommandFiresTriggers() returns false, cmd structure needs not
+ * be initialized further.
+ *
+ * There's no place where we can skip BEFORE command trigger initialization
+ * when we have an AFTER command triggers to run, because objectname and
+ * schemaname are needed in both places, so we check both here.
+ */
+bool
+CommandFiresTriggers(CommandContext cmd)
+{
+	return cmd != NULL && (cmd->before != NIL || cmd->after != NIL);
+}
+
+/*
+ * It's still interresting to avoid preparing the Command Context for AFTER
+ * command triggers when we have none to Execute, so we provide this API too.
+ */
+bool
+CommandFiresAfterTriggers(CommandContext cmd)
+{
+	return cmd != NULL && cmd->after != NIL;
+}
+
+/*
+ * In the various Exec...CommandTriggers functions, we still protect against
+ * and empty procedure list so as not to create a MemoryContext then switch to
+ * it unnecessarily.
+ */
 void
 ExecBeforeCommandTriggers(CommandContext cmd)
 {
-	exec_command_triggers_internal(cmd, cmd->before);
+	if (cmd != NULL && cmd->before != NIL)
+		exec_command_triggers_internal(cmd, cmd->before);
 }
 
 void
@@ -648,13 +696,15 @@ ExecBeforeAnyCommandTriggers(CommandContext cmd)
 	any.tag = "ANY";
 	ListCommandTriggers(&any);
 
-	exec_command_triggers_internal(cmd, any.before);
+	if (any.before != NIL)
+		exec_command_triggers_internal(cmd, any.before);
 }
 
 void
 ExecAfterCommandTriggers(CommandContext cmd)
 {
-	exec_command_triggers_internal(cmd, cmd->after);
+	if (cmd != NULL && cmd->after != NIL)
+		exec_command_triggers_internal(cmd, cmd->after);
 }
 
 void
@@ -664,5 +714,6 @@ ExecAfterAnyCommandTriggers(CommandContext cmd)
 	any.tag = "ANY";
 	ListCommandTriggers(&any);
 
-	exec_command_triggers_internal(cmd, any.after);
+	if (any.after != NIL)
+		exec_command_triggers_internal(cmd, any.after);
 }

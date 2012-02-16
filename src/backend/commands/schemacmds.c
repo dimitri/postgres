@@ -87,9 +87,9 @@ CreateSchemaCommand(CreateSchemaStmt *stmt, const char *queryString)
 	/*
 	 * Call BEFORE CREATE SCHEMA triggers (before changing authorization)
 	 */
-	cmd.tag = (char *) CreateCommandTag((Node *)stmt);
+	InitCommandContext(&cmd, (Node *)stmt, true);
 
-	if (ListCommandTriggers(&cmd))
+	if (CommandFiresTriggers(&cmd))
 	{
 		cmd.objectId = InvalidOid;
 		cmd.objectname = (char *)schemaName;
@@ -163,7 +163,7 @@ CreateSchemaCommand(CreateSchemaStmt *stmt, const char *queryString)
 	SetUserIdAndSecContext(saved_uid, save_sec_context);
 
 	/* Call AFTER CREATE SCHEMA triggers */
-	if (cmd.after != NIL)
+	if (CommandFiresAfterTriggers(&cmd))
 	{
 		cmd.objectId = namespaceId;
 		ExecAfterCommandTriggers(&cmd);
@@ -236,7 +236,7 @@ RenameSchema(const char *oldname, const char *newname, CommandContext cmd)
 		   errdetail("The prefix \"pg_\" is reserved for system schemas.")));
 
 	/* Call BEFORE ALTER SCHEMA triggers */
-	if (cmd->before != NIL || cmd->after != NIL)
+	if (CommandFiresTriggers(cmd))
 	{
 		cmd->objectId = HeapTupleGetOid(tup);
 		cmd->objectname = (char *)oldname;
@@ -254,7 +254,7 @@ RenameSchema(const char *oldname, const char *newname, CommandContext cmd)
 	heap_freetuple(tup);
 
 	/* Call AFTER ALTER SCHEMA triggers */
-	if (cmd->after != NIL)
+	if (CommandFiresAfterTriggers(cmd))
 	{
 		cmd->objectname = (char *)newname;
 		ExecAfterCommandTriggers(cmd);
@@ -355,7 +355,7 @@ AlterSchemaOwner_internal(HeapTuple tup, Relation rel, Oid newOwnerId,
 						   get_database_name(MyDatabaseId));
 
 		/* Call BEFORE ALTER SCHEMA triggers */
-		if (cmd!=NULL && (cmd->before != NIL || cmd->after != NIL))
+		if (CommandFiresTriggers(cmd))
 		{
 			cmd->objectId = HeapTupleGetOid(tup);
 			cmd->objectname = NameStr(nspForm->nspname);
@@ -397,7 +397,7 @@ AlterSchemaOwner_internal(HeapTuple tup, Relation rel, Oid newOwnerId,
 								newOwnerId);
 
 		/* Call AFTER ALTER SCHEMA triggers */
-		if (cmd!=NULL && cmd->after != NIL)
+		if (CommandFiresAfterTriggers(cmd))
 			ExecAfterCommandTriggers(cmd);
 	}
 }

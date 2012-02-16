@@ -172,7 +172,7 @@ DefineVirtualRelation(RangeVar *relation, List *tlist, bool replace,
 	/*
 	 * Call BEFORE CREATE VIEW triggers
 	 */
-	if (cmd->before != NIL || cmd->after != NIL)
+	if (CommandFiresTriggers(cmd))
 	{
 		cmd->objectId = InvalidOid;
 		cmd->objectname = relation->relname;
@@ -527,8 +527,7 @@ DefineView(ViewStmt *stmt, const char *queryString)
 	/*
 	 * Prepare BEFORE CREATE VIEW triggers
 	 */
-	cmd.tag = (char *) CreateCommandTag((Node *)stmt);
-	cmd.parsetree  = (Node *)stmt;
+	InitCommandContext(&cmd, (Node *)stmt, true);
 
 	/*
 	 * Create the view relation
@@ -561,7 +560,7 @@ DefineView(ViewStmt *stmt, const char *queryString)
 	DefineViewRules(viewOid, viewParse, stmt->replace);
 
 	/* Call AFTER CREATE VIEW triggers */
-	if (cmd.after != NIL)
+	if (CommandFiresAfterTriggers(&cmd))
 	{
 		cmd.objectId = viewOid;
 		ExecAfterCommandTriggers(&cmd);

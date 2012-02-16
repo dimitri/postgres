@@ -156,7 +156,7 @@ CollationCreate(const char *collname, Oid collnamespace,
 	heap_freetuple(tup);
 	heap_close(rel, RowExclusiveLock);
 
-	/* Call AFTER CREATE AGGREGATE triggers */
+	/* Call AFTER CREATE COLLATION triggers */
 	if (cmd->after != NIL)
 	{
 		cmd->objectId = oid;

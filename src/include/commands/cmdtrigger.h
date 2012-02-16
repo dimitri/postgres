@@ -44,7 +44,10 @@ extern Oid	get_cmdtrigger_oid(const char *command, const char *trigname, bool mi
 extern void AlterCmdTrigger(AlterCmdTrigStmt *stmt);
 extern void RenameCmdTrigger(List *command, const char *trigname, const char *newname);
 
+extern void InitCommandContext(CommandContext cmd, const Node *stmt, bool list_triggers);
 extern bool ListCommandTriggers(CommandContext cmd);
+extern bool CommandFiresTriggers(CommandContext cmd);
+extern bool CommandFiresAfterTriggers(CommandContext cmd);
 extern void ExecBeforeCommandTriggers(CommandContext cmd);
 extern void ExecBeforeAnyCommandTriggers(CommandContext cmd);
 extern void ExecAfterCommandTriggers(CommandContext cmd);

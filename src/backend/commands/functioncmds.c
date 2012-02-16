@@ -950,9 +950,9 @@ CreateFunction(CreateFunctionStmt *stmt, const char *queryString)
 	/*
 	 * Call BEFORE CREATE FUNCTION triggers
 	 */
-	cmd.tag = (char *) CreateCommandTag((Node *)stmt);
+	InitCommandContext(&cmd, (Node *)stmt, true);
 
-	if (ListCommandTriggers(&cmd))
+	if (CommandFiresTriggers(&cmd))
 	{
 		cmd.objectId = InvalidOid;
 		cmd.objectname = (char *)funcname;
@@ -989,7 +989,7 @@ CreateFunction(CreateFunctionStmt *stmt, const char *queryString)
 							  prorows);
 
 	/* Call AFTER CREATE FUNCTION triggers */
-	if (cmd.after != NIL)
+	if (CommandFiresAfterTriggers(&cmd))
 	{
 		cmd.objectId = procOid;
 		ExecAfterCommandTriggers(&cmd);
@@ -1106,7 +1106,7 @@ RenameFunction(List *name, List *argtypes, const char *newname, CommandContext c
 					   get_namespace_name(namespaceOid));
 
 	/* Call BEFORE ALTER FUNCTION triggers */
-	if (cmd->before != NIL || cmd->after != NIL)
+	if (CommandFiresTriggers(cmd))
 	{
 		cmd->objectId = procOid;
 		cmd->objectname = NameListToString(name);
@@ -1124,7 +1124,7 @@ RenameFunction(List *name, List *argtypes, const char *newname, CommandContext c
 	heap_freetuple(tup);
 
 	/* Call AFTER ALTER FUNCTION triggers */
-	if (cmd->after != NIL)
+	if (CommandFiresAfterTriggers(cmd))
 	{
 		cmd->objectname = (char *)newname;
 		ExecAfterCommandTriggers(cmd);
@@ -1230,7 +1230,7 @@ AlterFunctionOwner_internal(Relation rel, HeapTuple tup, Oid newOwnerId,
 		}
 
 		/* Call BEFORE ALTER FUNCTION triggers */
-		if (cmd!=NULL && (cmd->before != NIL || cmd->after != NIL))
+		if (CommandFiresTriggers(cmd))
 		{
 			cmd->objectId = procOid;
 			cmd->objectname = NameStr(procForm->proname);
@@ -1271,7 +1271,7 @@ AlterFunctionOwner_internal(Relation rel, HeapTuple tup, Oid newOwnerId,
 		changeDependencyOnOwner(ProcedureRelationId, procOid, newOwnerId);
 
 		/* Call AFTER ALTER FUNCTION triggers */
-		if (cmd!=NULL && cmd->after != NIL)
+		if (CommandFiresAfterTriggers(cmd))
 			ExecAfterCommandTriggers(cmd);
 	}
 
@@ -1896,7 +1896,7 @@ AlterFunctionNamespace_oid(Oid procOid, Oid nspOid, CommandContext cmd)
 						get_namespace_name(nspOid))));
 
 	/* Call BEFORE ALTER FUNCTION triggers */
-	if (cmd!=NULL && (cmd->before != NIL || cmd->after != NIL))
+	if (CommandFiresTriggers(cmd))
 	{
 		cmd->objectId = procOid;
 		cmd->objectname = NameStr(proc->proname);
@@ -1923,7 +1923,7 @@ AlterFunctionNamespace_oid(Oid procOid, Oid nspOid, CommandContext cmd)
 
 	heap_close(procRel, RowExclusiveLock);
 
-	if (cmd!=NULL && cmd->after != NIL)
+	if (CommandFiresAfterTriggers(cmd))
 	{
 		cmd->schemaname = get_namespace_name(nspOid);
 		ExecAfterCommandTriggers(cmd);
