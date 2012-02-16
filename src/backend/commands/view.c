@@ -527,7 +527,7 @@ DefineView(ViewStmt *stmt, const char *queryString)
 	/*
 	 * Prepare BEFORE CREATE VIEW triggers
 	 */
-	InitCommandContext(&cmd, (Node *)stmt, true);
+	InitCommandContext(&cmd, (Node *)stmt, false);
 
 	/*
 	 * Create the view relation

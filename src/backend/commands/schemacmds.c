@@ -87,7 +87,7 @@ CreateSchemaCommand(CreateSchemaStmt *stmt, const char *queryString)
 	/*
 	 * Call BEFORE CREATE SCHEMA triggers (before changing authorization)
 	 */
-	InitCommandContext(&cmd, (Node *)stmt, true);
+	InitCommandContext(&cmd, (Node *)stmt, false);
 
 	if (CommandFiresTriggers(&cmd))
 	{

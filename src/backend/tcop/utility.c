@@ -154,7 +154,7 @@ CommandIsReadOnly(Node *parsetree)
  * Support function for calling the command triggers.
  */
 static void
-call_before_or_insteadof_cmdtriggers(CommandContext cmd)
+call_before_cmdtriggers(CommandContext cmd)
 {
 	switch (nodeTag(cmd->parsetree))
 	{
@@ -221,7 +221,7 @@ call_before_or_insteadof_cmdtriggers(CommandContext cmd)
 		case T_AlterTableSpaceOptionsStmt:
 		case T_CreateForeignTableStmt:
 		case T_SecLabelStmt:
-			ExecBeforeAnyCommandTriggers(cmd);
+			ExecBeforeCommandTriggers(cmd);
 
 		default:
 			/* commands that don't support triggers */
@@ -297,7 +297,7 @@ call_after_cmdtriggers(CommandContext cmd)
 		case T_AlterTableSpaceOptionsStmt:
 		case T_CreateForeignTableStmt:
 		case T_SecLabelStmt:
-			ExecAfterAnyCommandTriggers(cmd);
+			ExecAfterCommandTriggers(cmd);
 
 		default:
 			/* commands that don't support triggers */
@@ -510,8 +510,8 @@ standard_ProcessUtility(Node *parsetree,
 		completionTag[0] = '\0';
 
 	/* call the BEFORE ANY COMMAND triggers first */
-	InitCommandContext(&cmd, parsetree, false);
-	call_before_or_insteadof_cmdtriggers(&cmd);
+	InitCommandContext(&cmd, parsetree, true);
+	call_before_cmdtriggers(&cmd);
 
 	switch (nodeTag(parsetree))
 	{
@@ -680,7 +680,7 @@ standard_ProcessUtility(Node *parsetree,
 				/*
 				 * Call BEFORE CREATE TABLE triggers
 				 */
-				InitCommandContext(&cmd, parsetree, true);
+				InitCommandContext(&cmd, parsetree, false);
 
 				if (CommandFiresTriggers(&cmd))
 				{
@@ -908,7 +908,7 @@ standard_ProcessUtility(Node *parsetree,
 					/*
 					 * Call BEFORE|INSTEAD OF ALTER TABLE triggers
 					 */
-					InitCommandContext(&cmd, parsetree, true);
+					InitCommandContext(&cmd, parsetree, false);
 
 					if (ListCommandTriggers(&cmd))
 					{
@@ -1029,7 +1029,7 @@ standard_ProcessUtility(Node *parsetree,
 				DefineStmt *stmt = (DefineStmt *) parsetree;
 				CommandContextData cmd;
 
-				InitCommandContext(&cmd, parsetree, true);
+				InitCommandContext(&cmd, parsetree, false);
 
 				switch (stmt->kind)
 				{
@@ -1078,7 +1078,7 @@ standard_ProcessUtility(Node *parsetree,
 				CompositeTypeStmt *stmt = (CompositeTypeStmt *) parsetree;
 				CommandContextData cmd;
 
-				InitCommandContext(&cmd, parsetree, true);
+				InitCommandContext(&cmd, parsetree, false);
 				DefineCompositeType(stmt->typevar, stmt->coldeflist, &cmd);
 			}
 			break;
@@ -1119,7 +1119,7 @@ standard_ProcessUtility(Node *parsetree,
 				IndexStmt  *stmt = (IndexStmt *) parsetree;
 				CommandContextData cmd;
 
-				InitCommandContext(&cmd, parsetree, true);
+				InitCommandContext(&cmd, parsetree, false);
 
 				if (stmt->concurrent)
 					PreventTransactionChain(isTopLevel,

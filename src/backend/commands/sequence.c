@@ -216,7 +216,7 @@ DefineSequence(CreateSeqStmt *seq)
 	/*
 	 * Call BEFORE CREATE SEQUENCE triggers
 	 */
-	InitCommandContext(&cmd, (Node *)seq, true);
+	InitCommandContext(&cmd, (Node *)seq, false);
 
 	if (CommandFiresTriggers(&cmd))
 	{

@@ -818,7 +818,7 @@ RemoveRelations(DropStmt *drop)
 		/*
 		 * Call BEFORE DROP command triggers
 		 */
-		InitCommandContext(&cmd, (Node *)drop, true);
+		InitCommandContext(&cmd, (Node *)drop, false);
 
 		if (CommandFiresTriggers(&cmd))
 		{
@@ -9570,7 +9570,7 @@ AlterTableNamespace(AlterObjectSchemaStmt *stmt)
 	CheckSetNamespace(oldNspOid, nspOid, RelationRelationId, relid);
 
 	/* Call BEFORE ALTER TABLE triggers */
-	InitCommandContext(&cmd, (Node *)stmt, true);
+	InitCommandContext(&cmd, (Node *)stmt, false);
 
 	if (CommandFiresTriggers(&cmd))
 	{

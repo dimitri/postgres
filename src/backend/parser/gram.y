@@ -53,6 +53,7 @@
 
 #include "catalog/index.h"
 #include "catalog/namespace.h"
+#include "catalog/pg_cmdtrigger.h"
 #include "catalog/pg_trigger.h"
 #include "commands/defrem.h"
 #include "nodes/makefuncs.h"
@@ -265,7 +266,7 @@ static void processCASbits(int cas_bits, int location, const char *constrType,
 %type <list>	OptSchemaEltList
 
 %type <boolean> TriggerForSpec TriggerForType
-%type <ival>	TriggerActionTime
+%type <ival>	TriggerActionTime CmdTriggerActionTime
 %type <list>	TriggerEvents TriggerOneEvent
 %type <value>	TriggerFuncArg
 %type <node>	TriggerWhen
@@ -4262,7 +4263,7 @@ DropTrigStmt:
  *****************************************************************************/
 
 CreateCmdTrigStmt:
-			CREATE TRIGGER name TriggerActionTime COMMAND trigger_command_list
+			CREATE TRIGGER name CmdTriggerActionTime COMMAND trigger_command_list
 			EXECUTE PROCEDURE func_name '(' ')'
 				{
 					CreateCmdTrigStmt *n = makeNode(CreateCmdTrigStmt);
@@ -4272,7 +4273,7 @@ CreateCmdTrigStmt:
 					n->funcname = $9;
 					$$ = (Node *)n;
 				}
-	      | CREATE TRIGGER name TriggerActionTime ANY COMMAND
+	      | CREATE TRIGGER name CmdTriggerActionTime ANY COMMAND
 			EXECUTE PROCEDURE func_name '(' ')'
 				{
 					CreateCmdTrigStmt *n = makeNode(CreateCmdTrigStmt);
@@ -4282,6 +4283,11 @@ CreateCmdTrigStmt:
 					n->funcname = $9;
 					$$ = (Node *)n;
 				}
+		;
+
+CmdTriggerActionTime:
+			BEFORE						{ $$ = CMD_TRIGGER_FIRED_BEFORE; }
+			| AFTER						{ $$ = CMD_TRIGGER_FIRED_AFTER; }
 		;
 
 trigger_command_list:
@@ -4303,7 +4309,7 @@ trigger_command_list:
  * supports, this list should match with the implementation.
  */
 trigger_command:
-               | CREATE SCHEMA						{ $$ = "CREATE SCHEMA"; }
+               CREATE SCHEMA						{ $$ = "CREATE SCHEMA"; }
 			   | CREATE EXTENSION					{ $$ = "CREATE EXTENSION"; }
 			   | CREATE FUNCTION					{ $$ = "CREATE FUNCTION"; }
 			   | CREATE TABLE						{ $$ = "CREATE TABLE"; }

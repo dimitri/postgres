@@ -1739,7 +1739,7 @@ typedef struct CreateCmdTrigStmt
 	List	   *command;		/* commands name */
 	char	   *trigname;		/* TRIGGER's name */
 	/* timing uses the TRIGGER_TYPE bits defined in catalog/pg_trigger.h */
-	int16		timing;			/* BEFORE, AFTER, or INSTEAD */
+	char		timing;			/* BEFORE, AFTER */
 	List	   *funcname;		/* qual. name of function to call */
 } CreateCmdTrigStmt;
 

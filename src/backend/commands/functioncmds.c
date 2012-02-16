@@ -950,7 +950,7 @@ CreateFunction(CreateFunctionStmt *stmt, const char *queryString)
 	/*
 	 * Call BEFORE CREATE FUNCTION triggers
 	 */
-	InitCommandContext(&cmd, (Node *)stmt, true);
+	InitCommandContext(&cmd, (Node *)stmt, false);
 
 	if (CommandFiresTriggers(&cmd))
 	{

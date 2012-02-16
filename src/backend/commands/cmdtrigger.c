@@ -121,7 +121,6 @@ CreateCmdTrigger(CreateCmdTrigStmt *stmt, const char *queryString)
 	Oid			fargtypes_c[6] = {TEXTOID, TEXTOID, OIDOID, TEXTOID, TEXTOID, INTERNALOID};
 	Oid			funcoid;
 	Oid			funcrettype;
-	char        ctgtype;
 
 	CheckCmdTriggerPrivileges();
 
@@ -162,27 +161,13 @@ CreateCmdTrigger(CreateCmdTrigStmt *stmt, const char *queryString)
 		 */
 		check_cmdtrigger_name(command, stmt->trigname, tgrel);
 
-		switch (stmt->timing)
-		{
-			case TRIGGER_TYPE_BEFORE:
-				ctgtype = CMD_TRIGGER_FIRED_BEFORE;
-
-			case TRIGGER_TYPE_AFTER:
-				ctgtype = CMD_TRIGGER_FIRED_AFTER;
-				break;
-
-			default:
-				elog(ERROR, "unknown trigger type for COMMAND TRIGGER");
-				return;	/* make compiler happy */
-		}
-
 		if (funcrettype != VOIDOID)
 			ereport(ERROR,
 					(errcode(ERRCODE_INVALID_OBJECT_DEFINITION),
 					 errmsg("function \"%s\" must return type \"void\"",
 							NameListToString(stmt->funcname))));
 
-		trigoid = InsertCmdTriggerTuple(tgrel, command, stmt->trigname, funcoid, ctgtype);
+		trigoid = InsertCmdTriggerTuple(tgrel, command, stmt->trigname, funcoid, stmt->timing);
 	}
 	heap_close(tgrel, RowExclusiveLock);
 }
@@ -642,7 +627,7 @@ exec_command_triggers_internal(CommandContext cmd, List *procs, const char *when
  * ExecBeforeAnyCommandTriggers() and ExecAfterAnyCommandTriggers().
  */
 void
-InitCommandContext(CommandContext cmd, const Node *stmt, bool list_triggers)
+InitCommandContext(CommandContext cmd, const Node *stmt, bool list_any_triggers)
 {
 	cmd->tag = (char *) CreateCommandTag((Node *)stmt);
 	cmd->parsetree  = (Node *)stmt;
@@ -652,7 +637,16 @@ InitCommandContext(CommandContext cmd, const Node *stmt, bool list_triggers)
 	cmd->before     = NIL;
 	cmd->after      = NIL;
 
-	if (list_triggers)
+	if (list_any_triggers)
+	{
+		/* list procedures for "ANY" command */
+		char *tag = cmd->tag;
+
+		cmd->tag = "ANY";
+		ListCommandTriggers(cmd);
+		cmd->tag = tag;
+	}
+	else
 		ListCommandTriggers(cmd);
 }
 
@@ -694,30 +688,8 @@ ExecBeforeCommandTriggers(CommandContext cmd)
 }
 
 void
-ExecBeforeAnyCommandTriggers(CommandContext cmd)
-{
-	CommandContextData any;
-	any.tag = "ANY";
-	ListCommandTriggers(&any);
-
-	if (any.before != NIL)
-		exec_command_triggers_internal(cmd, any.before, "BEFORE");
-}
-
-void
 ExecAfterCommandTriggers(CommandContext cmd)
 {
 	if (cmd != NULL && cmd->after != NIL)
 		exec_command_triggers_internal(cmd, cmd->after, "AFTER");
-}
-
-void
-ExecAfterAnyCommandTriggers(CommandContext cmd)
-{
-	CommandContextData any;
-	any.tag = "ANY";
-	ListCommandTriggers(&any);
-
-	if (any.after != NIL)
-		exec_command_triggers_internal(cmd, any.after, "AFTER");
 }

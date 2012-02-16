@@ -424,7 +424,7 @@ CreateTrigger(CreateTrigStmt *stmt, const char *queryString,
 	 */
 	if (!isInternal)
 	{
-		InitCommandContext(&cmd, (Node *)stmt, true);
+		InitCommandContext(&cmd, (Node *)stmt, false);
 
 		if (CommandFiresTriggers(&cmd))
 		{

@@ -1199,7 +1199,7 @@ CreateExtension(CreateExtensionStmt *stmt)
 	/*
 	 * Call BEFORE CREATE EXTENSION triggers
 	 */
-	InitCommandContext(&cmd, (Node *)stmt, true);
+	InitCommandContext(&cmd, (Node *)stmt, false);
 
 	if (CommandFiresTriggers(&cmd))
 	{
@@ -2455,7 +2455,7 @@ ExecAlterExtensionStmt(AlterExtensionStmt *stmt)
 	/*
 	 * Call BEFORE ALTER EXTENSION triggers
 	 */
-	InitCommandContext(&cmd, (Node *)stmt, true);
+	InitCommandContext(&cmd, (Node *)stmt, false);
 
 	if (CommandFiresTriggers(&cmd))
 	{
