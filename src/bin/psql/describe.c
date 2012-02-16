@@ -2941,7 +2941,7 @@ listConversions(const char *pattern, bool verbose, bool showSystem)
 }
 
 /*
- * \dcT
+ * \dct
  *
  * Describes command triggers.
  */

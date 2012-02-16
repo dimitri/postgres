@@ -368,7 +368,7 @@ exec_command(const char *cmd,
 					case '\0':
 						success = listConversions(pattern, show_verbose, show_system);
 						break;
-					case 'T':
+					case 't':
 						success = listCmdTriggers(pattern, show_verbose);
 						break;
 					default:
