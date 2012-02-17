@@ -4267,30 +4267,30 @@ DropTrigStmt:
 /*****************************************************************************
  *
  *		QUERIES :
- *				CREATE TRIGGER ... BEFORE|INSTEAD OF|AFTER COMMAND ...
- *				DROP TRIGGER ... ON COMMAND ...
+ *				CREATE COMMAND TRIGGER ... BEFORE|AFTER COMMAND ...
+ *				DROP COMMAND TRIGGER ... BEFORE|AFTER ...
  *
  *****************************************************************************/
 
 CreateCmdTrigStmt:
-			CREATE TRIGGER name CmdTriggerActionTime COMMAND trigger_command_list
+			CREATE COMMAND TRIGGER name CmdTriggerActionTime trigger_command_list
 			EXECUTE PROCEDURE func_name '(' ')'
 				{
 					CreateCmdTrigStmt *n = makeNode(CreateCmdTrigStmt);
-					n->trigname = $3;
-					n->timing   = $4;
+					n->trigname = $4;
+					n->timing   = $5;
 					n->command  = $6;
 					n->funcname = $9;
 					$$ = (Node *)n;
 				}
-	      | CREATE TRIGGER name CmdTriggerActionTime ANY COMMAND
+	      | CREATE COMMAND TRIGGER name CmdTriggerActionTime ANY COMMAND
 			EXECUTE PROCEDURE func_name '(' ')'
 				{
 					CreateCmdTrigStmt *n = makeNode(CreateCmdTrigStmt);
-					n->trigname = $3;
-					n->timing   = $4;
+					n->trigname = $4;
+					n->timing   = $5;
 					n->command  = list_make1(makeStringConst("ANY", @5));
-					n->funcname = $9;
+					n->funcname = $10;
 					$$ = (Node *)n;
 				}
 		;
@@ -4382,59 +4382,59 @@ trigger_command:
 		;
 
 DropCmdTrigStmt:
-			DROP TRIGGER name ON COMMAND trigger_command_list opt_drop_behavior
+			DROP COMMAND TRIGGER name ON trigger_command_list opt_drop_behavior
 				{
 					DropCmdTrigStmt *n = makeNode(DropCmdTrigStmt);
-					n->trigname = $3;
+					n->trigname = $4;
 					n->command  = $6;
 					n->behavior = $7;
 					n->missing_ok = false;
 					$$ = (Node *) n;
 				}
-			| DROP TRIGGER IF_P EXISTS name ON COMMAND trigger_command_list opt_drop_behavior
+			| DROP COMMAND TRIGGER IF_P EXISTS name ON trigger_command_list opt_drop_behavior
 				{
 					DropCmdTrigStmt *n = makeNode(DropCmdTrigStmt);
-					n->trigname = $5;
+					n->trigname = $6;
 					n->command  = $8;
 					n->behavior = $9;
 					n->missing_ok = true;
 					$$ = (Node *) n;
 				}
-			| DROP TRIGGER name ON ANY COMMAND opt_drop_behavior
+			| DROP COMMAND TRIGGER name ON ANY COMMAND opt_drop_behavior
 				{
 					DropCmdTrigStmt *n = makeNode(DropCmdTrigStmt);
-					n->trigname = $3;
+					n->trigname = $4;
 					n->command  = list_make1(makeStringConst("ANY", @4));
-					n->behavior = $7;
+					n->behavior = $8;
 					n->missing_ok = false;
 					$$ = (Node *) n;
 				}
-			| DROP TRIGGER IF_P EXISTS name ON ANY COMMAND opt_drop_behavior
+			| DROP COMMAND TRIGGER IF_P EXISTS name ON ANY COMMAND opt_drop_behavior
 				{
 					DropCmdTrigStmt *n = makeNode(DropCmdTrigStmt);
-					n->trigname = $5;
+					n->trigname = $6;
 					n->command  = list_make1(makeStringConst("ANY", @6));
-					n->behavior = $9;
+					n->behavior = $10;
 					n->missing_ok = true;
 					$$ = (Node *) n;
 				}
 		;
 
 AlterCmdTrigStmt:
-			ALTER TRIGGER name ON COMMAND trigger_command SET enable_trigger
+			ALTER COMMAND TRIGGER name ON trigger_command SET enable_trigger
 				{
 					AlterCmdTrigStmt *n = makeNode(AlterCmdTrigStmt);
-					n->trigname   = $3;
+					n->trigname   = $4;
 					n->command    = $6;
 					n->tgenabled  = $8;
 					$$ = (Node *) n;
 				}
-		  | ALTER TRIGGER name ON ANY COMMAND SET enable_trigger
+		  | ALTER COMMAND TRIGGER name ON ANY COMMAND SET enable_trigger
 				{
 					AlterCmdTrigStmt *n = makeNode(AlterCmdTrigStmt);
-					n->trigname   = $3;
+					n->trigname   = $4;
 					n->command    = "ANY";
-					n->tgenabled  = $8;
+					n->tgenabled  = $9;
 					$$ = (Node *) n;
 				}
 		;

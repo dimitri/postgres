@@ -62,6 +62,7 @@
    &alterTSParser;
    &alterTSTemplate;
    &alterTrigger;
+   &alterCommandTrigger;
    &alterType;
    &alterUser;
    &alterUserMapping;
@@ -104,6 +105,7 @@
    &createTSParser;
    &createTSTemplate;
    &createTrigger;
+   &createCommandTrigger;
    &createType;
    &createUser;
    &createUserMapping;
@@ -142,6 +144,7 @@
    &dropTSParser;
    &dropTSTemplate;
    &dropTrigger;
+   &dropCommandTrigger;
    &dropType;
    &dropUser;
    &dropUserMapping;

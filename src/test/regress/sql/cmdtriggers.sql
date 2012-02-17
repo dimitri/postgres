@@ -11,23 +11,23 @@ begin
 end;
 $$;
 
-create trigger snitch_before before any command execute procedure snitch();
-create trigger snitch_after  after  any command execute procedure snitch();
+create command trigger snitch_before before any command execute procedure snitch();
+create command trigger snitch_after  after  any command execute procedure snitch();
 
-alter trigger snitch_before on any command set disable;
-alter trigger snitch_before on any command set enable;
+alter command trigger snitch_before on any command set disable;
+alter command trigger snitch_before on any command set enable;
 
-create trigger snitch_some_more
-         after command create table, alter table, drop table,
-	               create function, create collation,
-		       alter operator, create domain, alter schema
+create command trigger snitch_some_more
+         after create table, alter table, drop table,
+               create function, create collation,
+               alter operator, create domain, alter schema
        execute procedure snitch();
 
-create trigger snitch_some_even_more
-        before command create trigger, alter trigger, drop trigger,
-	       	       create schema, drop schema,
-	               create aggregate, alter collation, create operator,
-		       alter domain, create type, alter type
+create command trigger snitch_some_even_more
+        before create trigger, alter trigger, drop trigger,
+               create schema, drop schema,
+               create aggregate, alter collation, create operator,
+               alter domain, create type, alter type
        execute procedure snitch();
 
 create schema cmd;
@@ -90,16 +90,17 @@ alter schema cmd rename to cmd1;
 
 drop schema cmd1 cascade;
 
-drop trigger snitch_before on any command;
-drop trigger snitch_after  on any command;
-drop trigger snitch_some_more
-  on command create table, alter table, drop table,
-     	     create function, create collation,
-	     alter operator, create domain, alter schema;
+drop command trigger snitch_before on any command;
+drop command trigger snitch_after  on any command;
 
-drop trigger snitch_some_even_more
-  on command create trigger, alter trigger, drop trigger,
-	     create schema, drop schema,
-	     create aggregate, alter collation, create operator,
-             alter domain, create type, alter type;
+drop command trigger snitch_some_more
+  on create table, alter table, drop table,
+     create function, create collation,
+     alter operator, create domain, alter schema;
+
+drop command trigger snitch_some_even_more
+  on create trigger, alter trigger, drop trigger,
+     create schema, drop schema,
+     create aggregate, alter collation, create operator,
+     alter domain, create type, alter type;
 

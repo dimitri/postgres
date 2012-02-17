@@ -1,0 +1,175 @@
+<!--
+doc/src/sgml/ref/drop_trigger.sgml
+PostgreSQL documentation
+-->
+
+<refentry id="SQL-DROPCOMMANDTRIGGER">
+ <refmeta>
+  <refentrytitle>DROP COMMAND TRIGGER</refentrytitle>
+  <manvolnum>7</manvolnum>
+  <refmiscinfo>SQL - Language Statements</refmiscinfo>
+ </refmeta>
+
+ <refnamediv>
+  <refname>DROP COMMAND TRIGGER</refname>
+  <refpurpose>remove a command trigger</refpurpose>
+ </refnamediv>
+
+ <indexterm zone="sql-dropcommandtrigger">
+  <primary>DROP COMMAND TRIGGER</primary>
+ </indexterm>
+
+ <refsynopsisdiv>
+<synopsis>
+DROP COMMAND TRIGGER [ IF EXISTS ] <replaceable class="PARAMETER">name</replaceable> ON COMMAND <replaceable class="PARAMETER">command</replaceable> [, ... ] [ CASCADE | RESTRICT ]
+DROP COMMAND TRIGGER [ IF EXISTS ] <replaceable class="PARAMETER">name</replaceable> ON ANY COMMAND [ CASCADE | RESTRICT ]
+
+<phrase>where <replaceable class="parameter">command</replaceable> can be one of:</phrase>
+
+    CREATE DATABASE
+    DROP DATABASE
+    CREATE SCHEMA
+    CREATE EXTENSION
+    CREATE TABLESPACE
+    CREATE FUNCTION
+    CREATE TABLE
+    CREATE FOREIGN TABLE
+    CREATE INDEX
+    CREATE SEQUENCE
+    CREATE VIEW
+    CREATE AGGREGATE
+    CREATE OPERATOR
+    CREATE COLLATION
+    CREATE TEXT SEARCH PARSER
+    CREATE TEXT SEARCH DICTIONARY
+    CREATE TEXT SEARCH TEMPLATE
+    CREATE TEXT SEARCH CONFIGURATION
+    CREATE TYPE
+    CREATE DOMAIN
+    ALTER TABLE
+    DROP TABLESPACE
+    DROP TABLE
+    DROP SEQUENCE
+    DROP VIEW
+    DROP INDEX
+    DROP FOREIGN TABLE
+    DROP TYPE
+    DROP DOMAIN
+    DROP COLLATION
+    DROP CONVERSION
+    DROP SCHEMA
+    DROP EXTENSION
+    DROP TEXT SEARCH PARSER
+    DROP TEXT SEARCH DICTIONARY
+    DROP TEXT SEARCH TEMPLATE
+    DROP TEXT SEARCH CONFIGURATION
+    DROP LANGUAGE
+    DROP FOREIGN DATA WRAPPER
+    DROP SERVER
+    DROP TRIGGER
+    DROP ASSERTION
+    DROP OPERATOR CLASS
+    DROP OPERATOR FAMILY
+    DROP FUNCTION
+    DROP AGGREGATE
+    DROP OPERATOR
+    DROP CAST
+    DROP RULE
+    VACUUM
+
+</synopsis>
+ </refsynopsisdiv>
+
+ <refsect1>
+  <title>Description</title>
+
+  <para>
+   <command>DROP COMMAND TRIGGER</command> removes an existing trigger definition.
+   To execute this command, the current user must be superuser.
+  </para>
+ </refsect1>
+
+ <refsect1>
+  <title>Parameters</title>
+
+  <variablelist>
+
+   <varlistentry>
+    <term><literal>IF EXISTS</literal></term>
+    <listitem>
+     <para>
+      Do not throw an error if the command trigger does not exist. A notice
+      is issued in this case.
+     </para>
+    </listitem>
+   </varlistentry>
+
+   <varlistentry>
+    <term><replaceable class="PARAMETER">name</replaceable></term>
+    <listitem>
+     <para>
+      The name of the command trigger to remove.
+     </para>
+    </listitem>
+   </varlistentry>
+
+   <varlistentry>
+    <term><replaceable class="PARAMETER">command</replaceable></term>
+    <listitem>
+     <para>
+      The name of the command for which the trigger is defined.
+     </para>
+    </listitem>
+   </varlistentry>
+
+   <varlistentry>
+    <term><literal>CASCADE</literal></term>
+    <listitem>
+     <para>
+      Automatically drop objects that depend on the trigger.
+     </para>
+    </listitem>
+   </varlistentry>
+
+   <varlistentry>
+    <term><literal>RESTRICT</literal></term>
+    <listitem>
+     <para>
+      Refuse to drop the trigger if any objects depend on it.  This is
+      the default.
+     </para>
+    </listitem>
+   </varlistentry>
+  </variablelist>
+ </refsect1>
+
+ <refsect1 id="SQL-DROPCOMMANDTRIGGER-examples">
+  <title>Examples</title>
+
+  <para>
+   Destroy the trigger <literal>snitch</literal> on any command:
+
+<programlisting>
+DROP COMMAND TRIGGER snitch ON ANY COMMAND;
+</programlisting></para>
+ </refsect1>
+
+ <refsect1 id="SQL-DROPCOMMANDTRIGGER-compatibility">
+  <title>Compatibility</title>
+
+  <para>
+   The <command>DROP COMMAND TRIGGER</command> statement is a 
+   <productname>PostgreSQL</productname> extension.
+  </para>
+ </refsect1>
+
+ <refsect1>
+  <title>See Also</title>
+
+  <simplelist type="inline">
+   <member><xref linkend="sql-createcommandtrigger"></member>
+   <member><xref linkend="sql-altercommandtrigger"></member>
+  </simplelist>
+ </refsect1>
+
+</refentry>

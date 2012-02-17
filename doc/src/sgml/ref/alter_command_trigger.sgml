@@ -1,0 +1,100 @@
+<!--
+doc/src/sgml/ref/alter_trigger.sgml
+PostgreSQL documentation
+-->
+
+<refentry id="SQL-ALTERCOMMANDTRIGGER">
+ <refmeta>
+  <refentrytitle>ALTER COMMAND TRIGGER</refentrytitle>
+  <manvolnum>7</manvolnum>
+  <refmiscinfo>SQL - Language Statements</refmiscinfo>
+ </refmeta>
+
+ <refnamediv>
+  <refname>ALTER COMMAND TRIGGER</refname>
+  <refpurpose>change the definition of a trigger</refpurpose>
+ </refnamediv>
+
+ <indexterm zone="sql-altertrigger">
+  <primary>ALTER COMMAND TRIGGER</primary>
+ </indexterm>
+
+ <refsynopsisdiv>
+<synopsis>
+ALTER COMMAND TRIGGER <replaceable class="PARAMETER">name</replaceable> ON <replaceable class="PARAMETER">command</replaceable> SET <replaceable class="parameter">enabled</replaceable>
+
+<phrase>where <replaceable class="parameter">enabled</replaceable> can be one of:</phrase>
+
+    ENABLE
+    ENABLE ALWAYS
+    ENABLE REPLICA
+    DISABLE
+
+</synopsis>
+ </refsynopsisdiv>
+
+ <refsect1>
+  <title>Description</title>
+
+  <para>
+   <command>ALTER COMMAND TRIGGER</command> changes properties of an
+   existing command trigger.
+  </para>
+
+  <para>
+   You must be superuser to alter a command trigger.
+  </para>
+ </refsect1>
+
+ <refsect1>
+  <title>Parameters</title>
+
+  <variablelist>
+   <varlistentry>
+    <term><replaceable class="PARAMETER">name</replaceable></term>
+    <listitem>
+     <para>
+      The name of an existing trigger to alter.
+     </para>
+    </listitem>
+   </varlistentry>
+
+   <varlistentry>
+    <term><replaceable class="PARAMETER">command</replaceable></term>
+    <listitem>
+     <para>
+      The command tag on which this trigger acts.
+     </para>
+    </listitem>
+   </varlistentry>
+
+   <varlistentry>
+    <term><replaceable class="PARAMETER">enabled</replaceable></term>
+    <listitem>
+     <para>
+      When to enable this trigger. See
+      the <literal>session_replication_role</literal> parameter.
+     </para>
+    </listitem>
+   </varlistentry>
+  </variablelist>
+ </refsect1>
+
+ <refsect1>
+  <title>Compatibility</title>
+
+  <para>
+   <command>ALTER COMMAND TRIGGER</command> is a <productname>PostgreSQL</>
+   extension of the SQL standard.
+  </para>
+ </refsect1>
+
+ <refsect1>
+  <title>See Also</title>
+
+  <simplelist type="inline">
+   <member><xref linkend="sql-createcommandtrigger"></member>
+   <member><xref linkend="sql-dropcommandtrigger"></member>
+  </simplelist>
+ </refsect1>
+</refentry>
