@@ -1608,6 +1608,7 @@ makeRangeConstructors(const char *name, Oid namespace,
 								  false,		/* isAgg */
 								  false,		/* isWindowFunc */
 								  false,		/* security_definer */
+								  false,		/* leakproof */
 								  false,		/* isStrict */
 								  PROVOLATILE_IMMUTABLE,		/* volatility */
 								  constructorArgTypesVector,	/* parameterTypes */

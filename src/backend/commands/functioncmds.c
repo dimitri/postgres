@@ -447,6 +447,7 @@ compute_common_attribute(DefElem *defel,
 						 DefElem **volatility_item,
 						 DefElem **strict_item,
 						 DefElem **security_item,
+						 DefElem **leakproof_item,
 						 List **set_items,
 						 DefElem **cost_item,
 						 DefElem **rows_item)
@@ -471,6 +472,13 @@ compute_common_attribute(DefElem *defel,
 			goto duplicate_error;
 
 		*security_item = defel;
+	}
+	else if (strcmp(defel->defname, "leakproof") == 0)
+	{
+		if (*leakproof_item)
+			goto duplicate_error;
+
+		*leakproof_item = defel;
 	}
 	else if (strcmp(defel->defname, "set") == 0)
 	{
@@ -565,6 +573,7 @@ compute_attributes_sql_style(List *options,
 							 char *volatility_p,
 							 bool *strict_p,
 							 bool *security_definer,
+							 bool *leakproof_p,
 							 ArrayType **proconfig,
 							 float4 *procost,
 							 float4 *prorows)
@@ -576,6 +585,7 @@ compute_attributes_sql_style(List *options,
 	DefElem    *volatility_item = NULL;
 	DefElem    *strict_item = NULL;
 	DefElem    *security_item = NULL;
+	DefElem    *leakproof_item = NULL;
 	List	   *set_items = NIL;
 	DefElem    *cost_item = NULL;
 	DefElem    *rows_item = NULL;
@@ -612,6 +622,7 @@ compute_attributes_sql_style(List *options,
 										  &volatility_item,
 										  &strict_item,
 										  &security_item,
+										  &leakproof_item,
 										  &set_items,
 										  &cost_item,
 										  &rows_item))
@@ -654,6 +665,8 @@ compute_attributes_sql_style(List *options,
 		*strict_p = intVal(strict_item->arg);
 	if (security_item)
 		*security_definer = intVal(security_item->arg);
+	if (leakproof_item)
+		*leakproof_p = intVal(leakproof_item->arg);
 	if (set_items)
 		*proconfig = update_proconfig_value(NULL, set_items);
 	if (cost_item)
@@ -807,7 +820,8 @@ CreateFunction(CreateFunctionStmt *stmt, const char *queryString)
 	Oid			requiredResultType;
 	bool		isWindowFunc,
 				isStrict,
-				security;
+				security,
+				isLeakProof;
 	char		volatility;
 	ArrayType  *proconfig;
 	float4		procost;
@@ -831,6 +845,7 @@ CreateFunction(CreateFunctionStmt *stmt, const char *queryString)
 	isWindowFunc = false;
 	isStrict = false;
 	security = false;
+	isLeakProof = false;
 	volatility = PROVOLATILE_VOLATILE;
 	proconfig = NULL;
 	procost = -1;				/* indicates not set */
@@ -840,7 +855,7 @@ CreateFunction(CreateFunctionStmt *stmt, const char *queryString)
 	compute_attributes_sql_style(stmt->options,
 								 &as_clause, &language,
 								 &isWindowFunc, &volatility,
-								 &isStrict, &security,
+								 &isStrict, &security, &isLeakProof,
 								 &proconfig, &procost, &prorows);
 
 	/* Look up the language and validate permissions */
@@ -876,6 +891,16 @@ CreateFunction(CreateFunctionStmt *stmt, const char *queryString)
 	languageValidator = languageStruct->lanvalidator;
 
 	ReleaseSysCache(languageTuple);
+
+	/*
+	 * Only superuser is allowed to create leakproof functions because
+	 * it possibly allows unprivileged users to reference invisible tuples
+	 * to be filtered out using views for row-level security.
+	 */
+	if (isLeakProof && !superuser())
+		ereport(ERROR,
+				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
+				 errmsg("only superuser can define a leakproof function")));
 
 	/*
 	 * Convert remaining parameters of CREATE to form wanted by
@@ -964,28 +989,30 @@ CreateFunction(CreateFunctionStmt *stmt, const char *queryString)
 	 * And now that we have all the parameters, and know we're permitted to do
 	 * so, go ahead and create the function.
 	 */
-	procOid = ProcedureCreate(funcname,
-							  namespaceId,
-							  stmt->replace,
-							  returnsSet,
-							  prorettype,
-							  languageOid,
-							  languageValidator,
-							  prosrc_str, /* converted to text later */
-							  probin_str, /* converted to text later */
-							  false,		/* not an aggregate */
-							  isWindowFunc,
-							  security,
-							  isStrict,
-							  volatility,
-							  parameterTypes,
-							  PointerGetDatum(allParameterTypes),
-							  PointerGetDatum(parameterModes),
-							  PointerGetDatum(parameterNames),
-							  parameterDefaults,
-							  PointerGetDatum(proconfig),
-							  procost,
-							  prorows);
+	procOid =
+		ProcedureCreate(funcname,
+						namespaceId,
+						stmt->replace,
+						returnsSet,
+						prorettype,
+						languageOid,
+						languageValidator,
+						prosrc_str, /* converted to text later */
+						probin_str, /* converted to text later */
+						false,		/* not an aggregate */
+						isWindowFunc,
+						security,
+						isLeakProof,
+						isStrict,
+						volatility,
+						parameterTypes,
+						PointerGetDatum(allParameterTypes),
+						PointerGetDatum(parameterModes),
+						PointerGetDatum(parameterNames),
+						parameterDefaults,
+						PointerGetDatum(proconfig),
+						procost,
+						prorows);
 
 	/* Call AFTER CREATE FUNCTION triggers */
 	if (CommandFiresAfterTriggers(&cmd))
@@ -1293,6 +1320,7 @@ AlterFunction(AlterFunctionStmt *stmt)
 	DefElem    *volatility_item = NULL;
 	DefElem    *strict_item = NULL;
 	DefElem    *security_def_item = NULL;
+	DefElem    *leakproof_item = NULL;
 	List	   *set_items = NIL;
 	DefElem    *cost_item = NULL;
 	DefElem    *rows_item = NULL;
@@ -1329,6 +1357,7 @@ AlterFunction(AlterFunctionStmt *stmt)
 									 &volatility_item,
 									 &strict_item,
 									 &security_def_item,
+									 &leakproof_item,
 									 &set_items,
 									 &cost_item,
 									 &rows_item) == false)
@@ -1341,6 +1370,14 @@ AlterFunction(AlterFunctionStmt *stmt)
 		procForm->proisstrict = intVal(strict_item->arg);
 	if (security_def_item)
 		procForm->prosecdef = intVal(security_def_item->arg);
+	if (leakproof_item)
+	{
+		if (intVal(leakproof_item->arg) && !superuser())
+			ereport(ERROR,
+					(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
+					 errmsg("only superuser can define a leakproof function")));
+		procForm->proleakproof = intVal(leakproof_item->arg);
+	}
 	if (cost_item)
 	{
 		procForm->procost = defGetNumeric(cost_item);
