@@ -42,16 +42,20 @@
 static void check_cmdtrigger_name(const char *command, const char *trigname, Relation tgrel);
 
 /*
- * Check permission: command triggers are only available for superusers and
- * database owner.  Raise an exception when requirements are not fullfilled.
+ * Check permission: command triggers are only available for superusers. Raise
+ * an exception when requirements are not fullfilled.
+ *
+ * It's not clear how to accept that database owners be able to create command
+ * triggers, a superuser could run a command that fires a trigger's procedure
+ * written by the database owner and now running with superuser privileges.
  */
 static void
 CheckCmdTriggerPrivileges()
 {
 	if (!superuser())
-		if (!pg_database_ownercheck(MyDatabaseId, GetUserId()))
-			aclcheck_error(ACLCHECK_NOT_OWNER, ACL_KIND_DATABASE,
-						   get_database_name(MyDatabaseId));
+		ereport(ERROR,
+				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
+				 (errmsg("must be superuser to use command triggers"))));
 }
 
 /*
