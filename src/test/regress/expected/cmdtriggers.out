@@ -12,22 +12,17 @@ end;
 $$;
 create trigger snitch_before before any command execute procedure snitch();
 create trigger snitch_after  after  any command execute procedure snitch();
-NOTICE:  snitch: BEFORE CREATE COMMAND TRIGGER <NULL> <NULL>
 create trigger snitch_some_more
          after command create table, alter table, drop table,
 	               create function, create collation,
 		       alter operator, create domain, alter schema
        execute procedure snitch();
-NOTICE:  snitch: BEFORE CREATE COMMAND TRIGGER <NULL> <NULL>
-NOTICE:  snitch: AFTER CREATE COMMAND TRIGGER <NULL> <NULL>
 create trigger snitch_some_even_more
         before command create trigger, alter trigger, drop trigger,
 	       	       create schema, drop schema,
 	               create aggregate, alter collation, create operator,
 		       alter domain, create type, alter type
        execute procedure snitch();
-NOTICE:  snitch: BEFORE CREATE COMMAND TRIGGER <NULL> <NULL>
-NOTICE:  snitch: AFTER CREATE COMMAND TRIGGER <NULL> <NULL>
 create schema cmd;
 NOTICE:  snitch: BEFORE CREATE SCHEMA <NULL> <NULL>
 NOTICE:  snitch: BEFORE CREATE SCHEMA <NULL> cmd
@@ -170,10 +165,7 @@ drop cascades to type cmd1.us_postal_code
 drop cascades to function cmd1.trigfunc()
 NOTICE:  snitch: AFTER DROP SCHEMA <NULL> <NULL>
 drop trigger snitch_before on any command;
-NOTICE:  snitch: BEFORE DROP COMMAND TRIGGER <NULL> <NULL>
-NOTICE:  snitch: AFTER DROP COMMAND TRIGGER <NULL> <NULL>
 drop trigger snitch_after  on any command;
-NOTICE:  snitch: BEFORE DROP COMMAND TRIGGER <NULL> <NULL>
 drop trigger snitch_some_more
   on command create table, alter table, drop table,
      	     create function, create collation,

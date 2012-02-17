@@ -172,8 +172,6 @@ call_before_cmdtriggers(CommandContext cmd)
 		case T_CommentStmt:
 		case T_DefineStmt:
 		case T_CreateCastStmt:
-		case T_CreateCmdTrigStmt:
-		case T_AlterCmdTrigStmt:
 		case T_CreateConversionStmt:
 		case T_CreatedbStmt:
 		case T_CreateDomainStmt:
@@ -195,7 +193,6 @@ call_before_cmdtriggers(CommandContext cmd)
 		case T_CreateRangeStmt:
 		case T_AlterEnumStmt:
 		case T_ViewStmt:
-		case T_DropCmdTrigStmt:
 		case T_DropStmt:
 		case T_DropdbStmt:
 		case T_DropTableSpaceStmt:
@@ -248,8 +245,6 @@ call_after_cmdtriggers(CommandContext cmd)
 		case T_CommentStmt:
 		case T_DefineStmt:
 		case T_CreateCastStmt:
-		case T_CreateCmdTrigStmt:
-		case T_AlterCmdTrigStmt:
 		case T_CreateConversionStmt:
 		case T_CreatedbStmt:
 		case T_CreateDomainStmt:
@@ -271,7 +266,6 @@ call_after_cmdtriggers(CommandContext cmd)
 		case T_CreateRangeStmt:
 		case T_AlterEnumStmt:
 		case T_ViewStmt:
-		case T_DropCmdTrigStmt:
 		case T_DropStmt:
 		case T_DropdbStmt:
 		case T_DropTableSpaceStmt:
