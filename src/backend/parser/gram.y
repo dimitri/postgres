@@ -4432,7 +4432,7 @@ AlterCmdTrigStmt:
 				{
 					AlterCmdTrigStmt *n = makeNode(AlterCmdTrigStmt);
 					n->trigname   = $3;
-					n->command    = makeStringConst("ANY", @6);
+					n->command    = "ANY";
 					n->tgenabled  = $8;
 					$$ = (Node *) n;
 				}

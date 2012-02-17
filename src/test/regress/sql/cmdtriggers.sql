@@ -14,6 +14,9 @@ $$;
 create trigger snitch_before before any command execute procedure snitch();
 create trigger snitch_after  after  any command execute procedure snitch();
 
+alter trigger snitch_before on any command set disable;
+alter trigger snitch_before on any command set enable;
+
 create trigger snitch_some_more
          after command create table, alter table, drop table,
 	               create function, create collation,
