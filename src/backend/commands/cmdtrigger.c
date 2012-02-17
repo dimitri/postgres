@@ -514,23 +514,32 @@ ListCommandTriggers(CommandContext cmd)
 	{
 		Form_pg_cmdtrigger form = (Form_pg_cmdtrigger) GETSTRUCT(tuple);
 
-        /*
-		 * Replica support for command triggers is still on the TODO
-		 */
-		if (form->ctgenabled != 'D')
+		if (form->ctgenabled == TRIGGER_DISABLED)
 		{
-			switch (form->ctgtype)
-			{
-				case CMD_TRIGGER_FIRED_BEFORE:
-					cmd->before = lappend_oid(cmd->before, form->ctgfoid);
-					break;
-
-				case CMD_TRIGGER_FIRED_AFTER:
-					cmd->after = lappend_oid(cmd->after, form->ctgfoid);
-					break;
-			}
-			count++;
+			continue;
 		}
+		else if (SessionReplicationRole == SESSION_REPLICATION_ROLE_REPLICA)
+		{
+			if (form->ctgenabled == TRIGGER_FIRES_ON_ORIGIN)
+				continue;
+		}
+		else	/* ORIGIN or LOCAL role */
+		{
+			if (form->ctgenabled == TRIGGER_FIRES_ON_REPLICA)
+				continue;
+		}
+
+		switch (form->ctgtype)
+		{
+			case CMD_TRIGGER_FIRED_BEFORE:
+				cmd->before = lappend_oid(cmd->before, form->ctgfoid);
+				break;
+
+			case CMD_TRIGGER_FIRED_AFTER:
+				cmd->after = lappend_oid(cmd->after, form->ctgfoid);
+				break;
+		}
+		count++;
 	}
 	systable_endscan_ordered(scandesc);
 

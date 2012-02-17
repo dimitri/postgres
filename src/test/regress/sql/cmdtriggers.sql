@@ -35,6 +35,10 @@ create table cmd.foo(id bigserial primary key);
 create view cmd.v as select * from cmd.foo;
 alter table cmd.foo add column t text;
 
+set session_replication_role to replica;
+create table cmd.bar();
+reset session_replication_role;
+
 create index idx_foo on cmd.foo(t);
 drop index cmd.idx_foo;
 
