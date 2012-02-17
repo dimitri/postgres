@@ -4378,6 +4378,7 @@ trigger_command:
 			   | DROP OPERATOR						{ $$ = "DROP OPERATOR"; }
 			   | DROP CAST							{ $$ = "DROP CAST"; }
 			   | DROP RULE							{ $$ = "DROP RULE"; }
+			   | VACUUM								{ $$ = "VACUUM"; }
 		;
 
 DropCmdTrigStmt:
