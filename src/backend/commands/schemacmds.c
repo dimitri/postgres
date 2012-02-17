@@ -94,7 +94,6 @@ CreateSchemaCommand(CreateSchemaStmt *stmt, const char *queryString)
 		cmd.objectId = InvalidOid;
 		cmd.objectname = (char *)schemaName;
 		cmd.schemaname = NULL;		/* a schema does not live in another schema */
-		cmd.parsetree  = (Node *)stmt;
 
 		ExecBeforeCommandTriggers(&cmd);
 	}

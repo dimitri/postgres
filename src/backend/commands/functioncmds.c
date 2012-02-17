@@ -957,7 +957,6 @@ CreateFunction(CreateFunctionStmt *stmt, const char *queryString)
 		cmd.objectId = InvalidOid;
 		cmd.objectname = (char *)funcname;
 		cmd.schemaname = get_namespace_name(namespaceId);
-		cmd.parsetree  = (Node *)stmt;
 
 		ExecBeforeCommandTriggers(&cmd);
 	}

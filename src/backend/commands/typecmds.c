@@ -1001,7 +1001,6 @@ DefineDomain(CreateDomainStmt *stmt)
 		cmd.objectId = InvalidOid;
 		cmd.objectname = (char *)domainName;
 		cmd.schemaname = get_namespace_name(domainNamespace);
-		cmd.parsetree  = (Node *)stmt;
 
 		ExecBeforeCommandTriggers(&cmd);
 	}
@@ -1134,7 +1133,6 @@ DefineEnum(CreateEnumStmt *stmt)
 		cmd.objectId = InvalidOid;
 		cmd.objectname = enumName;
 		cmd.schemaname = get_namespace_name(enumNamespace);
-		cmd.parsetree  = (Node *)stmt;
 
 		ExecBeforeCommandTriggers(&cmd);
 	}
@@ -1465,7 +1463,6 @@ DefineRange(CreateRangeStmt *stmt)
 		cmd.objectId = InvalidOid;
 		cmd.objectname = typeName;
 		cmd.schemaname = get_namespace_name(typeNamespace);
-		cmd.parsetree  = (Node *)stmt;
 
 		ExecBeforeCommandTriggers(&cmd);
 	}

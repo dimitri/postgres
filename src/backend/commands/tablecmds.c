@@ -825,7 +825,6 @@ RemoveRelations(DropStmt *drop)
 			cmd.objectId = relOid;
 			cmd.objectname = get_rel_name(relOid);
 			cmd.schemaname = get_namespace_name(get_rel_namespace(relOid));
-			cmd.parsetree  = (Node *)drop;
 
 			ExecBeforeCommandTriggers(&cmd);
 		}
@@ -9577,7 +9576,6 @@ AlterTableNamespace(AlterObjectSchemaStmt *stmt)
 		cmd.objectId = relid;
 		cmd.objectname = stmt->relation->relname;
 		cmd.schemaname = get_namespace_name(oldNspOid);
-		cmd.parsetree  = (Node *)stmt;
 
 		ExecBeforeCommandTriggers(&cmd);
 	}

@@ -223,7 +223,6 @@ DefineSequence(CreateSeqStmt *seq)
 		cmd.objectId = InvalidOid;
 		cmd.objectname = NameStr(name);
 		cmd.schemaname = NULL;		/* can't publish it easily enough here */
-		cmd.parsetree  = (Node *)stmt;
 
 		ExecBeforeCommandTriggers(&cmd);
 	}

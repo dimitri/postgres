@@ -1206,7 +1206,6 @@ CreateExtension(CreateExtensionStmt *stmt)
 		cmd.objectId = InvalidOid;
 		cmd.objectname = stmt->extname;
 		cmd.schemaname = NULL;
-		cmd.parsetree  = (Node *)stmt;
 
 		ExecBeforeCommandTriggers(&cmd);
 	}
@@ -2462,7 +2461,6 @@ ExecAlterExtensionStmt(AlterExtensionStmt *stmt)
 		cmd.objectId = extensionOid;
 		cmd.objectname = stmt->extname;
 		cmd.schemaname = NULL;
-		cmd.parsetree  = (Node *)stmt;
 
 		ExecBeforeCommandTriggers(&cmd);
 	}

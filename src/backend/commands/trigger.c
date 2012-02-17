@@ -431,7 +431,6 @@ CreateTrigger(CreateTrigStmt *stmt, const char *queryString,
 			cmd.objectId = InvalidOid;
 			cmd.objectname = stmt->trigname;
 			cmd.schemaname = get_namespace_name(RelationGetNamespace(rel));
-			cmd.parsetree  = (Node *)stmt;
 
 			ExecBeforeCommandTriggers(&cmd);
 		}

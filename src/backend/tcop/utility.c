@@ -688,7 +688,6 @@ standard_ProcessUtility(Node *parsetree,
 					cmd.objectname = stmt->relation->relname;
 					cmd.schemaname = get_namespace_name(
 						RangeVarGetCreationNamespace(stmt->relation));
-					cmd.parsetree  = parsetree;
 
 					ExecBeforeCommandTriggers(&cmd);
 				}
@@ -916,7 +915,6 @@ standard_ProcessUtility(Node *parsetree,
 						cmd.objectname = atstmt->relation->relname;
 						cmd.schemaname = get_namespace_name(
 							RangeVarGetCreationNamespace(atstmt->relation));
-						cmd.parsetree  = parsetree;
 
 						ExecBeforeCommandTriggers(&cmd);
 					}
