@@ -939,12 +939,11 @@ DefineIndex(RangeVar *heapRelation,
 	 */
 	UnlockRelationIdForSession(&heaprelid, ShareUpdateExclusiveLock);
 
-	/* Call AFTER CREATE INDEX triggers */
-	if (CommandFiresAfterTriggers(cmd))
-	{
-		cmd->objectId = indexRelationId;
-		ExecAfterCommandTriggers(cmd);
-	}
+	/*
+	 * Don't Call AFTER CREATE INDEX triggers here, because the transaction
+	 * that did the work is already commited, RAISE EXCEPTION in the trigger
+	 * can no longer undo what we did.
+	 */
 	return indexRelationId;
 }
 

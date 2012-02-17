@@ -30,6 +30,7 @@
 #include "catalog/namespace.h"
 #include "catalog/pg_database.h"
 #include "catalog/pg_namespace.h"
+#include "commands/cmdtrigger.h"
 #include "commands/cluster.h"
 #include "commands/vacuum.h"
 #include "miscadmin.h"
@@ -121,6 +122,22 @@ vacuum(VacuumStmt *vacstmt, Oid relid, bool do_toast,
 	}
 	else
 		in_outer_xact = IsInTransactionChain(isTopLevel);
+
+	/* CAll BEFORE VACUUM command triggers */
+	if (!IsAutoVacuumWorkerProcess() && vacstmt->relation != NULL)
+	{
+		CommandContextData cmd;
+		InitCommandContext(&cmd, (Node *)vacstmt, false);
+
+		if (CommandFiresTriggers(&cmd))
+		{
+			cmd.objectId = relid;
+			cmd.objectname = vacstmt->relation->relname;
+			cmd.schemaname = vacstmt->relation->schemaname;
+
+			ExecBeforeCommandTriggers(&cmd);
+		}
+	}
 
 	/*
 	 * Send info about dead objects to the statistics collector, unless we are

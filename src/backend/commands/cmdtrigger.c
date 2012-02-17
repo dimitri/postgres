@@ -155,6 +155,29 @@ CreateCmdTrigger(CreateCmdTrigStmt *stmt, const char *queryString)
 		char    *command = strVal(&con->val);
 
 		/*
+		 * Add some restrictions. We don't allow for AFTER command triggers on
+		 * commands that do their own transaction management, such as VACUUM and
+		 * CREATE INDEX CONCURRENTLY, because RAISE EXCEPTION at this point is
+		 * meaningless, the work as already been commited.
+		 *
+		 * CREATE INDEX CONCURRENTLY has no specific command tag and can not be
+		 * captured here, so we just document that not AFTER command trigger
+		 * will get run.
+		 */
+		if (stmt->timing == CMD_TRIGGER_FIRED_AFTER
+			&& (strcmp(command, "VACUUM") == 0))
+			ereport(ERROR,
+					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					 errmsg("AFTER VACUUM command triggers are not implemented")));
+
+		if (stmt->timing == CMD_TRIGGER_FIRED_AFTER
+			&& (strcmp(command, "CREATE INDEX") == 0))
+			ereport(WARNING,
+					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					 errmsg("CREATE INDEX CONCURRENTLY is not supported"),
+					 errdetail("The command trigger will not get fired.")));
+
+		/*
 		 * Scan pg_cmdtrigger for existing triggers on command. We do this only
 		 * to give a nice error message if there's already a trigger of the
 		 * same name. (The unique index on ctgcommand/ctgname would complain
