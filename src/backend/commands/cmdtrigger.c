@@ -200,42 +200,6 @@ CreateCmdTrigger(CreateCmdTrigStmt *stmt, const char *queryString)
 }
 
 /*
- * DropTrigger - drop an individual trigger by name
- */
-void
-DropCmdTrigger(DropCmdTrigStmt *stmt)
-{
-	ListCell   *c;
-
-	CheckCmdTriggerPrivileges();
-
-	foreach(c, stmt->command)
-	{
-		ObjectAddress object;
-		A_Const *con = (A_Const *) lfirst(c);
-		char    *command = strVal(&con->val);
-
-		object.classId = CmdTriggerRelationId;
-		object.objectId = get_cmdtrigger_oid(command, stmt->trigname,
-											 stmt->missing_ok);
-		object.objectSubId = 0;
-
-		if (!OidIsValid(object.objectId))
-		{
-			ereport(NOTICE,
-					(errmsg("trigger \"%s\" for command \"%s\" does not exist, skipping",
-							stmt->trigname, command)));
-			break;
-		}
-
-		/*
-		 * Do the deletion
-		 */
-		performDeletion(&object, stmt->behavior, 0);
-	}
-}
-
-/*
  * Guts of command trigger deletion.
  */
 void
@@ -391,7 +355,7 @@ RenameCmdTrigger(List *name, const char *trigname, const char *newname)
  * true, just return InvalidOid.
  */
 Oid
-get_cmdtrigger_oid(const char *command, const char *trigname, bool missing_ok)
+get_cmdtrigger_oid(const char *trigname, const char *command, bool missing_ok)
 {
 	Relation	tgrel;
 	ScanKeyData skey[2];

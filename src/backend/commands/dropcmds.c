@@ -237,6 +237,11 @@ does_not_exist_skipping(ObjectType objtype, List *objname, List *objargs)
 			args = NameListToString(list_truncate(objname,
 												  list_length(objname) - 1));
 			break;
+		case OBJECT_CMDTRIGGER:
+			msg = gettext_noop("trigger \"%s\" for command \"%s\" does not exist, skipping");
+			name = NameListToString(objname);
+			args = strVal(linitial(objargs));
+			break;
 		case OBJECT_RULE:
 			msg = gettext_noop("rule \"%s\" for relation \"%s\" does not exist, skipping");
 			name = strVal(llast(objname));

@@ -365,7 +365,6 @@ typedef enum NodeTag
 	T_AlterExtensionStmt,
 	T_AlterExtensionContentsStmt,
 	T_CreateCmdTrigStmt,
-	T_DropCmdTrigStmt,
 	T_AlterCmdTrigStmt,
 
 	/*

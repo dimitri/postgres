@@ -4382,38 +4382,42 @@ trigger_command:
 		;
 
 DropCmdTrigStmt:
-			DROP COMMAND TRIGGER name ON trigger_command_list opt_drop_behavior
+			DROP COMMAND TRIGGER name ON trigger_command opt_drop_behavior
 				{
-					DropCmdTrigStmt *n = makeNode(DropCmdTrigStmt);
-					n->trigname = $4;
-					n->command  = $6;
+					DropStmt *n = makeNode(DropStmt);
+					n->removeType = OBJECT_CMDTRIGGER;
+					n->objects = list_make1(list_make1(makeString($4)));
+					n->arguments = list_make1(list_make1(makeString($6)));
 					n->behavior = $7;
 					n->missing_ok = false;
 					$$ = (Node *) n;
 				}
-			| DROP COMMAND TRIGGER IF_P EXISTS name ON trigger_command_list opt_drop_behavior
+			| DROP COMMAND TRIGGER IF_P EXISTS name ON trigger_command opt_drop_behavior
 				{
-					DropCmdTrigStmt *n = makeNode(DropCmdTrigStmt);
-					n->trigname = $6;
-					n->command  = $8;
+					DropStmt *n = makeNode(DropStmt);
+					n->removeType = OBJECT_CMDTRIGGER;
+					n->objects = list_make1(list_make1(makeString($6)));
+					n->arguments = list_make1(list_make1(makeString($8)));
 					n->behavior = $9;
 					n->missing_ok = true;
 					$$ = (Node *) n;
 				}
 			| DROP COMMAND TRIGGER name ON ANY COMMAND opt_drop_behavior
 				{
-					DropCmdTrigStmt *n = makeNode(DropCmdTrigStmt);
-					n->trigname = $4;
-					n->command  = list_make1(makeStringConst("ANY", @4));
+					DropStmt *n = makeNode(DropStmt);
+					n->removeType = OBJECT_CMDTRIGGER;
+					n->objects = list_make1(list_make1(makeString($4)));
+					n->arguments = list_make1(list_make1(makeString("ANY")));
 					n->behavior = $8;
 					n->missing_ok = false;
 					$$ = (Node *) n;
 				}
 			| DROP COMMAND TRIGGER IF_P EXISTS name ON ANY COMMAND opt_drop_behavior
 				{
-					DropCmdTrigStmt *n = makeNode(DropCmdTrigStmt);
-					n->trigname = $6;
-					n->command  = list_make1(makeStringConst("ANY", @6));
+					DropStmt *n = makeNode(DropStmt);
+					n->removeType = OBJECT_CMDTRIGGER;
+					n->objects = list_make1(list_make1(makeString($6)));
+					n->arguments = list_make1(list_make1(makeString("ANY")));
 					n->behavior = $10;
 					n->missing_ok = true;
 					$$ = (Node *) n;

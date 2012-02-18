@@ -93,14 +93,23 @@ drop schema cmd1 cascade;
 drop command trigger snitch_before on any command;
 drop command trigger snitch_after  on any command;
 
-drop command trigger snitch_some_more
-  on create table, alter table, drop table,
-     create function, create collation,
-     alter operator, create domain, alter schema;
-
-drop command trigger snitch_some_even_more
-  on create trigger, alter trigger, drop trigger,
-     create schema, drop schema,
-     create aggregate, alter collation, create operator,
-     alter domain, create type, alter type;
+drop command trigger snitch_some_more on create table;
+drop command trigger snitch_some_more on alter table;
+drop command trigger snitch_some_more on drop table;
+drop command trigger snitch_some_more on create function;
+drop command trigger snitch_some_more on create collation;
+drop command trigger snitch_some_more on alter operator;
+drop command trigger snitch_some_more on create domain;
+drop command trigger snitch_some_more on alter schema;
+drop command trigger snitch_even_more on create trigger;
+drop command trigger snitch_even_more on alter trigger;
+drop command trigger snitch_even_more on drop trigger;
+drop command trigger snitch_even_more on create schema;
+drop command trigger snitch_even_more on drop schema;
+drop command trigger snitch_even_more on create aggregate;
+drop command trigger snitch_even_more on alter collation;
+drop command trigger snitch_even_more on create operator;
+drop command trigger snitch_even_more on alter domain;
+drop command trigger snitch_even_more on create type;
+drop command trigger snitch_even_more on alter type;
 

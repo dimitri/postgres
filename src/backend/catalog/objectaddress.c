@@ -257,6 +257,8 @@ static ObjectAddress get_object_address_type(ObjectType objtype,
 						List *objname, bool missing_ok);
 static ObjectAddress get_object_address_opcf(ObjectType objtype, List *objname,
 						List *objargs, bool missing_ok);
+static ObjectAddress get_object_address_cmdtrigger(ObjectType objtype,
+						List *objname, List *objargs, bool missing_ok);
 static ObjectPropertyType *get_object_property_data(Oid class_id);
 
 /*
@@ -300,7 +302,7 @@ get_object_address(ObjectType objtype, List *objname, List *objargs,
 		 */
 		inval_count = SharedInvalidMessageCounter;
 
-		/* Look up object address. */	
+		/* Look up object address. */
 		switch (objtype)
 		{
 			case OBJECT_INDEX:
@@ -324,6 +326,10 @@ get_object_address(ObjectType objtype, List *objname, List *objargs,
 			case OBJECT_CONSTRAINT:
 				address = get_object_address_relobject(objtype, objname,
 													   &relation, missing_ok);
+				break;
+			case OBJECT_CMDTRIGGER:
+				address = get_object_address_cmdtrigger(objtype, objname,
+														objargs, missing_ok);
 				break;
 			case OBJECT_DATABASE:
 			case OBJECT_EXTENSION:
@@ -910,6 +916,30 @@ get_object_address_opcf(ObjectType objtype,
 }
 
 /*
+ * Find the ObjectAddress for a command trigger.
+ */
+static ObjectAddress
+get_object_address_cmdtrigger(ObjectType objtype,
+							  List *objname, List *objargs, bool missing_ok)
+{
+	char *name;
+	char *command;
+	ObjectAddress address;
+
+	Assert(list_length(objname) == 1); /* command triggers are not schema qualified */
+	Assert(list_length(objargs) == 1);
+
+	name = strVal(linitial(objname));
+	command = strVal(linitial(objargs));
+
+	address.classId = CmdTriggerRelationId;
+	address.objectId = get_cmdtrigger_oid(name, command, missing_ok);
+	address.objectSubId = 0;
+
+	return address;
+}
+
+/*
  * Check ownership of an object previously identified by get_object_address.
  */
 void
@@ -1062,6 +1092,7 @@ check_object_ownership(Oid roleid, ObjectType objtype, ObjectAddress address,
 			break;
 		case OBJECT_TSPARSER:
 		case OBJECT_TSTEMPLATE:
+		case OBJECT_CMDTRIGGER:
 			/* We treat these object types as being owned by superusers */
 			if (!superuser_arg(roleid))
 				ereport(ERROR,

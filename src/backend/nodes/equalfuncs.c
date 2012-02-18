@@ -1801,17 +1801,6 @@ _equalCreateCmdTrigStmt(const CreateCmdTrigStmt *a, const CreateCmdTrigStmt *b)
 }
 
 static bool
-_equalDropCmdTrigStmt(const DropCmdTrigStmt *a, const DropCmdTrigStmt *b)
-{
-	COMPARE_NODE_FIELD(command);
-	COMPARE_STRING_FIELD(trigname);
-	COMPARE_SCALAR_FIELD(behavior);
-	COMPARE_SCALAR_FIELD(missing_ok);
-
-	return true;
-}
-
-static bool
 _equalAlterCmdTrigStmt(const AlterCmdTrigStmt *a, const AlterCmdTrigStmt *b)
 {
 	COMPARE_STRING_FIELD(command);
@@ -2901,9 +2890,6 @@ equal(const void *a, const void *b)
 			break;
 		case T_CreateCmdTrigStmt:
 			retval = _equalCreateCmdTrigStmt(a, b);
-			break;
-		case T_DropCmdTrigStmt:
-			retval = _equalDropCmdTrigStmt(a, b);
 			break;
 		case T_AlterCmdTrigStmt:
 			retval = _equalAlterCmdTrigStmt(a, b);

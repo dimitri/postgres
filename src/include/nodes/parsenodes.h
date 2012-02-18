@@ -1958,19 +1958,6 @@ typedef struct DropPropertyStmt
 } DropPropertyStmt;
 
 /* ----------------------
- *		Drop Command Trigger Statement
- * ----------------------
- */
-typedef struct DropCmdTrigStmt
-{
-	NodeTag		type;
-	List	   *command;		/* command's name */
-	char	   *trigname;		/* TRIGGER's name */
-	DropBehavior behavior;		/* RESTRICT or CASCADE behavior */
-	bool		missing_ok;		/* skip error if missing? */
-} DropCmdTrigStmt;
-
-/* ----------------------
  *				Truncate Table Statement
  * ----------------------
  */

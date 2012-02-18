@@ -193,7 +193,6 @@ call_before_cmdtriggers(CommandContext cmd)
 		case T_CreateRangeStmt:
 		case T_AlterEnumStmt:
 		case T_ViewStmt:
-		case T_DropStmt:
 		case T_DropdbStmt:
 		case T_DropTableSpaceStmt:
 		case T_DropRoleStmt:
@@ -219,6 +218,10 @@ call_before_cmdtriggers(CommandContext cmd)
 		case T_CreateForeignTableStmt:
 		case T_SecLabelStmt:
 			ExecBeforeCommandTriggers(cmd);
+
+		case T_DropStmt:
+			if (((DropStmt *) cmd->parsetree)->removeType != OBJECT_CMDTRIGGER)
+				ExecBeforeCommandTriggers(cmd);
 
 		default:
 			/* commands that don't support triggers */
@@ -266,7 +269,6 @@ call_after_cmdtriggers(CommandContext cmd)
 		case T_CreateRangeStmt:
 		case T_AlterEnumStmt:
 		case T_ViewStmt:
-		case T_DropStmt:
 		case T_DropdbStmt:
 		case T_DropTableSpaceStmt:
 		case T_DropRoleStmt:
@@ -292,6 +294,10 @@ call_after_cmdtriggers(CommandContext cmd)
 		case T_CreateForeignTableStmt:
 		case T_SecLabelStmt:
 			ExecAfterCommandTriggers(cmd);
+
+		case T_DropStmt:
+			if (((DropStmt *) cmd->parsetree)->removeType != OBJECT_CMDTRIGGER)
+				ExecAfterCommandTriggers(cmd);
 
 		default:
 			/* commands that don't support triggers */
@@ -357,7 +363,6 @@ check_xact_readonly(Node *parsetree)
 		case T_CreateRangeStmt:
 		case T_AlterEnumStmt:
 		case T_ViewStmt:
-		case T_DropCmdTrigStmt:
 		case T_DropStmt:
 		case T_DropdbStmt:
 		case T_DropTableSpaceStmt:
@@ -1272,10 +1277,6 @@ standard_ProcessUtility(Node *parsetree,
 			CreateCmdTrigger((CreateCmdTrigStmt *) parsetree, queryString);
 			break;
 
-		case T_DropCmdTrigStmt:
-			DropCmdTrigger((DropCmdTrigStmt *) parsetree);
-			break;
-
 		case T_AlterCmdTrigStmt:
 			(void) AlterCmdTrigger((AlterCmdTrigStmt *) parsetree);
 			break;
@@ -1927,6 +1928,9 @@ CreateCommandTag(Node *parsetree)
 				case OBJECT_TRIGGER:
 					tag = "DROP TRIGGER";
 					break;
+				case OBJECT_CMDTRIGGER:
+					tag = "DROP COMMAND TRIGGER";
+					break;
 				case OBJECT_RULE:
 					tag = "DROP RULE";
 					break;
@@ -2175,10 +2179,6 @@ CreateCommandTag(Node *parsetree)
 
 		case T_CreateCmdTrigStmt:
 			tag = "CREATE COMMAND TRIGGER";
-			break;
-
-		case T_DropCmdTrigStmt:
-			tag = "DROP COMMAND TRIGGER";
 			break;
 
 		case T_AlterCmdTrigStmt:
@@ -2692,10 +2692,6 @@ GetCommandLogLevel(Node *parsetree)
 			break;
 
 		case T_CreateCmdTrigStmt:
-			lev = LOGSTMT_DDL;
-			break;
-
-		case T_DropCmdTrigStmt:
 			lev = LOGSTMT_DDL;
 			break;
 
