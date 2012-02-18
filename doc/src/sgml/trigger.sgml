@@ -27,6 +27,24 @@
    plain SQL function language.
   </para>
 
+  <para>
+   <productname>PostgreSQL</productname> offers both triggers on commands
+   (see <xref linkend="ddl">) and triggers on data manipulation
+   (see <xref linkend="dml">).
+  </para>
+
+  <sect1 id="command-triggers">
+   <title>Overview of Trigger Behavior</title>
+
+   <para>
+    A trigger is a specification that the database should automatically
+    execute a particular function whenever a certain command is performed.
+    The whole set of <productname>PostgreSQL</productname> commands is not
+    supported for triggers, see <xref linkend="sql-createcommandtrigger">
+    for details.
+   </para>
+  </sect1>
+
   <sect1 id="trigger-definition">
    <title>Overview of Trigger Behavior</title>
 
