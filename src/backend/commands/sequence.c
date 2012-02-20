@@ -446,6 +446,7 @@ AlterSequence(AlterSeqStmt *stmt)
 	Form_pg_sequence seq;
 	FormData_pg_sequence new;
 	List	   *owned_by;
+	CommandContextData cmd;
 
 	/* Open and lock sequence. */
 	relid = RangeVarGetRelid(stmt->sequence, AccessShareLock, stmt->missing_ok);
@@ -480,6 +481,20 @@ AlterSequence(AlterSeqStmt *stmt)
 
 	/* Now okay to update the on-disk tuple */
 	memcpy(seq, &new, sizeof(FormData_pg_sequence));
+
+	/*
+	 * Call BEFORE ALTER SEQUENCE triggers
+	 */
+	InitCommandContext(&cmd, (Node *)stmt, false);
+
+	if (ListCommandTriggers(&cmd))
+	{
+		cmd.objectId = relid;
+		cmd.objectname = stmt->sequence->relname;
+		cmd.schemaname = stmt->sequence->schemaname;
+
+		ExecBeforeCommandTriggers(&cmd);
+	}
 
 	START_CRIT_SECTION();
 
@@ -519,6 +534,10 @@ AlterSequence(AlterSeqStmt *stmt)
 		process_owned_by(seqrel, owned_by);
 
 	relation_close(seqrel, NoLock);
+
+	/* Call AFTER ALTER SEQUENCE triggers */
+	if (CommandFiresAfterTriggers(&cmd))
+		ExecAfterCommandTriggers(&cmd);
 }
 
 

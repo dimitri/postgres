@@ -30,12 +30,13 @@ extern void AlterEnum(AlterEnumStmt *stmt);
 extern Oid	DefineCompositeType(const RangeVar *typevar, List *coldeflist, CommandContext cmd);
 extern Oid	AssignTypeArrayOid(void);
 
-extern void AlterDomainDefault(List *names, Node *defaultRaw);
-extern void AlterDomainNotNull(List *names, bool notNull);
-extern void AlterDomainAddConstraint(List *names, Node *constr);
-extern void AlterDomainValidateConstraint(List *names, char *constrName);
+extern void AlterDomainDefault(List *names, Node *defaultRaw, CommandContext cmd);
+extern void AlterDomainNotNull(List *names, bool notNull, CommandContext cmd);
+extern void AlterDomainAddConstraint(List *names, Node *constr, CommandContext cmd);
+extern void AlterDomainValidateConstraint(List *names, char *constrName, CommandContext cmd);
 extern void AlterDomainDropConstraint(List *names, const char *constrName,
-									  DropBehavior behavior, bool missing_ok);
+									  DropBehavior behavior, bool missing_ok,
+										  CommandContext cmd);
 
 extern List *GetDomainConstraints(Oid typeOid);
 

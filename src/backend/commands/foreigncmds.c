@@ -506,6 +506,7 @@ CreateForeignDataWrapper(CreateFdwStmt *stmt)
 	Oid			ownerId;
 	ObjectAddress myself;
 	ObjectAddress referenced;
+	CommandContextData cmd;
 
 	rel = heap_open(ForeignDataWrapperRelationId, RowExclusiveLock);
 
@@ -528,6 +529,18 @@ CreateForeignDataWrapper(CreateFdwStmt *stmt)
 				(errcode(ERRCODE_DUPLICATE_OBJECT),
 				 errmsg("foreign-data wrapper \"%s\" already exists",
 						stmt->fdwname)));
+
+	/* Call BEFORE CREATE FOREIGN DATA WRAPPER triggers */
+	InitCommandContext(&cmd, (Node *)stmt, false);
+
+	if (CommandFiresTriggers(&cmd))
+	{
+		cmd.objectId = InvalidOid;
+		cmd.objectname = stmt->fdwname;
+		cmd.schemaname = NULL;
+
+		ExecBeforeCommandTriggers(&cmd);
+	}
 
 	/*
 	 * Insert tuple into pg_foreign_data_wrapper.
@@ -597,6 +610,13 @@ CreateForeignDataWrapper(CreateFdwStmt *stmt)
 						   ForeignDataWrapperRelationId, fdwId, 0);
 
 	heap_close(rel, RowExclusiveLock);
+
+	/* Call AFTER CREATE FOREIGN DATA WRAPPER triggers */
+	if (CommandFiresAfterTriggers(&cmd))
+	{
+		cmd.objectId = fdwId;
+		ExecAfterCommandTriggers(&cmd);
+	}
 }
 
 
@@ -619,6 +639,7 @@ AlterForeignDataWrapper(AlterFdwStmt *stmt)
 	bool		validator_given;
 	Oid			fdwhandler;
 	Oid			fdwvalidator;
+	CommandContextData cmd;
 
 	rel = heap_open(ForeignDataWrapperRelationId, RowExclusiveLock);
 
@@ -640,6 +661,18 @@ AlterForeignDataWrapper(AlterFdwStmt *stmt)
 
 	fdwForm = (Form_pg_foreign_data_wrapper) GETSTRUCT(tp);
 	fdwId = HeapTupleGetOid(tp);
+
+	/* Call BEFORE ALTER FOREIGN DATA WRAPPER triggers */
+	InitCommandContext(&cmd, (Node *)stmt, false);
+
+	if (CommandFiresTriggers(&cmd))
+	{
+		cmd.objectId = fdwId;
+		cmd.objectname = stmt->fdwname;
+		cmd.schemaname = NULL;
+
+		ExecBeforeCommandTriggers(&cmd);
+	}
 
 	memset(repl_val, 0, sizeof(repl_val));
 	memset(repl_null, false, sizeof(repl_null));
@@ -758,6 +791,10 @@ AlterForeignDataWrapper(AlterFdwStmt *stmt)
 	}
 
 	heap_close(rel, RowExclusiveLock);
+
+	/* Call AFTER ALTER FOREIGN DATA WRAPPER triggers */
+	if (CommandFiresAfterTriggers(&cmd))
+		ExecAfterCommandTriggers(&cmd);
 }
 
 
@@ -802,6 +839,7 @@ CreateForeignServer(CreateForeignServerStmt *stmt)
 	ObjectAddress myself;
 	ObjectAddress referenced;
 	ForeignDataWrapper *fdw;
+	CommandContextData cmd;
 
 	rel = heap_open(ForeignServerRelationId, RowExclusiveLock);
 
@@ -826,6 +864,18 @@ CreateForeignServer(CreateForeignServerStmt *stmt)
 	aclresult = pg_foreign_data_wrapper_aclcheck(fdw->fdwid, ownerId, ACL_USAGE);
 	if (aclresult != ACLCHECK_OK)
 		aclcheck_error(aclresult, ACL_KIND_FDW, fdw->fdwname);
+
+	/* Call BEFORE CREATE SERVER triggers */
+	InitCommandContext(&cmd, (Node *)stmt, false);
+
+	if (CommandFiresTriggers(&cmd))
+	{
+		cmd.objectId = InvalidOid;
+		cmd.objectname = stmt->servername;
+		cmd.schemaname = NULL;
+
+		ExecBeforeCommandTriggers(&cmd);
+	}
 
 	/*
 	 * Insert tuple into pg_foreign_server.
@@ -893,6 +943,13 @@ CreateForeignServer(CreateForeignServerStmt *stmt)
 	InvokeObjectAccessHook(OAT_POST_CREATE, ForeignServerRelationId, srvId, 0);
 
 	heap_close(rel, RowExclusiveLock);
+
+	/* Call AFTER CREATE SERVER triggers */
+	if (CommandFiresAfterTriggers(&cmd))
+	{
+		cmd.objectId = srvId;
+		ExecAfterCommandTriggers(&cmd);
+	}
 }
 
 
@@ -909,6 +966,7 @@ AlterForeignServer(AlterForeignServerStmt *stmt)
 	bool		repl_repl[Natts_pg_foreign_server];
 	Oid			srvId;
 	Form_pg_foreign_server srvForm;
+	CommandContextData cmd;
 
 	rel = heap_open(ForeignServerRelationId, RowExclusiveLock);
 
@@ -929,6 +987,18 @@ AlterForeignServer(AlterForeignServerStmt *stmt)
 	if (!pg_foreign_server_ownercheck(srvId, GetUserId()))
 		aclcheck_error(ACLCHECK_NOT_OWNER, ACL_KIND_FOREIGN_SERVER,
 					   stmt->servername);
+
+	/* Call BEFORE ALTER SERVER triggers */
+	InitCommandContext(&cmd, (Node *)stmt, false);
+
+	if (CommandFiresTriggers(&cmd))
+	{
+		cmd.objectId = srvId;
+		cmd.objectname = stmt->servername;
+		cmd.schemaname = NULL;
+
+		ExecBeforeCommandTriggers(&cmd);
+	}
 
 	memset(repl_val, 0, sizeof(repl_val));
 	memset(repl_null, false, sizeof(repl_null));
@@ -986,6 +1056,10 @@ AlterForeignServer(AlterForeignServerStmt *stmt)
 	heap_freetuple(tp);
 
 	heap_close(rel, RowExclusiveLock);
+
+	/* Call AFTER ALTER SERVER triggers */
+	if (CommandFiresAfterTriggers(&cmd))
+		ExecAfterCommandTriggers(&cmd);
 }
 
 
@@ -1057,6 +1131,7 @@ CreateUserMapping(CreateUserMappingStmt *stmt)
 	ObjectAddress referenced;
 	ForeignServer *srv;
 	ForeignDataWrapper *fdw;
+	CommandContextData cmd;
 
 	rel = heap_open(UserMappingRelationId, RowExclusiveLock);
 
@@ -1081,6 +1156,18 @@ CreateUserMapping(CreateUserMappingStmt *stmt)
 						stmt->servername)));
 
 	fdw = GetForeignDataWrapper(srv->fdwid);
+
+	/* Call BEFORE CREATE USER MAPPING triggers */
+	InitCommandContext(&cmd, (Node *)stmt, false);
+
+	if (CommandFiresTriggers(&cmd))
+	{
+		cmd.objectId = InvalidOid;
+		cmd.objectname = NULL;	/* composite object name */
+		cmd.schemaname = NULL;
+
+		ExecBeforeCommandTriggers(&cmd);
+	}
 
 	/*
 	 * Insert tuple into pg_user_mapping.
@@ -1133,6 +1220,13 @@ CreateUserMapping(CreateUserMappingStmt *stmt)
 	InvokeObjectAccessHook(OAT_POST_CREATE, UserMappingRelationId, umId, 0);
 
 	heap_close(rel, RowExclusiveLock);
+
+	/* Call AFTER CREATE USER MAPPING triggers */
+	if (CommandFiresAfterTriggers(&cmd))
+	{
+		cmd.objectId = umId;
+		ExecAfterCommandTriggers(&cmd);
+	}
 }
 
 
@@ -1150,6 +1244,7 @@ AlterUserMapping(AlterUserMappingStmt *stmt)
 	Oid			useId;
 	Oid			umId;
 	ForeignServer *srv;
+	CommandContextData cmd;
 
 	rel = heap_open(UserMappingRelationId, RowExclusiveLock);
 
@@ -1171,6 +1266,18 @@ AlterUserMapping(AlterUserMappingStmt *stmt)
 
 	if (!HeapTupleIsValid(tp))
 		elog(ERROR, "cache lookup failed for user mapping %u", umId);
+
+	/* Call BEFORE ALTER USER MAPPING triggers */
+	InitCommandContext(&cmd, (Node *)stmt, false);
+
+	if (CommandFiresTriggers(&cmd))
+	{
+		cmd.objectId = umId;
+		cmd.objectname = NULL;	/* composite object name */
+		cmd.schemaname = NULL;
+
+		ExecBeforeCommandTriggers(&cmd);
+	}
 
 	memset(repl_val, 0, sizeof(repl_val));
 	memset(repl_null, false, sizeof(repl_null));
@@ -1219,6 +1326,10 @@ AlterUserMapping(AlterUserMappingStmt *stmt)
 	heap_freetuple(tp);
 
 	heap_close(rel, RowExclusiveLock);
+
+	/* Call AFTER ALTER SERVER triggers */
+	if (CommandFiresAfterTriggers(&cmd))
+		ExecAfterCommandTriggers(&cmd);
 }
 
 
@@ -1232,6 +1343,7 @@ RemoveUserMapping(DropUserMappingStmt *stmt)
 	Oid			useId;
 	Oid			umId;
 	ForeignServer *srv;
+	CommandContextData cmd;
 
 	useId = GetUserOidFromMapping(stmt->username, stmt->missing_ok);
 	srv = GetForeignServerByName(stmt->servername, true);
@@ -1279,6 +1391,18 @@ RemoveUserMapping(DropUserMappingStmt *stmt)
 
 	user_mapping_ddl_aclcheck(useId, srv->serverid, srv->servername);
 
+	/* Call BEFORE DROP USER MAPPING triggers */
+	InitCommandContext(&cmd, (Node *)stmt, false);
+
+	if (CommandFiresTriggers(&cmd))
+	{
+		cmd.objectId = umId;
+		cmd.objectname = NULL;	/* composite object name */
+		cmd.schemaname = NULL;
+
+		ExecBeforeCommandTriggers(&cmd);
+	}
+
 	/*
 	 * Do the deletion
 	 */
@@ -1287,6 +1411,12 @@ RemoveUserMapping(DropUserMappingStmt *stmt)
 	object.objectSubId = 0;
 
 	performDeletion(&object, DROP_CASCADE, 0);
+
+	if (CommandFiresTriggers(&cmd))
+	{
+		cmd.objectId = InvalidOid;
+		ExecAfterCommandTriggers(&cmd);
+	}
 }
 
 

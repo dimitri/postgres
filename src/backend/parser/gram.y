@@ -4323,7 +4323,10 @@ trigger_command:
 			   | CREATE EXTENSION					{ $$ = "CREATE EXTENSION"; }
 			   | CREATE FUNCTION					{ $$ = "CREATE FUNCTION"; }
 			   | CREATE TABLE						{ $$ = "CREATE TABLE"; }
+			   | CREATE SERVER						{ $$ = "CREATE SERVER"; }
 			   | CREATE FOREIGN TABLE				{ $$ = "CREATE FOREIGN TABLE"; }
+			   | CREATE FOREIGN DATA_P WRAPPER		{ $$ = "CREATE FOREIGN DATA WRAPPER"; }
+			   | CREATE USER MAPPING				{ $$ = "CREATE USER MAPPING"; }
 			   | CREATE INDEX						{ $$ = "CREATE INDEX"; }
 			   | CREATE SEQUENCE					{ $$ = "CREATE SEQUENCE"; }
 			   | CREATE VIEW						{ $$ = "CREATE VIEW"; }
@@ -4341,6 +4344,10 @@ trigger_command:
 			   | ALTER EXTENSION					{ $$ = "ALTER EXTENSION"; }
 			   | ALTER FUNCTION						{ $$ = "ALTER FUNCTION"; }
 			   | ALTER TABLE						{ $$ = "ALTER TABLE"; }
+			   | ALTER SERVER						{ $$ = "ALTER SERVER"; }
+			   | ALTER FOREIGN TABLE				{ $$ = "ALTER FOREIGN TABLE"; }
+			   | ALTER FOREIGN DATA_P WRAPPER		{ $$ = "ALTER FOREIGN DATA WRAPPER"; }
+			   | ALTER USER MAPPING					{ $$ = "ALTER USER MAPPING"; }
 			   | ALTER AGGREGATE					{ $$ = "ALTER AGGREGATE"; }
 			   | ALTER OPERATOR						{ $$ = "ALTER OPERATOR"; }
 			   | ALTER COLLATION					{ $$ = "ALTER COLLATION"; }
@@ -4355,7 +4362,6 @@ trigger_command:
 			   | DROP SEQUENCE						{ $$ = "DROP SEQUENCE"; }
 			   | DROP VIEW							{ $$ = "DROP VIEW"; }
 			   | DROP INDEX							{ $$ = "DROP INDEX"; }
-			   | DROP FOREIGN TABLE					{ $$ = "DROP FOREIGN TABLE"; }
 			   | DROP TYPE_P						{ $$ = "DROP TYPE"; }
 			   | DROP DOMAIN_P						{ $$ = "DROP DOMAIN"; }
 			   | DROP COLLATION						{ $$ = "DROP COLLATION"; }
@@ -4367,8 +4373,10 @@ trigger_command:
 			   | DROP TEXT_P SEARCH TEMPLATE		{ $$ = "DROP TEXT SEARCH TEMPLATE"; }
 			   | DROP TEXT_P SEARCH CONFIGURATION	{ $$ = "DROP TEXT SEARCH CONFIGURATION"; }
 			   | DROP LANGUAGE						{ $$ = "DROP LANGUAGE"; }
-			   | DROP FOREIGN DATA_P WRAPPER		{ $$ = "DROP FOREIGN DATA WRAPPER"; }
 			   | DROP SERVER						{ $$ = "DROP SERVER"; }
+			   | DROP FOREIGN TABLE					{ $$ = "DROP FOREIGN TABLE"; }
+			   | DROP FOREIGN DATA_P WRAPPER		{ $$ = "DROP FOREIGN DATA WRAPPER"; }
+			   | DROP USER MAPPING					{ $$ = "DROP USER MAPPING"; }
 			   | DROP TRIGGER						{ $$ = "DROP TRIGGER"; }
 			   | DROP ASSERTION						{ $$ = "DROP ASSERTION"; }
 			   | DROP OPERATOR CLASS				{ $$ = "DROP OPERATOR CLASS"; }

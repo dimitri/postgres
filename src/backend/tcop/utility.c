@@ -904,11 +904,11 @@ standard_ProcessUtility(Node *parsetree,
 				if (OidIsValid(relid))
 				{
 					/*
-					 * Call BEFORE|INSTEAD OF ALTER TABLE triggers
+					 * Call BEFORE ALTER TABLE triggers
 					 */
 					InitCommandContext(&cmd, parsetree, false);
 
-					if (ListCommandTriggers(&cmd))
+					if (CommandFiresTriggers(&cmd))
 					{
 						cmd.objectId = relid;
 						cmd.objectname = atstmt->relation->relname;
@@ -947,7 +947,7 @@ standard_ProcessUtility(Node *parsetree,
 							CommandCounterIncrement();
 					}
 					/* Call AFTER ALTER TABLE triggers */
-					if (cmd.after != NIL)
+					if (CommandFiresAfterTriggers(&cmd))
 						ExecAfterCommandTriggers(&cmd);
 				}
 				else
@@ -960,6 +960,12 @@ standard_ProcessUtility(Node *parsetree,
 		case T_AlterDomainStmt:
 			{
 				AlterDomainStmt *stmt = (AlterDomainStmt *) parsetree;
+				CommandContextData cmd;
+
+				/*
+				 * Prepare BEFORE ALTER DOMAIN triggers
+				 */
+				InitCommandContext(&cmd, parsetree, false);
 
 				/*
 				 * Some or all of these functions are recursive to cover
@@ -974,29 +980,30 @@ standard_ProcessUtility(Node *parsetree,
 						 * requested, for descendants
 						 */
 						AlterDomainDefault(stmt->typeName,
-										   stmt->def);
+										   stmt->def, &cmd);
 						break;
 					case 'N':	/* ALTER DOMAIN DROP NOT NULL */
 						AlterDomainNotNull(stmt->typeName,
-										   false);
+										   false, &cmd);
 						break;
 					case 'O':	/* ALTER DOMAIN SET NOT NULL */
 						AlterDomainNotNull(stmt->typeName,
-										   true);
+										   true, &cmd);
 						break;
 					case 'C':	/* ADD CONSTRAINT */
 						AlterDomainAddConstraint(stmt->typeName,
-												 stmt->def);
+												 stmt->def, &cmd);
 						break;
 					case 'X':	/* DROP CONSTRAINT */
 						AlterDomainDropConstraint(stmt->typeName,
 												  stmt->name,
 												  stmt->behavior,
-												  stmt->missing_ok);
+												  stmt->missing_ok,
+												  &cmd);
 						break;
 					case 'V':	/* VALIDATE CONSTRAINT */
 						AlterDomainValidateConstraint(stmt->typeName,
-													  stmt->name);
+													  stmt->name, &cmd);
 						break;
 					default:	/* oops */
 						elog(ERROR, "unrecognized alter domain type: %d",

@@ -2142,7 +2142,7 @@ DefineCompositeType(const RangeVar *typevar, List *coldeflist,
  * Routine implementing ALTER DOMAIN SET/DROP DEFAULT statements.
  */
 void
-AlterDomainDefault(List *names, Node *defaultRaw)
+AlterDomainDefault(List *names, Node *defaultRaw, CommandContext cmd)
 {
 	TypeName   *typename;
 	Oid			domainoid;
@@ -2171,6 +2171,16 @@ AlterDomainDefault(List *names, Node *defaultRaw)
 
 	/* Check it's a domain and check user has permission for ALTER DOMAIN */
 	checkDomainOwner(tup);
+
+	/* Call BEFORE ALTER DOMAIN triggers */
+	if (CommandFiresTriggers(cmd))
+	{
+		cmd->objectId = HeapTupleGetOid(tup);
+		cmd->objectname = NameStr(typTup->typname);
+		cmd->schemaname = get_namespace_name(typTup->typnamespace);
+
+		ExecBeforeCommandTriggers(cmd);
+	}
 
 	/* Setup new tuple */
 	MemSet(new_record, (Datum) 0, sizeof(new_record));
@@ -2268,6 +2278,10 @@ AlterDomainDefault(List *names, Node *defaultRaw)
 	/* Clean up */
 	heap_close(rel, NoLock);
 	heap_freetuple(newtuple);
+
+	/* Call AFTER ALTER DOMAIN triggers */
+	if (CommandFiresAfterTriggers(cmd))
+		ExecAfterCommandTriggers(cmd);
 }
 
 /*
@@ -2276,7 +2290,7 @@ AlterDomainDefault(List *names, Node *defaultRaw)
  * Routine implementing ALTER DOMAIN SET/DROP NOT NULL statements.
  */
 void
-AlterDomainNotNull(List *names, bool notNull)
+AlterDomainNotNull(List *names, bool notNull, CommandContext cmd)
 {
 	TypeName   *typename;
 	Oid			domainoid;
@@ -2298,6 +2312,16 @@ AlterDomainNotNull(List *names, bool notNull)
 
 	/* Check it's a domain and check user has permission for ALTER DOMAIN */
 	checkDomainOwner(tup);
+
+	/* Call BEFORE ALTER DOMAIN triggers */
+	if (CommandFiresTriggers(cmd))
+	{
+		cmd->objectId = HeapTupleGetOid(tup);
+		cmd->objectname = NameStr(typTup->typname);
+		cmd->schemaname = get_namespace_name(typTup->typnamespace);
+
+		ExecBeforeCommandTriggers(cmd);
+	}
 
 	/* Is the domain already set to the desired constraint? */
 	if (typTup->typnotnull == notNull)
@@ -2364,6 +2388,10 @@ AlterDomainNotNull(List *names, bool notNull)
 	/* Clean up */
 	heap_freetuple(tup);
 	heap_close(typrel, RowExclusiveLock);
+
+	/* Call AFTER ALTER DOMAIN triggers */
+	if (CommandFiresAfterTriggers(cmd))
+		ExecAfterCommandTriggers(cmd);
 }
 
 /*
@@ -2373,7 +2401,7 @@ AlterDomainNotNull(List *names, bool notNull)
  */
 void
 AlterDomainDropConstraint(List *names, const char *constrName,
-						  DropBehavior behavior, bool missing_ok)
+						  DropBehavior behavior, bool missing_ok, CommandContext cmd)
 {
 	TypeName   *typename;
 	Oid			domainoid;
@@ -2398,6 +2426,16 @@ AlterDomainDropConstraint(List *names, const char *constrName,
 
 	/* Check it's a domain and check user has permission for ALTER DOMAIN */
 	checkDomainOwner(tup);
+
+	/* Call BEFORE ALTER DOMAIN triggers */
+	if (CommandFiresTriggers(cmd))
+	{
+		cmd->objectId = HeapTupleGetOid(tup);
+		cmd->objectname = NameStr(((Form_pg_type)tup)->typname);
+		cmd->schemaname = get_namespace_name(((Form_pg_type)tup)->typnamespace);
+
+		ExecBeforeCommandTriggers(cmd);
+	}
 
 	/* Grab an appropriate lock on the pg_constraint relation */
 	conrel = heap_open(ConstraintRelationId, RowExclusiveLock);
@@ -2448,6 +2486,10 @@ AlterDomainDropConstraint(List *names, const char *constrName,
 					(errmsg("constraint \"%s\" of domain \"%s\" does not exist, skipping",
 							constrName, TypeNameToString(typename))));
 	}
+
+	/* Call AFTER ALTER DOMAIN triggers */
+	if (CommandFiresAfterTriggers(cmd))
+		ExecAfterCommandTriggers(cmd);
 }
 
 /*
@@ -2456,7 +2498,7 @@ AlterDomainDropConstraint(List *names, const char *constrName,
  * Implements the ALTER DOMAIN .. ADD CONSTRAINT statement.
  */
 void
-AlterDomainAddConstraint(List *names, Node *newConstraint)
+AlterDomainAddConstraint(List *names, Node *newConstraint, CommandContext cmd)
 {
 	TypeName   *typename;
 	Oid			domainoid;
@@ -2484,6 +2526,16 @@ AlterDomainAddConstraint(List *names, Node *newConstraint)
 	if (!IsA(newConstraint, Constraint))
 		elog(ERROR, "unrecognized node type: %d",
 			 (int) nodeTag(newConstraint));
+
+	/* Call BEFORE ALTER DOMAIN triggers */
+	if (CommandFiresTriggers(cmd))
+	{
+		cmd->objectId = HeapTupleGetOid(tup);
+		cmd->objectname = NameStr(typTup->typname);
+		cmd->schemaname = get_namespace_name(typTup->typnamespace);
+
+		ExecBeforeCommandTriggers(cmd);
+	}
 
 	constr = (Constraint *) newConstraint;
 
@@ -2551,6 +2603,10 @@ AlterDomainAddConstraint(List *names, Node *newConstraint)
 
 	/* Clean up */
 	heap_close(typrel, RowExclusiveLock);
+
+	/* Call AFTER ALTER DOMAIN triggers */
+	if (CommandFiresAfterTriggers(cmd))
+		ExecAfterCommandTriggers(cmd);
 }
 
 /*
@@ -2559,7 +2615,7 @@ AlterDomainAddConstraint(List *names, Node *newConstraint)
  * Implements the ALTER DOMAIN .. VALIDATE CONSTRAINT statement.
  */
 void
-AlterDomainValidateConstraint(List *names, char *constrName)
+AlterDomainValidateConstraint(List *names, char *constrName, CommandContext cmd)
 {
 	TypeName   *typename;
 	Oid			domainoid;
@@ -2632,6 +2688,16 @@ AlterDomainValidateConstraint(List *names, char *constrName)
 			 HeapTupleGetOid(tuple));
 	conbin = TextDatumGetCString(val);
 
+	/* Call BEFORE ALTER DOMAIN triggers */
+	if (CommandFiresTriggers(cmd))
+	{
+		cmd->objectId = HeapTupleGetOid(tup);
+		cmd->objectname = NameStr(((Form_pg_type)tup)->typname);
+		cmd->schemaname = get_namespace_name(((Form_pg_type)tup)->typnamespace);
+
+		ExecBeforeCommandTriggers(cmd);
+	}
+
 	validateDomainConstraint(domainoid, conbin);
 
 	/*
@@ -2650,6 +2716,10 @@ AlterDomainValidateConstraint(List *names, char *constrName)
 	heap_close(conrel, RowExclusiveLock);
 
 	ReleaseSysCache(tup);
+
+	/* Call AFTER ALTER DOMAIN triggers */
+	if (CommandFiresAfterTriggers(cmd))
+		ExecAfterCommandTriggers(cmd);
 }
 
 static void
