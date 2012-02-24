@@ -35,6 +35,10 @@ create table cmd.foo(id bigserial primary key);
 create view cmd.v as select * from cmd.foo;
 alter table cmd.foo add column t text;
 
+cluster cmd.foo using foo_pkey;
+vacuum cmd.foo;
+vacuum;
+
 set session_replication_role to replica;
 create table cmd.bar();
 reset session_replication_role;

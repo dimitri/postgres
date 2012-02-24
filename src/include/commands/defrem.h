@@ -42,8 +42,8 @@ extern Oid DefineIndex(RangeVar *heapRelation,
 			bool quiet,
 			bool concurrent,
 			CommandContext cmd);
-extern void ReindexIndex(RangeVar *indexRelation);
-extern void ReindexTable(RangeVar *relation);
+extern void ReindexIndex(RangeVar *indexRelation, CommandContext cmd);
+extern void ReindexTable(RangeVar *relation, CommandContext cmd);
 extern void ReindexDatabase(const char *databaseName,
 				bool do_system, bool do_user);
 extern char *makeObjectName(const char *name1, const char *name2,

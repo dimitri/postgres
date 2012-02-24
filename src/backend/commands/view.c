@@ -356,7 +356,8 @@ DefineViewRules(Oid viewOid, Query *viewParse, bool replace)
 					   CMD_SELECT,
 					   true,
 					   replace,
-					   list_make1(viewParse));
+					   list_make1(viewParse),
+					   NULL);
 
 	/*
 	 * Someday: automatic ON INSERT, etc

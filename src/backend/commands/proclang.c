@@ -49,7 +49,7 @@ typedef struct
 	char	   *tmpllibrary;	/* path of shared library */
 } PLTemplate;
 
-static void create_proc_lang(const char *languageName, bool replace,
+static Oid create_proc_lang(const char *languageName, bool replace,
 				 Oid languageOwner, Oid handlerOid, Oid inlineOid,
 				 Oid valOid, bool trusted);
 static PLTemplate *find_language_template(const char *languageName);
@@ -67,9 +67,13 @@ CreateProceduralLanguage(CreatePLangStmt *stmt)
 	PLTemplate *pltemplate;
 	Oid			handlerOid,
 				inlineOid,
-				valOid;
+				valOid,
+				loid;
 	Oid			funcrettype;
 	Oid			funcargtypes[1];
+	CommandContextData cmd;
+
+	InitCommandContext(&cmd, (Node *)stmt, false);
 
 	/*
 	 * If we have template information for the language, ignore the supplied
@@ -222,10 +226,27 @@ CreateProceduralLanguage(CreatePLangStmt *stmt)
 		else
 			valOid = InvalidOid;
 
+		/* Call BEFORE CREATE LANGUAGE command triggers */
+		if (CommandFiresTriggers(&cmd))
+		{
+			cmd.objectId = InvalidOid;
+			cmd.objectname = stmt->plname;
+			cmd.schemaname = NULL;
+
+			ExecBeforeCommandTriggers(&cmd);
+		}
+
 		/* ok, create it */
-		create_proc_lang(stmt->plname, stmt->replace, GetUserId(),
-						 handlerOid, inlineOid,
-						 valOid, pltemplate->tmpltrusted);
+		loid = create_proc_lang(stmt->plname, stmt->replace, GetUserId(),
+								handlerOid, inlineOid,
+								valOid, pltemplate->tmpltrusted);
+
+		/* Call AFTER CREATE LANGUAGE command triggers */
+		if (CommandFiresAfterTriggers(&cmd))
+		{
+			cmd.objectId = loid;
+			ExecAfterCommandTriggers(&cmd);
+		}
 	}
 	else
 	{
@@ -297,17 +318,34 @@ CreateProceduralLanguage(CreatePLangStmt *stmt)
 		else
 			valOid = InvalidOid;
 
+		/* Call BEFORE CREATE LANGUAGE command triggers */
+		if (CommandFiresTriggers(&cmd))
+		{
+			cmd.objectId = InvalidOid;
+			cmd.objectname = stmt->plname;
+			cmd.schemaname = NULL;
+
+			ExecBeforeCommandTriggers(&cmd);
+		}
+
 		/* ok, create it */
-		create_proc_lang(stmt->plname, stmt->replace, GetUserId(),
-						 handlerOid, inlineOid,
-						 valOid, stmt->pltrusted);
+		loid = create_proc_lang(stmt->plname, stmt->replace, GetUserId(),
+								handlerOid, inlineOid,
+								valOid, stmt->pltrusted);
+
+		/* Call AFTER CREATE LANGUAGE command triggers */
+		if (CommandFiresAfterTriggers(&cmd))
+		{
+			cmd.objectId = loid;
+			ExecAfterCommandTriggers(&cmd);
+		}
 	}
 }
 
 /*
  * Guts of language creation.
  */
-static void
+static Oid
 create_proc_lang(const char *languageName, bool replace,
 				 Oid languageOwner, Oid handlerOid, Oid inlineOid,
 				 Oid valOid, bool trusted)
@@ -431,6 +469,8 @@ create_proc_lang(const char *languageName, bool replace,
 						   LanguageRelationId, myself.objectId, 0);
 
 	heap_close(rel, RowExclusiveLock);
+
+	return myself.objectId;
 }
 
 /*

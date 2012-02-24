@@ -39,7 +39,7 @@ static void AlterConversionOwner_internal(Relation rel, Oid conversionOid,
 void
 CreateConversionCommand(CreateConversionStmt *stmt)
 {
-	Oid			namespaceId;
+	Oid			namespaceId, convOid;
 	char	   *conversion_name;
 	AclResult	aclresult;
 	int			from_encoding;
@@ -50,6 +50,7 @@ CreateConversionCommand(CreateConversionStmt *stmt)
 	List	   *func_name = stmt->func_name;
 	static Oid	funcargs[] = {INT4OID, INT4OID, CSTRINGOID, INTERNALOID, INT4OID};
 	char		result[1];
+	CommandContextData cmd;
 
 	/* Convert list of names to a name and namespace */
 	namespaceId = QualifiedNameGetCreationNamespace(stmt->conversion_name,
@@ -109,12 +110,31 @@ CreateConversionCommand(CreateConversionStmt *stmt)
 					 CStringGetDatum(result),
 					 Int32GetDatum(0));
 
+	/* Call BEFORE CREATE CONVERSION command triggers */
+	InitCommandContext(&cmd, (Node *)stmt, false);
+
+	if (CommandFiresTriggers(&cmd))
+	{
+		cmd.objectId = InvalidOid;
+		cmd.objectname = conversion_name;
+		cmd.schemaname = get_namespace_name(namespaceId);
+
+		ExecBeforeCommandTriggers(&cmd);
+	}
+
 	/*
 	 * All seem ok, go ahead (possible failure would be a duplicate conversion
 	 * name)
 	 */
-	ConversionCreate(conversion_name, namespaceId, GetUserId(),
-					 from_encoding, to_encoding, funcoid, stmt->def);
+	convOid = ConversionCreate(conversion_name, namespaceId, GetUserId(),
+							   from_encoding, to_encoding, funcoid, stmt->def);
+
+	/* Call AFTER CREATE CONVERSION command triggers */
+	if (CommandFiresAfterTriggers(&cmd))
+	{
+		cmd.objectId = convOid;
+		ExecAfterCommandTriggers(&cmd);
+	}
 }
 
 /*

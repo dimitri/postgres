@@ -14,6 +14,7 @@
 #ifndef INDEX_H
 #define INDEX_H
 
+#include "commands/cmdtrigger.h"
 #include "nodes/execnodes.h"
 
 
@@ -88,14 +89,15 @@ extern double IndexBuildHeapScan(Relation heapRelation,
 
 extern void validate_index(Oid heapId, Oid indexId, Snapshot snapshot);
 
-extern void reindex_index(Oid indexId, bool skip_constraint_checks);
+extern void reindex_index(Oid indexId, bool skip_constraint_checks,
+						  CommandContext cmd);
 
 /* Flag bits for reindex_relation(): */
 #define REINDEX_REL_PROCESS_TOAST		0x01
 #define REINDEX_REL_SUPPRESS_INDEX_USE	0x02
 #define REINDEX_REL_CHECK_CONSTRAINTS	0x04
 
-extern bool reindex_relation(Oid relid, int flags);
+extern bool reindex_relation(Oid relid, int flags, CommandContext cmd);
 
 extern bool ReindexIsProcessingHeap(Oid heapOid);
 extern bool ReindexIsProcessingIndex(Oid indexOid);

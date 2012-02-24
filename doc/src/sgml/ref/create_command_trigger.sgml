@@ -31,12 +31,17 @@ CREATE TRIGGER <replaceable class="PARAMETER">name</replaceable> { BEFORE | AFTE
 
     CREATE SCHEMA
     CREATE EXTENSION
+    CREATE LANGUAGE
     CREATE FUNCTION
     CREATE TABLE
+    CREATE SERVER
     CREATE FOREIGN TABLE
+    CREATE FOREIGN DATA WRAPPER
+    CREATE USER MAPPING
     CREATE INDEX
     CREATE SEQUENCE
     CREATE VIEW
+    CREATE RULE
     CREATE AGGREGATE
     CREATE OPERATOR
     CREATE COLLATION
@@ -44,20 +49,30 @@ CREATE TRIGGER <replaceable class="PARAMETER">name</replaceable> { BEFORE | AFTE
     CREATE TEXT SEARCH DICTIONARY
     CREATE TEXT SEARCH TEMPLATE
     CREATE TEXT SEARCH CONFIGURATION
-    CREATE TYPE
-    CREATE DOMAIN
-    ALTER TABLE
+    CREATE TYPE_P
+    CREATE DOMAIN_P
+    CREATE TRIGGER
+    CREATE CONVERSION_P
+    CREATE CAST
+    CREATE OPERATOR CLASS
+    CREATE OPERATOR FAMILY
     ALTER SCHEMA
     ALTER EXTENSION
     ALTER FUNCTION
     ALTER TABLE
+    ALTER SERVER
+    ALTER FOREIGN TABLE
+    ALTER FOREIGN DATA WRAPPER
+    ALTER USER MAPPING
     ALTER AGGREGATE
     ALTER OPERATOR
+    ALTER OPERATOR CLASS
+    ALTER OPERATOR FAMILY
     ALTER COLLATION
-    ALTER TEXT_P SEARCH PARSER
-    ALTER TEXT_P SEARCH DICTIONARY
-    ALTER TEXT_P SEARCH TEMPLATE
-    ALTER TEXT_P SEARCH CONFIGURATION
+    ALTER TEXT SEARCH PARSER
+    ALTER TEXT SEARCH DICTIONARY
+    ALTER TEXT SEARCH TEMPLATE
+    ALTER TEXT SEARCH CONFIGURATION
     ALTER TYPE_P
     ALTER DOMAIN_P
     ALTER TRIGGER
@@ -65,11 +80,10 @@ CREATE TRIGGER <replaceable class="PARAMETER">name</replaceable> { BEFORE | AFTE
     DROP SEQUENCE
     DROP VIEW
     DROP INDEX
-    DROP FOREIGN TABLE
-    DROP TYPE
-    DROP DOMAIN
+    DROP TYPE_P
+    DROP DOMAIN_P
     DROP COLLATION
-    DROP CONVERSION
+    DROP CONVERSION_P
     DROP SCHEMA
     DROP EXTENSION
     DROP TEXT SEARCH PARSER
@@ -77,8 +91,10 @@ CREATE TRIGGER <replaceable class="PARAMETER">name</replaceable> { BEFORE | AFTE
     DROP TEXT SEARCH TEMPLATE
     DROP TEXT SEARCH CONFIGURATION
     DROP LANGUAGE
-    DROP FOREIGN DATA WRAPPER
     DROP SERVER
+    DROP FOREIGN TABLE
+    DROP FOREIGN DATA WRAPPER
+    DROP USER MAPPING
     DROP TRIGGER
     DROP ASSERTION
     DROP OPERATOR CLASS
@@ -88,7 +104,10 @@ CREATE TRIGGER <replaceable class="PARAMETER">name</replaceable> { BEFORE | AFTE
     DROP OPERATOR
     DROP CAST
     DROP RULE
+    REINDEX
     VACUUM
+    CLUSTER
+    LOAD
 	
 </synopsis>
  </refsynopsisdiv>
@@ -149,7 +168,45 @@ CREATE TRIGGER <replaceable class="PARAMETER">name</replaceable> { BEFORE | AFTE
     <term><replaceable class="parameter">command</replaceable></term>
     <listitem>
      <para>
-      The tag of the command the trigger is for.
+      The tag of the command the trigger is for. Supported commands are
+      mainly those acting on database objects, plus some more facilities.
+      That leaves out the following list of non supported commands.
+     </para>
+     <para>
+      Commands that refers to global objects, such as databases, tablespaces
+      and roles are not supported. As command triggers are per-database, it
+      would be weird to affect e.g. a tablespace depending on which database
+      you are connected to.
+     </para>
+     <para>
+      Commands that exercize their own transaction control are only
+      supported in <literal>BEFORE</literal> command triggers, that's the
+      case for <literal>VACUUM</literal>, <literal>CLUSTER</literal>
+      <literal>CREATE INDEX CONCURRENTLY</literal>, and <literal>REINDEX
+      DATABASE</literal>.
+     </para>
+     <para>
+      Commands that are related to transaction control (such
+      as <literal>BEGIN</literal> or <literal>COMMIT</literal>), related to
+      prepared plans
+      (e.g. <literal>PREPARE</literal>, <literal>DEALLOCATE</literal>),
+      cursors management
+      (e.g. <literal>DECLARE</literal>, <literal>FETCH</literal>), setting
+      variables (<literal>SET</literal>), the <literal>LISTEN</literal>
+      feature, and security are not supported either.
+     </para>
+     <para>
+      Command triggers on <literal>CREATE COMMAND
+      TRIGGER</literal>, <literal>ALTER COMMAND TRIGGER</literal>
+      and <literal>DROP COMMAND TRIGGER</literal> are not supported so as
+      not to be able to take over control from a superuser.
+     </para>
+     <para>
+      Triggers on <literal>ANY</literal> command support more commands than
+      just this list, and will only provide the <literal>command
+      tag</literal> argument as <literal>NOT NULL</literal>. Supporting more
+      commands is made so that you can actually block <xref linkend="ddl">
+      commands in one go.
      </para>
     </listitem>
    </varlistentry>
@@ -177,6 +234,11 @@ CREATE TRIGGER <replaceable class="PARAMETER">name</replaceable> { BEFORE | AFTE
       living in a schema, and for sequences due to an implementation limit)
       and <literal>object name</literal> (can be null for any command
       triggers).
+     </para>
+     <para>
+      The command <literal>CREATE SEQUENCE</literal> lacks support for
+      the <literal>schemaname</literal> command trigger argument, it
+      provides <literal>NULL</literal> in all cases.
      </para>
     </listitem>
    </varlistentry>

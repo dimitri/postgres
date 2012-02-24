@@ -2464,6 +2464,7 @@ ExecAlterExtensionStmt(AlterExtensionStmt *stmt)
 
 		ExecBeforeCommandTriggers(&cmd);
 	}
+
 	/*
 	 * Read the primary control file.  Note we assume that it does not contain
 	 * any non-ASCII data, so there is no need to worry about encoding at this
@@ -2703,6 +2704,7 @@ ExecAlterExtensionContentsStmt(AlterExtensionContentsStmt *stmt)
 	ObjectAddress object;
 	Relation	relation;
 	Oid			oldExtension;
+	CommandContextData cmd;
 
 	extension.classId = ExtensionRelationId;
 	extension.objectId = get_extension_oid(stmt->extname, false);
@@ -2731,6 +2733,13 @@ ExecAlterExtensionContentsStmt(AlterExtensionContentsStmt *stmt)
 	 */
 	oldExtension = getExtensionOfObject(object.classId, object.objectId);
 
+	InitCommandContext(&cmd, (Node *)stmt, false);
+
+	/* Init the command context no matter what, that's cheap here */
+	cmd.objectId = extension.objectId;
+	cmd.objectname = stmt->extname;
+	cmd.schemaname = NULL;
+
 	if (stmt->action > 0)
 	{
 		/*
@@ -2742,6 +2751,10 @@ ExecAlterExtensionContentsStmt(AlterExtensionContentsStmt *stmt)
 					 errmsg("%s is already a member of extension \"%s\"",
 							getObjectDescription(&object),
 							get_extension_name(oldExtension))));
+
+		/* Call BEFORE ALTER EXTENSION command triggers */
+		if (CommandFiresTriggers(&cmd))
+			ExecBeforeCommandTriggers(&cmd);
 
 		/*
 		 * OK, add the dependency.
@@ -2760,6 +2773,10 @@ ExecAlterExtensionContentsStmt(AlterExtensionContentsStmt *stmt)
 							getObjectDescription(&object),
 							stmt->extname)));
 
+		/* Call BEFORE ALTER EXTENSION command triggers */
+		if (CommandFiresTriggers(&cmd))
+			ExecBeforeCommandTriggers(&cmd);
+
 		/*
 		 * OK, drop the dependency.
 		 */
@@ -2777,4 +2794,8 @@ ExecAlterExtensionContentsStmt(AlterExtensionContentsStmt *stmt)
 	 */
 	if (relation != NULL)
 		relation_close(relation, NoLock);
+
+	/* Call AFTER ALTER EXTENSION command triggers */
+	if (CommandFiresAfterTriggers(&cmd))
+		ExecAfterCommandTriggers(&cmd);
 }

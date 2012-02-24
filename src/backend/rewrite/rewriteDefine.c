@@ -195,9 +195,13 @@ DefineRule(RuleStmt *stmt, const char *queryString)
 	List	   *actions;
 	Node	   *whereClause;
 	Oid			relId;
+	CommandContextData cmd;
 
 	/* Parse analysis. */
 	transformRuleStmt(stmt, queryString, &actions, &whereClause);
+
+	/* Prepare command context */
+	InitCommandContext(&cmd, (Node *)stmt, false);
 
 	/*
 	 * Find and lock the relation.  Lock level should match
@@ -212,7 +216,8 @@ DefineRule(RuleStmt *stmt, const char *queryString)
 					   stmt->event,
 					   stmt->instead,
 					   stmt->replace,
-					   actions);
+					   actions,
+					   &cmd);
 }
 
 
@@ -230,7 +235,8 @@ DefineQueryRewrite(char *rulename,
 				   CmdType event_type,
 				   bool is_instead,
 				   bool replace,
-				   List *action)
+				   List *action,
+				   CommandContext cmd)
 {
 	Relation	event_relation;
 	int			event_attno;
@@ -480,6 +486,17 @@ DefineQueryRewrite(char *rulename,
 		}
 	}
 
+	/* Call BEFORE CREATE RULE triggers */
+	if (CommandFiresTriggers(cmd))
+	{
+		cmd->objectId = InvalidOid;
+		cmd->objectname = rulename;
+		cmd->schemaname =
+			get_namespace_name(RelationGetNamespace(event_relation));
+
+		ExecBeforeCommandTriggers(cmd);
+	}
+
 	/*
 	 * This rule is allowed - prepare to install it.
 	 */
@@ -520,6 +537,10 @@ DefineQueryRewrite(char *rulename,
 
 	/* Close rel, but keep lock till commit... */
 	heap_close(event_relation, NoLock);
+
+	/* Call AFTER CREATE RULE triggers */
+	if (CommandFiresAfterTriggers(cmd))
+		ExecAfterCommandTriggers(cmd);
 }
 
 /*

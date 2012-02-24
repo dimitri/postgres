@@ -785,6 +785,7 @@ AlterTSDictionary(AlterTSDictionaryStmt *stmt)
 	Datum		repl_val[Natts_pg_ts_dict];
 	bool		repl_null[Natts_pg_ts_dict];
 	bool		repl_repl[Natts_pg_ts_dict];
+	CommandContextData cmd;
 
 	dictId = get_ts_dict_oid(stmt->dictname, false);
 
@@ -848,6 +849,19 @@ AlterTSDictionary(AlterTSDictionaryStmt *stmt)
 	verify_dictoptions(((Form_pg_ts_dict) GETSTRUCT(tup))->dicttemplate,
 					   dictoptions);
 
+	/* Call BEFORE ALTER TEXT SEARCH DICTIONARY command triggers */
+	InitCommandContext(&cmd, (Node *)stmt, false);
+
+	if (CommandFiresTriggers(&cmd))
+	{
+		Form_pg_ts_dict form = (Form_pg_ts_dict) GETSTRUCT(tup);
+		cmd.objectId = dictId;
+		cmd.objectname = NameStr(form->dictname);
+		cmd.schemaname = get_namespace_name(form->dictnamespace);
+
+		ExecBeforeCommandTriggers(&cmd);
+	}
+
 	/*
 	 * Looks good, update
 	 */
@@ -879,6 +893,10 @@ AlterTSDictionary(AlterTSDictionaryStmt *stmt)
 	ReleaseSysCache(tup);
 
 	heap_close(rel, RowExclusiveLock);
+
+	/* Call AFTER ALTER TEXT SEARCH DICTIONARY command triggers */
+	if (CommandFiresAfterTriggers(&cmd))
+		ExecAfterCommandTriggers(&cmd);
 }
 
 /*
@@ -1814,6 +1832,7 @@ AlterTSConfiguration(AlterTSConfigurationStmt *stmt)
 {
 	HeapTuple	tup;
 	Relation	relMap;
+	CommandContextData cmd;
 
 	/* Find the configuration */
 	tup = GetTSConfigTuple(stmt->cfgname);
@@ -1827,6 +1846,20 @@ AlterTSConfiguration(AlterTSConfigurationStmt *stmt)
 	if (!pg_ts_config_ownercheck(HeapTupleGetOid(tup), GetUserId()))
 		aclcheck_error(ACLCHECK_NOT_OWNER, ACL_KIND_TSCONFIGURATION,
 					   NameListToString(stmt->cfgname));
+
+	/* Call BEFORE ALTER TEXT SEARCH CONFIGURATION command triggers */
+	InitCommandContext(&cmd, (Node *)stmt, false);
+
+	if (CommandFiresTriggers(&cmd))
+	{
+		Form_pg_ts_config form = (Form_pg_ts_config) GETSTRUCT(tup);
+
+		cmd.objectId = HeapTupleGetOid(tup);
+		cmd.objectname = NameStr(form->cfgname);
+		cmd.schemaname = get_namespace_name(form->cfgnamespace);
+
+		ExecBeforeCommandTriggers(&cmd);
+	}
 
 	relMap = heap_open(TSConfigMapRelationId, RowExclusiveLock);
 
@@ -1842,6 +1875,10 @@ AlterTSConfiguration(AlterTSConfigurationStmt *stmt)
 	heap_close(relMap, RowExclusiveLock);
 
 	ReleaseSysCache(tup);
+
+	/* Call AFTER ALTER TEXT SEARCH CONFIGURATION command triggers */
+	if (CommandFiresAfterTriggers(&cmd))
+		ExecAfterCommandTriggers(&cmd);
 }
 
 /*

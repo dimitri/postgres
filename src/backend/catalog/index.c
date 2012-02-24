@@ -2789,7 +2789,7 @@ IndexGetRelation(Oid indexId, bool missing_ok)
  * reindex_index - This routine is used to recreate a single index
  */
 void
-reindex_index(Oid indexId, bool skip_constraint_checks)
+reindex_index(Oid indexId, bool skip_constraint_checks, CommandContext cmd)
 {
 	Relation	iRel,
 				heapRelation,
@@ -2827,6 +2827,16 @@ reindex_index(Oid indexId, bool skip_constraint_checks)
 	 * don't want to reindex underneath an open indexscan.
 	 */
 	CheckTableNotInUse(iRel, "REINDEX INDEX");
+
+	/* Call BEFORE REINDEX command triggers */
+	if (CommandFiresTriggers(cmd))
+	{
+		cmd->objectId = indexId;
+		cmd->objectname = RelationGetRelationName(heapRelation);
+		cmd->schemaname = get_namespace_name(RelationGetNamespace(heapRelation));
+
+		ExecBeforeCommandTriggers(cmd);
+	}
 
 	/*
 	 * All predicate locks on the index are about to be made invalid. Promote
@@ -2923,6 +2933,10 @@ reindex_index(Oid indexId, bool skip_constraint_checks)
 	/* Close rels, but keep locks */
 	index_close(iRel, NoLock);
 	heap_close(heapRelation, NoLock);
+
+	/* Call AFTER REINDEX command triggers */
+	if (CommandFiresAfterTriggers(cmd))
+		ExecAfterCommandTriggers(cmd);
 }
 
 /*
@@ -2955,7 +2969,7 @@ reindex_index(Oid indexId, bool skip_constraint_checks)
  * index rebuild.
  */
 bool
-reindex_relation(Oid relid, int flags)
+reindex_relation(Oid relid, int flags, CommandContext cmd)
 {
 	Relation	rel;
 	Oid			toast_relid;
@@ -2971,6 +2985,17 @@ reindex_relation(Oid relid, int flags)
 	rel = heap_open(relid, ShareLock);
 
 	toast_relid = rel->rd_rel->reltoastrelid;
+
+	/* Call BEFORE REINDEX command triggers */
+	if (CommandFiresTriggers(cmd))
+	{
+		cmd->objectId = relid;
+		cmd->objectname = RelationGetRelationName(rel);
+		cmd->objectname = get_namespace_name(RelationGetNamespace(rel));
+
+		ExecBeforeCommandTriggers(cmd);
+	}
+
 
 	/*
 	 * Get the list of index OIDs for this relation.  (We trust to the
@@ -3033,7 +3058,7 @@ reindex_relation(Oid relid, int flags)
 			if (is_pg_class)
 				RelationSetIndexList(rel, doneIndexes, InvalidOid);
 
-			reindex_index(indexOid, !(flags & REINDEX_REL_CHECK_CONSTRAINTS));
+			reindex_index(indexOid, !(flags & REINDEX_REL_CHECK_CONSTRAINTS), NULL);
 
 			CommandCounterIncrement();
 
@@ -3068,7 +3093,11 @@ reindex_relation(Oid relid, int flags)
 	 * still hold the lock on the master table.
 	 */
 	if ((flags & REINDEX_REL_PROCESS_TOAST) && OidIsValid(toast_relid))
-		result |= reindex_relation(toast_relid, flags);
+		result |= reindex_relation(toast_relid, flags, NULL);
+
+	/* Call AFTER REINDEX command triggers */
+	if (CommandFiresAfterTriggers(cmd))
+		ExecAfterCommandTriggers(cmd);
 
 	return result;
 }

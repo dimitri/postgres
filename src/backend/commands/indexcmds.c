@@ -1765,7 +1765,7 @@ ChooseIndexColumnNames(List *indexElems)
  *		Recreate a specific index.
  */
 void
-ReindexIndex(RangeVar *indexRelation)
+ReindexIndex(RangeVar *indexRelation, CommandContext cmd)
 {
 	Oid			indOid;
 	Oid			heapOid = InvalidOid;
@@ -1776,7 +1776,7 @@ ReindexIndex(RangeVar *indexRelation)
 									  RangeVarCallbackForReindexIndex,
 									  (void *) &heapOid);
 
-	reindex_index(indOid, false);
+	reindex_index(indOid, false, cmd);
 }
 
 /*
@@ -1843,7 +1843,7 @@ RangeVarCallbackForReindexIndex(const RangeVar *relation,
  *		Recreate all indexes of a table (and of its toast table, if any)
  */
 void
-ReindexTable(RangeVar *relation)
+ReindexTable(RangeVar *relation, CommandContext cmd)
 {
 	Oid			heapOid;
 
@@ -1851,7 +1851,7 @@ ReindexTable(RangeVar *relation)
 	heapOid = RangeVarGetRelidExtended(relation, ShareLock, false, false,
 									   RangeVarCallbackOwnsTable, NULL);
 
-	if (!reindex_relation(heapOid, REINDEX_REL_PROCESS_TOAST))
+	if (!reindex_relation(heapOid, REINDEX_REL_PROCESS_TOAST, cmd))
 		ereport(NOTICE,
 				(errmsg("table \"%s\" has no indexes",
 						relation->relname)));
@@ -1964,7 +1964,7 @@ ReindexDatabase(const char *databaseName, bool do_system, bool do_user)
 		StartTransactionCommand();
 		/* functions in indexes may want a snapshot set */
 		PushActiveSnapshot(GetTransactionSnapshot());
-		if (reindex_relation(relid, REINDEX_REL_PROCESS_TOAST))
+		if (reindex_relation(relid, REINDEX_REL_PROCESS_TOAST, NULL))
 			ereport(NOTICE,
 					(errmsg("table \"%s.%s\" was reindexed",
 							get_namespace_name(get_rel_namespace(relid)),

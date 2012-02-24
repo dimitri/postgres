@@ -31,12 +31,14 @@ NOTICE:  snitch: BEFORE CREATE SCHEMA <NULL> <NULL>
 NOTICE:  snitch: BEFORE CREATE SCHEMA <NULL> cmd
 NOTICE:  snitch: AFTER CREATE SCHEMA <NULL> <NULL>
 NOTICE:  snitch: AFTER CREATE SCHEMA <NULL> <NULL>
+NOTICE:  snitch: AFTER CREATE SCHEMA <NULL> <NULL>
 create table cmd.foo(id bigserial primary key);
 NOTICE:  snitch: BEFORE CREATE TABLE <NULL> <NULL>
 NOTICE:  snitch: BEFORE CREATE TABLE <NULL> <NULL>
 NOTICE:  CREATE TABLE will create implicit sequence "foo_id_seq" for serial column "foo.id"
 NOTICE:  snitch: BEFORE CREATE SEQUENCE <NULL> <NULL>
 NOTICE:  snitch: BEFORE CREATE SEQUENCE <NULL> <NULL>
+NOTICE:  snitch: AFTER CREATE SEQUENCE <NULL> <NULL>
 NOTICE:  snitch: AFTER CREATE SEQUENCE <NULL> <NULL>
 NOTICE:  snitch: AFTER CREATE SEQUENCE <NULL> <NULL>
 NOTICE:  snitch: BEFORE CREATE INDEX <NULL> <NULL>
@@ -48,6 +50,7 @@ NOTICE:  snitch: BEFORE ALTER SEQUENCE <NULL> <NULL>
 NOTICE:  snitch: BEFORE ALTER SEQUENCE <NULL> <NULL>
 NOTICE:  snitch: AFTER ALTER SEQUENCE <NULL> <NULL>
 NOTICE:  snitch: AFTER ALTER SEQUENCE <NULL> <NULL>
+NOTICE:  snitch: AFTER ALTER SEQUENCE <NULL> <NULL>
 NOTICE:  snitch: AFTER CREATE TABLE cmd foo
 NOTICE:  snitch: AFTER CREATE TABLE <NULL> <NULL>
 NOTICE:  snitch: AFTER CREATE TABLE <NULL> <NULL>
@@ -56,12 +59,23 @@ NOTICE:  snitch: BEFORE CREATE VIEW <NULL> <NULL>
 NOTICE:  snitch: BEFORE CREATE VIEW <NULL> <NULL>
 NOTICE:  snitch: AFTER CREATE VIEW <NULL> <NULL>
 NOTICE:  snitch: AFTER CREATE VIEW <NULL> <NULL>
+NOTICE:  snitch: AFTER CREATE VIEW <NULL> <NULL>
 alter table cmd.foo add column t text;
 NOTICE:  snitch: BEFORE ALTER TABLE <NULL> <NULL>
 NOTICE:  snitch: BEFORE ALTER TABLE <NULL> <NULL>
 NOTICE:  snitch: AFTER ALTER TABLE cmd foo
 NOTICE:  snitch: AFTER ALTER TABLE <NULL> <NULL>
 NOTICE:  snitch: AFTER ALTER TABLE <NULL> <NULL>
+NOTICE:  snitch: AFTER ALTER TABLE <NULL> <NULL>
+cluster cmd.foo using foo_pkey;
+NOTICE:  snitch: BEFORE CLUSTER <NULL> <NULL>
+NOTICE:  snitch: BEFORE CLUSTER <NULL> <NULL>
+vacuum cmd.foo;
+NOTICE:  snitch: BEFORE VACUUM <NULL> <NULL>
+NOTICE:  snitch: BEFORE VACUUM <NULL> <NULL>
+vacuum;
+NOTICE:  snitch: BEFORE VACUUM <NULL> <NULL>
+NOTICE:  snitch: BEFORE VACUUM <NULL> <NULL>
 set session_replication_role to replica;
 create table cmd.bar();
 reset session_replication_role;
@@ -80,14 +94,17 @@ NOTICE:  snitch: BEFORE CREATE FUNCTION <NULL> <NULL>
 NOTICE:  snitch: AFTER CREATE FUNCTION cmd fun
 NOTICE:  snitch: AFTER CREATE FUNCTION <NULL> <NULL>
 NOTICE:  snitch: AFTER CREATE FUNCTION <NULL> <NULL>
+NOTICE:  snitch: AFTER CREATE FUNCTION <NULL> <NULL>
 alter function cmd.fun(int) strict;
 NOTICE:  snitch: BEFORE ALTER FUNCTION <NULL> <NULL>
 NOTICE:  snitch: BEFORE ALTER FUNCTION <NULL> <NULL>
 NOTICE:  snitch: AFTER ALTER FUNCTION <NULL> <NULL>
 NOTICE:  snitch: AFTER ALTER FUNCTION <NULL> <NULL>
+NOTICE:  snitch: AFTER ALTER FUNCTION <NULL> <NULL>
 alter function cmd.fun(int) rename to notfun;
 NOTICE:  snitch: BEFORE ALTER FUNCTION <NULL> <NULL>
 NOTICE:  snitch: BEFORE ALTER FUNCTION <NULL> <NULL>
+NOTICE:  snitch: AFTER ALTER FUNCTION <NULL> <NULL>
 NOTICE:  snitch: AFTER ALTER FUNCTION <NULL> <NULL>
 NOTICE:  snitch: AFTER ALTER FUNCTION <NULL> <NULL>
 drop function cmd.notfun(int);
@@ -100,16 +117,19 @@ NOTICE:  snitch: BEFORE CREATE FUNCTION <NULL> <NULL>
 NOTICE:  snitch: AFTER CREATE FUNCTION cmd plus1
 NOTICE:  snitch: AFTER CREATE FUNCTION <NULL> <NULL>
 NOTICE:  snitch: AFTER CREATE FUNCTION <NULL> <NULL>
+NOTICE:  snitch: AFTER CREATE FUNCTION <NULL> <NULL>
 create operator cmd.+!(procedure = cmd.plus1, leftarg = int);
 NOTICE:  snitch: BEFORE CREATE OPERATOR <NULL> <NULL>
 NOTICE:  snitch: BEFORE CREATE OPERATOR <NULL> <NULL>
 NOTICE:  snitch: BEFORE CREATE OPERATOR cmd +!
 NOTICE:  snitch: AFTER CREATE OPERATOR <NULL> <NULL>
 NOTICE:  snitch: AFTER CREATE OPERATOR <NULL> <NULL>
+NOTICE:  snitch: AFTER CREATE OPERATOR <NULL> <NULL>
 alter operator cmd.+!(int, NONE) set schema public;
 NOTICE:  snitch: BEFORE ALTER OPERATOR <NULL> <NULL>
 NOTICE:  snitch: BEFORE ALTER OPERATOR <NULL> <NULL>
 NOTICE:  snitch: AFTER ALTER OPERATOR public +!
+NOTICE:  snitch: AFTER ALTER OPERATOR <NULL> <NULL>
 NOTICE:  snitch: AFTER ALTER OPERATOR <NULL> <NULL>
 NOTICE:  snitch: AFTER ALTER OPERATOR <NULL> <NULL>
 drop operator public.+!(int, NONE);
@@ -127,9 +147,11 @@ NOTICE:  snitch: BEFORE CREATE AGGREGATE <NULL> <NULL>
 NOTICE:  snitch: BEFORE CREATE AGGREGATE cmd avg
 NOTICE:  snitch: AFTER CREATE AGGREGATE <NULL> <NULL>
 NOTICE:  snitch: AFTER CREATE AGGREGATE <NULL> <NULL>
+NOTICE:  snitch: AFTER CREATE AGGREGATE <NULL> <NULL>
 alter aggregate cmd.avg(float8) set schema public;
 NOTICE:  snitch: BEFORE ALTER AGGREGATE <NULL> <NULL>
 NOTICE:  snitch: BEFORE ALTER AGGREGATE <NULL> <NULL>
+NOTICE:  snitch: AFTER ALTER AGGREGATE <NULL> <NULL>
 NOTICE:  snitch: AFTER ALTER AGGREGATE <NULL> <NULL>
 NOTICE:  snitch: AFTER ALTER AGGREGATE <NULL> <NULL>
 drop aggregate public.avg(float8);
@@ -141,10 +163,12 @@ NOTICE:  snitch: BEFORE CREATE COLLATION <NULL> <NULL>
 NOTICE:  snitch: AFTER CREATE COLLATION cmd french
 NOTICE:  snitch: AFTER CREATE COLLATION <NULL> <NULL>
 NOTICE:  snitch: AFTER CREATE COLLATION <NULL> <NULL>
+NOTICE:  snitch: AFTER CREATE COLLATION <NULL> <NULL>
 alter collation cmd.french rename to francais;
 NOTICE:  snitch: BEFORE ALTER COLLATION <NULL> <NULL>
 NOTICE:  snitch: BEFORE ALTER COLLATION <NULL> <NULL>
 NOTICE:  snitch: BEFORE ALTER COLLATION cmd french
+NOTICE:  snitch: AFTER ALTER COLLATION <NULL> <NULL>
 NOTICE:  snitch: AFTER ALTER COLLATION <NULL> <NULL>
 NOTICE:  snitch: AFTER ALTER COLLATION <NULL> <NULL>
 create type cmd.compfoo AS (f1 int, f2 text);
@@ -153,10 +177,12 @@ NOTICE:  snitch: BEFORE CREATE TYPE <NULL> <NULL>
 NOTICE:  snitch: BEFORE CREATE TYPE cmd compfoo
 NOTICE:  snitch: AFTER CREATE TYPE <NULL> <NULL>
 NOTICE:  snitch: AFTER CREATE TYPE <NULL> <NULL>
+NOTICE:  snitch: AFTER CREATE TYPE <NULL> <NULL>
 alter type cmd.compfoo add attribute f3 text;
 NOTICE:  snitch: BEFORE ALTER TYPE <NULL> <NULL>
 NOTICE:  snitch: BEFORE ALTER TYPE <NULL> <NULL>
 NOTICE:  snitch: BEFORE ALTER TYPE cmd compfoo
+NOTICE:  snitch: AFTER ALTER TYPE <NULL> <NULL>
 NOTICE:  snitch: AFTER ALTER TYPE <NULL> <NULL>
 NOTICE:  snitch: AFTER ALTER TYPE <NULL> <NULL>
 drop type cmd.compfoo;
@@ -168,9 +194,11 @@ NOTICE:  snitch: BEFORE CREATE TYPE <NULL> <NULL>
 NOTICE:  snitch: BEFORE CREATE TYPE cmd bug_status
 NOTICE:  snitch: AFTER CREATE TYPE <NULL> <NULL>
 NOTICE:  snitch: AFTER CREATE TYPE <NULL> <NULL>
+NOTICE:  snitch: AFTER CREATE TYPE <NULL> <NULL>
 alter type cmd.bug_status add value 'wontfix';
 NOTICE:  snitch: BEFORE ALTER TYPE <NULL> <NULL>
 NOTICE:  snitch: BEFORE ALTER TYPE <NULL> <NULL>
+NOTICE:  snitch: AFTER ALTER TYPE <NULL> <NULL>
 NOTICE:  snitch: AFTER ALTER TYPE <NULL> <NULL>
 NOTICE:  snitch: AFTER ALTER TYPE <NULL> <NULL>
 create domain cmd.us_postal_code as text check(value ~ '^\d{5}$' or value ~ '^\d{5}-\d{4}$');
@@ -179,9 +207,12 @@ NOTICE:  snitch: BEFORE CREATE DOMAIN <NULL> <NULL>
 NOTICE:  snitch: AFTER CREATE DOMAIN cmd us_postal_code
 NOTICE:  snitch: AFTER CREATE DOMAIN <NULL> <NULL>
 NOTICE:  snitch: AFTER CREATE DOMAIN <NULL> <NULL>
+NOTICE:  snitch: AFTER CREATE DOMAIN <NULL> <NULL>
 alter domain cmd.us_postal_code set not null;
 NOTICE:  snitch: BEFORE ALTER DOMAIN <NULL> <NULL>
 NOTICE:  snitch: BEFORE ALTER DOMAIN <NULL> <NULL>
+NOTICE:  snitch: BEFORE ALTER DOMAIN cmd us_postal_code
+NOTICE:  snitch: AFTER ALTER DOMAIN <NULL> <NULL>
 NOTICE:  snitch: AFTER ALTER DOMAIN <NULL> <NULL>
 NOTICE:  snitch: AFTER ALTER DOMAIN <NULL> <NULL>
 create function cmd.trigfunc() returns trigger language plpgsql as
@@ -189,6 +220,7 @@ $$ begin raise notice 'trigfunc';  end;$$;
 NOTICE:  snitch: BEFORE CREATE FUNCTION <NULL> <NULL>
 NOTICE:  snitch: BEFORE CREATE FUNCTION <NULL> <NULL>
 NOTICE:  snitch: AFTER CREATE FUNCTION cmd trigfunc
+NOTICE:  snitch: AFTER CREATE FUNCTION <NULL> <NULL>
 NOTICE:  snitch: AFTER CREATE FUNCTION <NULL> <NULL>
 NOTICE:  snitch: AFTER CREATE FUNCTION <NULL> <NULL>
 create trigger footg before update on cmd.foo for each row execute procedure cmd.trigfunc();
@@ -203,6 +235,7 @@ NOTICE:  snitch: BEFORE ALTER TRIGGER <NULL> <NULL>
 NOTICE:  snitch: BEFORE ALTER TRIGGER cmd footg
 NOTICE:  snitch: AFTER ALTER TRIGGER <NULL> <NULL>
 NOTICE:  snitch: AFTER ALTER TRIGGER <NULL> <NULL>
+NOTICE:  snitch: AFTER ALTER TRIGGER <NULL> <NULL>
 drop trigger foo_trigger on cmd.foo;
 NOTICE:  snitch: BEFORE DROP TRIGGER <NULL> <NULL>
 NOTICE:  snitch: BEFORE DROP TRIGGER <NULL> foo_trigger
@@ -211,6 +244,7 @@ alter schema cmd rename to cmd1;
 NOTICE:  snitch: BEFORE ALTER SCHEMA <NULL> <NULL>
 NOTICE:  snitch: BEFORE ALTER SCHEMA <NULL> <NULL>
 NOTICE:  snitch: AFTER ALTER SCHEMA <NULL> cmd1
+NOTICE:  snitch: AFTER ALTER SCHEMA <NULL> <NULL>
 NOTICE:  snitch: AFTER ALTER SCHEMA <NULL> <NULL>
 NOTICE:  snitch: AFTER ALTER SCHEMA <NULL> <NULL>
 drop schema cmd1 cascade;

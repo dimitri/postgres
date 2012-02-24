@@ -350,6 +350,7 @@ DefineOpClass(CreateOpClassStmt *stmt)
 	NameData	opcName;
 	ObjectAddress myself,
 				referenced;
+	CommandContextData cmd;
 
 	/* Convert list of names to a name and namespace */
 	namespaceoid = QualifiedNameGetCreationNamespace(stmt->opclassname,
@@ -590,6 +591,18 @@ DefineOpClass(CreateOpClassStmt *stmt)
 							stmt->amname)));
 	}
 
+	/* Call BEFORE CREATE OPERATOR CLASS command triggers */
+	InitCommandContext(&cmd, (Node *)stmt, false);
+
+	if (CommandFiresTriggers(&cmd))
+	{
+		cmd.objectId = InvalidOid;
+		cmd.objectname = stmt->amname;
+		cmd.schemaname = get_namespace_name(namespaceoid);
+
+		ExecBeforeCommandTriggers(&cmd);
+	}
+
 	rel = heap_open(OperatorClassRelationId, RowExclusiveLock);
 
 	/*
@@ -720,6 +733,13 @@ DefineOpClass(CreateOpClassStmt *stmt)
 						   OperatorClassRelationId, opclassoid, 0);
 
 	heap_close(rel, RowExclusiveLock);
+
+	/* Call AFTER CREATE OPERATOR CLASS command triggers */
+	if (CommandFiresAfterTriggers(&cmd))
+	{
+		cmd.objectId = opclassoid;
+		ExecAfterCommandTriggers(&cmd);
+	}
 }
 
 
@@ -731,9 +751,11 @@ void
 DefineOpFamily(CreateOpFamilyStmt *stmt)
 {
 	char	   *opfname;		/* name of opfamily we're creating */
-	Oid			amoid,			/* our AM's oid */
+	Oid			opfOid,
+				amoid,			/* our AM's oid */
 				namespaceoid;	/* namespace to create opfamily in */
 	AclResult	aclresult;
+	CommandContextData cmd;
 
 	/* Convert list of names to a name and namespace */
 	namespaceoid = QualifiedNameGetCreationNamespace(stmt->opfamilyname,
@@ -759,8 +781,27 @@ DefineOpFamily(CreateOpFamilyStmt *stmt)
 				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
 				 errmsg("must be superuser to create an operator family")));
 
+	/* Call BEFORE CREATE OPERATOR FAMILY command triggers */
+	InitCommandContext(&cmd, (Node *)stmt, false);
+
+	if (CommandFiresTriggers(&cmd))
+	{
+		cmd.objectId = InvalidOid;
+		cmd.objectname = opfname;
+		cmd.schemaname = get_namespace_name(namespaceoid);
+
+		ExecBeforeCommandTriggers(&cmd);
+	}
+
 	/* Insert pg_opfamily catalog entry */
-	(void) CreateOpFamily(stmt->amname, opfname, namespaceoid, amoid);
+	opfOid = CreateOpFamily(stmt->amname, opfname, namespaceoid, amoid);
+
+	/* Call AFTER CREATE OPERATOR FAMILY command triggers */
+	if (CommandFiresAfterTriggers(&cmd))
+	{
+		cmd.objectId = opfOid;
+		ExecAfterCommandTriggers(&cmd);
+	}
 }
 
 
@@ -781,6 +822,7 @@ AlterOpFamily(AlterOpFamilyStmt *stmt)
 				maxProcNumber;	/* amsupport value */
 	HeapTuple	tup;
 	Form_pg_am	pg_am;
+	CommandContextData cmd;
 
 	/* Get necessary info about access method */
 	tup = SearchSysCache1(AMNAME, CStringGetDatum(stmt->amname));
@@ -815,6 +857,26 @@ AlterOpFamily(AlterOpFamilyStmt *stmt)
 				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
 				 errmsg("must be superuser to alter an operator family")));
 
+	/* Call BEFORE ALTER OPERATOR FAMILY command triggers */
+	InitCommandContext(&cmd, (Node *)stmt, false);
+
+	if (CommandFiresTriggers(&cmd))
+	{
+		HeapTuple	htup;
+		Form_pg_opfamily opfForm;
+
+		htup = OpFamilyCacheLookup(amoid, stmt->opfamilyname, false);
+		opfForm = (Form_pg_opfamily) GETSTRUCT(htup);
+
+		cmd.objectId = opfamilyoid;
+		cmd.objectname = NameStr(opfForm->opfname);
+		cmd.schemaname = get_namespace_name(opfForm->opfnamespace);
+
+		ReleaseSysCache(htup);
+
+		ExecBeforeCommandTriggers(&cmd);
+	}
+
 	/*
 	 * ADD and DROP cases need separate code from here on down.
 	 */
@@ -826,6 +888,10 @@ AlterOpFamily(AlterOpFamilyStmt *stmt)
 		AlterOpFamilyAdd(stmt->opfamilyname, amoid, opfamilyoid,
 						 maxOpNumber, maxProcNumber,
 						 stmt->items);
+
+	/* Call AFTER ALTER OPERATOR FAMILY command triggers */
+	if (CommandFiresAfterTriggers(&cmd))
+		ExecAfterCommandTriggers(&cmd);
 }
 
 /*

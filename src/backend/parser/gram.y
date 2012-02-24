@@ -4321,6 +4321,7 @@ trigger_command_list:
 trigger_command:
                CREATE SCHEMA						{ $$ = "CREATE SCHEMA"; }
 			   | CREATE EXTENSION					{ $$ = "CREATE EXTENSION"; }
+			   | CREATE LANGUAGE					{ $$ = "CREATE LANGUAGE"; }
 			   | CREATE FUNCTION					{ $$ = "CREATE FUNCTION"; }
 			   | CREATE TABLE						{ $$ = "CREATE TABLE"; }
 			   | CREATE SERVER						{ $$ = "CREATE SERVER"; }
@@ -4330,6 +4331,7 @@ trigger_command:
 			   | CREATE INDEX						{ $$ = "CREATE INDEX"; }
 			   | CREATE SEQUENCE					{ $$ = "CREATE SEQUENCE"; }
 			   | CREATE VIEW						{ $$ = "CREATE VIEW"; }
+			   | CREATE RULE						{ $$ = "CREATE RULE"; }
 			   | CREATE AGGREGATE					{ $$ = "CREATE AGGREGATE"; }
 			   | CREATE OPERATOR					{ $$ = "CREATE OPERATOR"; }
 			   | CREATE COLLATION					{ $$ = "CREATE COLLATION"; }
@@ -4340,6 +4342,10 @@ trigger_command:
 			   | CREATE TYPE_P						{ $$ = "CREATE TYPE"; }
 			   | CREATE DOMAIN_P					{ $$ = "CREATE DOMAIN"; }
 			   | CREATE TRIGGER						{ $$ = "CREATE TRIGGER"; }
+			   | CREATE CONVERSION_P				{ $$ = "CREATE CONVERSION"; }
+			   | CREATE CAST						{ $$ = "CREATE CAST"; }
+			   | CREATE OPERATOR CLASS				{ $$ = "CREATE OPERATOR CLASS"; }
+			   | CREATE OPERATOR FAMILY				{ $$ = "CREATE OPERATOR FAMILY"; }
                | ALTER SCHEMA						{ $$ = "ALTER SCHEMA"; }
 			   | ALTER EXTENSION					{ $$ = "ALTER EXTENSION"; }
 			   | ALTER FUNCTION						{ $$ = "ALTER FUNCTION"; }
@@ -4350,6 +4356,8 @@ trigger_command:
 			   | ALTER USER MAPPING					{ $$ = "ALTER USER MAPPING"; }
 			   | ALTER AGGREGATE					{ $$ = "ALTER AGGREGATE"; }
 			   | ALTER OPERATOR						{ $$ = "ALTER OPERATOR"; }
+			   | ALTER OPERATOR CLASS				{ $$ = "ALTER OPERATOR CLASS"; }
+			   | ALTER OPERATOR FAMILY				{ $$ = "ALTER OPERATOR FAMILY"; }
 			   | ALTER COLLATION					{ $$ = "ALTER COLLATION"; }
 			   | ALTER TEXT_P SEARCH PARSER			{ $$ = "ALTER TEXT SEARCH PARSER"; }
 			   | ALTER TEXT_P SEARCH DICTIONARY		{ $$ = "ALTER TEXT SEARCH DICTIONARY"; }
@@ -4386,7 +4394,10 @@ trigger_command:
 			   | DROP OPERATOR						{ $$ = "DROP OPERATOR"; }
 			   | DROP CAST							{ $$ = "DROP CAST"; }
 			   | DROP RULE							{ $$ = "DROP RULE"; }
+			   | REINDEX							{ $$ = "REINDEX"; }
 			   | VACUUM								{ $$ = "VACUUM"; }
+			   | CLUSTER							{ $$ = "CLUSTER"; }
+			   | LOAD								{ $$ = "LOAD"; }
 		;
 
 DropCmdTrigStmt:

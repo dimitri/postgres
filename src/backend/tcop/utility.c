@@ -216,7 +216,10 @@ call_before_cmdtriggers(CommandContext cmd)
 		case T_DropUserMappingStmt:
 		case T_AlterTableSpaceOptionsStmt:
 		case T_CreateForeignTableStmt:
-		case T_SecLabelStmt:
+		case T_ClusterStmt:
+		case T_VacuumStmt:
+		case T_LoadStmt:
+		case T_ReindexStmt:
 			ExecBeforeCommandTriggers(cmd);
 
 		case T_DropStmt:
@@ -253,7 +256,6 @@ call_after_cmdtriggers(CommandContext cmd)
 		case T_CreateDomainStmt:
 		case T_CreateFunctionStmt:
 		case T_CreateRoleStmt:
-		case T_IndexStmt:
 		case T_CreatePLangStmt:
 		case T_CreateOpClassStmt:
 		case T_CreateOpFamilyStmt:
@@ -292,8 +294,13 @@ call_after_cmdtriggers(CommandContext cmd)
 		case T_DropUserMappingStmt:
 		case T_AlterTableSpaceOptionsStmt:
 		case T_CreateForeignTableStmt:
-		case T_SecLabelStmt:
+		case T_LoadStmt:
+		case T_ReindexStmt:
 			ExecAfterCommandTriggers(cmd);
+
+		case T_IndexStmt:
+			if (!((IndexStmt *)cmd->parsetree)->concurrent)
+				ExecAfterCommandTriggers(cmd);
 
 		case T_DropStmt:
 			if (((DropStmt *) cmd->parsetree)->removeType != OBJECT_CMDTRIGGER)
@@ -1233,10 +1240,24 @@ standard_ProcessUtility(Node *parsetree,
 		case T_LoadStmt:
 			{
 				LoadStmt   *stmt = (LoadStmt *) parsetree;
+				CommandContextData cmd;
+
+				InitCommandContext(&cmd, parsetree, false);
+
+				if (CommandFiresTriggers(&cmd))
+				{
+					cmd.objectname = stmt->filename;
+					cmd.schemaname = NULL;
+
+					ExecBeforeCommandTriggers(&cmd);
+				}
 
 				closeAllVfds(); /* probably not necessary... */
 				/* Allowed names are restricted if you're not superuser */
 				load_file(stmt->filename, !superuser());
+
+				if (CommandFiresAfterTriggers(&cmd))
+					ExecAfterCommandTriggers(&cmd);
 			}
 			break;
 
@@ -1360,16 +1381,19 @@ standard_ProcessUtility(Node *parsetree,
 		case T_ReindexStmt:
 			{
 				ReindexStmt *stmt = (ReindexStmt *) parsetree;
+				CommandContextData cmd;
+
+				InitCommandContext(&cmd, parsetree, false);
 
 				/* we choose to allow this during "read only" transactions */
 				PreventCommandDuringRecovery("REINDEX");
 				switch (stmt->kind)
 				{
 					case OBJECT_INDEX:
-						ReindexIndex(stmt->relation);
+						ReindexIndex(stmt->relation, &cmd);
 						break;
 					case OBJECT_TABLE:
-						ReindexTable(stmt->relation);
+						ReindexTable(stmt->relation, &cmd);
 						break;
 					case OBJECT_DATABASE:
 

@@ -1535,6 +1535,7 @@ CreateCast(CreateCastStmt *stmt)
 	ObjectAddress myself,
 				referenced;
 	AclResult	aclresult;
+	CommandContextData cmd;
 
 	sourcetypeid = typenameTypeId(NULL, stmt->sourcetype);
 	targettypeid = typenameTypeId(NULL, stmt->targettype);
@@ -1753,6 +1754,18 @@ CreateCast(CreateCastStmt *stmt)
 			break;
 	}
 
+	/* Call BEFORE CREATE CAST command triggers */
+	InitCommandContext(&cmd, (Node *)stmt, false);
+
+	if (CommandFiresTriggers(&cmd))
+	{
+		cmd.objectId = InvalidOid;
+		cmd.objectname = NULL;	/* composite name, not supported */
+		cmd.schemaname = NULL;	/* casts don't live in a namespace */
+
+		ExecBeforeCommandTriggers(&cmd);
+	}
+
 	relation = heap_open(CastRelationId, RowExclusiveLock);
 
 	/*
@@ -1820,6 +1833,12 @@ CreateCast(CreateCastStmt *stmt)
 	heap_freetuple(tuple);
 
 	heap_close(relation, RowExclusiveLock);
+
+	if (CommandFiresAfterTriggers(&cmd))
+	{
+		cmd.objectId = castid;
+		ExecAfterCommandTriggers(&cmd);
+	}
 }
 
 /*

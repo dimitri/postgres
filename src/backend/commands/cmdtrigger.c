@@ -171,10 +171,22 @@ CreateCmdTrigger(CreateCmdTrigStmt *stmt, const char *queryString)
 					 errmsg("AFTER VACUUM command triggers are not implemented")));
 
 		if (stmt->timing == CMD_TRIGGER_FIRED_AFTER
+			&& (strcmp(command, "CLUSTER") == 0))
+			ereport(ERROR,
+					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					 errmsg("AFTER CLUSTER command triggers are not implemented")));
+
+		if (stmt->timing == CMD_TRIGGER_FIRED_AFTER
 			&& (strcmp(command, "CREATE INDEX") == 0))
 			ereport(WARNING,
 					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 					 errmsg("CREATE INDEX CONCURRENTLY is not supported"),
+					 errdetail("The command trigger will not get fired.")));
+
+		if (strcmp(command, "REINDEX") == 0)
+			ereport(WARNING,
+					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					 errmsg("REINDEX DATABASE is not supported"),
 					 errdetail("The command trigger will not get fired.")));
 
 		/*
