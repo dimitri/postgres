@@ -3457,20 +3457,6 @@ _copyCreateTrigStmt(const CreateTrigStmt *from)
 	return newnode;
 }
 
-static DropPropertyStmt *
-_copyDropPropertyStmt(const DropPropertyStmt *from)
-{
-	DropPropertyStmt *newnode = makeNode(DropPropertyStmt);
-
-	COPY_NODE_FIELD(relation);
-	COPY_STRING_FIELD(property);
-	COPY_SCALAR_FIELD(removeType);
-	COPY_SCALAR_FIELD(behavior);
-	COPY_SCALAR_FIELD(missing_ok);
-
-	return newnode;
-}
-
 static CreateCmdTrigStmt *
 _copyCreateCmdTrigStmt(const CreateCmdTrigStmt *from)
 {
@@ -4347,9 +4333,6 @@ copyObject(const void *from)
 			break;
 		case T_CreateTrigStmt:
 			retval = _copyCreateTrigStmt(from);
-			break;
-		case T_DropPropertyStmt:
-			retval = _copyDropPropertyStmt(from);
 			break;
 		case T_CreateCmdTrigStmt:
 			retval = _copyCreateCmdTrigStmt(from);

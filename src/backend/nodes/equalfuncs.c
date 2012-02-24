@@ -1778,18 +1778,6 @@ _equalCreateTrigStmt(const CreateTrigStmt *a, const CreateTrigStmt *b)
 }
 
 static bool
-_equalDropPropertyStmt(const DropPropertyStmt *a, const DropPropertyStmt *b)
-{
-	COMPARE_NODE_FIELD(relation);
-	COMPARE_STRING_FIELD(property);
-	COMPARE_SCALAR_FIELD(removeType);
-	COMPARE_SCALAR_FIELD(behavior);
-	COMPARE_SCALAR_FIELD(missing_ok);
-
-	return true;
-}
-
-static bool
 _equalCreateCmdTrigStmt(const CreateCmdTrigStmt *a, const CreateCmdTrigStmt *b)
 {
 	COMPARE_NODE_FIELD(command);
@@ -2884,9 +2872,6 @@ equal(const void *a, const void *b)
 			break;
 		case T_CreateTrigStmt:
 			retval = _equalCreateTrigStmt(a, b);
-			break;
-		case T_DropPropertyStmt:
-			retval = _equalDropPropertyStmt(a, b);
 			break;
 		case T_CreateCmdTrigStmt:
 			retval = _equalCreateCmdTrigStmt(a, b);
