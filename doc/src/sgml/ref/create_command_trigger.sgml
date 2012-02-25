@@ -3,7 +3,7 @@ doc/src/sgml/ref/create_trigger.sgml
 PostgreSQL documentation
 -->
 
-<refentry id="SQL-CREATETRIGGER">
+<refentry id="SQL-CREATECOMMANDTRIGGER">
  <refmeta>
   <refentrytitle>CREATE COMMAND TRIGGER</refentrytitle>
   <manvolnum>7</manvolnum>
@@ -21,10 +21,10 @@ PostgreSQL documentation
 
  <refsynopsisdiv>
 <synopsis>
-CREATE TRIGGER <replaceable class="PARAMETER">name</replaceable> { BEFORE | AFTER  } ANY COMMAND
+CREATE COMMAND TRIGGER <replaceable class="PARAMETER">name</replaceable> { BEFORE | AFTER  } ANY COMMAND
     EXECUTE PROCEDURE <replaceable class="PARAMETER">function_name</replaceable> ()
 
-CREATE TRIGGER <replaceable class="PARAMETER">name</replaceable> { BEFORE | AFTER  } COMMAND <replaceable class="PARAMETER">command</replaceable> [, ... ]
+CREATE COMMAND TRIGGER <replaceable class="PARAMETER">name</replaceable> { BEFORE | AFTER  } <replaceable class="PARAMETER">command</replaceable> [, ... ]
     EXECUTE PROCEDURE <replaceable class="PARAMETER">function_name</replaceable> ()
 
 <phrase>where <replaceable class="parameter">command</replaceable> can be one of:</phrase>
@@ -49,10 +49,10 @@ CREATE TRIGGER <replaceable class="PARAMETER">name</replaceable> { BEFORE | AFTE
     CREATE TEXT SEARCH DICTIONARY
     CREATE TEXT SEARCH TEMPLATE
     CREATE TEXT SEARCH CONFIGURATION
-    CREATE TYPE_P
-    CREATE DOMAIN_P
+    CREATE TYPE
+    CREATE DOMAIN
     CREATE TRIGGER
-    CREATE CONVERSION_P
+    CREATE CONVERSION
     CREATE CAST
     CREATE OPERATOR CLASS
     CREATE OPERATOR FAMILY
@@ -73,17 +73,17 @@ CREATE TRIGGER <replaceable class="PARAMETER">name</replaceable> { BEFORE | AFTE
     ALTER TEXT SEARCH DICTIONARY
     ALTER TEXT SEARCH TEMPLATE
     ALTER TEXT SEARCH CONFIGURATION
-    ALTER TYPE_P
-    ALTER DOMAIN_P
+    ALTER TYPE
+    ALTER DOMAIN
     ALTER TRIGGER
     DROP TABLE
     DROP SEQUENCE
     DROP VIEW
     DROP INDEX
-    DROP TYPE_P
-    DROP DOMAIN_P
+    DROP TYPE
+    DROP DOMAIN
     DROP COLLATION
-    DROP CONVERSION_P
+    DROP CONVERSION
     DROP SCHEMA
     DROP EXTENSION
     DROP TEXT SEARCH PARSER
@@ -108,7 +108,7 @@ CREATE TRIGGER <replaceable class="PARAMETER">name</replaceable> { BEFORE | AFTE
     VACUUM
     CLUSTER
     LOAD
-	
+
 </synopsis>
  </refsynopsisdiv>
 
@@ -261,6 +261,7 @@ CREATE TRIGGER <replaceable class="PARAMETER">name</replaceable> { BEFORE | AFTE
  <refsect1 id="SQL-CREATECOMMANDTRIGGER-examples">
   <title>Examples</title>
 
+  <para>
    Forbids the execution of any DDL command:
 
 <programlisting>
@@ -272,8 +273,8 @@ BEGIN
 END;
 $$;
 
-CREATE TRIGGER abort_ddl
-        BEFORE COMMAND CREATE TABLE
+CREATE COMMAND TRIGGER abort_ddl
+        BEFORE ANY COMMAND
        EXECUTE PROCEDURE abort_any_command();
 </programlisting>
 
@@ -283,7 +284,7 @@ CREATE TRIGGER abort_ddl
 <programlisting>
 CREATE OR REPLACE FUNCTION enforce_local_style
  (tg_when text, cmd_tag text, objectid oid, schemaname text, objectname text)
- RETURNS bool LANGUAGE plpgsql AS $$
+ RETURNS void LANGUAGE plpgsql AS $$
 BEGIN
   IF substring(objectname, 0, 4) NOT IN ('ab_', 'cz_', 'fr_')
   THEN
@@ -292,8 +293,8 @@ BEGIN
 END;
 $$;
 
-CREATE TRIGGER check_style
-        BEFORE COMMAND CREATE TABLE
+CREATE COMMAND TRIGGER check_style
+        BEFORE CREATE TABLE
        EXECUTE PROCEDURE enforce_local_style();
 </programlisting>
   </para>

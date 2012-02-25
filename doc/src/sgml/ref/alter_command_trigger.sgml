@@ -15,7 +15,7 @@ PostgreSQL documentation
   <refpurpose>change the definition of a trigger</refpurpose>
  </refnamediv>
 
- <indexterm zone="sql-altertrigger">
+ <indexterm zone="sql-altercommandtrigger">
   <primary>ALTER COMMAND TRIGGER</primary>
  </indexterm>
 
