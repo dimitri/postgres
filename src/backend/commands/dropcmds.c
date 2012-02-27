@@ -35,6 +35,10 @@
 static void does_not_exist_skipping(ObjectType objtype,
 									List *objname, List *objargs);
 
+static void	get_object_name_and_namespace(CommandContext cmd,
+										  ObjectType objtype,
+										  Oid objectId);
+
 /*
  * Drop one or more objects.
  *
@@ -130,8 +134,9 @@ RemoveObjects(DropStmt *stmt)
 		if (CommandFiresTriggers(&cmd))
 		{
 			cmd.objectId = address.objectId;
-			cmd.objectname = strVal(list_nth(objname, list_length(objname)-1));
-			cmd.schemaname = get_namespace_name(namespaceId);
+			get_object_name_and_namespace(&cmd, stmt->removeType, address.objectId);
+			/* cmd.objectname = strVal(list_nth(objname, list_length(objname)-1)); */
+			/* cmd.schemaname = get_namespace_name(namespaceId); */
 
 			ExecBeforeCommandTriggers(&cmd);
 		}
@@ -275,4 +280,45 @@ does_not_exist_skipping(ObjectType objtype, List *objname, List *objargs)
 		ereport(NOTICE, (errmsg(msg, name)));
 	else
 		ereport(NOTICE, (errmsg(msg, name, args)));
+}
+
+/*
+ * Fill in the CommandContext name and schemaname for the given object.
+ */
+static void
+get_object_name_and_namespace(CommandContext cmd,
+							  ObjectType objtype,
+							  Oid objectId)
+{
+	switch (objtype)
+	{
+		case OBJECT_TYPE:
+		case OBJECT_DOMAIN:
+			cmd->objectname = format_type_be(objectId);
+			cmd->schemaname = NULL;
+			break;
+		case OBJECT_COLLATION:
+		case OBJECT_CONVERSION:
+		case OBJECT_SCHEMA:
+		case OBJECT_TSPARSER:
+		case OBJECT_TSDICTIONARY:
+		case OBJECT_TSTEMPLATE:
+		case OBJECT_TSCONFIGURATION:
+		case OBJECT_EXTENSION:
+		case OBJECT_FUNCTION:
+		case OBJECT_AGGREGATE:
+		case OBJECT_OPERATOR:
+		case OBJECT_LANGUAGE:
+		case OBJECT_CAST:
+		case OBJECT_TRIGGER:
+		case OBJECT_CMDTRIGGER:
+		case OBJECT_RULE:
+		case OBJECT_FDW:
+		case OBJECT_FOREIGN_SERVER:
+		case OBJECT_OPCLASS:
+		case OBJECT_OPFAMILY:
+		default:
+			elog(ERROR, "unexpected object type (%d)", (int)objtype);
+			break;
+	}
 }

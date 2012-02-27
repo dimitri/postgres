@@ -81,9 +81,9 @@ static void dropOperators(List *opfamilyname, Oid amoid, Oid opfamilyoid,
 static void dropProcedures(List *opfamilyname, Oid amoid, Oid opfamilyoid,
 			   List *procedures);
 static void AlterOpClassOwner_internal(Relation rel, HeapTuple tuple,
-						   Oid newOwnerId);
+									   Oid newOwnerId, CommandContext cmd);
 static void AlterOpFamilyOwner_internal(Relation rel, HeapTuple tuple,
-							Oid newOwnerId);
+										Oid newOwnerId, CommandContext cmd);
 
 
 /*
@@ -1733,7 +1733,8 @@ RemoveAmProcEntryById(Oid entryOid)
  * Rename opclass
  */
 void
-RenameOpClass(List *name, const char *access_method, const char *newname)
+RenameOpClass(List *name, const char *access_method, const char *newname,
+			  CommandContext cmd)
 {
 	Oid			opcOid;
 	Oid			amOid;
@@ -1778,6 +1779,16 @@ RenameOpClass(List *name, const char *access_method, const char *newname)
 		aclcheck_error(aclresult, ACL_KIND_NAMESPACE,
 					   get_namespace_name(namespaceOid));
 
+	/* Call BEFORE ALTER OPERATOR CLASS triggers */
+	if (CommandFiresTriggers(cmd))
+	{
+		cmd->objectId = opcOid;
+		cmd->objectname = NameListToString(name);
+		cmd->schemaname = get_namespace_name(namespaceOid);
+
+		ExecBeforeCommandTriggers(cmd);
+	}
+
 	/* rename */
 	namestrcpy(&(((Form_pg_opclass) GETSTRUCT(tup))->opcname), newname);
 	simple_heap_update(rel, &tup->t_self, tup);
@@ -1785,13 +1796,21 @@ RenameOpClass(List *name, const char *access_method, const char *newname)
 
 	heap_close(rel, NoLock);
 	heap_freetuple(tup);
+
+	/* Call AFTER ALTER OPERATOR CLASS triggers */
+	if (CommandFiresAfterTriggers(cmd))
+	{
+		cmd->objectname = (char *) newname;
+		ExecAfterCommandTriggers(cmd);
+	}
 }
 
 /*
  * Rename opfamily
  */
 void
-RenameOpFamily(List *name, const char *access_method, const char *newname)
+RenameOpFamily(List *name, const char *access_method, const char *newname,
+			   CommandContext cmd)
 {
 	Oid			opfOid;
 	Oid			amOid;
@@ -1867,6 +1886,16 @@ RenameOpFamily(List *name, const char *access_method, const char *newname)
 		aclcheck_error(aclresult, ACL_KIND_NAMESPACE,
 					   get_namespace_name(namespaceOid));
 
+	/* Call BEFORE ALTER OPERATOR FAMILY triggers */
+	if (CommandFiresTriggers(cmd))
+	{
+		cmd->objectId = opfOid;
+		cmd->objectname = NameListToString(name);
+		cmd->schemaname = get_namespace_name(namespaceOid);
+
+		ExecBeforeCommandTriggers(cmd);
+	}
+
 	/* rename */
 	namestrcpy(&(((Form_pg_opfamily) GETSTRUCT(tup))->opfname), newname);
 	simple_heap_update(rel, &tup->t_self, tup);
@@ -1874,13 +1903,21 @@ RenameOpFamily(List *name, const char *access_method, const char *newname)
 
 	heap_close(rel, NoLock);
 	heap_freetuple(tup);
+
+	/* Call AFTER ALTER OPERATOR FAMILY triggers */
+	if (CommandFiresAfterTriggers(cmd))
+	{
+		cmd->objectname = (char *) newname;
+		ExecAfterCommandTriggers(cmd);
+	}
 }
 
 /*
  * Change opclass owner by name
  */
 void
-AlterOpClassOwner(List *name, const char *access_method, Oid newOwnerId)
+AlterOpClassOwner(List *name, const char *access_method, Oid newOwnerId,
+				  CommandContext cmd)
 {
 	Oid			amOid;
 	Relation	rel;
@@ -1896,7 +1933,7 @@ AlterOpClassOwner(List *name, const char *access_method, Oid newOwnerId)
 	tup = heap_copytuple(origtup);
 	ReleaseSysCache(origtup);
 
-	AlterOpClassOwner_internal(rel, tup, newOwnerId);
+	AlterOpClassOwner_internal(rel, tup, newOwnerId, cmd);
 
 	heap_freetuple(tup);
 	heap_close(rel, NoLock);
@@ -1917,7 +1954,7 @@ AlterOpClassOwner_oid(Oid opclassOid, Oid newOwnerId)
 	if (!HeapTupleIsValid(tup))
 		elog(ERROR, "cache lookup failed for opclass %u", opclassOid);
 
-	AlterOpClassOwner_internal(rel, tup, newOwnerId);
+	AlterOpClassOwner_internal(rel, tup, newOwnerId, NULL);
 
 	heap_freetuple(tup);
 	heap_close(rel, NoLock);
@@ -1928,7 +1965,8 @@ AlterOpClassOwner_oid(Oid opclassOid, Oid newOwnerId)
  * parameter is a copy of the tuple from pg_opclass we want to modify.
  */
 static void
-AlterOpClassOwner_internal(Relation rel, HeapTuple tup, Oid newOwnerId)
+AlterOpClassOwner_internal(Relation rel, HeapTuple tup, Oid newOwnerId,
+						   CommandContext cmd)
 {
 	Oid			namespaceOid;
 	AclResult	aclresult;
@@ -1966,6 +2004,16 @@ AlterOpClassOwner_internal(Relation rel, HeapTuple tup, Oid newOwnerId)
 							   get_namespace_name(namespaceOid));
 		}
 
+		/* Call BEFORE ALTER OPERATOR CLASS triggers */
+		if (CommandFiresTriggers(cmd))
+		{
+			cmd->objectId = HeapTupleGetOid(tup);
+			cmd->objectname = NameStr(opcForm->opcname);
+			cmd->schemaname = get_namespace_name(opcForm->opcnamespace);
+
+			ExecBeforeCommandTriggers(cmd);
+		}
+
 		/*
 		 * Modify the owner --- okay to scribble on tup because it's a copy
 		 */
@@ -1978,6 +2026,10 @@ AlterOpClassOwner_internal(Relation rel, HeapTuple tup, Oid newOwnerId)
 		/* Update owner dependency reference */
 		changeDependencyOnOwner(OperatorClassRelationId, HeapTupleGetOid(tup),
 								newOwnerId);
+
+		/* Call AFTER ALTER OPERATOR CLASS triggers */
+		if (CommandFiresAfterTriggers(cmd))
+			ExecAfterCommandTriggers(cmd);
 	}
 }
 
@@ -2038,7 +2090,8 @@ AlterOpClassNamespace_oid(Oid opclassOid, Oid newNspOid)
  * Change opfamily owner by name
  */
 void
-AlterOpFamilyOwner(List *name, const char *access_method, Oid newOwnerId)
+AlterOpFamilyOwner(List *name, const char *access_method, Oid newOwnerId,
+				   CommandContext cmd)
 {
 	Oid			amOid;
 	Relation	rel;
@@ -2087,7 +2140,7 @@ AlterOpFamilyOwner(List *name, const char *access_method, Oid newOwnerId)
 			elog(ERROR, "cache lookup failed for opfamily %u", opfOid);
 	}
 
-	AlterOpFamilyOwner_internal(rel, tup, newOwnerId);
+	AlterOpFamilyOwner_internal(rel, tup, newOwnerId, cmd);
 
 	heap_freetuple(tup);
 	heap_close(rel, NoLock);
@@ -2108,7 +2161,7 @@ AlterOpFamilyOwner_oid(Oid opfamilyOid, Oid newOwnerId)
 	if (!HeapTupleIsValid(tup))
 		elog(ERROR, "cache lookup failed for opfamily %u", opfamilyOid);
 
-	AlterOpFamilyOwner_internal(rel, tup, newOwnerId);
+	AlterOpFamilyOwner_internal(rel, tup, newOwnerId, NULL);
 
 	heap_freetuple(tup);
 	heap_close(rel, NoLock);
@@ -2119,7 +2172,8 @@ AlterOpFamilyOwner_oid(Oid opfamilyOid, Oid newOwnerId)
  * parameter is a copy of the tuple from pg_opfamily we want to modify.
  */
 static void
-AlterOpFamilyOwner_internal(Relation rel, HeapTuple tup, Oid newOwnerId)
+AlterOpFamilyOwner_internal(Relation rel, HeapTuple tup, Oid newOwnerId,
+							CommandContext cmd)
 {
 	Oid			namespaceOid;
 	AclResult	aclresult;
@@ -2157,6 +2211,16 @@ AlterOpFamilyOwner_internal(Relation rel, HeapTuple tup, Oid newOwnerId)
 							   get_namespace_name(namespaceOid));
 		}
 
+		/* Call BEFORE ALTER OPERATOR FAMILY triggers */
+		if (CommandFiresTriggers(cmd))
+		{
+			cmd->objectId = HeapTupleGetOid(tup);
+			cmd->objectname = NameStr(opfForm->opfname);
+			cmd->schemaname = get_namespace_name(opfForm->opfnamespace);
+
+			ExecBeforeCommandTriggers(cmd);
+		}
+
 		/*
 		 * Modify the owner --- okay to scribble on tup because it's a copy
 		 */
@@ -2169,6 +2233,10 @@ AlterOpFamilyOwner_internal(Relation rel, HeapTuple tup, Oid newOwnerId)
 		/* Update owner dependency reference */
 		changeDependencyOnOwner(OperatorFamilyRelationId, HeapTupleGetOid(tup),
 								newOwnerId);
+
+		/* Call AFTER ALTER OPERATOR FAMILY triggers */
+		if (CommandFiresAfterTriggers(cmd))
+			ExecAfterCommandTriggers(cmd);
 	}
 }
 

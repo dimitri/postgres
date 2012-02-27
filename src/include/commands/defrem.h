@@ -103,14 +103,18 @@ extern void RemoveOpClassById(Oid opclassOid);
 extern void RemoveOpFamilyById(Oid opfamilyOid);
 extern void RemoveAmOpEntryById(Oid entryOid);
 extern void RemoveAmProcEntryById(Oid entryOid);
-extern void RenameOpClass(List *name, const char *access_method, const char *newname);
-extern void RenameOpFamily(List *name, const char *access_method, const char *newname);
-extern void AlterOpClassOwner(List *name, const char *access_method, Oid newOwnerId);
+extern void RenameOpClass(List *name, const char *access_method,
+						  const char *newname, CommandContext cmd);
+extern void RenameOpFamily(List *name, const char *access_method,
+						  const char *newname, CommandContext cmd);
+extern void AlterOpClassOwner(List *name, const char *access_method,
+							  Oid newOwnerId, CommandContext cmd);
 extern void AlterOpClassOwner_oid(Oid opclassOid, Oid newOwnerId);
 extern void AlterOpClassNamespace(List *name, char *access_method,
 								  const char *newschema, CommandContext cmd);
 extern Oid	AlterOpClassNamespace_oid(Oid opclassOid, Oid newNspOid);
-extern void AlterOpFamilyOwner(List *name, const char *access_method, Oid newOwnerId);
+extern void AlterOpFamilyOwner(List *name, const char *access_method,
+							   Oid newOwnerId, CommandContext cmd);
 extern void AlterOpFamilyOwner_oid(Oid opfamilyOid, Oid newOwnerId);
 extern void AlterOpFamilyNamespace(List *name, char *access_method,
 								   const char *newschema, CommandContext cmd);
@@ -152,11 +156,11 @@ extern text *serialize_deflist(List *deflist);
 extern List *deserialize_deflist(Datum txt);
 
 /* commands/foreigncmds.c */
-extern void RenameForeignServer(const char *oldname, const char *newname);
-extern void RenameForeignDataWrapper(const char *oldname, const char *newname);
-extern void AlterForeignServerOwner(const char *name, Oid newOwnerId);
+extern void RenameForeignServer(const char *oldname, const char *newname, CommandContext cmd);
+extern void RenameForeignDataWrapper(const char *oldname, const char *newname, CommandContext cmd);
+extern void AlterForeignServerOwner(const char *name, Oid newOwnerId, CommandContext cmd);
 extern void AlterForeignServerOwner_oid(Oid , Oid newOwnerId);
-extern void AlterForeignDataWrapperOwner(const char *name, Oid newOwnerId);
+extern void AlterForeignDataWrapperOwner(const char *name, Oid newOwnerId, CommandContext cmd);
 extern void AlterForeignDataWrapperOwner_oid(Oid fwdId, Oid newOwnerId);
 extern void CreateForeignDataWrapper(CreateFdwStmt *stmt);
 extern void AlterForeignDataWrapper(AlterFdwStmt *stmt);

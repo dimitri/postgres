@@ -4348,6 +4348,7 @@ trigger_command:
 			   | CREATE OPERATOR FAMILY				{ $$ = "CREATE OPERATOR FAMILY"; }
                | ALTER SCHEMA						{ $$ = "ALTER SCHEMA"; }
 			   | ALTER EXTENSION					{ $$ = "ALTER EXTENSION"; }
+			   | ALTER LANGUAGE						{ $$ = "ALTER LANGUAGE"; }
 			   | ALTER FUNCTION						{ $$ = "ALTER FUNCTION"; }
 			   | ALTER TABLE						{ $$ = "ALTER TABLE"; }
 			   | ALTER SERVER						{ $$ = "ALTER SERVER"; }
@@ -4373,7 +4374,7 @@ trigger_command:
 			   | DROP TYPE_P						{ $$ = "DROP TYPE"; }
 			   | DROP DOMAIN_P						{ $$ = "DROP DOMAIN"; }
 			   | DROP COLLATION						{ $$ = "DROP COLLATION"; }
-			   | DROP CONVERSION_P					{ $$ = "DROP CONVERSION_P"; }
+			   | DROP CONVERSION_P					{ $$ = "DROP CONVERSION"; }
 			   | DROP SCHEMA						{ $$ = "DROP SCHEMA"; }
 			   | DROP EXTENSION						{ $$ = "DROP EXTENSION"; }
 			   | DROP TEXT_P SEARCH PARSER			{ $$ = "DROP TEXT SEARCH PARSER"; }
@@ -4386,7 +4387,6 @@ trigger_command:
 			   | DROP FOREIGN DATA_P WRAPPER		{ $$ = "DROP FOREIGN DATA WRAPPER"; }
 			   | DROP USER MAPPING					{ $$ = "DROP USER MAPPING"; }
 			   | DROP TRIGGER						{ $$ = "DROP TRIGGER"; }
-			   | DROP ASSERTION						{ $$ = "DROP ASSERTION"; }
 			   | DROP OPERATOR CLASS				{ $$ = "DROP OPERATOR CLASS"; }
 			   | DROP OPERATOR FAMILY				{ $$ = "DROP OPERATOR FAMILY"; }
 			   | DROP FUNCTION						{ $$ = "DROP FUNCTION"; }

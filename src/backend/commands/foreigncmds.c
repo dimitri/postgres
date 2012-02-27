@@ -204,7 +204,8 @@ GetUserOidFromMapping(const char *username, bool missing_ok)
  * Rename foreign-data wrapper
  */
 void
-RenameForeignDataWrapper(const char *oldname, const char *newname)
+RenameForeignDataWrapper(const char *oldname, const char *newname,
+						 CommandContext cmd)
 {
 	HeapTuple	tup;
 	Relation	rel;
@@ -228,6 +229,16 @@ RenameForeignDataWrapper(const char *oldname, const char *newname)
 		aclcheck_error(ACLCHECK_NOT_OWNER, ACL_KIND_FDW,
 					   oldname);
 
+	/* Call BEFORE ALTER FOREIGN DATA WRAPPER triggers */
+	if (CommandFiresTriggers(cmd))
+	{
+		cmd->objectId = HeapTupleGetOid(tup);
+		cmd->objectname = (char *)oldname;
+		cmd->schemaname = NULL;
+
+		ExecBeforeCommandTriggers(cmd);
+	}
+
 	/* rename */
 	namestrcpy(&(((Form_pg_foreign_data_wrapper) GETSTRUCT(tup))->fdwname), newname);
 	simple_heap_update(rel, &tup->t_self, tup);
@@ -235,6 +246,13 @@ RenameForeignDataWrapper(const char *oldname, const char *newname)
 
 	heap_close(rel, NoLock);
 	heap_freetuple(tup);
+
+	/* Call AFTER ALTER FOREIGN DATA WRAPPER triggers */
+	if (CommandFiresAfterTriggers(cmd))
+	{
+		cmd->objectname = (char *)newname;
+		ExecAfterCommandTriggers(cmd);
+	}
 }
 
 
@@ -242,7 +260,7 @@ RenameForeignDataWrapper(const char *oldname, const char *newname)
  * Rename foreign server
  */
 void
-RenameForeignServer(const char *oldname, const char *newname)
+RenameForeignServer(const char *oldname, const char *newname, CommandContext cmd)
 {
 	HeapTuple	tup;
 	Relation	rel;
@@ -266,6 +284,16 @@ RenameForeignServer(const char *oldname, const char *newname)
 		aclcheck_error(ACLCHECK_NOT_OWNER, ACL_KIND_FOREIGN_SERVER,
 					   oldname);
 
+	/* Call BEFORE ALTER SERVER triggers */
+	if (CommandFiresTriggers(cmd))
+	{
+		cmd->objectId = HeapTupleGetOid(tup);
+		cmd->objectname = (char *) oldname;
+		cmd->schemaname = NULL;
+
+		ExecBeforeCommandTriggers(cmd);
+	}
+
 	/* rename */
 	namestrcpy(&(((Form_pg_foreign_server) GETSTRUCT(tup))->srvname), newname);
 	simple_heap_update(rel, &tup->t_self, tup);
@@ -273,6 +301,13 @@ RenameForeignServer(const char *oldname, const char *newname)
 
 	heap_close(rel, NoLock);
 	heap_freetuple(tup);
+
+	/* Call AFTER ALTER SERVER triggers */
+	if (CommandFiresAfterTriggers(cmd))
+	{
+		cmd->objectname = (char *) newname;
+		ExecAfterCommandTriggers(cmd);
+	}
 }
 
 
@@ -283,7 +318,8 @@ RenameForeignServer(const char *oldname, const char *newname)
  * superuser.
  */
 static void
-AlterForeignDataWrapperOwner_internal(Relation rel, HeapTuple tup, Oid newOwnerId)
+AlterForeignDataWrapperOwner_internal(Relation rel, HeapTuple tup, Oid newOwnerId,
+									  CommandContext cmd)
 {
 	Form_pg_foreign_data_wrapper form;
 
@@ -305,6 +341,16 @@ AlterForeignDataWrapperOwner_internal(Relation rel, HeapTuple tup, Oid newOwnerI
 						NameStr(form->fdwname)),
 		errhint("The owner of a foreign-data wrapper must be a superuser.")));
 
+	/* Call BEFORE ALTER FOREIGN DATA WRAPPER triggers */
+	if (CommandFiresTriggers(cmd))
+	{
+		cmd->objectId = HeapTupleGetOid(tup);
+		cmd->objectname = NameStr(form->fdwname);
+		cmd->schemaname = NULL;
+
+		ExecBeforeCommandTriggers(cmd);
+	}
+
 	if (form->fdwowner != newOwnerId)
 	{
 		form->fdwowner = newOwnerId;
@@ -317,6 +363,10 @@ AlterForeignDataWrapperOwner_internal(Relation rel, HeapTuple tup, Oid newOwnerI
 								HeapTupleGetOid(tup),
 								newOwnerId);
 	}
+
+	/* Call AFTER ALTER FOREIGN DATA WRAPPER triggers */
+	if (CommandFiresAfterTriggers(cmd))
+		ExecAfterCommandTriggers(cmd);
 }
 
 /*
@@ -325,7 +375,8 @@ AlterForeignDataWrapperOwner_internal(Relation rel, HeapTuple tup, Oid newOwnerI
  * Note restrictions in the "_internal" function, above.
  */
 void
-AlterForeignDataWrapperOwner(const char *name, Oid newOwnerId)
+AlterForeignDataWrapperOwner(const char *name, Oid newOwnerId,
+							 CommandContext cmd)
 {
 	HeapTuple	tup;
 	Relation	rel;
@@ -339,7 +390,7 @@ AlterForeignDataWrapperOwner(const char *name, Oid newOwnerId)
 				(errcode(ERRCODE_UNDEFINED_OBJECT),
 				 errmsg("foreign-data wrapper \"%s\" does not exist", name)));
 
-	AlterForeignDataWrapperOwner_internal(rel, tup, newOwnerId);
+	AlterForeignDataWrapperOwner_internal(rel, tup, newOwnerId, cmd);
 
 	heap_freetuple(tup);
 
@@ -366,7 +417,7 @@ AlterForeignDataWrapperOwner_oid(Oid fwdId, Oid newOwnerId)
 				(errcode(ERRCODE_UNDEFINED_OBJECT),
 				 errmsg("foreign-data wrapper with OID %u does not exist", fwdId)));
 
-	AlterForeignDataWrapperOwner_internal(rel, tup, newOwnerId);
+	AlterForeignDataWrapperOwner_internal(rel, tup, newOwnerId, NULL);
 
 	heap_freetuple(tup);
 
@@ -377,7 +428,8 @@ AlterForeignDataWrapperOwner_oid(Oid fwdId, Oid newOwnerId)
  * Internal workhorse for changing a foreign server's owner
  */
 static void
-AlterForeignServerOwner_internal(Relation rel, HeapTuple tup, Oid newOwnerId)
+AlterForeignServerOwner_internal(Relation rel, HeapTuple tup, Oid newOwnerId,
+								 CommandContext cmd)
 {
 	Form_pg_foreign_server form;
 
@@ -411,6 +463,16 @@ AlterForeignServerOwner_internal(Relation rel, HeapTuple tup, Oid newOwnerId)
 			}
 		}
 
+		/* Call BEFORE ALTER SERVER triggers */
+		if (CommandFiresTriggers(cmd))
+		{
+			cmd->objectId = HeapTupleGetOid(tup);
+			cmd->objectname = NameStr(form->srvname);
+			cmd->schemaname = NULL;
+
+			ExecBeforeCommandTriggers(cmd);
+		}
+
 		form->srvowner = newOwnerId;
 
 		simple_heap_update(rel, &tup->t_self, tup);
@@ -419,6 +481,10 @@ AlterForeignServerOwner_internal(Relation rel, HeapTuple tup, Oid newOwnerId)
 		/* Update owner dependency reference */
 		changeDependencyOnOwner(ForeignServerRelationId, HeapTupleGetOid(tup),
 								newOwnerId);
+
+		/* Call AFTER ALTER SERVER triggers */
+		if (CommandFiresAfterTriggers(cmd))
+			ExecAfterCommandTriggers(cmd);
 	}
 }
 
@@ -426,7 +492,7 @@ AlterForeignServerOwner_internal(Relation rel, HeapTuple tup, Oid newOwnerId)
  * Change foreign server owner -- by name
  */
 void
-AlterForeignServerOwner(const char *name, Oid newOwnerId)
+AlterForeignServerOwner(const char *name, Oid newOwnerId, CommandContext cmd)
 {
 	HeapTuple	tup;
 	Relation	rel;
@@ -440,7 +506,7 @@ AlterForeignServerOwner(const char *name, Oid newOwnerId)
 				(errcode(ERRCODE_UNDEFINED_OBJECT),
 				 errmsg("server \"%s\" does not exist", name)));
 
-	AlterForeignServerOwner_internal(rel, tup, newOwnerId);
+	AlterForeignServerOwner_internal(rel, tup, newOwnerId, cmd);
 
 	heap_freetuple(tup);
 
@@ -465,7 +531,7 @@ AlterForeignServerOwner_oid(Oid srvId, Oid newOwnerId)
 				(errcode(ERRCODE_UNDEFINED_OBJECT),
 				 errmsg("foreign server with OID %u does not exist", srvId)));
 
-	AlterForeignServerOwner_internal(rel, tup, newOwnerId);
+	AlterForeignServerOwner_internal(rel, tup, newOwnerId, NULL);
 
 	heap_freetuple(tup);
 

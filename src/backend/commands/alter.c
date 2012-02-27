@@ -74,11 +74,11 @@ ExecRenameStmt(RenameStmt *stmt)
 			break;
 
 		case OBJECT_FDW:
-			RenameForeignDataWrapper(stmt->subname, stmt->newname);
+			RenameForeignDataWrapper(stmt->subname, stmt->newname, &cmd);
 			break;
 
 		case OBJECT_FOREIGN_SERVER:
-			RenameForeignServer(stmt->subname, stmt->newname);
+			RenameForeignServer(stmt->subname, stmt->newname, &cmd);
 			break;
 
 		case OBJECT_FUNCTION:
@@ -86,15 +86,15 @@ ExecRenameStmt(RenameStmt *stmt)
 			break;
 
 		case OBJECT_LANGUAGE:
-			RenameLanguage(stmt->subname, stmt->newname);
+			RenameLanguage(stmt->subname, stmt->newname, &cmd);
 			break;
 
 		case OBJECT_OPCLASS:
-			RenameOpClass(stmt->object, stmt->subname, stmt->newname);
+			RenameOpClass(stmt->object, stmt->subname, stmt->newname, &cmd);
 			break;
 
 		case OBJECT_OPFAMILY:
-			RenameOpFamily(stmt->object, stmt->subname, stmt->newname);
+			RenameOpFamily(stmt->object, stmt->subname, stmt->newname, &cmd);
 			break;
 
 		case OBJECT_ROLE:
@@ -510,7 +510,7 @@ ExecAlterOwnerStmt(AlterOwnerStmt *stmt)
 			break;
 
 		case OBJECT_LANGUAGE:
-			AlterLanguageOwner(strVal(linitial(stmt->object)), newowner);
+			AlterLanguageOwner(strVal(linitial(stmt->object)), newowner, &cmd);
 			break;
 
 		case OBJECT_LARGEOBJECT:
@@ -526,11 +526,11 @@ ExecAlterOwnerStmt(AlterOwnerStmt *stmt)
 			break;
 
 		case OBJECT_OPCLASS:
-			AlterOpClassOwner(stmt->object, stmt->addname, newowner);
+			AlterOpClassOwner(stmt->object, stmt->addname, newowner, &cmd);
 			break;
 
 		case OBJECT_OPFAMILY:
-			AlterOpFamilyOwner(stmt->object, stmt->addname, newowner);
+			AlterOpFamilyOwner(stmt->object, stmt->addname, newowner, &cmd);
 			break;
 
 		case OBJECT_SCHEMA:
@@ -556,11 +556,11 @@ ExecAlterOwnerStmt(AlterOwnerStmt *stmt)
 
 		case OBJECT_FDW:
 			AlterForeignDataWrapperOwner(strVal(linitial(stmt->object)),
-										 newowner);
+										 newowner, &cmd);
 			break;
 
 		case OBJECT_FOREIGN_SERVER:
-			AlterForeignServerOwner(strVal(linitial(stmt->object)), newowner);
+			AlterForeignServerOwner(strVal(linitial(stmt->object)), newowner, &cmd);
 			break;
 
 		default:

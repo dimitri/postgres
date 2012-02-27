@@ -54,7 +54,7 @@ static Oid create_proc_lang(const char *languageName, bool replace,
 				 Oid valOid, bool trusted);
 static PLTemplate *find_language_template(const char *languageName);
 static void AlterLanguageOwner_internal(HeapTuple tup, Relation rel,
-							Oid newOwnerId);
+										Oid newOwnerId, CommandContext cmd);
 
 
 /* ---------------------------------------------------------------------
@@ -576,7 +576,7 @@ DropProceduralLanguageById(Oid langOid)
  * Rename language
  */
 void
-RenameLanguage(const char *oldname, const char *newname)
+RenameLanguage(const char *oldname, const char *newname, CommandContext cmd)
 {
 	HeapTuple	tup;
 	Relation	rel;
@@ -600,6 +600,16 @@ RenameLanguage(const char *oldname, const char *newname)
 		aclcheck_error(ACLCHECK_NOT_OWNER, ACL_KIND_LANGUAGE,
 					   oldname);
 
+	/* Call BEFORE ALTER SERVER triggers */
+	if (CommandFiresTriggers(cmd))
+	{
+		cmd->objectId = HeapTupleGetOid(tup);
+		cmd->objectname = (char *) oldname;
+		cmd->schemaname = NULL;
+
+		ExecBeforeCommandTriggers(cmd);
+	}
+
 	/* rename */
 	namestrcpy(&(((Form_pg_language) GETSTRUCT(tup))->lanname), newname);
 	simple_heap_update(rel, &tup->t_self, tup);
@@ -607,13 +617,20 @@ RenameLanguage(const char *oldname, const char *newname)
 
 	heap_close(rel, NoLock);
 	heap_freetuple(tup);
+
+	/* Call AFTER ALTER LANGUAGE triggers */
+	if (CommandFiresAfterTriggers(cmd))
+	{
+		cmd->objectname = (char *) newname;
+		ExecAfterCommandTriggers(cmd);
+	}
 }
 
 /*
  * Change language owner
  */
 void
-AlterLanguageOwner(const char *name, Oid newOwnerId)
+AlterLanguageOwner(const char *name, Oid newOwnerId, CommandContext cmd)
 {
 	HeapTuple	tup;
 	Relation	rel;
@@ -626,7 +643,7 @@ AlterLanguageOwner(const char *name, Oid newOwnerId)
 				(errcode(ERRCODE_UNDEFINED_OBJECT),
 				 errmsg("language \"%s\" does not exist", name)));
 
-	AlterLanguageOwner_internal(tup, rel, newOwnerId);
+	AlterLanguageOwner_internal(tup, rel, newOwnerId, cmd);
 
 	ReleaseSysCache(tup);
 
@@ -649,7 +666,7 @@ AlterLanguageOwner_oid(Oid oid, Oid newOwnerId)
 	if (!HeapTupleIsValid(tup))
 		elog(ERROR, "cache lookup failed for language %u", oid);
 
-	AlterLanguageOwner_internal(tup, rel, newOwnerId);
+	AlterLanguageOwner_internal(tup, rel, newOwnerId, NULL);
 
 	ReleaseSysCache(tup);
 
@@ -660,7 +677,8 @@ AlterLanguageOwner_oid(Oid oid, Oid newOwnerId)
  * Workhorse for AlterLanguageOwner variants
  */
 static void
-AlterLanguageOwner_internal(HeapTuple tup, Relation rel, Oid newOwnerId)
+AlterLanguageOwner_internal(HeapTuple tup, Relation rel, Oid newOwnerId,
+							CommandContext cmd)
 {
 	Form_pg_language lanForm;
 
@@ -687,6 +705,16 @@ AlterLanguageOwner_internal(HeapTuple tup, Relation rel, Oid newOwnerId)
 
 		/* Must be able to become new owner */
 		check_is_member_of_role(GetUserId(), newOwnerId);
+
+		/* Call BEFORE ALTER LANGUAGE triggers */
+		if (CommandFiresTriggers(cmd))
+		{
+			cmd->objectId = HeapTupleGetOid(tup);
+			cmd->objectname = NameStr(lanForm->lanname);
+			cmd->schemaname = NULL;
+
+			ExecBeforeCommandTriggers(cmd);
+		}
 
 		memset(repl_null, false, sizeof(repl_null));
 		memset(repl_repl, false, sizeof(repl_repl));
@@ -720,6 +748,10 @@ AlterLanguageOwner_internal(HeapTuple tup, Relation rel, Oid newOwnerId)
 		/* Update owner dependency reference */
 		changeDependencyOnOwner(LanguageRelationId, HeapTupleGetOid(tup),
 								newOwnerId);
+
+		/* Call AFTER ALTER LANGUAGE triggers */
+		if (CommandFiresAfterTriggers(cmd))
+			ExecAfterCommandTriggers(cmd);
 	}
 }
 

@@ -30,6 +30,8 @@ ALTER COMMAND TRIGGER <replaceable class="PARAMETER">name</replaceable> ON <repl
     ENABLE REPLICA
     DISABLE
 
+<phrase>and where <replaceable class="parameter">command</replaceable> can be one of the same list as in <xref linkend="sql-createcommandtrigger">.</phrase>
+
 </synopsis>
  </refsynopsisdiv>
 

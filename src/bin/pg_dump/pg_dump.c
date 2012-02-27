@@ -13728,7 +13728,7 @@ dumpCmdTrigger(Archive *fout, CmdTriggerInfo *ctginfo)
 	query = createPQExpBuffer();
 	labelq = createPQExpBuffer();
 
-	appendPQExpBuffer(query, "CREATE TRIGGER ");
+	appendPQExpBuffer(query, "CREATE COMMAND TRIGGER ");
 	appendPQExpBufferStr(query, fmtId(ctginfo->dobj.name));
 
 	/* Trigger type */
@@ -13746,7 +13746,6 @@ dumpCmdTrigger(Archive *fout, CmdTriggerInfo *ctginfo)
 		appendPQExpBufferStr(query, " ANY COMMAND");
 	else
 	{
-		appendPQExpBufferStr(query, " COMMAND ");
 		appendPQExpBufferStr(query, fmtId(ctginfo->ctgcommand));
 	}
 

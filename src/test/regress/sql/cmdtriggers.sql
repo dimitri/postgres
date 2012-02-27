@@ -20,7 +20,8 @@ alter command trigger snitch_before on any command set enable;
 create command trigger snitch_some_more
          after create table, alter table, drop table,
                create function, create collation,
-               alter operator, create domain, alter schema
+               alter operator, create domain, alter schema,
+	       create text search configuration
        execute procedure snitch();
 
 create command trigger snitch_some_even_more
@@ -90,6 +91,11 @@ create trigger footg before update on cmd.foo for each row execute procedure cmd
 alter trigger footg on cmd.foo rename to foo_trigger;
 drop trigger foo_trigger on cmd.foo;
 
+create text search configuration test (parser = "default");
+
+create cast (bigint as int4) without function;
+drop cast (bigint as int4);
+
 alter schema cmd rename to cmd1;
 
 drop schema cmd1 cascade;
@@ -116,4 +122,3 @@ drop command trigger snitch_even_more on create operator;
 drop command trigger snitch_even_more on alter domain;
 drop command trigger snitch_even_more on create type;
 drop command trigger snitch_even_more on alter type;
-
