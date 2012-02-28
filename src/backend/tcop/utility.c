@@ -220,11 +220,15 @@ call_before_cmdtriggers(CommandContext cmd)
 		case T_VacuumStmt:
 		case T_LoadStmt:
 		case T_ReindexStmt:
-			ExecBeforeCommandTriggers(cmd);
+			if (CommandFiresTriggers(cmd))
+				ExecBeforeCommandTriggers(cmd);
+			return;
 
 		case T_DropStmt:
 			if (((DropStmt *) cmd->parsetree)->removeType != OBJECT_CMDTRIGGER)
-				ExecBeforeCommandTriggers(cmd);
+				if (CommandFiresTriggers(cmd))
+					ExecBeforeCommandTriggers(cmd);
+			return;
 
 		default:
 			/* commands that don't support triggers */
@@ -296,15 +300,21 @@ call_after_cmdtriggers(CommandContext cmd)
 		case T_CreateForeignTableStmt:
 		case T_LoadStmt:
 		case T_ReindexStmt:
-			ExecAfterCommandTriggers(cmd);
+			if (CommandFiresAfterTriggers(cmd))
+				ExecAfterCommandTriggers(cmd);
+			return;
 
 		case T_IndexStmt:
 			if (!((IndexStmt *)cmd->parsetree)->concurrent)
-				ExecAfterCommandTriggers(cmd);
+				if (CommandFiresAfterTriggers(cmd))
+					ExecAfterCommandTriggers(cmd);
+			return;
 
 		case T_DropStmt:
 			if (((DropStmt *) cmd->parsetree)->removeType != OBJECT_CMDTRIGGER)
-				ExecAfterCommandTriggers(cmd);
+				if (CommandFiresAfterTriggers(cmd))
+					ExecAfterCommandTriggers(cmd);
+			return;
 
 		default:
 			/* commands that don't support triggers */
@@ -517,6 +527,7 @@ standard_ProcessUtility(Node *parsetree,
 
 	/* call the BEFORE ANY COMMAND triggers first */
 	InitCommandContext(&cmd, parsetree, true);
+
 	call_before_cmdtriggers(&cmd);
 
 	switch (nodeTag(parsetree))
@@ -1450,6 +1461,7 @@ standard_ProcessUtility(Node *parsetree,
 				 (int) nodeTag(parsetree));
 			break;
 	}
+
 	/* call the AFTER ANY COMMAND triggers */
 	call_after_cmdtriggers(&cmd);
 }

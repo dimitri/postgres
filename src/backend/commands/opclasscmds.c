@@ -1800,7 +1800,7 @@ RenameOpClass(List *name, const char *access_method, const char *newname,
 	/* Call AFTER ALTER OPERATOR CLASS triggers */
 	if (CommandFiresAfterTriggers(cmd))
 	{
-		cmd->objectname = (char *) newname;
+		cmd->objectname = pstrdup(newname);
 		ExecAfterCommandTriggers(cmd);
 	}
 }
@@ -1907,7 +1907,7 @@ RenameOpFamily(List *name, const char *access_method, const char *newname,
 	/* Call AFTER ALTER OPERATOR FAMILY triggers */
 	if (CommandFiresAfterTriggers(cmd))
 	{
-		cmd->objectname = (char *) newname;
+		cmd->objectname = pstrdup(newname);
 		ExecAfterCommandTriggers(cmd);
 	}
 }
@@ -2008,7 +2008,7 @@ AlterOpClassOwner_internal(Relation rel, HeapTuple tup, Oid newOwnerId,
 		if (CommandFiresTriggers(cmd))
 		{
 			cmd->objectId = HeapTupleGetOid(tup);
-			cmd->objectname = NameStr(opcForm->opcname);
+			cmd->objectname = pstrdup(NameStr(opcForm->opcname));
 			cmd->schemaname = get_namespace_name(opcForm->opcnamespace);
 
 			ExecBeforeCommandTriggers(cmd);
@@ -2215,7 +2215,7 @@ AlterOpFamilyOwner_internal(Relation rel, HeapTuple tup, Oid newOwnerId,
 		if (CommandFiresTriggers(cmd))
 		{
 			cmd->objectId = HeapTupleGetOid(tup);
-			cmd->objectname = NameStr(opfForm->opfname);
+			cmd->objectname = pstrdup(NameStr(opfForm->opfname));
 			cmd->schemaname = get_namespace_name(opfForm->opfnamespace);
 
 			ExecBeforeCommandTriggers(cmd);

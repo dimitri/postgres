@@ -2432,7 +2432,7 @@ RenameRelationInternal(Oid myrelid, const char *newrelname, CommandContext cmd)
 	if (CommandFiresTriggers(cmd))
 	{
 		cmd->objectId = HeapTupleGetOid(reltup);
-		cmd->objectname = NameStr(relform->relname);
+		cmd->objectname = pstrdup(NameStr(relform->relname));
 		cmd->schemaname = get_namespace_name(namespaceId);
 
 		ExecBeforeCommandTriggers(cmd);
@@ -2478,7 +2478,7 @@ RenameRelationInternal(Oid myrelid, const char *newrelname, CommandContext cmd)
 	/* Call AFTER ALTER relation triggers */
 	if (CommandFiresAfterTriggers(cmd))
 	{
-		cmd->objectname = (char *)newrelname;
+		cmd->objectname = pstrdup(newrelname);
 		ExecAfterCommandTriggers(cmd);
 	}
 }
@@ -2579,7 +2579,7 @@ AlterTableLookupRelation(AlterTableStmt *stmt, LOCKMODE lockmode)
  * Thanks to the magic of MVCC, an error anywhere along the way rolls back
  * the whole operation; we don't have to do anything special to clean up.
  *
- * The caller must lock the relation, with an appropriate lock level 
+ * The caller must lock the relation, with an appropriate lock level
  * for the subcommands requested. Any subcommand that needs to rewrite
  * tuples in the table forces the whole command to be executed with
  * AccessExclusiveLock (actually, that is currently required always, but
@@ -6794,7 +6794,7 @@ ATExecDropConstraint(Relation rel, const char *constrName,
 		/* Right now only CHECK constraints can be inherited */
 		if (con->contype == CONSTRAINT_CHECK)
 			is_check_constraint = true;
-		
+
 		if (con->conisonly)
 		{
 			Assert(is_check_constraint);

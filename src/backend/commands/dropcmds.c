@@ -35,9 +35,9 @@
 static void does_not_exist_skipping(ObjectType objtype,
 									List *objname, List *objargs);
 
-static void	get_object_name_and_namespace(CommandContext cmd,
-										  ObjectType objtype,
-										  Oid objectId);
+static void	get_object_name(CommandContext cmd,
+							ObjectType objtype,
+							Oid objectId, List *objname);
 
 /*
  * Drop one or more objects.
@@ -134,9 +134,8 @@ RemoveObjects(DropStmt *stmt)
 		if (CommandFiresTriggers(&cmd))
 		{
 			cmd.objectId = address.objectId;
-			get_object_name_and_namespace(&cmd, stmt->removeType, address.objectId);
-			/* cmd.objectname = strVal(list_nth(objname, list_length(objname)-1)); */
-			/* cmd.schemaname = get_namespace_name(namespaceId); */
+			get_object_name(&cmd, stmt->removeType, address.objectId, objname);
+			cmd.schemaname = get_namespace_name(namespaceId);
 
 			ExecBeforeCommandTriggers(&cmd);
 		}
@@ -283,19 +282,20 @@ does_not_exist_skipping(ObjectType objtype, List *objname, List *objargs)
 }
 
 /*
- * Fill in the CommandContext name and schemaname for the given object.
+ * Fill in the CommandContext name, with the non-qualified part fo the name.
  */
 static void
-get_object_name_and_namespace(CommandContext cmd,
-							  ObjectType objtype,
-							  Oid objectId)
+get_object_name(CommandContext cmd, ObjectType objtype,
+				Oid objectId, List *objname)
 {
 	switch (objtype)
 	{
 		case OBJECT_TYPE:
 		case OBJECT_DOMAIN:
 			cmd->objectname = format_type_be(objectId);
-			cmd->schemaname = NULL;
+			break;
+		case OBJECT_CAST:
+			cmd->objectname = NULL;
 			break;
 		case OBJECT_COLLATION:
 		case OBJECT_CONVERSION:
@@ -309,7 +309,6 @@ get_object_name_and_namespace(CommandContext cmd,
 		case OBJECT_AGGREGATE:
 		case OBJECT_OPERATOR:
 		case OBJECT_LANGUAGE:
-		case OBJECT_CAST:
 		case OBJECT_TRIGGER:
 		case OBJECT_CMDTRIGGER:
 		case OBJECT_RULE:
@@ -317,6 +316,8 @@ get_object_name_and_namespace(CommandContext cmd,
 		case OBJECT_FOREIGN_SERVER:
 		case OBJECT_OPCLASS:
 		case OBJECT_OPFAMILY:
+			cmd->objectname = strVal(linitial(objname));
+			break;
 		default:
 			elog(ERROR, "unexpected object type (%d)", (int)objtype);
 			break;

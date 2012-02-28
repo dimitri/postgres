@@ -528,8 +528,7 @@ ListCommandTriggers(CommandContext cmd)
 static bool
 call_cmdtrigger_procedure(CommandContext cmd,
 						  RegProcedure proc,
-						  const char *when,
-						  MemoryContext per_command_context)
+						  const char *when)
 {
 	FmgrInfo	flinfo;
 	FunctionCallInfoData fcinfo;
@@ -539,9 +538,10 @@ call_cmdtrigger_procedure(CommandContext cmd,
 	Form_pg_proc procedureStruct;
 	int         nargs = 5;
 
-	fmgr_info_cxt(proc, &flinfo, per_command_context);
+	fmgr_info(proc, &flinfo);
 
-	/* we need the procedure's language here to know how many args to call it
+	/*
+	 * we need the procedure's language here to know how many args to call it
 	 * with
 	 */
 	procedureTuple = SearchSysCache1(PROCOID, ObjectIdGetDatum(proc));
@@ -603,29 +603,13 @@ call_cmdtrigger_procedure(CommandContext cmd,
 static void
 exec_command_triggers_internal(CommandContext cmd, List *procs, const char *when)
 {
-	MemoryContext per_command_context, oldContext;
 	ListCell   *cell;
-
-	/*
-	 * Do the functions evaluation in a per-command memory context, so that
-	 * leaked memory will be reclaimed once per command.
-	 */
-	per_command_context =
-		AllocSetContextCreate(CurrentMemoryContext,
-							  "CommandTriggerContext",
-							  ALLOCSET_DEFAULT_MINSIZE,
-							  ALLOCSET_DEFAULT_INITSIZE,
-							  ALLOCSET_DEFAULT_MAXSIZE);
-
-	oldContext = MemoryContextSwitchTo(per_command_context);
-	MemoryContextReset(per_command_context);
 
 	foreach(cell, procs)
 	{
 		Oid proc = lfirst_oid(cell);
-		call_cmdtrigger_procedure(cmd, (RegProcedure)proc, when, per_command_context);
+		call_cmdtrigger_procedure(cmd, (RegProcedure)proc, when);
 	}
-	MemoryContextSwitchTo(oldContext);
 }
 
 /*
@@ -648,6 +632,8 @@ InitCommandContext(CommandContext cmd, const Node *stmt, bool list_any_triggers)
 	cmd->schemaname = NULL;
 	cmd->before     = NIL;
 	cmd->after      = NIL;
+	cmd->oldmctx    = NULL;
+	cmd->cmdmctx    = NULL;
 
 	if (list_any_triggers)
 	{
@@ -670,11 +656,38 @@ InitCommandContext(CommandContext cmd, const Node *stmt, bool list_any_triggers)
  * There's no place where we can skip BEFORE command trigger initialization
  * when we have an AFTER command triggers to run, because objectname and
  * schemaname are needed in both places, so we check both here.
+ *
+ * Integration is always on the form:
+ *
+ * if (CommandFiresTriggers(cmd)
+ * {
+ *      cmd->objectname = pstrdup(...);
+ *      ...
+ *
+ *      ExecBeforeCommandTriggers(cmd);
+ * }
+ *
+ * The same applies to after command triggers, so that we are able to switch
+ * Memory contexts all from here.
  */
 bool
 CommandFiresTriggers(CommandContext cmd)
 {
-	return cmd != NULL && (cmd->before != NIL || cmd->after != NIL);
+	if (cmd != NULL && (cmd->before != NIL || cmd->after != NIL))
+	{
+		cmd->oldmctx = CurrentMemoryContext;
+		cmd->cmdmctx =
+			AllocSetContextCreate(CurrentMemoryContext,
+								  "CommandTriggerContext",
+								  ALLOCSET_DEFAULT_MINSIZE,
+								  ALLOCSET_DEFAULT_INITSIZE,
+								  ALLOCSET_DEFAULT_MAXSIZE);
+
+		MemoryContextSwitchTo(cmd->cmdmctx);
+
+		return true;
+	}
+	return false;
 }
 
 /*
@@ -684,7 +697,12 @@ CommandFiresTriggers(CommandContext cmd)
 bool
 CommandFiresAfterTriggers(CommandContext cmd)
 {
-	return cmd != NULL && cmd->after != NIL;
+	if (cmd != NULL && cmd->after != NIL)
+	{
+		MemoryContextSwitchTo(cmd->cmdmctx);
+		return true;
+	}
+	return false;
 }
 
 /*
@@ -695,13 +713,21 @@ CommandFiresAfterTriggers(CommandContext cmd)
 void
 ExecBeforeCommandTriggers(CommandContext cmd)
 {
+	/* that will execute under command trigger memory context */
 	if (cmd != NULL && cmd->before != NIL)
 		exec_command_triggers_internal(cmd, cmd->before, "BEFORE");
+
+	/* switch back to the command Memory Context now */
+	MemoryContextSwitchTo(cmd->oldmctx);
 }
 
 void
 ExecAfterCommandTriggers(CommandContext cmd)
 {
+	/* that will execute under command trigger memory context */
 	if (cmd != NULL && cmd->after != NIL)
 		exec_command_triggers_internal(cmd, cmd->after, "AFTER");
+
+	/* switch back to the command Memory Context now */
+	MemoryContextSwitchTo(cmd->oldmctx);
 }

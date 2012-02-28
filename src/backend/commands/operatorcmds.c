@@ -417,7 +417,7 @@ AlterOperatorOwner_internal(Relation rel, Oid operOid, Oid newOwnerId,
 		if (CommandFiresTriggers(cmd))
 		{
 			cmd->objectId = operOid;
-			cmd->objectname = NameStr(oprForm->oprname);
+			cmd->objectname = pstrdup(NameStr(oprForm->oprname));
 			cmd->schemaname = get_namespace_name(oprForm->oprnamespace);
 
 			ExecBeforeCommandTriggers(cmd);

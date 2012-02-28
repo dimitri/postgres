@@ -210,7 +210,7 @@ RenameCollation(List *name, const char *newname, CommandContext cmd)
 	if (CommandFiresTriggers(cmd))
 	{
 		cmd->objectId = HeapTupleGetOid(tup);
-		cmd->objectname = NameStr((((Form_pg_collation) GETSTRUCT(tup))->collname));
+		cmd->objectname = pstrdup(NameStr((((Form_pg_collation) GETSTRUCT(tup))->collname)));
 		cmd->schemaname = get_namespace_name(namespaceOid);
 
 		ExecBeforeCommandTriggers(cmd);
@@ -227,7 +227,7 @@ RenameCollation(List *name, const char *newname, CommandContext cmd)
 	/* Call AFTER ALTER COLLATION triggers */
 	if (CommandFiresAfterTriggers(cmd))
 	{
-		cmd->objectname = (char *)newname;
+		cmd->objectname = pstrdup(newname);
 		ExecAfterCommandTriggers(cmd);
 	}
 }
@@ -318,7 +318,7 @@ AlterCollationOwner_internal(Relation rel, Oid collationOid, Oid newOwnerId,
 		if (CommandFiresTriggers(cmd))
 		{
 			cmd->objectId = HeapTupleGetOid(tup);
-			cmd->objectname = NameStr(collForm->collname);
+			cmd->objectname = pstrdup(NameStr(collForm->collname));
 			cmd->schemaname = get_namespace_name(collForm->collnamespace);
 
 			ExecBeforeCommandTriggers(cmd);

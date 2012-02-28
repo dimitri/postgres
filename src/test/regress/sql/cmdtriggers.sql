@@ -1,6 +1,17 @@
 --
 -- COMMAND TRIGGERS
 --
+create or replace function any_snitch
+ (in tg_when text, in cmd_tag text, in objectid oid, in schemaname text, in objectname text)
+ returns void language plpgsql
+as $$
+begin
+  -- can't output the objectid here that would break pg_regress
+  -- don't output objectname and schemaname, NULL in an ANY command trigger
+  raise notice 'snitch: % any %', tg_when, cmd_tag;
+end;
+$$;
+
 create or replace function snitch
  (in tg_when text, in cmd_tag text, in objectid oid, in schemaname text, in objectname text)
  returns void language plpgsql
@@ -11,8 +22,8 @@ begin
 end;
 $$;
 
-create command trigger snitch_before before any command execute procedure snitch();
-create command trigger snitch_after  after  any command execute procedure snitch();
+create command trigger snitch_before before any command execute procedure any_snitch();
+create command trigger snitch_after  after  any command execute procedure any_snitch();
 
 alter command trigger snitch_before on any command set disable;
 alter command trigger snitch_before on any command set enable;
@@ -21,14 +32,14 @@ create command trigger snitch_some_more
          after create table, alter table, drop table,
                create function, create collation,
                alter operator, create domain, alter schema,
-	       create text search configuration
+	       create text search configuration, alter function
        execute procedure snitch();
 
 create command trigger snitch_some_even_more
         before create trigger, alter trigger, drop trigger,
                create schema, drop schema,
                create aggregate, alter collation, create operator,
-               alter domain, create type, alter type
+               alter domain, create type, alter type, alter function
        execute procedure snitch();
 
 create schema cmd;
@@ -52,7 +63,8 @@ as $$ select t from cmd.foo where id = $1; $$;
 
 alter function cmd.fun(int) strict;
 alter function cmd.fun(int) rename to notfun;
-drop function cmd.notfun(int);
+alter function cmd.notfun(int) set schema public;
+drop function public.notfun(int);
 
 create function cmd.plus1(int) returns bigint language sql
 as $$ select $1::bigint + 1; $$;
@@ -93,7 +105,8 @@ drop trigger foo_trigger on cmd.foo;
 
 create text search configuration test (parser = "default");
 
-create cast (bigint as int4) without function;
+create function cmd.bigint_to_int4(bigint) returns integer language sql as 'select $1::int4';
+create cast (bigint as int4) with function cmd.bigint_to_int4(bigint);
 drop cast (bigint as int4);
 
 alter schema cmd rename to cmd1;
@@ -122,3 +135,5 @@ drop command trigger snitch_even_more on create operator;
 drop command trigger snitch_even_more on alter domain;
 drop command trigger snitch_even_more on create type;
 drop command trigger snitch_even_more on alter type;
+drop command trigger snitch_even_more on alter function;
+drop command trigger snitch_even_more on create text search configuration;

@@ -604,7 +604,7 @@ RenameLanguage(const char *oldname, const char *newname, CommandContext cmd)
 	if (CommandFiresTriggers(cmd))
 	{
 		cmd->objectId = HeapTupleGetOid(tup);
-		cmd->objectname = (char *) oldname;
+		cmd->objectname = pstrdup(oldname);
 		cmd->schemaname = NULL;
 
 		ExecBeforeCommandTriggers(cmd);
@@ -621,7 +621,7 @@ RenameLanguage(const char *oldname, const char *newname, CommandContext cmd)
 	/* Call AFTER ALTER LANGUAGE triggers */
 	if (CommandFiresAfterTriggers(cmd))
 	{
-		cmd->objectname = (char *) newname;
+		cmd->objectname = pstrdup(newname);
 		ExecAfterCommandTriggers(cmd);
 	}
 }
@@ -710,7 +710,7 @@ AlterLanguageOwner_internal(HeapTuple tup, Relation rel, Oid newOwnerId,
 		if (CommandFiresTriggers(cmd))
 		{
 			cmd->objectId = HeapTupleGetOid(tup);
-			cmd->objectname = NameStr(lanForm->lanname);
+			cmd->objectname = pstrdup(NameStr(lanForm->lanname));
 			cmd->schemaname = NULL;
 
 			ExecBeforeCommandTriggers(cmd);

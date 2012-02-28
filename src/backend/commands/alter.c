@@ -437,7 +437,7 @@ AlterObjectNamespace(Relation rel, int oidCacheId, int nameCacheId,
 	if (CommandFiresTriggers(cmd))
 	{
 		cmd->objectId = objid;
-		cmd->objectname = NameStr(*(DatumGetName(name)));
+		cmd->objectname = pstrdup(NameStr(*(DatumGetName(name))));
 		cmd->schemaname = get_namespace_name(oldNspOid);
 
 		ExecBeforeCommandTriggers(cmd);

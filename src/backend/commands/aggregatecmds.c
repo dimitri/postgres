@@ -265,7 +265,7 @@ RenameAggregate(List *name, List *args, const char *newname, CommandContext cmd)
 	if (CommandFiresTriggers(cmd))
 	{
 		cmd->objectId = HeapTupleGetOid(tup);
-		cmd->objectname = NameStr(procForm->proname);
+		cmd->objectname = pstrdup(NameStr(procForm->proname));
 		cmd->schemaname = get_namespace_name(namespaceOid);
 
 		ExecBeforeCommandTriggers(cmd);
@@ -282,7 +282,7 @@ RenameAggregate(List *name, List *args, const char *newname, CommandContext cmd)
 	/* Call AFTER ALTER AGGREGATE triggers */
 	if (CommandFiresAfterTriggers(cmd))
 	{
-		cmd->objectname = (char *)newname;
+		cmd->objectname = pstrdup(newname);
 		ExecAfterCommandTriggers(cmd);
 	}
 }

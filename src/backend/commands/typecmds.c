@@ -550,7 +550,7 @@ DefineType(List *names, List *parameters, CommandContext cmd)
 	if (CommandFiresTriggers(cmd))
 	{
 		cmd->objectId = InvalidOid;
-		cmd->objectname = (char *)typeName;
+		cmd->objectname = pstrdup(typeName);
 		cmd->schemaname = get_namespace_name(typeNamespace);
 
 		ExecBeforeCommandTriggers(cmd);
@@ -2176,7 +2176,7 @@ AlterDomainDefault(List *names, Node *defaultRaw, CommandContext cmd)
 	if (CommandFiresTriggers(cmd))
 	{
 		cmd->objectId = HeapTupleGetOid(tup);
-		cmd->objectname = NameStr(typTup->typname);
+		cmd->objectname = pstrdup(NameStr(typTup->typname));
 		cmd->schemaname = get_namespace_name(typTup->typnamespace);
 
 		ExecBeforeCommandTriggers(cmd);
@@ -2317,7 +2317,7 @@ AlterDomainNotNull(List *names, bool notNull, CommandContext cmd)
 	if (CommandFiresTriggers(cmd))
 	{
 		cmd->objectId = HeapTupleGetOid(tup);
-		cmd->objectname = NameStr(typTup->typname);
+		cmd->objectname = pstrdup(NameStr(typTup->typname));
 		cmd->schemaname = get_namespace_name(typTup->typnamespace);
 
 		ExecBeforeCommandTriggers(cmd);
@@ -2431,7 +2431,7 @@ AlterDomainDropConstraint(List *names, const char *constrName,
 	if (CommandFiresTriggers(cmd))
 	{
 		cmd->objectId = HeapTupleGetOid(tup);
-		cmd->objectname = NameStr(((Form_pg_type)tup)->typname);
+		cmd->objectname = pstrdup(NameStr(((Form_pg_type)tup)->typname));
 		cmd->schemaname = get_namespace_name(((Form_pg_type)tup)->typnamespace);
 
 		ExecBeforeCommandTriggers(cmd);
@@ -2531,7 +2531,7 @@ AlterDomainAddConstraint(List *names, Node *newConstraint, CommandContext cmd)
 	if (CommandFiresTriggers(cmd))
 	{
 		cmd->objectId = HeapTupleGetOid(tup);
-		cmd->objectname = NameStr(typTup->typname);
+		cmd->objectname = pstrdup(NameStr(typTup->typname));
 		cmd->schemaname = get_namespace_name(typTup->typnamespace);
 
 		ExecBeforeCommandTriggers(cmd);
@@ -2692,7 +2692,7 @@ AlterDomainValidateConstraint(List *names, char *constrName, CommandContext cmd)
 	if (CommandFiresTriggers(cmd))
 	{
 		cmd->objectId = HeapTupleGetOid(tup);
-		cmd->objectname = NameStr(((Form_pg_type)tup)->typname);
+		cmd->objectname = pstrdup(NameStr(((Form_pg_type)tup)->typname));
 		cmd->schemaname = get_namespace_name(((Form_pg_type)tup)->typnamespace);
 
 		ExecBeforeCommandTriggers(cmd);
@@ -3645,7 +3645,7 @@ AlterTypeNamespaceInternal(Oid typeOid, Oid nspOid,
 	if (CommandFiresTriggers(cmd))
 	{
 		cmd->objectId = typeOid;
-		cmd->objectname = NameStr(typform->typname);
+		cmd->objectname = pstrdup(NameStr(typform->typname));
 		cmd->schemaname = get_namespace_name(oldNspOid);
 
 		ExecBeforeCommandTriggers(cmd);

@@ -264,7 +264,7 @@ DefineTSParser(List *names, List *parameters, CommandContext cmd)
 	if (CommandFiresTriggers(cmd))
 	{
 		cmd->objectId = InvalidOid;
-		cmd->objectname = NameStr(pname);
+		cmd->objectname = pstrdup(NameStr(pname));
 		cmd->schemaname = get_namespace_name(namespaceoid);
 
 		ExecBeforeCommandTriggers(cmd);
@@ -360,7 +360,7 @@ RenameTSParser(List *oldname, const char *newname, CommandContext cmd)
 	if (CommandFiresTriggers(cmd))
 	{
 		cmd->objectId = prsId;
-		cmd->objectname = NameStr(((Form_pg_ts_parser) GETSTRUCT(tup))->prsname);
+		cmd->objectname = pstrdup(NameStr(((Form_pg_ts_parser) GETSTRUCT(tup))->prsname));
 		cmd->schemaname = get_namespace_name(namespaceOid);
 
 		ExecBeforeCommandTriggers(cmd);
@@ -376,7 +376,7 @@ RenameTSParser(List *oldname, const char *newname, CommandContext cmd)
 	/* Call AFTER ALTER TEXT SEARCH PARSER triggers */
 	if (CommandFiresAfterTriggers(cmd))
 	{
-		cmd->objectname = (char *)newname;
+		cmd->objectname = pstrdup(newname);
 		ExecAfterCommandTriggers(cmd);
 	}
 }
@@ -579,7 +579,7 @@ DefineTSDictionary(List *names, List *parameters, CommandContext cmd)
 	if (CommandFiresTriggers(cmd))
 	{
 		cmd->objectId = InvalidOid;
-		cmd->objectname = NameStr(dname);
+		cmd->objectname = pstrdup(NameStr(dname));
 		cmd->schemaname = get_namespace_name(namespaceoid);
 
 		ExecBeforeCommandTriggers(cmd);
@@ -675,7 +675,7 @@ RenameTSDictionary(List *oldname, const char *newname, CommandContext cmd)
 	if (CommandFiresTriggers(cmd))
 	{
 		cmd->objectId = dictId;
-		cmd->objectname = NameStr(((Form_pg_ts_dict) GETSTRUCT(tup))->dictname);
+		cmd->objectname = pstrdup(NameStr(((Form_pg_ts_dict) GETSTRUCT(tup))->dictname));
 		cmd->schemaname = get_namespace_name(namespaceOid);
 
 		ExecBeforeCommandTriggers(cmd);
@@ -691,7 +691,7 @@ RenameTSDictionary(List *oldname, const char *newname, CommandContext cmd)
 	/* Call AFTER ALTER TEXT SEARCH DICTIONARY triggers */
 	if (CommandFiresAfterTriggers(cmd))
 	{
-		cmd->objectname = (char *)newname;
+		cmd->objectname = pstrdup(newname);
 		ExecAfterCommandTriggers(cmd);
 	}
 }
@@ -949,7 +949,7 @@ AlterTSDictionaryOwner(List *name, Oid newOwnerId, CommandContext cmd)
 		if (CommandFiresTriggers(cmd))
 		{
 			cmd->objectId = dictId;
-			cmd->objectname = NameStr(form->dictname);
+			cmd->objectname = pstrdup(NameStr(form->dictname));
 			cmd->schemaname = get_namespace_name(namespaceOid);
 
 			ExecBeforeCommandTriggers(cmd);
@@ -1132,7 +1132,7 @@ DefineTSTemplate(List *names, List *parameters, CommandContext cmd)
 	if (CommandFiresTriggers(cmd))
 	{
 		cmd->objectId = InvalidOid;
-		cmd->objectname = NameStr(dname);
+		cmd->objectname = pstrdup(NameStr(dname));
 		cmd->schemaname = get_namespace_name(namespaceoid);
 
 		ExecBeforeCommandTriggers(cmd);
@@ -1207,7 +1207,7 @@ RenameTSTemplate(List *oldname, const char *newname, CommandContext cmd)
 	if (CommandFiresTriggers(cmd))
 	{
 		cmd->objectId = tmplId;
-		cmd->objectname = NameStr(((Form_pg_ts_template) GETSTRUCT(tup))->tmplname);
+		cmd->objectname = pstrdup(NameStr(((Form_pg_ts_template) GETSTRUCT(tup))->tmplname));
 		cmd->schemaname = get_namespace_name(namespaceOid);
 
 		ExecBeforeCommandTriggers(cmd);
@@ -1223,7 +1223,7 @@ RenameTSTemplate(List *oldname, const char *newname, CommandContext cmd)
 	/* Call AFTER ALTER TEXT SEARCH TEMPLATE triggers */
 	if (CommandFiresAfterTriggers(cmd))
 	{
-		cmd->objectname = (char *)newname;
+		cmd->objectname = pstrdup(newname);
 		ExecAfterCommandTriggers(cmd);
 	}
 }
@@ -1497,7 +1497,7 @@ DefineTSConfiguration(List *names, List *parameters, CommandContext cmd)
 	if (CommandFiresTriggers(cmd))
 	{
 		cmd->objectId = InvalidOid;
-		cmd->objectname = NameStr(cname);
+		cmd->objectname = pstrdup(NameStr(cname));
 		cmd->schemaname = get_namespace_name(namespaceoid);
 
 		ExecBeforeCommandTriggers(cmd);
@@ -1634,7 +1634,7 @@ RenameTSConfiguration(List *oldname, const char *newname, CommandContext cmd)
 	if (CommandFiresTriggers(cmd))
 	{
 		cmd->objectId = cfgId;
-		cmd->objectname = NameStr(((Form_pg_ts_config) GETSTRUCT(tup))->cfgname);
+		cmd->objectname = pstrdup(NameStr(((Form_pg_ts_config) GETSTRUCT(tup))->cfgname));
 		cmd->schemaname = get_namespace_name(namespaceOid);
 
 		ExecBeforeCommandTriggers(cmd);
@@ -1650,7 +1650,7 @@ RenameTSConfiguration(List *oldname, const char *newname, CommandContext cmd)
 	/* Call AFTER ALTER TEXT SEARCH CONFIGURATION triggers */
 	if (CommandFiresAfterTriggers(cmd))
 	{
-		cmd->objectname = (char *)newname;
+		cmd->objectname = pstrdup(newname);
 		ExecAfterCommandTriggers(cmd);
 	}
 }
@@ -1801,7 +1801,7 @@ AlterTSConfigurationOwner(List *name, Oid newOwnerId, CommandContext cmd)
 		if (CommandFiresTriggers(cmd))
 		{
 			cmd->objectId = cfgId;
-			cmd->objectname = NameStr(form->cfgname);
+			cmd->objectname = pstrdup(NameStr(form->cfgname));
 			cmd->schemaname = get_namespace_name(namespaceOid);
 
 			ExecBeforeCommandTriggers(cmd);

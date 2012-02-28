@@ -238,7 +238,7 @@ RenameSchema(const char *oldname, const char *newname, CommandContext cmd)
 	if (CommandFiresTriggers(cmd))
 	{
 		cmd->objectId = HeapTupleGetOid(tup);
-		cmd->objectname = (char *)oldname;
+		cmd->objectname = pstrdup(oldname);
 		cmd->schemaname = NULL;
 
 		ExecBeforeCommandTriggers(cmd);
@@ -255,7 +255,7 @@ RenameSchema(const char *oldname, const char *newname, CommandContext cmd)
 	/* Call AFTER ALTER SCHEMA triggers */
 	if (CommandFiresAfterTriggers(cmd))
 	{
-		cmd->objectname = (char *)newname;
+		cmd->objectname = pstrdup(newname);
 		ExecAfterCommandTriggers(cmd);
 	}
 }
@@ -357,7 +357,7 @@ AlterSchemaOwner_internal(HeapTuple tup, Relation rel, Oid newOwnerId,
 		if (CommandFiresTriggers(cmd))
 		{
 			cmd->objectId = HeapTupleGetOid(tup);
-			cmd->objectname = NameStr(nspForm->nspname);
+			cmd->objectname = pstrdup(NameStr(nspForm->nspname));
 			cmd->schemaname = NULL;
 
 			ExecBeforeCommandTriggers(cmd);

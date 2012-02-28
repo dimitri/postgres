@@ -233,7 +233,7 @@ RenameForeignDataWrapper(const char *oldname, const char *newname,
 	if (CommandFiresTriggers(cmd))
 	{
 		cmd->objectId = HeapTupleGetOid(tup);
-		cmd->objectname = (char *)oldname;
+		cmd->objectname = pstrdup(oldname);
 		cmd->schemaname = NULL;
 
 		ExecBeforeCommandTriggers(cmd);
@@ -250,7 +250,7 @@ RenameForeignDataWrapper(const char *oldname, const char *newname,
 	/* Call AFTER ALTER FOREIGN DATA WRAPPER triggers */
 	if (CommandFiresAfterTriggers(cmd))
 	{
-		cmd->objectname = (char *)newname;
+		cmd->objectname = pstrdup(newname);
 		ExecAfterCommandTriggers(cmd);
 	}
 }
@@ -288,7 +288,7 @@ RenameForeignServer(const char *oldname, const char *newname, CommandContext cmd
 	if (CommandFiresTriggers(cmd))
 	{
 		cmd->objectId = HeapTupleGetOid(tup);
-		cmd->objectname = (char *) oldname;
+		cmd->objectname = pstrdup(oldname);
 		cmd->schemaname = NULL;
 
 		ExecBeforeCommandTriggers(cmd);
@@ -305,7 +305,7 @@ RenameForeignServer(const char *oldname, const char *newname, CommandContext cmd
 	/* Call AFTER ALTER SERVER triggers */
 	if (CommandFiresAfterTriggers(cmd))
 	{
-		cmd->objectname = (char *) newname;
+		cmd->objectname = pstrdup(newname);
 		ExecAfterCommandTriggers(cmd);
 	}
 }
@@ -345,7 +345,7 @@ AlterForeignDataWrapperOwner_internal(Relation rel, HeapTuple tup, Oid newOwnerI
 	if (CommandFiresTriggers(cmd))
 	{
 		cmd->objectId = HeapTupleGetOid(tup);
-		cmd->objectname = NameStr(form->fdwname);
+		cmd->objectname = pstrdup(NameStr(form->fdwname));
 		cmd->schemaname = NULL;
 
 		ExecBeforeCommandTriggers(cmd);
@@ -467,7 +467,7 @@ AlterForeignServerOwner_internal(Relation rel, HeapTuple tup, Oid newOwnerId,
 		if (CommandFiresTriggers(cmd))
 		{
 			cmd->objectId = HeapTupleGetOid(tup);
-			cmd->objectname = NameStr(form->srvname);
+			cmd->objectname = pstrdup(NameStr(form->srvname));
 			cmd->schemaname = NULL;
 
 			ExecBeforeCommandTriggers(cmd);

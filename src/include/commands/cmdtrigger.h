@@ -23,13 +23,15 @@
  */
 typedef struct CommandContextData
 {
-	char *tag;			/* Command Tag */
-	Oid   objectId;		/* oid of the existing object, if any */
-	char *schemaname;	/* schemaname or NULL if not relevant */
-	char *objectname;	/* objectname */
-	Node *parsetree;	/* command parsetree, given as an internal */
-	List *before;		/* procedures to call before the command */
-	List *after;		/* procedures to call after the command */
+	char *tag;				/* Command Tag */
+	Oid   objectId;			/* oid of the existing object, if any */
+	char *schemaname;		/* schemaname or NULL if not relevant */
+	char *objectname;		/* objectname */
+	Node *parsetree;		/* command parsetree, given as an internal */
+	List *before;			/* procedures to call before the command */
+	List *after;			/* procedures to call after the command */
+	MemoryContext oldmctx;	/* Memory Context to switch back to */
+	MemoryContext cmdmctx;	/* Memory Context for the command triggers */
 } CommandContextData;
 
 typedef struct CommandContextData *CommandContext;

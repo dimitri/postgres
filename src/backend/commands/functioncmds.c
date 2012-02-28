@@ -1135,7 +1135,7 @@ RenameFunction(List *name, List *argtypes, const char *newname, CommandContext c
 	if (CommandFiresTriggers(cmd))
 	{
 		cmd->objectId = procOid;
-		cmd->objectname = NameListToString(name);
+		cmd->objectname = pstrdup(NameStr(procForm->proname));
 		cmd->schemaname = get_namespace_name(namespaceOid);
 
 		ExecBeforeCommandTriggers(cmd);
@@ -1152,7 +1152,7 @@ RenameFunction(List *name, List *argtypes, const char *newname, CommandContext c
 	/* Call AFTER ALTER FUNCTION triggers */
 	if (CommandFiresAfterTriggers(cmd))
 	{
-		cmd->objectname = (char *)newname;
+		cmd->objectname = pstrdup(newname);
 		ExecAfterCommandTriggers(cmd);
 	}
 }
@@ -1259,7 +1259,7 @@ AlterFunctionOwner_internal(Relation rel, HeapTuple tup, Oid newOwnerId,
 		if (CommandFiresTriggers(cmd))
 		{
 			cmd->objectId = procOid;
-			cmd->objectname = NameStr(procForm->proname);
+			cmd->objectname = pstrdup(NameStr(procForm->proname));
 			cmd->schemaname = get_namespace_name(procForm->pronamespace);
 
 			ExecBeforeCommandTriggers(cmd);
@@ -1954,7 +1954,7 @@ AlterFunctionNamespace_oid(Oid procOid, Oid nspOid, CommandContext cmd)
 	if (CommandFiresTriggers(cmd))
 	{
 		cmd->objectId = procOid;
-		cmd->objectname = NameStr(proc->proname);
+		cmd->objectname = pstrdup(NameStr(proc->proname));
 		cmd->schemaname = get_namespace_name(oldNspOid);
 
 		ExecBeforeCommandTriggers(cmd);
