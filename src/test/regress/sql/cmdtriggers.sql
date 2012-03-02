@@ -124,6 +124,7 @@ drop command trigger snitch_some_more on create collation;
 drop command trigger snitch_some_more on alter operator;
 drop command trigger snitch_some_more on create domain;
 drop command trigger snitch_some_more on alter schema;
+drop command trigger snitch_some_more on alter function;
 drop command trigger snitch_even_more on create trigger;
 drop command trigger snitch_even_more on alter trigger;
 drop command trigger snitch_even_more on drop trigger;

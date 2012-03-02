@@ -1497,7 +1497,7 @@ DefineTSConfiguration(List *names, List *parameters, CommandContext cmd)
 	if (CommandFiresTriggers(cmd))
 	{
 		cmd->objectId = InvalidOid;
-		cmd->objectname = pstrdup(NameStr(cname));
+		cmd->objectname = pstrdup(cfgname);
 		cmd->schemaname = get_namespace_name(namespaceoid);
 
 		ExecBeforeCommandTriggers(cmd);

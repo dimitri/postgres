@@ -154,9 +154,9 @@ CommandIsReadOnly(Node *parsetree)
  * Support function for calling the command triggers.
  */
 static void
-call_before_cmdtriggers(CommandContext cmd)
+call_before_cmdtriggers(Node *parsetree, CommandContext cmd)
 {
-	switch (nodeTag(cmd->parsetree))
+	switch (nodeTag(parsetree))
 	{
 		case T_AlterDatabaseStmt:
 		case T_AlterDatabaseSetStmt:
@@ -237,9 +237,9 @@ call_before_cmdtriggers(CommandContext cmd)
 }
 
 static void
-call_after_cmdtriggers(CommandContext cmd)
+call_after_cmdtriggers(Node *parsetree, CommandContext cmd)
 {
-	switch (nodeTag(cmd->parsetree))
+	switch (nodeTag(parsetree))
 	{
 		case T_AlterDatabaseStmt:
 		case T_AlterDatabaseSetStmt:
@@ -528,7 +528,7 @@ standard_ProcessUtility(Node *parsetree,
 	/* call the BEFORE ANY COMMAND triggers first */
 	InitCommandContext(&cmd, parsetree, true);
 
-	call_before_cmdtriggers(&cmd);
+	call_before_cmdtriggers(parsetree, &cmd);
 
 	switch (nodeTag(parsetree))
 	{
@@ -1463,7 +1463,7 @@ standard_ProcessUtility(Node *parsetree,
 	}
 
 	/* call the AFTER ANY COMMAND triggers */
-	call_after_cmdtriggers(&cmd);
+	call_after_cmdtriggers(parsetree, &cmd);
 }
 
 /*
