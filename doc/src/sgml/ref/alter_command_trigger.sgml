@@ -21,7 +21,7 @@ PostgreSQL documentation
 
  <refsynopsisdiv>
 <synopsis>
-ALTER COMMAND TRIGGER <replaceable class="PARAMETER">name</replaceable> ON <replaceable class="PARAMETER">command</replaceable> SET <replaceable class="parameter">enabled</replaceable>
+ALTER COMMAND TRIGGER <replaceable class="PARAMETER">name</replaceable> SET <replaceable class="parameter">enabled</replaceable>
 
 <phrase>where <replaceable class="parameter">enabled</replaceable> can be one of:</phrase>
 

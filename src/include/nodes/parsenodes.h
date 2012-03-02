@@ -1737,7 +1737,7 @@ typedef struct CreateTrigStmt
 typedef struct CreateCmdTrigStmt
 {
 	NodeTag		type;
-	List	   *command;		/* commands name */
+	char	   *command;		/* command's name */
 	char	   *trigname;		/* TRIGGER's name */
 	/* timing uses the TRIGGER_TYPE bits defined in catalog/pg_trigger.h */
 	char		timing;			/* BEFORE, AFTER */
@@ -1751,7 +1751,6 @@ typedef struct CreateCmdTrigStmt
 typedef struct AlterCmdTrigStmt
 {
 	NodeTag		type;
-	char	   *command;		/* command's name */
 	char	   *trigname;		/* TRIGGER's name */
 	char       *tgenabled;		/* trigger's firing configuration WRT
 								 * session_replication_role */

@@ -271,7 +271,6 @@ static void processCASbits(int cas_bits, int location, const char *constrType,
 %type <value>	TriggerFuncArg
 %type <node>	TriggerWhen
 %type <str>		trigger_command enable_trigger
-%type <list>    trigger_command_list
 
 %type <str>		copy_file_name
 				database_name access_method_clause access_method attr_name
@@ -4273,7 +4272,7 @@ DropTrigStmt:
  *****************************************************************************/
 
 CreateCmdTrigStmt:
-			CREATE COMMAND TRIGGER name CmdTriggerActionTime trigger_command_list
+			CREATE COMMAND TRIGGER name CmdTriggerActionTime trigger_command
 			EXECUTE PROCEDURE func_name '(' ')'
 				{
 					CreateCmdTrigStmt *n = makeNode(CreateCmdTrigStmt);
@@ -4289,7 +4288,7 @@ CreateCmdTrigStmt:
 					CreateCmdTrigStmt *n = makeNode(CreateCmdTrigStmt);
 					n->trigname = $4;
 					n->timing   = $5;
-					n->command  = list_make1(makeStringConst("ANY", @5));
+					n->command  = "ANY";
 					n->funcname = $10;
 					$$ = (Node *)n;
 				}
@@ -4299,18 +4298,6 @@ CmdTriggerActionTime:
 			BEFORE						{ $$ = CMD_TRIGGER_FIRED_BEFORE; }
 			| AFTER						{ $$ = CMD_TRIGGER_FIRED_AFTER; }
 		;
-
-trigger_command_list:
-          trigger_command
-          {
-              $$ = list_make1(makeStringConst($1, @1));
-          }
-		| trigger_command_list ',' trigger_command
-          {
-			  $$ = lappend($1, makeStringConst($3, @1));
-          }
-		;
-
 
 /*
  * that will get matched against what CreateCommandTag  returns
@@ -4401,63 +4388,32 @@ trigger_command:
 		;
 
 DropCmdTrigStmt:
-			DROP COMMAND TRIGGER name ON trigger_command opt_drop_behavior
+			DROP COMMAND TRIGGER name opt_drop_behavior
 				{
 					DropStmt *n = makeNode(DropStmt);
 					n->removeType = OBJECT_CMDTRIGGER;
 					n->objects = list_make1(list_make1(makeString($4)));
-					n->arguments = list_make1(list_make1(makeString($6)));
+					n->behavior = $5;
+					n->missing_ok = false;
+					$$ = (Node *) n;
+				}
+			| DROP COMMAND TRIGGER IF_P EXISTS name opt_drop_behavior
+				{
+					DropStmt *n = makeNode(DropStmt);
+					n->removeType = OBJECT_CMDTRIGGER;
+					n->objects = list_make1(list_make1(makeString($6)));
 					n->behavior = $7;
-					n->missing_ok = false;
-					$$ = (Node *) n;
-				}
-			| DROP COMMAND TRIGGER IF_P EXISTS name ON trigger_command opt_drop_behavior
-				{
-					DropStmt *n = makeNode(DropStmt);
-					n->removeType = OBJECT_CMDTRIGGER;
-					n->objects = list_make1(list_make1(makeString($6)));
-					n->arguments = list_make1(list_make1(makeString($8)));
-					n->behavior = $9;
-					n->missing_ok = true;
-					$$ = (Node *) n;
-				}
-			| DROP COMMAND TRIGGER name ON ANY COMMAND opt_drop_behavior
-				{
-					DropStmt *n = makeNode(DropStmt);
-					n->removeType = OBJECT_CMDTRIGGER;
-					n->objects = list_make1(list_make1(makeString($4)));
-					n->arguments = list_make1(list_make1(makeString("ANY")));
-					n->behavior = $8;
-					n->missing_ok = false;
-					$$ = (Node *) n;
-				}
-			| DROP COMMAND TRIGGER IF_P EXISTS name ON ANY COMMAND opt_drop_behavior
-				{
-					DropStmt *n = makeNode(DropStmt);
-					n->removeType = OBJECT_CMDTRIGGER;
-					n->objects = list_make1(list_make1(makeString($6)));
-					n->arguments = list_make1(list_make1(makeString("ANY")));
-					n->behavior = $10;
 					n->missing_ok = true;
 					$$ = (Node *) n;
 				}
 		;
 
 AlterCmdTrigStmt:
-			ALTER COMMAND TRIGGER name ON trigger_command SET enable_trigger
+			ALTER COMMAND TRIGGER name SET enable_trigger
 				{
 					AlterCmdTrigStmt *n = makeNode(AlterCmdTrigStmt);
 					n->trigname   = $4;
-					n->command    = $6;
-					n->tgenabled  = $8;
-					$$ = (Node *) n;
-				}
-		  | ALTER COMMAND TRIGGER name ON ANY COMMAND SET enable_trigger
-				{
-					AlterCmdTrigStmt *n = makeNode(AlterCmdTrigStmt);
-					n->trigname   = $4;
-					n->command    = "ANY";
-					n->tgenabled  = $9;
+					n->tgenabled  = $6;
 					$$ = (Node *) n;
 				}
 		;

@@ -39,7 +39,7 @@
 #include "utils/syscache.h"
 #include "tcop/utility.h"
 
-static void check_cmdtrigger_name(const char *command, const char *trigname, Relation tgrel);
+static void check_cmdtrigger_name(const char *trigname, Relation tgrel);
 
 /*
  * Check permission: command triggers are only available for superusers. Raise
@@ -119,11 +119,10 @@ void
 CreateCmdTrigger(CreateCmdTrigStmt *stmt, const char *queryString)
 {
 	Relation	tgrel;
-	ListCell   *c;
 	/* cmd trigger args: when, cmd_tag, objectId, schemaname, objectname [,parsetree] */
 	Oid			fargtypes[5] = {TEXTOID, TEXTOID, OIDOID, TEXTOID, TEXTOID};
 	Oid			fargtypes_c[6] = {TEXTOID, TEXTOID, OIDOID, TEXTOID, TEXTOID, INTERNALOID};
-	Oid			funcoid;
+	Oid			funcoid, trigoid;
 	Oid			funcrettype;
 
 	CheckCmdTriggerPrivileges();
@@ -148,66 +147,61 @@ CreateCmdTrigger(CreateCmdTrigStmt *stmt, const char *queryString)
 	 */
 	tgrel = heap_open(CmdTriggerRelationId, RowExclusiveLock);
 
-	foreach(c, stmt->command)
-	{
-		Oid trigoid;
-		A_Const *con = (A_Const *) lfirst(c);
-		char    *command = strVal(&con->val);
+	/*
+	 * Scan pg_cmdtrigger for existing triggers on command. We do this only
+	 * to give a nice error message if there's already a trigger of the
+	 * same name. (The unique index on ctgcommand/ctgname would complain
+	 * anyway.)
+	 *
+	 * NOTE that this is cool only because we have AccessExclusiveLock on
+	 * the relation, so the trigger set won't be changing underneath us.
+	 */
+	check_cmdtrigger_name(stmt->trigname, tgrel);
 
-		/*
-		 * Add some restrictions. We don't allow for AFTER command triggers on
-		 * commands that do their own transaction management, such as VACUUM and
-		 * CREATE INDEX CONCURRENTLY, because RAISE EXCEPTION at this point is
-		 * meaningless, the work as already been commited.
-		 *
-		 * CREATE INDEX CONCURRENTLY has no specific command tag and can not be
-		 * captured here, so we just document that not AFTER command trigger
-		 * will get run.
-		 */
-		if (stmt->timing == CMD_TRIGGER_FIRED_AFTER
-			&& (strcmp(command, "VACUUM") == 0))
-			ereport(ERROR,
-					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-					 errmsg("AFTER VACUUM command triggers are not implemented")));
+	/*
+	 * Add some restrictions. We don't allow for AFTER command triggers on
+	 * commands that do their own transaction management, such as VACUUM and
+	 * CREATE INDEX CONCURRENTLY, because RAISE EXCEPTION at this point is
+	 * meaningless, the work as already been commited.
+	 *
+	 * CREATE INDEX CONCURRENTLY has no specific command tag and can not be
+	 * captured here, so we just document that not AFTER command trigger
+	 * will get run.
+	 */
+	if (stmt->timing == CMD_TRIGGER_FIRED_AFTER
+		&& (strcmp(stmt->command, "VACUUM") == 0))
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("AFTER VACUUM command triggers are not implemented")));
 
-		if (stmt->timing == CMD_TRIGGER_FIRED_AFTER
-			&& (strcmp(command, "CLUSTER") == 0))
-			ereport(ERROR,
-					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-					 errmsg("AFTER CLUSTER command triggers are not implemented")));
+	if (stmt->timing == CMD_TRIGGER_FIRED_AFTER
+		&& (strcmp(stmt->command, "CLUSTER") == 0))
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("AFTER CLUSTER command triggers are not implemented")));
 
-		if (stmt->timing == CMD_TRIGGER_FIRED_AFTER
-			&& (strcmp(command, "CREATE INDEX") == 0))
-			ereport(WARNING,
-					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-					 errmsg("CREATE INDEX CONCURRENTLY is not supported"),
-					 errdetail("The command trigger will not get fired.")));
+	if (stmt->timing == CMD_TRIGGER_FIRED_AFTER
+		&& (strcmp(stmt->command, "CREATE INDEX") == 0))
+		ereport(WARNING,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("CREATE INDEX CONCURRENTLY is not supported"),
+				 errdetail("The command trigger will not get fired.")));
 
-		if (strcmp(command, "REINDEX") == 0)
-			ereport(WARNING,
-					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-					 errmsg("REINDEX DATABASE is not supported"),
-					 errdetail("The command trigger will not get fired.")));
+	if (strcmp(stmt->command, "REINDEX") == 0)
+		ereport(WARNING,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("REINDEX DATABASE is not supported"),
+				 errdetail("The command trigger will not get fired.")));
 
-		/*
-		 * Scan pg_cmdtrigger for existing triggers on command. We do this only
-		 * to give a nice error message if there's already a trigger of the
-		 * same name. (The unique index on ctgcommand/ctgname would complain
-		 * anyway.)
-		 *
-		 * NOTE that this is cool only because we have AccessExclusiveLock on
-		 * the relation, so the trigger set won't be changing underneath us.
-		 */
-		check_cmdtrigger_name(command, stmt->trigname, tgrel);
+	if (funcrettype != VOIDOID)
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_OBJECT_DEFINITION),
+				 errmsg("function \"%s\" must return type \"void\"",
+						NameListToString(stmt->funcname))));
 
-		if (funcrettype != VOIDOID)
-			ereport(ERROR,
-					(errcode(ERRCODE_INVALID_OBJECT_DEFINITION),
-					 errmsg("function \"%s\" must return type \"void\"",
-							NameListToString(stmt->funcname))));
+	trigoid = InsertCmdTriggerTuple(tgrel, stmt->command, stmt->trigname,
+									funcoid, stmt->timing);
 
-		trigoid = InsertCmdTriggerTuple(tgrel, command, stmt->trigname, funcoid, stmt->timing);
-	}
 	heap_close(tgrel, RowExclusiveLock);
 }
 
@@ -256,7 +250,7 @@ AlterCmdTrigger(AlterCmdTrigStmt *stmt)
 {
 	Relation	tgrel;
 	SysScanDesc tgscan;
-	ScanKeyData skey[2];
+	ScanKeyData skey[1];
 	HeapTuple	tup;
 	Form_pg_cmdtrigger cmdForm;
 	char        tgenabled = pstrdup(stmt->tgenabled)[0]; /* works with gram.y */
@@ -265,24 +259,20 @@ AlterCmdTrigger(AlterCmdTrigStmt *stmt)
 
 	tgrel = heap_open(CmdTriggerRelationId, RowExclusiveLock);
 	ScanKeyInit(&skey[0],
-				Anum_pg_cmdtrigger_ctgcommand,
-				BTEqualStrategyNumber, F_NAMEEQ,
-				CStringGetDatum(stmt->command));
-	ScanKeyInit(&skey[1],
 				Anum_pg_cmdtrigger_ctgname,
 				BTEqualStrategyNumber, F_NAMEEQ,
 				CStringGetDatum(stmt->trigname));
 
-	tgscan = systable_beginscan(tgrel, CmdTriggerCommandNameIndexId, true,
-								SnapshotNow, 2, skey);
+	tgscan = systable_beginscan(tgrel, CmdTriggerNameIndexId, true,
+								SnapshotNow, 1, skey);
 
 	tup = systable_getnext(tgscan);
 
 	if (!HeapTupleIsValid(tup))
 		ereport(ERROR,
 				(errcode(ERRCODE_UNDEFINED_OBJECT),
-				 errmsg("trigger \"%s\" for command \"%s\" does not exist, skipping",
-						stmt->trigname, stmt->command)));
+				 errmsg("trigger \"%s\" does not exist, skipping",
+						stmt->trigname)));
 
 	/* Copy tuple so we can modify it below */
 	tup = heap_copytuple(tup);
@@ -304,46 +294,37 @@ AlterCmdTrigger(AlterCmdTrigStmt *stmt)
  * Rename command trigger
  */
 void
-RenameCmdTrigger(List *name, const char *trigname, const char *newname)
+RenameCmdTrigger(const char *trigname, const char *newname)
 {
 	SysScanDesc tgscan;
-	ScanKeyData skey[2];
+	ScanKeyData skey[1];
 	HeapTuple	tup;
 	Relation	rel;
 	Form_pg_cmdtrigger cmdForm;
-	char       *command;
 
 	CheckCmdTriggerPrivileges();
 
-	Assert(list_length(name) == 1);
-	command = strVal((Value *)linitial(name));
-
 	rel = heap_open(CmdTriggerRelationId, RowExclusiveLock);
 
-	//FIXME: need a row level lock here
 	/* newname must be available */
-	check_cmdtrigger_name(command, newname, rel);
+	check_cmdtrigger_name(newname, rel);
 
 	/* get existing tuple */
 	ScanKeyInit(&skey[0],
-				Anum_pg_cmdtrigger_ctgcommand,
-				BTEqualStrategyNumber, F_NAMEEQ,
-				CStringGetDatum(command));
-	ScanKeyInit(&skey[1],
 				Anum_pg_cmdtrigger_ctgname,
 				BTEqualStrategyNumber, F_NAMEEQ,
 				CStringGetDatum(trigname));
 
-	tgscan = systable_beginscan(rel, CmdTriggerCommandNameIndexId, true,
-								SnapshotNow, 2, skey);
+	tgscan = systable_beginscan(rel, CmdTriggerNameIndexId, true,
+								SnapshotNow, 1, skey);
 
 	tup = systable_getnext(tgscan);
 
 	if (!HeapTupleIsValid(tup))
 		ereport(ERROR,
 				(errcode(ERRCODE_UNDEFINED_OBJECT),
-				 errmsg("trigger \"%s\" for command \"%s\" does not exist, skipping",
-						trigname, command)));
+				 errmsg("command trigger \"%s\" does not exist, skipping",
+						trigname)));
 
 	/* Copy tuple so we can modify it below */
 	tup = heap_copytuple(tup);
@@ -367,10 +348,10 @@ RenameCmdTrigger(List *name, const char *trigname, const char *newname)
  * true, just return InvalidOid.
  */
 Oid
-get_cmdtrigger_oid(const char *trigname, const char *command, bool missing_ok)
+get_cmdtrigger_oid(const char *trigname, bool missing_ok)
 {
 	Relation	tgrel;
-	ScanKeyData skey[2];
+	ScanKeyData skey[1];
 	SysScanDesc tgscan;
 	HeapTuple	tup;
 	Oid			oid;
@@ -381,15 +362,11 @@ get_cmdtrigger_oid(const char *trigname, const char *command, bool missing_ok)
 	tgrel = heap_open(CmdTriggerRelationId, AccessShareLock);
 
 	ScanKeyInit(&skey[0],
-				Anum_pg_cmdtrigger_ctgcommand,
-				BTEqualStrategyNumber, F_NAMEEQ,
-				CStringGetDatum(command));
-	ScanKeyInit(&skey[1],
 				Anum_pg_cmdtrigger_ctgname,
 				BTEqualStrategyNumber, F_NAMEEQ,
 				CStringGetDatum(trigname));
 
-	tgscan = systable_beginscan(tgrel, CmdTriggerCommandNameIndexId, true,
+	tgscan = systable_beginscan(tgrel, CmdTriggerNameIndexId, true,
 								SnapshotNow, 1, skey);
 
 	tup = systable_getnext(tgscan);
@@ -399,8 +376,8 @@ get_cmdtrigger_oid(const char *trigname, const char *command, bool missing_ok)
 		if (!missing_ok)
 			ereport(ERROR,
 						(errcode(ERRCODE_UNDEFINED_OBJECT),
-							 errmsg("trigger \"%s\" for command \"%s\" does not exist, skipping",
-							 trigname, command)));
+							 errmsg("command trigger \"%s\" does not exist, skipping",
+							 trigname)));
 		oid = InvalidOid;
 	}
 	else
@@ -418,33 +395,26 @@ get_cmdtrigger_oid(const char *trigname, const char *command, bool missing_ok)
  * give a nice error message if there's already a trigger of the same name.
  */
 void
-check_cmdtrigger_name(const char *command, const char *trigname, Relation tgrel)
+check_cmdtrigger_name(const char *trigname, Relation tgrel)
 {
 	SysScanDesc tgscan;
-	ScanKeyData skey[2];
+	ScanKeyData skey[1];
 	HeapTuple	tuple;
 
 	ScanKeyInit(&skey[0],
-				Anum_pg_cmdtrigger_ctgcommand,
-				BTEqualStrategyNumber, F_NAMEEQ,
-				CStringGetDatum(command));
-	ScanKeyInit(&skey[1],
 				Anum_pg_cmdtrigger_ctgname,
 				BTEqualStrategyNumber, F_NAMEEQ,
 				CStringGetDatum(trigname));
 
-	tgscan = systable_beginscan(tgrel, CmdTriggerCommandNameIndexId, true,
-								SnapshotNow, 2, skey);
+	tgscan = systable_beginscan(tgrel, CmdTriggerNameIndexId, true,
+								SnapshotNow, 1, skey);
 
 	tuple = systable_getnext(tgscan);
-
-	elog(DEBUG1, "check_cmdtrigger_name(%s, %s)", command, trigname);
 
 	if (HeapTupleIsValid(tuple))
 		ereport(ERROR,
 				(errcode(ERRCODE_DUPLICATE_OBJECT),
-				 errmsg("trigger \"%s\" for command \"%s\" already exists",
-						trigname, command)));
+				 errmsg("command trigger \"%s\" already exists", trigname)));
 	systable_endscan(tgscan);
 }
 

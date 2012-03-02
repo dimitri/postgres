@@ -22,20 +22,30 @@ end;
 $$;
 create command trigger snitch_before before any command execute procedure any_snitch();
 create command trigger snitch_after  after  any command execute procedure any_snitch();
-alter command trigger snitch_before on any command set disable;
-alter command trigger snitch_before on any command set enable;
-create command trigger snitch_some_more
-         after create table, alter table, drop table,
-               create function, create collation,
-               alter operator, create domain, alter schema,
-	       create text search configuration, alter function
-       execute procedure snitch();
-create command trigger snitch_some_even_more
-        before create trigger, alter trigger, drop trigger,
-               create schema, drop schema,
-               create aggregate, alter collation, create operator,
-               alter domain, create type, alter type, alter function
-       execute procedure snitch();
+alter command trigger snitch_before set disable;
+alter command trigger snitch_before set enable;
+create command trigger snitch_create_table after create table execute procedure snitch();
+create command trigger snitch_alter_table after alter table execute procedure snitch();
+create command trigger snitch_drop_table after drop table execute procedure snitch();
+create command trigger snitch_create_function after create function execute procedure snitch();
+create command trigger snitch_create_collation after create collation execute procedure snitch();
+create command trigger snitch_alter_operator after alter operator execute procedure snitch();
+create command trigger snitch_create_domain after create domain execute procedure snitch();
+create command trigger snitch_alter_schema after alter schema execute procedure snitch();
+create command trigger snitch_create_tsconfig after create text search configuration execute procedure snitch();
+create command trigger snitch_after_alter_function after alter function execute procedure snitch();
+create command trigger snitch_create_trigger before create trigger execute procedure snitch();
+create command trigger snitch_alter_trigger before alter trigger execute procedure snitch();
+create command trigger snitch_drop_trigger before drop trigger execute procedure snitch();
+create command trigger snitch_create_schema before create schema execute procedure snitch();
+create command trigger snitch_drop_schema before drop schema execute procedure snitch();
+create command trigger snitch_create_aggregate before create aggregate execute procedure snitch();
+create command trigger snitch_alter_collation before alter collation execute procedure snitch();
+create command trigger snitch_create_operator before create operator execute procedure snitch();
+create command trigger snitch_alter_domain before alter domain execute procedure snitch();
+create command trigger snitch_create_type before create type execute procedure snitch();
+create command trigger snitch_alter_type before alter type execute procedure snitch();
+create command trigger snitch_before_alter_function before alter function execute procedure snitch();
 create schema cmd;
 NOTICE:  snitch: BEFORE any CREATE SCHEMA
 NOTICE:  snitch: BEFORE CREATE SCHEMA <NULL> cmd
@@ -210,27 +220,27 @@ drop cascades to type cmd1.us_postal_code
 drop cascades to function cmd1.trigfunc()
 drop cascades to function cmd1.bigint_to_int4(bigint)
 NOTICE:  snitch: AFTER any DROP SCHEMA
-drop command trigger snitch_before on any command;
-drop command trigger snitch_after  on any command;
-drop command trigger snitch_some_more on create table;
-drop command trigger snitch_some_more on alter table;
-drop command trigger snitch_some_more on drop table;
-drop command trigger snitch_some_more on create function;
-drop command trigger snitch_some_more on create collation;
-drop command trigger snitch_some_more on alter operator;
-drop command trigger snitch_some_more on create domain;
-drop command trigger snitch_some_more on alter schema;
-drop command trigger snitch_some_more on alter function;
-drop command trigger snitch_even_more on create trigger;
-drop command trigger snitch_even_more on alter trigger;
-drop command trigger snitch_even_more on drop trigger;
-drop command trigger snitch_even_more on create schema;
-drop command trigger snitch_even_more on drop schema;
-drop command trigger snitch_even_more on create aggregate;
-drop command trigger snitch_even_more on alter collation;
-drop command trigger snitch_even_more on create operator;
-drop command trigger snitch_even_more on alter domain;
-drop command trigger snitch_even_more on create type;
-drop command trigger snitch_even_more on alter type;
-drop command trigger snitch_even_more on alter function;
-drop command trigger snitch_even_more on create text search configuration;
+drop command trigger snitch_before;
+drop command trigger snitch_after;
+drop command trigger snitch_create_table;
+drop command trigger snitch_alter_table;
+drop command trigger snitch_drop_table;
+drop command trigger snitch_create_function;
+drop command trigger snitch_create_collation;
+drop command trigger snitch_alter_operator;
+drop command trigger snitch_create_domain;
+drop command trigger snitch_alter_schema;
+drop command trigger snitch_create_tsconfig;
+drop command trigger snitch_after_alter_function;
+drop command trigger snitch_create_trigger;
+drop command trigger snitch_alter_trigger;
+drop command trigger snitch_drop_trigger;
+drop command trigger snitch_create_schema;
+drop command trigger snitch_drop_schema;
+drop command trigger snitch_create_aggregate;
+drop command trigger snitch_alter_collation;
+drop command trigger snitch_create_operator;
+drop command trigger snitch_alter_domain;
+drop command trigger snitch_create_type;
+drop command trigger snitch_alter_type;
+drop command trigger snitch_before_alter_function;

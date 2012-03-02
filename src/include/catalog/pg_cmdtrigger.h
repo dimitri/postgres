@@ -30,8 +30,8 @@
 
 CATALOG(pg_cmdtrigger,3466)
 {
-	NameData    ctgcommand;		/* trigger's command */
 	NameData	ctgname;		/* trigger's name */
+	NameData    ctgcommand;		/* trigger's command */
 	Oid			ctgfoid;		/* OID of function to be called */
 	char		ctgtype;		/* BEFORE/AFTER */
 	char		ctgenabled;		/* trigger's firing configuration WRT
@@ -50,8 +50,8 @@ typedef FormData_pg_cmdtrigger *Form_pg_cmdtrigger;
  * ----------------
  */
 #define Natts_pg_cmdtrigger					5
-#define Anum_pg_cmdtrigger_ctgcommand		1
-#define Anum_pg_cmdtrigger_ctgname			2
+#define Anum_pg_cmdtrigger_ctgname			1
+#define Anum_pg_cmdtrigger_ctgcommand		2
 #define Anum_pg_cmdtrigger_ctgfoid			3
 #define Anum_pg_cmdtrigger_ctgtype			4
 #define Anum_pg_cmdtrigger_ctgenabled		5
