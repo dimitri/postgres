@@ -168,7 +168,6 @@ call_before_cmdtriggers(Node *parsetree, CommandContext cmd)
 		case T_AlterOwnerStmt:
 		case T_AlterSeqStmt:
 		case T_AlterTableStmt:
-		case T_RenameStmt:
 		case T_CommentStmt:
 		case T_DefineStmt:
 		case T_CreateCastStmt:
@@ -224,8 +223,14 @@ call_before_cmdtriggers(Node *parsetree, CommandContext cmd)
 				ExecBeforeCommandTriggers(cmd);
 			return;
 
+		case T_RenameStmt:
+			if (((RenameStmt *) parsetree)->renameType != OBJECT_CMDTRIGGER)
+				if (CommandFiresTriggers(cmd))
+					ExecBeforeCommandTriggers(cmd);
+			return;
+
 		case T_DropStmt:
-			if (((DropStmt *) cmd->parsetree)->removeType != OBJECT_CMDTRIGGER)
+			if (((DropStmt *) parsetree)->removeType != OBJECT_CMDTRIGGER)
 				if (CommandFiresTriggers(cmd))
 					ExecBeforeCommandTriggers(cmd);
 			return;
@@ -251,7 +256,6 @@ call_after_cmdtriggers(Node *parsetree, CommandContext cmd)
 		case T_AlterOwnerStmt:
 		case T_AlterSeqStmt:
 		case T_AlterTableStmt:
-		case T_RenameStmt:
 		case T_CommentStmt:
 		case T_DefineStmt:
 		case T_CreateCastStmt:
@@ -310,8 +314,14 @@ call_after_cmdtriggers(Node *parsetree, CommandContext cmd)
 					ExecAfterCommandTriggers(cmd);
 			return;
 
+		case T_RenameStmt:
+			if (((RenameStmt *) parsetree)->renameType != OBJECT_CMDTRIGGER)
+				if (CommandFiresTriggers(cmd))
+					ExecAfterCommandTriggers(cmd);
+			return;
+
 		case T_DropStmt:
-			if (((DropStmt *) cmd->parsetree)->removeType != OBJECT_CMDTRIGGER)
+			if (((DropStmt *) parsetree)->removeType != OBJECT_CMDTRIGGER)
 				if (CommandFiresAfterTriggers(cmd))
 					ExecAfterCommandTriggers(cmd);
 			return;

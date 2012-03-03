@@ -22,6 +22,7 @@ PostgreSQL documentation
  <refsynopsisdiv>
 <synopsis>
 ALTER COMMAND TRIGGER <replaceable class="PARAMETER">name</replaceable> SET <replaceable class="parameter">enabled</replaceable>
+ALTER COMMAND TRIGGER <replaceable class="PARAMETER">name</replaceable> RENAME TO <replaceable class="PARAMETER">newname</replaceable>
 
 <phrase>where <replaceable class="parameter">enabled</replaceable> can be one of:</phrase>
 
@@ -62,10 +63,10 @@ ALTER COMMAND TRIGGER <replaceable class="PARAMETER">name</replaceable> SET <rep
    </varlistentry>
 
    <varlistentry>
-    <term><replaceable class="PARAMETER">command</replaceable></term>
+    <term><replaceable class="PARAMETER">newname</replaceable></term>
     <listitem>
      <para>
-      The command tag on which this trigger acts.
+      The new name of the command trigger.
      </para>
     </listitem>
    </varlistentry>

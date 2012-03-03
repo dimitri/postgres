@@ -294,13 +294,17 @@ AlterCmdTrigger(AlterCmdTrigStmt *stmt)
  * Rename command trigger
  */
 void
-RenameCmdTrigger(const char *trigname, const char *newname)
+RenameCmdTrigger(List *name, const char *newname)
 {
 	SysScanDesc tgscan;
 	ScanKeyData skey[1];
 	HeapTuple	tup;
 	Relation	rel;
 	Form_pg_cmdtrigger cmdForm;
+	char *trigname;
+
+	Assert(list_length(name) == 1);
+	trigname = strVal((Value *)linitial(name));
 
 	CheckCmdTriggerPrivileges();
 

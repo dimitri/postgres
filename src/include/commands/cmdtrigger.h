@@ -42,7 +42,7 @@ extern void CreateCmdTrigger(CreateCmdTrigStmt *stmt, const char *queryString);
 extern void RemoveCmdTriggerById(Oid ctrigOid);
 extern Oid	get_cmdtrigger_oid(const char *trigname, bool missing_ok);
 extern void AlterCmdTrigger(AlterCmdTrigStmt *stmt);
-extern void RenameCmdTrigger(const char *trigname, const char *newname);
+extern void RenameCmdTrigger(List *name, const char *newname);
 
 extern void InitCommandContext(CommandContext cmd, const Node *stmt, bool list_triggers);
 extern bool ListCommandTriggers(CommandContext cmd);

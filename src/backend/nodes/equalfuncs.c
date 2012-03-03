@@ -1780,7 +1780,6 @@ _equalCreateTrigStmt(const CreateTrigStmt *a, const CreateTrigStmt *b)
 static bool
 _equalCreateCmdTrigStmt(const CreateCmdTrigStmt *a, const CreateCmdTrigStmt *b)
 {
-	COMPARE_NODE_FIELD(command);
 	COMPARE_STRING_FIELD(trigname);
 	COMPARE_SCALAR_FIELD(timing);
 	COMPARE_NODE_FIELD(funcname);
@@ -1791,7 +1790,6 @@ _equalCreateCmdTrigStmt(const CreateCmdTrigStmt *a, const CreateCmdTrigStmt *b)
 static bool
 _equalAlterCmdTrigStmt(const AlterCmdTrigStmt *a, const AlterCmdTrigStmt *b)
 {
-	COMPARE_STRING_FIELD(command);
 	COMPARE_STRING_FIELD(trigname);
 	COMPARE_STRING_FIELD(tgenabled);
 

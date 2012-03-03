@@ -3463,7 +3463,6 @@ _copyCreateCmdTrigStmt(const CreateCmdTrigStmt *from)
 {
 	CreateCmdTrigStmt *newnode = makeNode(CreateCmdTrigStmt);
 
-	COPY_NODE_FIELD(command);
 	COPY_STRING_FIELD(trigname);
 	COPY_SCALAR_FIELD(timing);
 	COPY_NODE_FIELD(funcname);
@@ -3476,7 +3475,6 @@ _copyAlterCmdTrigStmt(const AlterCmdTrigStmt *from)
 {
 	AlterCmdTrigStmt *newnode = makeNode(AlterCmdTrigStmt);
 
-	COPY_STRING_FIELD(command);
 	COPY_STRING_FIELD(trigname);
 	COPY_STRING_FIELD(tgenabled);
 
