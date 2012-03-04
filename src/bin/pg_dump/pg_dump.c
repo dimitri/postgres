@@ -13753,10 +13753,29 @@ dumpCmdTrigger(Archive *fout, CmdTriggerInfo *ctginfo)
 	appendPQExpBufferStr(query, fmtId(ctginfo->ctgfname));
 	appendPQExpBuffer(query, " ();\n");
 
-	appendPQExpBuffer(labelq, "TRIGGER %s ",
+	if (ctginfo->ctgenabled != 'O')
+	{
+		appendPQExpBuffer(query, "\nALTER COMMAND TRIGGER %s SET ",
+						  fmtId(ctginfo->dobj.name));
+		switch (ctginfo->ctgenabled)
+		{
+			case 'D':
+				appendPQExpBuffer(query, "DISABLE");
+				break;
+			case 'A':
+				appendPQExpBuffer(query, "ENABLE ALWAYS");
+				break;
+			case 'R':
+				appendPQExpBuffer(query, "ENABLE REPLICA");
+				break;
+			default:
+				appendPQExpBuffer(query, "ENABLE");
+				break;
+		}
+		appendPQExpBuffer(query, ";\n");
+	}
+	appendPQExpBuffer(labelq, "COMMAND TRIGGER %s ",
 					  fmtId(ctginfo->dobj.name));
-	appendPQExpBuffer(labelq, "ON COMMAND %s",
-					  fmtId(ctginfo->ctgcommand));
 
 	ArchiveEntry(fout, ctginfo->dobj.catId, ctginfo->dobj.dumpId,
 				 ctginfo->dobj.name, NULL, NULL, "", false,
