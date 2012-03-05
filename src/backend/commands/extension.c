@@ -1215,7 +1215,8 @@ CreateExtension(CreateExtensionStmt *stmt)
 	 * in case of race conditions; but this is a friendlier error message, and
 	 * besides we need a check to support IF NOT EXISTS.
 	 */
-	if (get_extension_oid(stmt->extname, true) != InvalidOid)
+	extensionOid = get_extension_oid(stmt->extname, true);
+	if ( extensionOid != InvalidOid)
 	{
 		if (stmt->if_not_exists)
 		{
@@ -1223,6 +1224,13 @@ CreateExtension(CreateExtensionStmt *stmt)
 					(errcode(ERRCODE_DUPLICATE_OBJECT),
 					 errmsg("extension \"%s\" already exists, skipping",
 							stmt->extname)));
+
+			/* Call AFTER CREATE EXTENSION triggers */
+			if (CommandFiresAfterTriggers(&cmd))
+			{
+				cmd.objectId = extensionOid;
+				ExecAfterCommandTriggers(&cmd);
+			}
 			return;
 		}
 		else

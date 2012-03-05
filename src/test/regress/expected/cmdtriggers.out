@@ -26,6 +26,7 @@ alter command trigger snitch_before set disable;
 alter command trigger snitch_before set enable;
 alter command trigger snitch_after_ rename to snitch_after;
 create command trigger snitch_create_table after create table execute procedure snitch();
+create command trigger snitch_create_view after create view execute procedure snitch();
 create command trigger snitch_alter_table after alter table execute procedure snitch();
 create command trigger snitch_drop_table after drop table execute procedure snitch();
 create command trigger snitch_create_function after create function execute procedure snitch();
@@ -34,7 +35,11 @@ create command trigger snitch_alter_operator after alter operator execute proced
 create command trigger snitch_create_domain after create domain execute procedure snitch();
 create command trigger snitch_alter_schema after alter schema execute procedure snitch();
 create command trigger snitch_create_tsconfig after create text search configuration execute procedure snitch();
+create command trigger snitch_create_tsdict after create text search dictionary execute procedure snitch();
+create command trigger snitch_create_tsparser after create text search parser execute procedure snitch();
+create command trigger snitch_create_tstmpl after create text search template execute procedure snitch();
 create command trigger snitch_after_alter_function after alter function execute procedure snitch();
+create command trigger snitch_create_cast after create cast execute procedure snitch();
 create command trigger snitch_create_trigger before create trigger execute procedure snitch();
 create command trigger snitch_alter_trigger before alter trigger execute procedure snitch();
 create command trigger snitch_drop_trigger before drop trigger execute procedure snitch();
@@ -51,6 +56,13 @@ create schema cmd;
 NOTICE:  snitch: BEFORE any CREATE SCHEMA
 NOTICE:  snitch: BEFORE CREATE SCHEMA <NULL> cmd
 NOTICE:  snitch: AFTER any CREATE SCHEMA
+create schema cmd2;
+NOTICE:  snitch: BEFORE any CREATE SCHEMA
+NOTICE:  snitch: BEFORE CREATE SCHEMA <NULL> cmd2
+NOTICE:  snitch: AFTER any CREATE SCHEMA
+create role regbob;
+NOTICE:  snitch: BEFORE any CREATE ROLE
+NOTICE:  snitch: AFTER any CREATE ROLE
 create table cmd.foo(id bigserial primary key);
 NOTICE:  snitch: BEFORE any CREATE TABLE
 NOTICE:  CREATE TABLE will create implicit sequence "foo_id_seq" for serial column "foo.id"
@@ -65,6 +77,7 @@ NOTICE:  snitch: AFTER CREATE TABLE cmd foo
 NOTICE:  snitch: AFTER any CREATE TABLE
 create view cmd.v as select * from cmd.foo;
 NOTICE:  snitch: BEFORE any CREATE VIEW
+NOTICE:  snitch: AFTER CREATE VIEW cmd v
 NOTICE:  snitch: AFTER any CREATE VIEW
 alter table cmd.foo add column t text;
 NOTICE:  snitch: BEFORE any ALTER TABLE
@@ -172,6 +185,38 @@ alter domain cmd.us_postal_code set not null;
 NOTICE:  snitch: BEFORE any ALTER DOMAIN
 NOTICE:  snitch: BEFORE ALTER DOMAIN cmd us_postal_code
 NOTICE:  snitch: AFTER any ALTER DOMAIN
+alter domain cmd.us_postal_code set default 90210;
+NOTICE:  snitch: BEFORE any ALTER DOMAIN
+NOTICE:  snitch: BEFORE ALTER DOMAIN cmd us_postal_code
+NOTICE:  snitch: AFTER any ALTER DOMAIN
+alter domain cmd.us_postal_code drop default;
+NOTICE:  snitch: BEFORE any ALTER DOMAIN
+NOTICE:  snitch: BEFORE ALTER DOMAIN cmd us_postal_code
+NOTICE:  snitch: AFTER any ALTER DOMAIN
+alter domain cmd.us_postal_code set not null;
+NOTICE:  snitch: BEFORE any ALTER DOMAIN
+NOTICE:  snitch: BEFORE ALTER DOMAIN cmd us_postal_code
+NOTICE:  snitch: AFTER any ALTER DOMAIN
+alter domain cmd.us_postal_code drop not null;
+NOTICE:  snitch: BEFORE any ALTER DOMAIN
+NOTICE:  snitch: BEFORE ALTER DOMAIN cmd us_postal_code
+NOTICE:  snitch: AFTER any ALTER DOMAIN
+alter domain cmd.us_postal_code add constraint dummy_constraint check (value ~ '^\d{8}$');
+NOTICE:  snitch: BEFORE any ALTER DOMAIN
+NOTICE:  snitch: BEFORE ALTER DOMAIN cmd us_postal_code
+NOTICE:  snitch: AFTER any ALTER DOMAIN
+alter domain cmd.us_postal_code drop constraint dummy_constraint;
+NOTICE:  snitch: BEFORE any ALTER DOMAIN
+NOTICE:  snitch: BEFORE ALTER DOMAIN cmd us_postal_code
+NOTICE:  snitch: AFTER any ALTER DOMAIN
+alter domain cmd.us_postal_code owner to regbob;
+NOTICE:  snitch: BEFORE any ALTER DOMAIN
+NOTICE:  snitch: BEFORE ALTER DOMAIN cmd us_postal_code
+NOTICE:  snitch: AFTER any ALTER DOMAIN
+alter domain cmd.us_postal_code set schema cmd2;
+NOTICE:  snitch: BEFORE any ALTER DOMAIN
+NOTICE:  snitch: BEFORE ALTER DOMAIN cmd us_postal_code
+NOTICE:  snitch: AFTER any ALTER DOMAIN
 create function cmd.trigfunc() returns trigger language plpgsql as
 $$ begin raise notice 'trigfunc';  end;$$;
 NOTICE:  snitch: BEFORE any CREATE FUNCTION
@@ -193,16 +238,38 @@ create text search configuration test (parser = "default");
 NOTICE:  snitch: BEFORE any CREATE TEXT SEARCH CONFIGURATION
 NOTICE:  snitch: AFTER CREATE TEXT SEARCH CONFIGURATION public test
 NOTICE:  snitch: AFTER any CREATE TEXT SEARCH CONFIGURATION
-create function cmd.bigint_to_int4(bigint) returns integer language sql as 'select $1::int4';
+create text search dictionary test_stem (
+   template = snowball,
+   language = 'english', stopwords = 'english'
+);
+NOTICE:  snitch: BEFORE any CREATE TEXT SEARCH DICTIONARY
+NOTICE:  snitch: AFTER CREATE TEXT SEARCH DICTIONARY public test_stem
+NOTICE:  snitch: AFTER any CREATE TEXT SEARCH DICTIONARY
+create text search parser test_parser (
+  start = prsd_start,
+  gettoken = prsd_nexttoken,
+  end = prsd_end,
+  lextypes = prsd_lextype,
+  headline = prsd_headline
+);
+NOTICE:  snitch: BEFORE any CREATE TEXT SEARCH PARSER
+NOTICE:  snitch: AFTER CREATE TEXT SEARCH PARSER public test_parser
+NOTICE:  snitch: AFTER any CREATE TEXT SEARCH PARSER
+create text search template test_template (
+  init = dsimple_init,
+  lexize = dsimple_lexize
+);
+NOTICE:  snitch: BEFORE any CREATE TEXT SEARCH TEMPLATE
+NOTICE:  snitch: AFTER CREATE TEXT SEARCH TEMPLATE public test_template
+NOTICE:  snitch: AFTER any CREATE TEXT SEARCH TEMPLATE
+create function cmd.testcast(text) returns int4  language plpgsql as $$begin return 4::int4;end;$$;
 NOTICE:  snitch: BEFORE any CREATE FUNCTION
-NOTICE:  snitch: AFTER CREATE FUNCTION cmd bigint_to_int4
+NOTICE:  snitch: AFTER CREATE FUNCTION cmd testcast
 NOTICE:  snitch: AFTER any CREATE FUNCTION
-create cast (bigint as int4) with function cmd.bigint_to_int4(bigint);
+create cast (text as int4) with function cmd.testcast(text) as assignment;
 NOTICE:  snitch: BEFORE any CREATE CAST
-ERROR:  cast from type bigint to type integer already exists
-drop cast (bigint as int4);
-NOTICE:  snitch: BEFORE any DROP CAST
-ERROR:  cannot drop cast from bigint to integer because it is required by the database system
+NOTICE:  snitch: AFTER CREATE CAST <NULL> <NULL>
+NOTICE:  snitch: AFTER any CREATE CAST
 alter schema cmd rename to cmd1;
 NOTICE:  snitch: BEFORE any ALTER SCHEMA
 NOTICE:  snitch: AFTER ALTER SCHEMA <NULL> cmd1
@@ -217,13 +284,22 @@ drop cascades to table cmd1.bar
 drop cascades to function cmd1.plus1(integer)
 drop cascades to collation francais
 drop cascades to type cmd1.bug_status
-drop cascades to type cmd1.us_postal_code
 drop cascades to function cmd1.trigfunc()
-drop cascades to function cmd1.bigint_to_int4(bigint)
+drop cascades to function cmd1.testcast(text)
+drop cascades to cast from text to integer
 NOTICE:  snitch: AFTER any DROP SCHEMA
+drop schema cmd2 cascade;
+NOTICE:  snitch: BEFORE any DROP SCHEMA
+NOTICE:  snitch: BEFORE DROP SCHEMA <NULL> cmd2
+NOTICE:  drop cascades to type cmd2.us_postal_code
+NOTICE:  snitch: AFTER any DROP SCHEMA
+drop role regbob;
+NOTICE:  snitch: BEFORE any DROP ROLE
+NOTICE:  snitch: AFTER any DROP ROLE
 drop command trigger snitch_before;
 drop command trigger snitch_after;
 drop command trigger snitch_create_table;
+drop command trigger snitch_create_view;
 drop command trigger snitch_alter_table;
 drop command trigger snitch_drop_table;
 drop command trigger snitch_create_function;
@@ -232,7 +308,11 @@ drop command trigger snitch_alter_operator;
 drop command trigger snitch_create_domain;
 drop command trigger snitch_alter_schema;
 drop command trigger snitch_create_tsconfig;
+drop command trigger snitch_create_tsdict;
+drop command trigger snitch_create_tsparser;
+drop command trigger snitch_create_tstmpl;
 drop command trigger snitch_after_alter_function;
+drop command trigger snitch_create_cast;
 drop command trigger snitch_create_trigger;
 drop command trigger snitch_alter_trigger;
 drop command trigger snitch_drop_trigger;

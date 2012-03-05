@@ -238,6 +238,7 @@ DefineQueryRewrite(char *rulename,
 				   List *action,
 				   CommandContext cmd)
 {
+	Oid         ruleOid;
 	Relation	event_relation;
 	int			event_attno;
 	ListCell   *l;
@@ -505,14 +506,14 @@ DefineQueryRewrite(char *rulename,
 	/* discard rule if it's null action and not INSTEAD; it's a no-op */
 	if (action != NIL || is_instead)
 	{
-		InsertRule(rulename,
-				   event_type,
-				   event_relid,
-				   event_attno,
-				   is_instead,
-				   event_qual,
-				   action,
-				   replace);
+		ruleOid = InsertRule(rulename,
+							 event_type,
+							 event_relid,
+							 event_attno,
+							 is_instead,
+							 event_qual,
+							 action,
+							 replace);
 
 		/*
 		 * Set pg_class 'relhasrules' field TRUE for event relation. If
@@ -540,7 +541,10 @@ DefineQueryRewrite(char *rulename,
 
 	/* Call AFTER CREATE RULE triggers */
 	if (CommandFiresAfterTriggers(cmd))
+	{
+		cmd->objectId = ruleOid;
 		ExecAfterCommandTriggers(cmd);
+	}
 }
 
 /*

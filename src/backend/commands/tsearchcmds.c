@@ -579,7 +579,7 @@ DefineTSDictionary(List *names, List *parameters, CommandContext cmd)
 	if (CommandFiresTriggers(cmd))
 	{
 		cmd->objectId = InvalidOid;
-		cmd->objectname = pstrdup(NameStr(dname));
+		cmd->objectname = pstrdup(dictname);
 		cmd->schemaname = get_namespace_name(namespaceoid);
 
 		ExecBeforeCommandTriggers(cmd);

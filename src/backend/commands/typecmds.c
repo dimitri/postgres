@@ -2430,9 +2430,11 @@ AlterDomainDropConstraint(List *names, const char *constrName,
 	/* Call BEFORE ALTER DOMAIN triggers */
 	if (CommandFiresTriggers(cmd))
 	{
+		Form_pg_type typTup = (Form_pg_type) GETSTRUCT(tup);
+
 		cmd->objectId = HeapTupleGetOid(tup);
-		cmd->objectname = pstrdup(NameStr(((Form_pg_type)tup)->typname));
-		cmd->schemaname = get_namespace_name(((Form_pg_type)tup)->typnamespace);
+		cmd->objectname = pstrdup(NameStr(typTup->typname));
+		cmd->schemaname = get_namespace_name(typTup->typnamespace);
 
 		ExecBeforeCommandTriggers(cmd);
 	}
@@ -2691,9 +2693,11 @@ AlterDomainValidateConstraint(List *names, char *constrName, CommandContext cmd)
 	/* Call BEFORE ALTER DOMAIN triggers */
 	if (CommandFiresTriggers(cmd))
 	{
+		Form_pg_type typTup = (Form_pg_type) GETSTRUCT(tup);
+
 		cmd->objectId = HeapTupleGetOid(tup);
-		cmd->objectname = pstrdup(NameStr(((Form_pg_type)tup)->typname));
-		cmd->schemaname = get_namespace_name(((Form_pg_type)tup)->typnamespace);
+		cmd->objectname = pstrdup(NameStr(typTup->typname));
+		cmd->schemaname = get_namespace_name(typTup->typnamespace);
 
 		ExecBeforeCommandTriggers(cmd);
 	}
@@ -3434,7 +3438,7 @@ AlterTypeOwner(List *names, Oid newOwnerId, ObjectType objecttype,
 		if (CommandFiresTriggers(cmd))
 		{
 			cmd->objectId = typeOid;
-			cmd->objectname = (char *)typename;
+			cmd->objectname = pstrdup(NameStr(typTup->typname));
 			cmd->schemaname = get_namespace_name(typTup->typnamespace);
 
 			ExecBeforeCommandTriggers(cmd);

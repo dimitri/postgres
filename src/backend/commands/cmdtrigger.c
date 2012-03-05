@@ -184,7 +184,7 @@ CreateCmdTrigger(CreateCmdTrigStmt *stmt, const char *queryString)
 		&& (strcmp(stmt->command, "CREATE INDEX") == 0))
 		ereport(WARNING,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				 errmsg("CREATE INDEX CONCURRENTLY is not supported"),
+				 errmsg("AFTER CREATE INDEX CONCURRENTLY triggers are not supported"),
 				 errdetail("The command trigger will not get fired.")));
 
 	if (strcmp(stmt->command, "REINDEX") == 0)
