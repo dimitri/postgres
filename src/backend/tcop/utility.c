@@ -158,12 +158,8 @@ call_before_cmdtriggers(Node *parsetree, CommandContext cmd)
 {
 	switch (nodeTag(parsetree))
 	{
-		case T_AlterDatabaseStmt:
-		case T_AlterDatabaseSetStmt:
 		case T_AlterDomainStmt:
 		case T_AlterFunctionStmt:
-		case T_AlterRoleStmt:
-		case T_AlterRoleSetStmt:
 		case T_AlterObjectSchemaStmt:
 		case T_AlterOwnerStmt:
 		case T_AlterSeqStmt:
@@ -175,7 +171,6 @@ call_before_cmdtriggers(Node *parsetree, CommandContext cmd)
 		case T_CreatedbStmt:
 		case T_CreateDomainStmt:
 		case T_CreateFunctionStmt:
-		case T_CreateRoleStmt:
 		case T_IndexStmt:
 		case T_CreatePLangStmt:
 		case T_CreateOpClassStmt:
@@ -185,15 +180,12 @@ call_before_cmdtriggers(Node *parsetree, CommandContext cmd)
 		case T_CreateSchemaStmt:
 		case T_CreateSeqStmt:
 		case T_CreateStmt:
-		case T_CreateTableSpaceStmt:
 		case T_CreateTrigStmt:
 		case T_CompositeTypeStmt:
 		case T_CreateEnumStmt:
 		case T_CreateRangeStmt:
 		case T_AlterEnumStmt:
 		case T_ViewStmt:
-		case T_DropdbStmt:
-		case T_DropTableSpaceStmt:
 		case T_DropRoleStmt:
 		case T_GrantStmt:
 		case T_GrantRoleStmt:
@@ -213,7 +205,6 @@ call_before_cmdtriggers(Node *parsetree, CommandContext cmd)
 		case T_CreateUserMappingStmt:
 		case T_AlterUserMappingStmt:
 		case T_DropUserMappingStmt:
-		case T_AlterTableSpaceOptionsStmt:
 		case T_CreateForeignTableStmt:
 		case T_ClusterStmt:
 		case T_VacuumStmt:
@@ -246,12 +237,8 @@ call_after_cmdtriggers(Node *parsetree, CommandContext cmd)
 {
 	switch (nodeTag(parsetree))
 	{
-		case T_AlterDatabaseStmt:
-		case T_AlterDatabaseSetStmt:
 		case T_AlterDomainStmt:
 		case T_AlterFunctionStmt:
-		case T_AlterRoleStmt:
-		case T_AlterRoleSetStmt:
 		case T_AlterObjectSchemaStmt:
 		case T_AlterOwnerStmt:
 		case T_AlterSeqStmt:
@@ -260,10 +247,8 @@ call_after_cmdtriggers(Node *parsetree, CommandContext cmd)
 		case T_DefineStmt:
 		case T_CreateCastStmt:
 		case T_CreateConversionStmt:
-		case T_CreatedbStmt:
 		case T_CreateDomainStmt:
 		case T_CreateFunctionStmt:
-		case T_CreateRoleStmt:
 		case T_CreatePLangStmt:
 		case T_CreateOpClassStmt:
 		case T_CreateOpFamilyStmt:
@@ -272,15 +257,12 @@ call_after_cmdtriggers(Node *parsetree, CommandContext cmd)
 		case T_CreateSchemaStmt:
 		case T_CreateSeqStmt:
 		case T_CreateStmt:
-		case T_CreateTableSpaceStmt:
 		case T_CreateTrigStmt:
 		case T_CompositeTypeStmt:
 		case T_CreateEnumStmt:
 		case T_CreateRangeStmt:
 		case T_AlterEnumStmt:
 		case T_ViewStmt:
-		case T_DropdbStmt:
-		case T_DropTableSpaceStmt:
 		case T_DropRoleStmt:
 		case T_GrantStmt:
 		case T_GrantRoleStmt:
@@ -1711,6 +1693,9 @@ AlterObjectTypeCommandTag(ObjectType objtype)
 			break;
 		case OBJECT_TRIGGER:
 			tag = "ALTER TRIGGER";
+			break;
+		case OBJECT_CMDTRIGGER:
+			tag = "ALTER COMMAND TRIGGER";
 			break;
 		case OBJECT_TSCONFIGURATION:
 			tag = "ALTER TEXT SEARCH CONFIGURATION";

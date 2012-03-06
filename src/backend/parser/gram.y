@@ -4342,6 +4342,8 @@ trigger_command:
 			   | ALTER FOREIGN TABLE				{ $$ = "ALTER FOREIGN TABLE"; }
 			   | ALTER FOREIGN DATA_P WRAPPER		{ $$ = "ALTER FOREIGN DATA WRAPPER"; }
 			   | ALTER USER MAPPING					{ $$ = "ALTER USER MAPPING"; }
+			   | ALTER SEQUENCE						{ $$ = "ALTER SEQUENCE"; }
+			   | ALTER VIEW							{ $$ = "ALTER VIEW"; }
 			   | ALTER AGGREGATE					{ $$ = "ALTER AGGREGATE"; }
 			   | ALTER OPERATOR						{ $$ = "ALTER OPERATOR"; }
 			   | ALTER OPERATOR CLASS				{ $$ = "ALTER OPERATOR CLASS"; }

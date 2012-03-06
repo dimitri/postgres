@@ -487,11 +487,11 @@ AlterSequence(AlterSeqStmt *stmt)
 	 */
 	InitCommandContext(&cmd, (Node *)stmt, false);
 
-	if (ListCommandTriggers(&cmd))
+	if (CommandFiresTriggers(&cmd))
 	{
 		cmd.objectId = relid;
-		cmd.objectname = stmt->sequence->relname;
-		cmd.schemaname = stmt->sequence->schemaname;
+		cmd.objectname = pstrdup(stmt->sequence->relname);
+		cmd.schemaname = pstrdup(stmt->sequence->schemaname);
 
 		ExecBeforeCommandTriggers(&cmd);
 	}

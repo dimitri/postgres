@@ -47,7 +47,7 @@ extern void ExecuteTruncate(TruncateStmt *stmt);
 
 extern void SetRelationHasSubclass(Oid relationId, bool relhassubclass);
 
-extern void renameatt(RenameStmt *stmt);
+extern void renameatt(RenameStmt *stmt, CommandContext cmd);
 
 extern void RenameRelation(RenameStmt *stmt, CommandContext cmd);
 

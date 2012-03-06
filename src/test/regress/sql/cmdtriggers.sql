@@ -32,6 +32,8 @@ alter command trigger snitch_after_ rename to snitch_after;
 create command trigger snitch_create_table after create table execute procedure snitch();
 create command trigger snitch_create_view after create view execute procedure snitch();
 create command trigger snitch_alter_table after alter table execute procedure snitch();
+create command trigger snitch_alter_seq after alter sequence execute procedure snitch();
+create command trigger snitch_alter_view after alter view execute procedure snitch();
 create command trigger snitch_drop_table after drop table execute procedure snitch();
 create command trigger snitch_create_function after create function execute procedure snitch();
 create command trigger snitch_create_collation after create collation execute procedure snitch();
@@ -65,6 +67,48 @@ create role regbob;
 create table cmd.foo(id bigserial primary key);
 create view cmd.v as select * from cmd.foo;
 alter table cmd.foo add column t text;
+
+create table test9 (id int, stuff text);
+alter table test9 rename to test;
+alter table test set schema cmd;
+alter table cmd.test rename column stuff to things;
+alter table cmd.test add column alpha text;
+alter table cmd.test alter column alpha set data type varchar(300);
+alter table cmd.test alter column alpha set default 'test';
+alter table cmd.test alter column alpha drop default;
+alter table cmd.test alter column alpha set statistics 78;
+alter table cmd.test alter column alpha set storage plain;
+alter table cmd.test alter column alpha set not null;
+alter table cmd.test alter column alpha drop not null;
+alter table cmd.test alter column alpha set (n_distinct = -0.78);
+alter table cmd.test alter column alpha reset (n_distinct);
+alter table cmd.test drop column alpha;
+alter table cmd.test add check (id > 2) not valid;
+alter table cmd.test add check (id < 800000);
+alter table cmd.test set without cluster;
+alter table cmd.test set with oids;
+alter table cmd.test set without oids;
+
+create sequence test_seq_;
+alter sequence test_seq_ owner to regbob;
+alter sequence test_seq_ rename to test_seq;
+alter sequence test_seq set schema cmd;
+alter sequence cmd.test_seq start with 3;
+alter sequence cmd.test_seq restart with 4;
+alter sequence cmd.test_seq minvalue 3;
+alter sequence cmd.test_seq no minvalue;
+alter sequence cmd.test_seq maxvalue 900000;
+alter sequence cmd.test_seq no maxvalue;
+alter sequence cmd.test_seq cache 876;
+alter sequence cmd.test_seq cycle;
+alter sequence cmd.test_seq no cycle;
+
+create view view_test as select id, things from cmd.test;
+alter view view_test owner to regbob;
+alter view view_test rename to view_test2;
+alter view view_test2 set schema cmd;
+alter view cmd.view_test2 alter column id set default 9;
+alter view cmd.view_test2 alter column id drop default;
 
 cluster cmd.foo using foo_pkey;
 vacuum cmd.foo;
@@ -107,7 +151,18 @@ alter collation cmd.french rename to francais;
 
 create type cmd.compfoo AS (f1 int, f2 text);
 alter type cmd.compfoo add attribute f3 text;
+
+create type cmd.type_test AS (a integer, b integer, c text);
+alter type cmd.type_test owner to regbob;
+alter type cmd.type_test rename to type_test2;
+alter type cmd.type_test2 set schema public;
+alter type public.type_test2 rename attribute a to z;
+alter type public.type_test2 add attribute alpha text;
+alter type public.type_test2 alter attribute alpha set data type char(90);
+alter type public.type_test2 drop attribute alpha;
+
 drop type cmd.compfoo;
+drop type public.type_test2;
 
 create type cmd.bug_status as enum ('new', 'open', 'closed');
 alter type cmd.bug_status add value 'wontfix';
@@ -165,6 +220,8 @@ drop command trigger snitch_after;
 drop command trigger snitch_create_table;
 drop command trigger snitch_create_view;
 drop command trigger snitch_alter_table;
+drop command trigger snitch_alter_seq;
+drop command trigger snitch_alter_view;
 drop command trigger snitch_drop_table;
 drop command trigger snitch_create_function;
 drop command trigger snitch_create_collation;

@@ -439,7 +439,7 @@ check_cmdtrigger_name(const char *trigname, Relation tgrel)
  * Scan the catalogs and fill in the CommandContext procedures that we will
  * have to call before and after the command.
  */
-bool
+static bool
 ListCommandTriggers(CommandContext cmd)
 {
 	int         count = 0;

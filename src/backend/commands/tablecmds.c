@@ -2331,7 +2331,7 @@ RangeVarCallbackForRenameAttribute(const RangeVar *rv, Oid relid, Oid oldrelid,
  *		renameatt		- changes the name of a attribute in a relation
  */
 void
-renameatt(RenameStmt *stmt)
+renameatt(RenameStmt *stmt, CommandContext cmd)
 {
 	Oid			relid;
 
@@ -2349,6 +2349,16 @@ renameatt(RenameStmt *stmt)
 		return;
 	}
 
+	/* BEFORE command triggers */
+	if (CommandFiresTriggers(cmd))
+	{
+		cmd->objectId = relid;
+		cmd->objectname = stmt->relation->relname;
+		cmd->schemaname = stmt->relation->schemaname;
+
+		ExecBeforeCommandTriggers(cmd);
+	}
+
 	renameatt_internal(relid,
 					   stmt->subname,	/* old att name */
 					   stmt->newname,	/* new att name */
@@ -2356,6 +2366,10 @@ renameatt(RenameStmt *stmt)
 					   false,	/* recursing? */
 					   0,		/* expected inhcount */
 					   stmt->behavior);
+
+	/* AFTER command triggers */
+	if (CommandFiresAfterTriggers(cmd))
+		ExecAfterCommandTriggers(cmd);
 }
 
 /*

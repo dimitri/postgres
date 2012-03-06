@@ -45,7 +45,6 @@ extern void AlterCmdTrigger(AlterCmdTrigStmt *stmt);
 extern void RenameCmdTrigger(List *name, const char *newname);
 
 extern void InitCommandContext(CommandContext cmd, const Node *stmt, bool list_triggers);
-extern bool ListCommandTriggers(CommandContext cmd);
 extern bool CommandFiresTriggers(CommandContext cmd);
 extern bool CommandFiresAfterTriggers(CommandContext cmd);
 extern void ExecBeforeCommandTriggers(CommandContext cmd);

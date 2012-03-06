@@ -119,7 +119,7 @@ ExecRenameStmt(RenameStmt *stmt)
 
 		case OBJECT_COLUMN:
 		case OBJECT_ATTRIBUTE:
-			renameatt(stmt);
+			renameatt(stmt, &cmd);
 			break;
 
 		case OBJECT_TRIGGER:

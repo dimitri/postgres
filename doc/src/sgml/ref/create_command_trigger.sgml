@@ -45,6 +45,7 @@ CREATE COMMAND TRIGGER <replaceable class="PARAMETER">name</replaceable> { BEFOR
     ALTER OPERATOR FAMILY
     ALTER OPERATOR FAMILY
     ALTER SCHEMA
+    ALTER SEQUENCE
     ALTER SERVER
     ALTER TABLE
     ALTER TEXT SEARCH CONFIGURATION
@@ -54,6 +55,7 @@ CREATE COMMAND TRIGGER <replaceable class="PARAMETER">name</replaceable> { BEFOR
     ALTER TRIGGER
     ALTER TYPE
     ALTER USER MAPPING
+    ALTER VIEW
     CLUSTER
     CREATE AGGREGATE
     CREATE CAST
@@ -132,6 +134,13 @@ CREATE COMMAND TRIGGER <replaceable class="PARAMETER">name</replaceable> { BEFOR
    is executed. A command trigger's function must
    return <literal>void</literal>, the only it can aborts the execution of
    the command is by raising an exception.
+  </para>
+
+  <para>
+   Note that objects dropped by effect of <literal>DROP CASCADE</literal>
+   will not provoque firing a command trigger, only the top-level command
+   for the main object will fire a command trigger. That also applis to
+   other dependencies following, as in <literal>DROP OWNED BY</literal>.
   </para>
 
   <para>

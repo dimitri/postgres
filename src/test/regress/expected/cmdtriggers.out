@@ -28,6 +28,8 @@ alter command trigger snitch_after_ rename to snitch_after;
 create command trigger snitch_create_table after create table execute procedure snitch();
 create command trigger snitch_create_view after create view execute procedure snitch();
 create command trigger snitch_alter_table after alter table execute procedure snitch();
+create command trigger snitch_alter_seq after alter sequence execute procedure snitch();
+create command trigger snitch_alter_view after alter view execute procedure snitch();
 create command trigger snitch_drop_table after drop table execute procedure snitch();
 create command trigger snitch_create_function after create function execute procedure snitch();
 create command trigger snitch_create_collation after create collation execute procedure snitch();
@@ -61,8 +63,6 @@ NOTICE:  snitch: BEFORE any CREATE SCHEMA
 NOTICE:  snitch: BEFORE CREATE SCHEMA <NULL> cmd2
 NOTICE:  snitch: AFTER any CREATE SCHEMA
 create role regbob;
-NOTICE:  snitch: BEFORE any CREATE ROLE
-NOTICE:  snitch: AFTER any CREATE ROLE
 create table cmd.foo(id bigserial primary key);
 NOTICE:  snitch: BEFORE any CREATE TABLE
 NOTICE:  CREATE TABLE will create implicit sequence "foo_id_seq" for serial column "foo.id"
@@ -72,6 +72,7 @@ NOTICE:  snitch: BEFORE any CREATE INDEX
 NOTICE:  CREATE TABLE / PRIMARY KEY will create implicit index "foo_pkey" for table "foo"
 NOTICE:  snitch: AFTER any CREATE INDEX
 NOTICE:  snitch: BEFORE any ALTER SEQUENCE
+NOTICE:  snitch: AFTER ALTER SEQUENCE cmd foo_id_seq
 NOTICE:  snitch: AFTER any ALTER SEQUENCE
 NOTICE:  snitch: AFTER CREATE TABLE cmd foo
 NOTICE:  snitch: AFTER any CREATE TABLE
@@ -83,6 +84,161 @@ alter table cmd.foo add column t text;
 NOTICE:  snitch: BEFORE any ALTER TABLE
 NOTICE:  snitch: AFTER ALTER TABLE cmd foo
 NOTICE:  snitch: AFTER any ALTER TABLE
+create table test9 (id int, stuff text);
+NOTICE:  snitch: BEFORE any CREATE TABLE
+NOTICE:  snitch: AFTER CREATE TABLE public test9
+NOTICE:  snitch: AFTER any CREATE TABLE
+alter table test9 rename to test;
+NOTICE:  snitch: BEFORE any ALTER TABLE
+NOTICE:  snitch: AFTER ALTER TABLE public test
+NOTICE:  snitch: AFTER any ALTER TABLE
+alter table test set schema cmd;
+NOTICE:  snitch: BEFORE any ALTER TABLE
+NOTICE:  snitch: AFTER ALTER TABLE cmd test
+NOTICE:  snitch: AFTER any ALTER TABLE
+alter table cmd.test rename column stuff to things;
+NOTICE:  snitch: BEFORE any ALTER TABLE
+NOTICE:  snitch: AFTER ALTER TABLE cmd test
+NOTICE:  snitch: AFTER any ALTER TABLE
+alter table cmd.test add column alpha text;
+NOTICE:  snitch: BEFORE any ALTER TABLE
+NOTICE:  snitch: AFTER ALTER TABLE cmd test
+NOTICE:  snitch: AFTER any ALTER TABLE
+alter table cmd.test alter column alpha set data type varchar(300);
+NOTICE:  snitch: BEFORE any ALTER TABLE
+NOTICE:  snitch: AFTER ALTER TABLE cmd test
+NOTICE:  snitch: AFTER any ALTER TABLE
+alter table cmd.test alter column alpha set default 'test';
+NOTICE:  snitch: BEFORE any ALTER TABLE
+NOTICE:  snitch: AFTER ALTER TABLE cmd test
+NOTICE:  snitch: AFTER any ALTER TABLE
+alter table cmd.test alter column alpha drop default;
+NOTICE:  snitch: BEFORE any ALTER TABLE
+NOTICE:  snitch: AFTER ALTER TABLE cmd test
+NOTICE:  snitch: AFTER any ALTER TABLE
+alter table cmd.test alter column alpha set statistics 78;
+NOTICE:  snitch: BEFORE any ALTER TABLE
+NOTICE:  snitch: AFTER ALTER TABLE cmd test
+NOTICE:  snitch: AFTER any ALTER TABLE
+alter table cmd.test alter column alpha set storage plain;
+NOTICE:  snitch: BEFORE any ALTER TABLE
+NOTICE:  snitch: AFTER ALTER TABLE cmd test
+NOTICE:  snitch: AFTER any ALTER TABLE
+alter table cmd.test alter column alpha set not null;
+NOTICE:  snitch: BEFORE any ALTER TABLE
+NOTICE:  snitch: AFTER ALTER TABLE cmd test
+NOTICE:  snitch: AFTER any ALTER TABLE
+alter table cmd.test alter column alpha drop not null;
+NOTICE:  snitch: BEFORE any ALTER TABLE
+NOTICE:  snitch: AFTER ALTER TABLE cmd test
+NOTICE:  snitch: AFTER any ALTER TABLE
+alter table cmd.test alter column alpha set (n_distinct = -0.78);
+NOTICE:  snitch: BEFORE any ALTER TABLE
+NOTICE:  snitch: AFTER ALTER TABLE cmd test
+NOTICE:  snitch: AFTER any ALTER TABLE
+alter table cmd.test alter column alpha reset (n_distinct);
+NOTICE:  snitch: BEFORE any ALTER TABLE
+NOTICE:  snitch: AFTER ALTER TABLE cmd test
+NOTICE:  snitch: AFTER any ALTER TABLE
+alter table cmd.test drop column alpha;
+NOTICE:  snitch: BEFORE any ALTER TABLE
+NOTICE:  snitch: AFTER ALTER TABLE cmd test
+NOTICE:  snitch: AFTER any ALTER TABLE
+alter table cmd.test add check (id > 2) not valid;
+NOTICE:  snitch: BEFORE any ALTER TABLE
+NOTICE:  snitch: AFTER ALTER TABLE cmd test
+NOTICE:  snitch: AFTER any ALTER TABLE
+alter table cmd.test add check (id < 800000);
+NOTICE:  snitch: BEFORE any ALTER TABLE
+NOTICE:  snitch: AFTER ALTER TABLE cmd test
+NOTICE:  snitch: AFTER any ALTER TABLE
+alter table cmd.test set without cluster;
+NOTICE:  snitch: BEFORE any ALTER TABLE
+NOTICE:  snitch: AFTER ALTER TABLE cmd test
+NOTICE:  snitch: AFTER any ALTER TABLE
+alter table cmd.test set with oids;
+NOTICE:  snitch: BEFORE any ALTER TABLE
+NOTICE:  snitch: AFTER ALTER TABLE cmd test
+NOTICE:  snitch: AFTER any ALTER TABLE
+alter table cmd.test set without oids;
+NOTICE:  snitch: BEFORE any ALTER TABLE
+NOTICE:  snitch: AFTER ALTER TABLE cmd test
+NOTICE:  snitch: AFTER any ALTER TABLE
+create sequence test_seq_;
+NOTICE:  snitch: BEFORE any CREATE SEQUENCE
+NOTICE:  snitch: AFTER any CREATE SEQUENCE
+alter sequence test_seq_ owner to regbob;
+NOTICE:  snitch: BEFORE any ALTER SEQUENCE
+NOTICE:  snitch: AFTER ALTER SEQUENCE public test_seq_
+NOTICE:  snitch: AFTER any ALTER SEQUENCE
+alter sequence test_seq_ rename to test_seq;
+NOTICE:  snitch: BEFORE any ALTER SEQUENCE
+NOTICE:  snitch: AFTER ALTER SEQUENCE public test_seq
+NOTICE:  snitch: AFTER any ALTER SEQUENCE
+alter sequence test_seq set schema cmd;
+NOTICE:  snitch: BEFORE any ALTER SEQUENCE
+NOTICE:  snitch: AFTER ALTER SEQUENCE cmd test_seq
+NOTICE:  snitch: AFTER any ALTER SEQUENCE
+alter sequence cmd.test_seq start with 3;
+NOTICE:  snitch: BEFORE any ALTER SEQUENCE
+NOTICE:  snitch: AFTER ALTER SEQUENCE cmd test_seq
+NOTICE:  snitch: AFTER any ALTER SEQUENCE
+alter sequence cmd.test_seq restart with 4;
+NOTICE:  snitch: BEFORE any ALTER SEQUENCE
+NOTICE:  snitch: AFTER ALTER SEQUENCE cmd test_seq
+NOTICE:  snitch: AFTER any ALTER SEQUENCE
+alter sequence cmd.test_seq minvalue 3;
+NOTICE:  snitch: BEFORE any ALTER SEQUENCE
+NOTICE:  snitch: AFTER ALTER SEQUENCE cmd test_seq
+NOTICE:  snitch: AFTER any ALTER SEQUENCE
+alter sequence cmd.test_seq no minvalue;
+NOTICE:  snitch: BEFORE any ALTER SEQUENCE
+NOTICE:  snitch: AFTER ALTER SEQUENCE cmd test_seq
+NOTICE:  snitch: AFTER any ALTER SEQUENCE
+alter sequence cmd.test_seq maxvalue 900000;
+NOTICE:  snitch: BEFORE any ALTER SEQUENCE
+NOTICE:  snitch: AFTER ALTER SEQUENCE cmd test_seq
+NOTICE:  snitch: AFTER any ALTER SEQUENCE
+alter sequence cmd.test_seq no maxvalue;
+NOTICE:  snitch: BEFORE any ALTER SEQUENCE
+NOTICE:  snitch: AFTER ALTER SEQUENCE cmd test_seq
+NOTICE:  snitch: AFTER any ALTER SEQUENCE
+alter sequence cmd.test_seq cache 876;
+NOTICE:  snitch: BEFORE any ALTER SEQUENCE
+NOTICE:  snitch: AFTER ALTER SEQUENCE cmd test_seq
+NOTICE:  snitch: AFTER any ALTER SEQUENCE
+alter sequence cmd.test_seq cycle;
+NOTICE:  snitch: BEFORE any ALTER SEQUENCE
+NOTICE:  snitch: AFTER ALTER SEQUENCE cmd test_seq
+NOTICE:  snitch: AFTER any ALTER SEQUENCE
+alter sequence cmd.test_seq no cycle;
+NOTICE:  snitch: BEFORE any ALTER SEQUENCE
+NOTICE:  snitch: AFTER ALTER SEQUENCE cmd test_seq
+NOTICE:  snitch: AFTER any ALTER SEQUENCE
+create view view_test as select id, things from cmd.test;
+NOTICE:  snitch: BEFORE any CREATE VIEW
+NOTICE:  snitch: AFTER CREATE VIEW <NULL> view_test
+NOTICE:  snitch: AFTER any CREATE VIEW
+alter view view_test owner to regbob;
+NOTICE:  snitch: BEFORE any ALTER VIEW
+NOTICE:  snitch: AFTER ALTER VIEW public view_test
+NOTICE:  snitch: AFTER any ALTER VIEW
+alter view view_test rename to view_test2;
+NOTICE:  snitch: BEFORE any ALTER VIEW
+NOTICE:  snitch: AFTER ALTER VIEW public view_test2
+NOTICE:  snitch: AFTER any ALTER VIEW
+alter view view_test2 set schema cmd;
+NOTICE:  snitch: BEFORE any ALTER VIEW
+NOTICE:  snitch: AFTER ALTER VIEW cmd view_test2
+NOTICE:  snitch: AFTER any ALTER VIEW
+alter view cmd.view_test2 alter column id set default 9;
+NOTICE:  snitch: BEFORE any ALTER VIEW
+NOTICE:  snitch: AFTER ALTER VIEW cmd view_test2
+NOTICE:  snitch: AFTER any ALTER VIEW
+alter view cmd.view_test2 alter column id drop default;
+NOTICE:  snitch: BEFORE any ALTER VIEW
+NOTICE:  snitch: AFTER ALTER VIEW cmd view_test2
+NOTICE:  snitch: AFTER any ALTER VIEW
 cluster cmd.foo using foo_pkey;
 NOTICE:  snitch: BEFORE any CLUSTER
 vacuum cmd.foo;
@@ -167,7 +323,42 @@ alter type cmd.compfoo add attribute f3 text;
 NOTICE:  snitch: BEFORE any ALTER TYPE
 NOTICE:  snitch: BEFORE ALTER TYPE cmd compfoo
 NOTICE:  snitch: AFTER any ALTER TYPE
+create type cmd.type_test AS (a integer, b integer, c text);
+NOTICE:  snitch: BEFORE any CREATE TYPE
+NOTICE:  snitch: BEFORE CREATE TYPE cmd type_test
+NOTICE:  snitch: AFTER any CREATE TYPE
+alter type cmd.type_test owner to regbob;
+NOTICE:  snitch: BEFORE any ALTER TYPE
+NOTICE:  snitch: BEFORE ALTER TYPE cmd type_test
+NOTICE:  snitch: AFTER any ALTER TYPE
+alter type cmd.type_test rename to type_test2;
+NOTICE:  snitch: BEFORE any ALTER TYPE
+NOTICE:  snitch: BEFORE ALTER TYPE cmd type_test
+NOTICE:  snitch: AFTER any ALTER TYPE
+alter type cmd.type_test2 set schema public;
+NOTICE:  snitch: BEFORE any ALTER TYPE
+NOTICE:  snitch: BEFORE ALTER TYPE cmd type_test2
+NOTICE:  snitch: AFTER any ALTER TYPE
+alter type public.type_test2 rename attribute a to z;
+NOTICE:  snitch: BEFORE any ALTER TYPE
+NOTICE:  snitch: BEFORE ALTER TYPE public type_test2
+NOTICE:  snitch: AFTER any ALTER TYPE
+alter type public.type_test2 add attribute alpha text;
+NOTICE:  snitch: BEFORE any ALTER TYPE
+NOTICE:  snitch: BEFORE ALTER TYPE public type_test2
+NOTICE:  snitch: AFTER any ALTER TYPE
+alter type public.type_test2 alter attribute alpha set data type char(90);
+NOTICE:  snitch: BEFORE any ALTER TYPE
+NOTICE:  snitch: BEFORE ALTER TYPE public type_test2
+NOTICE:  snitch: AFTER any ALTER TYPE
+alter type public.type_test2 drop attribute alpha;
+NOTICE:  snitch: BEFORE any ALTER TYPE
+NOTICE:  snitch: BEFORE ALTER TYPE public type_test2
+NOTICE:  snitch: AFTER any ALTER TYPE
 drop type cmd.compfoo;
+NOTICE:  snitch: BEFORE any DROP TYPE
+NOTICE:  snitch: AFTER any DROP TYPE
+drop type public.type_test2;
 NOTICE:  snitch: BEFORE any DROP TYPE
 NOTICE:  snitch: AFTER any DROP TYPE
 create type cmd.bug_status as enum ('new', 'open', 'closed');
@@ -277,9 +468,12 @@ NOTICE:  snitch: AFTER any ALTER SCHEMA
 drop schema cmd1 cascade;
 NOTICE:  snitch: BEFORE any DROP SCHEMA
 NOTICE:  snitch: BEFORE DROP SCHEMA <NULL> cmd1
-NOTICE:  drop cascades to 9 other objects
+NOTICE:  drop cascades to 12 other objects
 DETAIL:  drop cascades to table cmd1.foo
 drop cascades to view cmd1.v
+drop cascades to table cmd1.test
+drop cascades to sequence cmd1.test_seq
+drop cascades to view cmd1.view_test2
 drop cascades to table cmd1.bar
 drop cascades to function cmd1.plus1(integer)
 drop cascades to collation francais
@@ -301,6 +495,8 @@ drop command trigger snitch_after;
 drop command trigger snitch_create_table;
 drop command trigger snitch_create_view;
 drop command trigger snitch_alter_table;
+drop command trigger snitch_alter_seq;
+drop command trigger snitch_alter_view;
 drop command trigger snitch_drop_table;
 drop command trigger snitch_create_function;
 drop command trigger snitch_create_collation;
