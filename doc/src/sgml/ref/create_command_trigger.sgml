@@ -41,8 +41,6 @@ CREATE COMMAND TRIGGER <replaceable class="PARAMETER">name</replaceable> { BEFOR
     ALTER LANGUAGE
     ALTER OPERATOR
     ALTER OPERATOR CLASS
-    ALTER OPERATOR CLASS
-    ALTER OPERATOR FAMILY
     ALTER OPERATOR FAMILY
     ALTER SCHEMA
     ALTER SEQUENCE
@@ -137,10 +135,11 @@ CREATE COMMAND TRIGGER <replaceable class="PARAMETER">name</replaceable> { BEFOR
   </para>
 
   <para>
-   Note that objects dropped by effect of <literal>DROP CASCADE</literal>
-   will not provoque firing a command trigger, only the top-level command
-   for the main object will fire a command trigger. That also applis to
-   other dependencies following, as in <literal>DROP OWNED BY</literal>.
+   Note that objects dropped by the effect of <literal>DROP
+   CASCADE</literal> will not result in a command trigger firing, only the
+   top-level command for the main object will fire a command trigger. That
+   also applies to other dependencies following, as in <literal>DROP OWNED
+   BY</literal>.
   </para>
 
   <para>
@@ -192,7 +191,7 @@ CREATE COMMAND TRIGGER <replaceable class="PARAMETER">name</replaceable> { BEFOR
       you are connected to.
      </para>
      <para>
-      Commands that exercize their own transaction control are only
+      Commands that exercise their own transaction control are only
       supported in <literal>BEFORE</literal> command triggers, that's the
       case for <literal>VACUUM</literal>, <literal>CLUSTER</literal>
       <literal>CREATE INDEX CONCURRENTLY</literal>, and <literal>REINDEX
@@ -215,6 +214,11 @@ CREATE COMMAND TRIGGER <replaceable class="PARAMETER">name</replaceable> { BEFOR
       not to be able to take over control from a superuser.
      </para>
      <para>
+      Triggers on ANY command support more commands than just this list, and
+      will provide NULL values for every argument except for the argument
+      that determines whether the trigger was before or after the command
+      event, and the command tag.
+
       Triggers on <literal>ANY</literal> command support more commands than
       just this list, and will only provide the <literal>command
       tag</literal> argument as <literal>NOT NULL</literal>. Supporting more
@@ -244,14 +248,8 @@ CREATE COMMAND TRIGGER <replaceable class="PARAMETER">name</replaceable> { BEFOR
       tag</literal>, <literal>objectid</literal> (can be null in case of a
       BEFORE CREATE or an AFTER DROP command trigger
       timing), <literal>schemaname</literal> (can be null for objects not
-      living in a schema, and for sequences due to an implementation limit)
-      and <literal>object name</literal> (can be null for any command
-      triggers).
-     </para>
-     <para>
-      The command <literal>CREATE SEQUENCE</literal> lacks support for
-      the <literal>schemaname</literal> command trigger argument, it
-      provides <literal>NULL</literal> in all cases.
+      living in a schema) and <literal>object name</literal> (can be null
+      for any command triggers).
      </para>
     </listitem>
    </varlistentry>

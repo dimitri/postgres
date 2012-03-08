@@ -1324,6 +1324,7 @@ AlterFunction(AlterFunctionStmt *stmt)
 	List	   *set_items = NIL;
 	DefElem    *cost_item = NULL;
 	DefElem    *rows_item = NULL;
+	CommandContextData cmd;
 
 	rel = heap_open(ProcedureRelationId, RowExclusiveLock);
 
@@ -1433,12 +1434,28 @@ AlterFunction(AlterFunctionStmt *stmt)
 								repl_val, repl_null, repl_repl);
 	}
 
+	/* Call BEFORE ALTER FUNCTION command triggers */
+	InitCommandContext(&cmd, (Node *)stmt, false);
+
+	if (CommandFiresTriggers(&cmd))
+	{
+		cmd.objectId = InvalidOid;
+		cmd.objectname = pstrdup(NameStr(procForm->proname));
+		cmd.schemaname = get_namespace_name(procForm->pronamespace);
+
+		ExecBeforeCommandTriggers(&cmd);
+	}
+
 	/* Do the update */
 	simple_heap_update(rel, &tup->t_self, tup);
 	CatalogUpdateIndexes(rel, tup);
 
 	heap_close(rel, NoLock);
 	heap_freetuple(tup);
+
+	/* Call AFTER ALTER FUNCTION command triggers */
+	if (CommandFiresAfterTriggers(&cmd))
+		ExecAfterCommandTriggers(&cmd);
 }
 
 /*

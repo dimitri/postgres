@@ -123,8 +123,8 @@ vacuum(VacuumStmt *vacstmt, Oid relid, bool do_toast,
 	else
 		in_outer_xact = IsInTransactionChain(isTopLevel);
 
-	/* CAll BEFORE VACUUM command triggers */
-	if (!IsAutoVacuumWorkerProcess() && vacstmt->relation != NULL)
+	/* Call BEFORE VACUUM command triggers */
+	if (!IsAutoVacuumWorkerProcess())
 	{
 		CommandContextData cmd;
 		InitCommandContext(&cmd, (Node *)vacstmt, false);
@@ -132,9 +132,12 @@ vacuum(VacuumStmt *vacstmt, Oid relid, bool do_toast,
 		if (CommandFiresTriggers(&cmd))
 		{
 			cmd.objectId = relid;
-			cmd.objectname = vacstmt->relation->relname;
-			cmd.schemaname = vacstmt->relation->schemaname;
 
+			if (vacstmt->relation != NULL)
+			{
+				cmd.objectname = vacstmt->relation->relname;
+				cmd.schemaname = vacstmt->relation->schemaname;
+			}
 			ExecBeforeCommandTriggers(&cmd);
 		}
 	}

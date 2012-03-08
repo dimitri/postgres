@@ -415,7 +415,7 @@ static void RangeVarCallbackForAlterRelation(const RangeVar *rv, Oid relid,
  * ----------------------------------------------------------------
  */
 Oid
-DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId)
+DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId, CommandContext cmd)
 {
 	char		relname[NAMEDATALEN];
 	Oid			namespaceId;
@@ -608,6 +608,16 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId)
 		}
 	}
 
+	/* Exec BEFORE CREATE view|sequence|table|type command triggers */
+	if (CommandFiresTriggers(cmd))
+	{
+		cmd->objectId = InvalidOid;
+		cmd->objectname = pstrdup(relname);
+		cmd->schemaname = get_namespace_name(namespaceId);
+
+		ExecBeforeCommandTriggers(cmd);
+	}
+
 	/*
 	 * Create the relation.  Inherited defaults and constraints are passed in
 	 * for immediate handling --- since they don't need parsing, they can be
@@ -670,6 +680,7 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId)
 	 */
 	relation_close(rel, NoLock);
 
+	/* AFTER command triggers are fired from well outside this function */
 	return relationId;
 }
 

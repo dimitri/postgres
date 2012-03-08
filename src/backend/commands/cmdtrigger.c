@@ -185,13 +185,13 @@ CreateCmdTrigger(CreateCmdTrigStmt *stmt, const char *queryString)
 		ereport(WARNING,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 				 errmsg("AFTER CREATE INDEX CONCURRENTLY triggers are not supported"),
-				 errdetail("The command trigger will not get fired.")));
+				 errdetail("The command trigger will not fire on concurrently-created indexes.")));
 
 	if (strcmp(stmt->command, "REINDEX") == 0)
 		ereport(WARNING,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 				 errmsg("REINDEX DATABASE is not supported"),
-				 errdetail("The command trigger will not get fired.")));
+				 errdetail("The command trigger will not fire on REINDEX DATABASE.")));
 
 	if (funcrettype != VOIDOID)
 		ereport(ERROR,

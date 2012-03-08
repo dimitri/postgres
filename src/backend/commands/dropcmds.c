@@ -316,8 +316,16 @@ get_object_name(CommandContext cmd, ObjectType objtype,
 		case OBJECT_FOREIGN_SERVER:
 		case OBJECT_OPCLASS:
 		case OBJECT_OPFAMILY:
-			cmd->objectname = strVal(linitial(objname));
+		{
+			int len = list_length(objname);
+			if (len == 1)
+				cmd->objectname = strVal(linitial(objname));
+			else if (len == 2)
+				cmd->objectname = strVal(lsecond(objname));
+			else
+				elog(ERROR, "unexpected name list length (%d)", len);
 			break;
+		}
 		default:
 			elog(ERROR, "unexpected object type (%d)", (int)objtype);
 			break;

@@ -169,18 +169,6 @@ DefineVirtualRelation(RangeVar *relation, List *tlist, bool replace,
 	lockmode = replace ? AccessExclusiveLock : NoLock;
 	(void) RangeVarGetAndCheckCreationNamespace(relation, lockmode, &viewOid);
 
-	/*
-	 * Call BEFORE CREATE VIEW triggers
-	 */
-	if (CommandFiresTriggers(cmd))
-	{
-		cmd->objectId = InvalidOid;
-		cmd->objectname = relation->relname;
-		cmd->schemaname = relation->schemaname;
-
-		ExecBeforeCommandTriggers(cmd);
-	}
-
 	if (OidIsValid(viewOid) && replace)
 	{
 		Relation	rel;
@@ -207,6 +195,16 @@ DefineVirtualRelation(RangeVar *relation, List *tlist, bool replace,
 		 * temporary view, and similarly for permanent views.
 		 */
 		Assert(relation->relpersistence == rel->rd_rel->relpersistence);
+
+		/* Call BEFORE CREATE VIEW triggers */
+		if (CommandFiresTriggers(cmd))
+		{
+			cmd->objectId = viewOid;
+			cmd->objectname = RelationGetRelationName(rel);
+			cmd->schemaname = get_namespace_name(RelationGetNamespace(rel));
+
+			ExecBeforeCommandTriggers(cmd);
+		}
 
 		/*
 		 * Create a tuple descriptor to compare against the existing view, and
@@ -282,7 +280,7 @@ DefineVirtualRelation(RangeVar *relation, List *tlist, bool replace,
 		 * existing view, so we don't need more code to complain if "replace"
 		 * is false).
 		 */
-		relid = DefineRelation(createStmt, RELKIND_VIEW, InvalidOid);
+		relid = DefineRelation(createStmt, RELKIND_VIEW, InvalidOid, cmd);
 		Assert(relid != InvalidOid);
 		return relid;
 	}

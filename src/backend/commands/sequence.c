@@ -213,21 +213,10 @@ DefineSequence(CreateSeqStmt *seq)
 	stmt->tablespacename = NULL;
 	stmt->if_not_exists = false;
 
-	/*
-	 * Call BEFORE CREATE SEQUENCE triggers
-	 */
+	/* Prepare BEFORE CREATE SEQUENCE triggers */
 	InitCommandContext(&cmd, (Node *)seq, false);
 
-	if (CommandFiresTriggers(&cmd))
-	{
-		cmd.objectId = InvalidOid;
-		cmd.objectname = NameStr(name);
-		cmd.schemaname = NULL;		/* can't publish it easily enough here */
-
-		ExecBeforeCommandTriggers(&cmd);
-	}
-
-	seqoid = DefineRelation(stmt, RELKIND_SEQUENCE, seq->ownerId);
+	seqoid = DefineRelation(stmt, RELKIND_SEQUENCE, seq->ownerId, &cmd);
 	Assert(seqoid != InvalidOid);
 
 	rel = heap_open(seqoid, AccessExclusiveLock);

@@ -26,6 +26,7 @@ alter command trigger snitch_before set disable;
 alter command trigger snitch_before set enable;
 alter command trigger snitch_after_ rename to snitch_after;
 create command trigger snitch_create_table after create table execute procedure snitch();
+create command trigger snitch_create_seq after create sequence execute procedure snitch();
 create command trigger snitch_create_view after create view execute procedure snitch();
 create command trigger snitch_alter_table after alter table execute procedure snitch();
 create command trigger snitch_alter_seq after alter sequence execute procedure snitch();
@@ -54,6 +55,16 @@ create command trigger snitch_alter_domain before alter domain execute procedure
 create command trigger snitch_create_type before create type execute procedure snitch();
 create command trigger snitch_alter_type before alter type execute procedure snitch();
 create command trigger snitch_before_alter_function before alter function execute procedure snitch();
+create command trigger snitch_alter_conversion before alter conversion execute procedure snitch();
+create command trigger snitch_drop_agg before drop aggregate execute procedure snitch();
+create command trigger snitch_before_drop_tsconf before drop text search configuration execute procedure snitch();
+create command trigger snitch_before_drop_tsdict before drop text search dictionary execute procedure snitch();
+create command trigger snitch_before_drop_tsparser before drop text search parser execute procedure snitch();
+create command trigger snitch_before_drop_tstmpl before drop text search template execute procedure snitch();
+create command trigger snitch_vacuum before vacuum execute procedure snitch();
+create command trigger snitch_reindex before reindex execute procedure snitch();
+WARNING:  REINDEX DATABASE is not supported
+DETAIL:  The command trigger will not fire on REINDEX DATABASE.
 create schema cmd;
 NOTICE:  snitch: BEFORE any CREATE SCHEMA
 NOTICE:  snitch: BEFORE CREATE SCHEMA <NULL> cmd
@@ -63,10 +74,12 @@ NOTICE:  snitch: BEFORE any CREATE SCHEMA
 NOTICE:  snitch: BEFORE CREATE SCHEMA <NULL> cmd2
 NOTICE:  snitch: AFTER any CREATE SCHEMA
 create role regbob;
+ERROR:  role "regbob" already exists
 create table cmd.foo(id bigserial primary key);
 NOTICE:  snitch: BEFORE any CREATE TABLE
 NOTICE:  CREATE TABLE will create implicit sequence "foo_id_seq" for serial column "foo.id"
 NOTICE:  snitch: BEFORE any CREATE SEQUENCE
+NOTICE:  snitch: AFTER CREATE SEQUENCE cmd foo_id_seq
 NOTICE:  snitch: AFTER any CREATE SEQUENCE
 NOTICE:  snitch: BEFORE any CREATE INDEX
 NOTICE:  CREATE TABLE / PRIMARY KEY will create implicit index "foo_pkey" for table "foo"
@@ -166,6 +179,7 @@ NOTICE:  snitch: AFTER ALTER TABLE cmd test
 NOTICE:  snitch: AFTER any ALTER TABLE
 create sequence test_seq_;
 NOTICE:  snitch: BEFORE any CREATE SEQUENCE
+NOTICE:  snitch: AFTER CREATE SEQUENCE public test_seq_
 NOTICE:  snitch: AFTER any CREATE SEQUENCE
 alter sequence test_seq_ owner to regbob;
 NOTICE:  snitch: BEFORE any ALTER SEQUENCE
@@ -217,7 +231,7 @@ NOTICE:  snitch: AFTER ALTER SEQUENCE cmd test_seq
 NOTICE:  snitch: AFTER any ALTER SEQUENCE
 create view view_test as select id, things from cmd.test;
 NOTICE:  snitch: BEFORE any CREATE VIEW
-NOTICE:  snitch: AFTER CREATE VIEW <NULL> view_test
+NOTICE:  snitch: AFTER CREATE VIEW public view_test
 NOTICE:  snitch: AFTER any CREATE VIEW
 alter view view_test owner to regbob;
 NOTICE:  snitch: BEFORE any ALTER VIEW
@@ -243,8 +257,14 @@ cluster cmd.foo using foo_pkey;
 NOTICE:  snitch: BEFORE any CLUSTER
 vacuum cmd.foo;
 NOTICE:  snitch: BEFORE any VACUUM
+NOTICE:  snitch: BEFORE VACUUM cmd foo
 vacuum;
 NOTICE:  snitch: BEFORE any VACUUM
+NOTICE:  snitch: BEFORE VACUUM <NULL> <NULL>
+reindex table cmd.foo;
+NOTICE:  snitch: BEFORE any REINDEX
+NOTICE:  snitch: BEFORE REINDEX <NULL> cmd
+NOTICE:  snitch: AFTER any REINDEX
 set session_replication_role to replica;
 create table cmd.bar();
 reset session_replication_role;
@@ -254,25 +274,37 @@ NOTICE:  snitch: AFTER any CREATE INDEX
 drop index cmd.idx_foo;
 NOTICE:  snitch: BEFORE any DROP INDEX
 NOTICE:  snitch: AFTER any DROP INDEX
-create function cmd.fun(int) returns text language sql
+create function fun(int) returns text language sql
 as $$ select t from cmd.foo where id = $1; $$;
 NOTICE:  snitch: BEFORE any CREATE FUNCTION
-NOTICE:  snitch: AFTER CREATE FUNCTION cmd fun
+NOTICE:  snitch: AFTER CREATE FUNCTION public fun
 NOTICE:  snitch: AFTER any CREATE FUNCTION
-alter function cmd.fun(int) strict;
+alter function fun(int) strict;
 NOTICE:  snitch: BEFORE any ALTER FUNCTION
+NOTICE:  snitch: BEFORE ALTER FUNCTION public fun
+NOTICE:  snitch: AFTER ALTER FUNCTION public fun
 NOTICE:  snitch: AFTER any ALTER FUNCTION
-alter function cmd.fun(int) rename to notfun;
+alter function fun(int) rename to notfun;
 NOTICE:  snitch: BEFORE any ALTER FUNCTION
-NOTICE:  snitch: BEFORE ALTER FUNCTION cmd fun
-NOTICE:  snitch: AFTER ALTER FUNCTION cmd notfun
-NOTICE:  snitch: AFTER any ALTER FUNCTION
-alter function cmd.notfun(int) set schema public;
-NOTICE:  snitch: BEFORE any ALTER FUNCTION
-NOTICE:  snitch: BEFORE ALTER FUNCTION cmd notfun
+NOTICE:  snitch: BEFORE ALTER FUNCTION public fun
 NOTICE:  snitch: AFTER ALTER FUNCTION public notfun
 NOTICE:  snitch: AFTER any ALTER FUNCTION
-drop function public.notfun(int);
+alter function notfun(int) set schema cmd;
+NOTICE:  snitch: BEFORE any ALTER FUNCTION
+NOTICE:  snitch: BEFORE ALTER FUNCTION public notfun
+NOTICE:  snitch: AFTER ALTER FUNCTION cmd notfun
+NOTICE:  snitch: AFTER any ALTER FUNCTION
+alter function cmd.notfun(int) owner to regbob;
+NOTICE:  snitch: BEFORE any ALTER FUNCTION
+NOTICE:  snitch: BEFORE ALTER FUNCTION cmd notfun
+NOTICE:  snitch: AFTER ALTER FUNCTION cmd notfun
+NOTICE:  snitch: AFTER any ALTER FUNCTION
+alter function cmd.notfun(int) cost 77;
+NOTICE:  snitch: BEFORE any ALTER FUNCTION
+NOTICE:  snitch: BEFORE ALTER FUNCTION cmd notfun
+NOTICE:  snitch: AFTER ALTER FUNCTION cmd notfun
+NOTICE:  snitch: AFTER any ALTER FUNCTION
+drop function cmd.notfun(int);
 NOTICE:  snitch: BEFORE any DROP FUNCTION
 NOTICE:  snitch: AFTER any DROP FUNCTION
 create function cmd.plus1(int) returns bigint language sql
@@ -306,6 +338,7 @@ NOTICE:  snitch: BEFORE any ALTER AGGREGATE
 NOTICE:  snitch: AFTER any ALTER AGGREGATE
 drop aggregate public.avg(float8);
 NOTICE:  snitch: BEFORE any DROP AGGREGATE
+NOTICE:  snitch: BEFORE DROP AGGREGATE public avg
 NOTICE:  snitch: AFTER any DROP AGGREGATE
 create collation cmd.french (LOCALE = 'fr_FR');
 NOTICE:  snitch: BEFORE any CREATE COLLATION
@@ -423,8 +456,23 @@ NOTICE:  snitch: BEFORE ALTER TRIGGER cmd footg
 NOTICE:  snitch: AFTER any ALTER TRIGGER
 drop trigger foo_trigger on cmd.foo;
 NOTICE:  snitch: BEFORE any DROP TRIGGER
-NOTICE:  snitch: BEFORE DROP TRIGGER <NULL> cmd
-NOTICE:  snitch: AFTER any DROP TRIGGER
+ERROR:  unexpected name list length (3)
+create conversion test for 'utf8' to 'sjis' from utf8_to_sjis;
+NOTICE:  snitch: BEFORE any CREATE CONVERSION
+NOTICE:  snitch: AFTER any CREATE CONVERSION
+create default conversion test2 for 'utf8' to 'sjis' from utf8_to_sjis;
+NOTICE:  snitch: BEFORE any CREATE CONVERSION
+NOTICE:  snitch: AFTER any CREATE CONVERSION
+alter conversion test2 rename to test3;
+NOTICE:  snitch: BEFORE any ALTER CONVERSION
+NOTICE:  snitch: BEFORE ALTER CONVERSION public test2
+NOTICE:  snitch: AFTER any ALTER CONVERSION
+drop conversion test3;
+NOTICE:  snitch: BEFORE any DROP CONVERSION
+NOTICE:  snitch: AFTER any DROP CONVERSION
+drop conversion test;
+NOTICE:  snitch: BEFORE any DROP CONVERSION
+NOTICE:  snitch: AFTER any DROP CONVERSION
 create text search configuration test (parser = "default");
 NOTICE:  snitch: BEFORE any CREATE TEXT SEARCH CONFIGURATION
 NOTICE:  snitch: AFTER CREATE TEXT SEARCH CONFIGURATION public test
@@ -453,6 +501,22 @@ create text search template test_template (
 NOTICE:  snitch: BEFORE any CREATE TEXT SEARCH TEMPLATE
 NOTICE:  snitch: AFTER CREATE TEXT SEARCH TEMPLATE public test_template
 NOTICE:  snitch: AFTER any CREATE TEXT SEARCH TEMPLATE
+drop text search configuration test;
+NOTICE:  snitch: BEFORE any DROP TEXT SEARCH CONFIGURATION
+NOTICE:  snitch: BEFORE DROP TEXT SEARCH CONFIGURATION public test
+NOTICE:  snitch: AFTER any DROP TEXT SEARCH CONFIGURATION
+drop text search dictionary test_stem;
+NOTICE:  snitch: BEFORE any DROP TEXT SEARCH DICTIONARY
+NOTICE:  snitch: BEFORE DROP TEXT SEARCH DICTIONARY public test_stem
+NOTICE:  snitch: AFTER any DROP TEXT SEARCH DICTIONARY
+drop text search parser test_parser;
+NOTICE:  snitch: BEFORE any DROP TEXT SEARCH PARSER
+NOTICE:  snitch: BEFORE DROP TEXT SEARCH PARSER public test_parser
+NOTICE:  snitch: AFTER any DROP TEXT SEARCH PARSER
+drop text search template test_template;
+NOTICE:  snitch: BEFORE any DROP TEXT SEARCH TEMPLATE
+NOTICE:  snitch: BEFORE DROP TEXT SEARCH TEMPLATE public test_template
+NOTICE:  snitch: AFTER any DROP TEXT SEARCH TEMPLATE
 create function cmd.testcast(text) returns int4  language plpgsql as $$begin return 4::int4;end;$$;
 NOTICE:  snitch: BEFORE any CREATE FUNCTION
 NOTICE:  snitch: AFTER CREATE FUNCTION cmd testcast
@@ -489,10 +553,12 @@ NOTICE:  drop cascades to type cmd2.us_postal_code
 NOTICE:  snitch: AFTER any DROP SCHEMA
 drop role regbob;
 NOTICE:  snitch: BEFORE any DROP ROLE
-NOTICE:  snitch: AFTER any DROP ROLE
+ERROR:  role "regbob" cannot be dropped because some objects depend on it
+DETAIL:  3 objects in database foo
 drop command trigger snitch_before;
 drop command trigger snitch_after;
 drop command trigger snitch_create_table;
+drop command trigger snitch_create_seq;
 drop command trigger snitch_create_view;
 drop command trigger snitch_alter_table;
 drop command trigger snitch_alter_seq;
@@ -521,3 +587,11 @@ drop command trigger snitch_alter_domain;
 drop command trigger snitch_create_type;
 drop command trigger snitch_alter_type;
 drop command trigger snitch_before_alter_function;
+drop command trigger snitch_alter_conversion;
+drop command trigger snitch_drop_agg;
+drop command trigger snitch_before_drop_tsconf;
+drop command trigger snitch_before_drop_tsdict;
+drop command trigger snitch_before_drop_tsparser;
+drop command trigger snitch_before_drop_tstmpl;
+drop command trigger snitch_vacuum;
+drop command trigger snitch_reindex;

@@ -691,16 +691,6 @@ standard_ProcessUtility(Node *parsetree,
 				 */
 				InitCommandContext(&cmd, parsetree, false);
 
-				if (CommandFiresTriggers(&cmd))
-				{
-					cmd.objectId = InvalidOid;
-					cmd.objectname = stmt->relation->relname;
-					cmd.schemaname = get_namespace_name(
-						RangeVarGetCreationNamespace(stmt->relation));
-
-					ExecBeforeCommandTriggers(&cmd);
-				}
-
 				/* Run parse analysis ... */
 				stmts = transformCreateStmt(stmt, queryString);
 
@@ -717,7 +707,8 @@ standard_ProcessUtility(Node *parsetree,
 						/* Create the table itself */
 						relOid = DefineRelation((CreateStmt *) stmt,
 												RELKIND_RELATION,
-												InvalidOid);
+												InvalidOid,
+												&cmd);
 
 						/*
 						 * Let AlterTableCreateToastTable decide if this one
@@ -741,7 +732,8 @@ standard_ProcessUtility(Node *parsetree,
 						/* Create the table itself */
 						relOid = DefineRelation((CreateStmt *) stmt,
 												RELKIND_FOREIGN_TABLE,
-												InvalidOid);
+												InvalidOid,
+												&cmd);
 						CreateForeignTable((CreateForeignTableStmt *) stmt,
 										   relOid);
 					}

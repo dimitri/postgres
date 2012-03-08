@@ -30,6 +30,7 @@ alter command trigger snitch_before set enable;
 alter command trigger snitch_after_ rename to snitch_after;
 
 create command trigger snitch_create_table after create table execute procedure snitch();
+create command trigger snitch_create_seq after create sequence execute procedure snitch();
 create command trigger snitch_create_view after create view execute procedure snitch();
 create command trigger snitch_alter_table after alter table execute procedure snitch();
 create command trigger snitch_alter_seq after alter sequence execute procedure snitch();
@@ -59,6 +60,16 @@ create command trigger snitch_alter_domain before alter domain execute procedure
 create command trigger snitch_create_type before create type execute procedure snitch();
 create command trigger snitch_alter_type before alter type execute procedure snitch();
 create command trigger snitch_before_alter_function before alter function execute procedure snitch();
+create command trigger snitch_alter_conversion before alter conversion execute procedure snitch();
+create command trigger snitch_drop_agg before drop aggregate execute procedure snitch();
+
+create command trigger snitch_before_drop_tsconf before drop text search configuration execute procedure snitch();
+create command trigger snitch_before_drop_tsdict before drop text search dictionary execute procedure snitch();
+create command trigger snitch_before_drop_tsparser before drop text search parser execute procedure snitch();
+create command trigger snitch_before_drop_tstmpl before drop text search template execute procedure snitch();
+
+create command trigger snitch_vacuum before vacuum execute procedure snitch();
+create command trigger snitch_reindex before reindex execute procedure snitch();
 
 create schema cmd;
 create schema cmd2;
@@ -113,6 +124,7 @@ alter view cmd.view_test2 alter column id drop default;
 cluster cmd.foo using foo_pkey;
 vacuum cmd.foo;
 vacuum;
+reindex table cmd.foo;
 
 set session_replication_role to replica;
 create table cmd.bar();
@@ -121,13 +133,15 @@ reset session_replication_role;
 create index idx_foo on cmd.foo(t);
 drop index cmd.idx_foo;
 
-create function cmd.fun(int) returns text language sql
+create function fun(int) returns text language sql
 as $$ select t from cmd.foo where id = $1; $$;
 
-alter function cmd.fun(int) strict;
-alter function cmd.fun(int) rename to notfun;
-alter function cmd.notfun(int) set schema public;
-drop function public.notfun(int);
+alter function fun(int) strict;
+alter function fun(int) rename to notfun;
+alter function notfun(int) set schema cmd;
+alter function cmd.notfun(int) owner to regbob;
+alter function cmd.notfun(int) cost 77;
+drop function cmd.notfun(int);
 
 create function cmd.plus1(int) returns bigint language sql
 as $$ select $1::bigint + 1; $$;
@@ -185,6 +199,12 @@ create trigger footg before update on cmd.foo for each row execute procedure cmd
 alter trigger footg on cmd.foo rename to foo_trigger;
 drop trigger foo_trigger on cmd.foo;
 
+create conversion test for 'utf8' to 'sjis' from utf8_to_sjis;
+create default conversion test2 for 'utf8' to 'sjis' from utf8_to_sjis;
+alter conversion test2 rename to test3;
+drop conversion test3;
+drop conversion test;
+
 create text search configuration test (parser = "default");
 
 create text search dictionary test_stem (
@@ -205,6 +225,11 @@ create text search template test_template (
   lexize = dsimple_lexize
 );
 
+drop text search configuration test;
+drop text search dictionary test_stem;
+drop text search parser test_parser;
+drop text search template test_template;
+
 create function cmd.testcast(text) returns int4  language plpgsql as $$begin return 4::int4;end;$$;
 create cast (text as int4) with function cmd.testcast(text) as assignment;
 
@@ -218,6 +243,7 @@ drop command trigger snitch_before;
 drop command trigger snitch_after;
 
 drop command trigger snitch_create_table;
+drop command trigger snitch_create_seq;
 drop command trigger snitch_create_view;
 drop command trigger snitch_alter_table;
 drop command trigger snitch_alter_seq;
@@ -247,3 +273,13 @@ drop command trigger snitch_alter_domain;
 drop command trigger snitch_create_type;
 drop command trigger snitch_alter_type;
 drop command trigger snitch_before_alter_function;
+drop command trigger snitch_alter_conversion;
+drop command trigger snitch_drop_agg;
+
+drop command trigger snitch_before_drop_tsconf;
+drop command trigger snitch_before_drop_tsdict;
+drop command trigger snitch_before_drop_tsparser;
+drop command trigger snitch_before_drop_tstmpl;
+
+drop command trigger snitch_vacuum;
+drop command trigger snitch_reindex;

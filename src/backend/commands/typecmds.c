@@ -2110,21 +2110,9 @@ DefineCompositeType(RangeVar *typevar, List *coldeflist,
 	}
 
 	/*
-	 * Call BEFORE CREATE (composite) TYPE triggers
-	 */
-	if (CommandFiresTriggers(cmd))
-	{
-		cmd->objectId = InvalidOid;
-		cmd->objectname = createStmt->relation->relname;
-		cmd->schemaname = get_namespace_name(typeNamespace);
-
-		ExecBeforeCommandTriggers(cmd);
-	}
-
-	/*
 	 * Finally create the relation.  This also creates the type.
 	 */
-	relid = DefineRelation(createStmt, RELKIND_COMPOSITE_TYPE, InvalidOid);
+	relid = DefineRelation(createStmt, RELKIND_COMPOSITE_TYPE, InvalidOid, cmd);
 	Assert(relid != InvalidOid);
 
 	/* Call AFTER CREATE (composite) TYPE triggers */

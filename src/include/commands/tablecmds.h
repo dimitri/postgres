@@ -21,7 +21,8 @@
 #include "utils/relcache.h"
 
 
-extern Oid	DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId);
+extern Oid	DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId,
+						   CommandContext cmd);
 
 extern void RemoveRelations(DropStmt *drop);
 
