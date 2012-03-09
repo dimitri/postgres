@@ -292,10 +292,13 @@ get_object_name(CommandContext cmd, ObjectType objtype,
 	{
 		case OBJECT_TYPE:
 		case OBJECT_DOMAIN:
-			cmd->objectname = format_type_be(objectId);
+			cmd->objectname = format_type_be_without_namespace(objectId);
 			break;
 		case OBJECT_CAST:
 			cmd->objectname = NULL;
+			break;
+		case OBJECT_TRIGGER:
+			cmd->objectname = pstrdup(strVal(llast(objname)));
 			break;
 		case OBJECT_COLLATION:
 		case OBJECT_CONVERSION:
@@ -309,7 +312,6 @@ get_object_name(CommandContext cmd, ObjectType objtype,
 		case OBJECT_AGGREGATE:
 		case OBJECT_OPERATOR:
 		case OBJECT_LANGUAGE:
-		case OBJECT_TRIGGER:
 		case OBJECT_CMDTRIGGER:
 		case OBJECT_RULE:
 		case OBJECT_FDW:
@@ -319,9 +321,9 @@ get_object_name(CommandContext cmd, ObjectType objtype,
 		{
 			int len = list_length(objname);
 			if (len == 1)
-				cmd->objectname = strVal(linitial(objname));
+				cmd->objectname = pstrdup(strVal(linitial(objname)));
 			else if (len == 2)
-				cmd->objectname = strVal(lsecond(objname));
+				cmd->objectname = pstrdup(strVal(lsecond(objname)));
 			else
 				elog(ERROR, "unexpected name list length (%d)", len);
 			break;

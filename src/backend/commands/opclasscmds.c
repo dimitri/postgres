@@ -597,7 +597,7 @@ DefineOpClass(CreateOpClassStmt *stmt)
 	if (CommandFiresTriggers(&cmd))
 	{
 		cmd.objectId = InvalidOid;
-		cmd.objectname = stmt->amname;
+		cmd.objectname = pstrdup(opcname);
 		cmd.schemaname = get_namespace_name(namespaceoid);
 
 		ExecBeforeCommandTriggers(&cmd);
@@ -1890,7 +1890,7 @@ RenameOpFamily(List *name, const char *access_method, const char *newname,
 	if (CommandFiresTriggers(cmd))
 	{
 		cmd->objectId = opfOid;
-		cmd->objectname = NameListToString(name);
+		cmd->objectname = pstrdup(opfname);
 		cmd->schemaname = get_namespace_name(namespaceOid);
 
 		ExecBeforeCommandTriggers(cmd);

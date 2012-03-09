@@ -5311,8 +5311,10 @@ getCmdTriggers(Archive *fout, int *numCmdTriggers)
 	{
 		appendPQExpBuffer(query,
 						  "SELECT c.tableoid, c.oid, "
-						  "ctgname, ctgtype, ctgcommand, proname as ctgfname, ctgenabled "
+						  "ctgname, ctgtype, ctgcommand, "
+						  "n.nspname || '.' || p.proname as ctgfname, ctgenabled "
 						  "FROM pg_cmdtrigger c JOIN pg_proc p on c.ctgfoid = p.oid "
+						  "JOIN pg_namespace n ON p.pronamespace = n.oid "
 						  "ORDER BY c.oid");
 	}
 
@@ -13733,9 +13735,9 @@ dumpCmdTrigger(Archive *fout, CmdTriggerInfo *ctginfo)
 
 	/* Trigger type */
 	if (ctginfo->ctgtype == CMD_TRIGGER_FIRED_BEFORE)
-		appendPQExpBuffer(query, " BEFORE");
+		appendPQExpBuffer(query, " BEFORE ");
 	else if (ctginfo->ctgtype == CMD_TRIGGER_FIRED_AFTER)
-		appendPQExpBuffer(query, " AFTER");
+		appendPQExpBuffer(query, " AFTER ");
 	else
 	{
 		write_msg(NULL, "unexpected ctgtype value: %d\n", ctginfo->ctgtype);
@@ -13743,14 +13745,14 @@ dumpCmdTrigger(Archive *fout, CmdTriggerInfo *ctginfo)
 	}
 
 	if (strcmp("ANY", ctginfo->ctgcommand) == 0)
-		appendPQExpBufferStr(query, " ANY COMMAND");
+		appendPQExpBufferStr(query, "ANY COMMAND");
 	else
 	{
-		appendPQExpBufferStr(query, fmtId(ctginfo->ctgcommand));
+		appendPQExpBufferStr(query, ctginfo->ctgcommand);
 	}
 
 	appendPQExpBuffer(query, " EXECUTE PROCEDURE ");
-	appendPQExpBufferStr(query, fmtId(ctginfo->ctgfname));
+	appendPQExpBufferStr(query, ctginfo->ctgfname);
 	appendPQExpBuffer(query, " ();\n");
 
 	if (ctginfo->ctgenabled != 'O')

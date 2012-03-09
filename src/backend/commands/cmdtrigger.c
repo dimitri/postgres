@@ -190,7 +190,7 @@ CreateCmdTrigger(CreateCmdTrigStmt *stmt, const char *queryString)
 	if (strcmp(stmt->command, "REINDEX") == 0)
 		ereport(WARNING,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				 errmsg("REINDEX DATABASE is not supported"),
+				 errmsg("REINDEX DATABASE triggers are not supported"),
 				 errdetail("The command trigger will not fire on REINDEX DATABASE.")));
 
 	if (funcrettype != VOIDOID)

@@ -47,6 +47,7 @@ create command trigger snitch_create_tsparser after create text search parser ex
 create command trigger snitch_create_tstmpl after create text search template execute procedure snitch();
 create command trigger snitch_after_alter_function after alter function execute procedure snitch();
 create command trigger snitch_create_cast after create cast execute procedure snitch();
+create command trigger snitch_create_opclass after create operator class execute procedure snitch();
 
 create command trigger snitch_create_trigger before create trigger execute procedure snitch();
 create command trigger snitch_alter_trigger before alter trigger execute procedure snitch();
@@ -62,6 +63,7 @@ create command trigger snitch_alter_type before alter type execute procedure sni
 create command trigger snitch_before_alter_function before alter function execute procedure snitch();
 create command trigger snitch_alter_conversion before alter conversion execute procedure snitch();
 create command trigger snitch_drop_agg before drop aggregate execute procedure snitch();
+create command trigger snitch_drop_domain before drop domain execute procedure snitch();
 
 create command trigger snitch_before_drop_tsconf before drop text search configuration execute procedure snitch();
 create command trigger snitch_before_drop_tsdict before drop text search dictionary execute procedure snitch();
@@ -131,6 +133,7 @@ create table cmd.bar();
 reset session_replication_role;
 
 create index idx_foo on cmd.foo(t);
+reindex index cmd.idx_foo;
 drop index cmd.idx_foo;
 
 create function fun(int) returns text language sql
@@ -191,6 +194,7 @@ alter domain cmd.us_postal_code add constraint dummy_constraint check (value ~ '
 alter domain cmd.us_postal_code drop constraint dummy_constraint;
 alter domain cmd.us_postal_code owner to regbob;
 alter domain cmd.us_postal_code set schema cmd2;
+drop domain cmd2.us_postal_code;
 
 create function cmd.trigfunc() returns trigger language plpgsql as
 $$ begin raise notice 'trigfunc';  end;$$;
@@ -204,6 +208,11 @@ create default conversion test2 for 'utf8' to 'sjis' from utf8_to_sjis;
 alter conversion test2 rename to test3;
 drop conversion test3;
 drop conversion test;
+
+create operator class test_op_class
+   for type anyenum using hash as
+   operator 1  =,
+   function 1  hashenum(anyenum);
 
 create text search configuration test (parser = "default");
 
@@ -260,6 +269,7 @@ drop command trigger snitch_create_tsparser;
 drop command trigger snitch_create_tstmpl;
 drop command trigger snitch_after_alter_function;
 drop command trigger snitch_create_cast;
+drop command trigger snitch_create_opclass;
 
 drop command trigger snitch_create_trigger;
 drop command trigger snitch_alter_trigger;
@@ -275,6 +285,7 @@ drop command trigger snitch_alter_type;
 drop command trigger snitch_before_alter_function;
 drop command trigger snitch_alter_conversion;
 drop command trigger snitch_drop_agg;
+drop command trigger snitch_drop_domain;
 
 drop command trigger snitch_before_drop_tsconf;
 drop command trigger snitch_before_drop_tsdict;

@@ -56,7 +56,6 @@ CREATE COMMAND TRIGGER <replaceable class="PARAMETER">name</replaceable> { BEFOR
     ALTER VIEW
     CLUSTER
     CREATE AGGREGATE
-    CREATE CAST
     CREATE COLLATION
     CREATE CONVERSION
     CREATE DOMAIN
@@ -130,8 +129,8 @@ CREATE COMMAND TRIGGER <replaceable class="PARAMETER">name</replaceable> { BEFOR
   <para>
    The command trigger can be specified to fire before or after the command
    is executed. A command trigger's function must
-   return <literal>void</literal>, the only it can aborts the execution of
-   the command is by raising an exception.
+   return <literal>void</literal>. It can then only abort the execution of
+   the command by raising an exception.
   </para>
 
   <para>
@@ -155,12 +154,9 @@ CREATE COMMAND TRIGGER <replaceable class="PARAMETER">name</replaceable> { BEFOR
     <term><replaceable class="parameter">name</replaceable></term>
     <listitem>
      <para>
-      The name to give the new trigger.  This must be distinct from
-      the name of any other trigger for the same table.
-      The name cannot be schema-qualified &mdash; the trigger inherits the
-      schema of its table.  For a constraint trigger, this is also the name to
-      use when modifying the trigger's behavior using
-      <command>SET CONSTRAINTS</>.
+      The name to give the new trigger. This must be distinct from the name
+      of any other trigger for the same table. The name cannot be
+      schema-qualified.
      </para>
     </listitem>
    </varlistentry>
@@ -193,7 +189,7 @@ CREATE COMMAND TRIGGER <replaceable class="PARAMETER">name</replaceable> { BEFOR
      <para>
       Commands that exercise their own transaction control are only
       supported in <literal>BEFORE</literal> command triggers, that's the
-      case for <literal>VACUUM</literal>, <literal>CLUSTER</literal>
+      case for <literal>VACUUM</literal>, <literal>CLUSTER</literal>,
       <literal>CREATE INDEX CONCURRENTLY</literal>, and <literal>REINDEX
       DATABASE</literal>.
      </para>

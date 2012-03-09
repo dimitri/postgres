@@ -28,7 +28,8 @@
 #define MAX_INT32_LEN 11
 
 static char *format_type_internal(Oid type_oid, int32 typemod,
-					 bool typemod_given, bool allow_invalid);
+								  bool typemod_given, bool allow_invalid,
+								  bool qualify);
 static char *printTypmod(const char *typname, int32 typmod, Oid typmodout);
 static char *
 psnprintf(size_t len, const char *fmt,...)
@@ -76,11 +77,11 @@ format_type(PG_FUNCTION_ARGS)
 	type_oid = PG_GETARG_OID(0);
 
 	if (PG_ARGISNULL(1))
-		result = format_type_internal(type_oid, -1, false, true);
+		result = format_type_internal(type_oid, -1, false, true, true);
 	else
 	{
 		typemod = PG_GETARG_INT32(1);
-		result = format_type_internal(type_oid, typemod, true, true);
+		result = format_type_internal(type_oid, typemod, true, true, true);
 	}
 
 	PG_RETURN_TEXT_P(cstring_to_text(result));
@@ -95,7 +96,18 @@ format_type(PG_FUNCTION_ARGS)
 char *
 format_type_be(Oid type_oid)
 {
-	return format_type_internal(type_oid, -1, false, false);
+	return format_type_internal(type_oid, -1, false, false, true);
+}
+
+/*
+ * Allow formating a type name without namespace, useful for command context
+ * where we probide object name and namespace separately and still want nice
+ * formating of type names.
+ */
+char *
+format_type_be_without_namespace(Oid type_oid)
+{
+	return format_type_internal(type_oid, -1, false, false, false);
 }
 
 /*
@@ -104,14 +116,14 @@ format_type_be(Oid type_oid)
 char *
 format_type_with_typemod(Oid type_oid, int32 typemod)
 {
-	return format_type_internal(type_oid, typemod, true, false);
+	return format_type_internal(type_oid, typemod, true, false, true);
 }
 
 
 
 static char *
 format_type_internal(Oid type_oid, int32 typemod,
-					 bool typemod_given, bool allow_invalid)
+					 bool typemod_given, bool allow_invalid, bool qualify)
 {
 	bool		with_typemod = typemod_given && (typemod >= 0);
 	HeapTuple	tuple;
@@ -299,7 +311,9 @@ format_type_internal(Oid type_oid, int32 typemod,
 		char	   *nspname;
 		char	   *typname;
 
-		if (TypeIsVisible(type_oid))
+		if (!qualify)
+			nspname = NULL;
+		else if (TypeIsVisible(type_oid))
 			nspname = NULL;
 		else
 			nspname = get_namespace_name(typeform->typnamespace);
@@ -420,7 +434,7 @@ oidvectortypes(PG_FUNCTION_ARGS)
 	for (num = 0; num < numargs; num++)
 	{
 		char	   *typename = format_type_internal(oidArray->values[num], -1,
-													false, true);
+													false, true, true);
 		size_t		slen = strlen(typename);
 
 		if (left < (slen + 2))

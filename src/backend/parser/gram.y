@@ -4357,7 +4357,6 @@ trigger_command:
 			   | ALTER DOMAIN_P						{ $$ = "ALTER DOMAIN"; }
 			   | ALTER TRIGGER						{ $$ = "ALTER TRIGGER"; }
 			   | ALTER CONVERSION_P					{ $$ = "ALTER CONVERSION"; }
-			   | ALTER CAST							{ $$ = "ALTER CAST"; }
 			   | DROP TABLE							{ $$ = "DROP TABLE"; }
 			   | DROP SEQUENCE						{ $$ = "DROP SEQUENCE"; }
 			   | DROP VIEW							{ $$ = "DROP VIEW"; }

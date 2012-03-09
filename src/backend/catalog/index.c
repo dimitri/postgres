@@ -2828,12 +2828,12 @@ reindex_index(Oid indexId, bool skip_constraint_checks, CommandContext cmd)
 	 */
 	CheckTableNotInUse(iRel, "REINDEX INDEX");
 
-	/* Call BEFORE REINDEX command triggers */
+	/* Call BEFORE REINDEX INDEX command triggers */
 	if (CommandFiresTriggers(cmd))
 	{
 		cmd->objectId = indexId;
-		cmd->objectname = RelationGetRelationName(heapRelation);
-		cmd->schemaname = get_namespace_name(RelationGetNamespace(heapRelation));
+		cmd->objectname = RelationGetRelationName(iRel);
+		cmd->schemaname = get_namespace_name(RelationGetNamespace(iRel));
 
 		ExecBeforeCommandTriggers(cmd);
 	}
@@ -2934,7 +2934,7 @@ reindex_index(Oid indexId, bool skip_constraint_checks, CommandContext cmd)
 	index_close(iRel, NoLock);
 	heap_close(heapRelation, NoLock);
 
-	/* Call AFTER REINDEX command triggers */
+	/* Call AFTER REINDEX INDEX command triggers */
 	if (CommandFiresAfterTriggers(cmd))
 		ExecAfterCommandTriggers(cmd);
 }
@@ -2991,7 +2991,7 @@ reindex_relation(Oid relid, int flags, CommandContext cmd)
 	{
 		cmd->objectId = relid;
 		cmd->objectname = RelationGetRelationName(rel);
-		cmd->objectname = get_namespace_name(RelationGetNamespace(rel));
+		cmd->schemaname = get_namespace_name(RelationGetNamespace(rel));
 
 		ExecBeforeCommandTriggers(cmd);
 	}
