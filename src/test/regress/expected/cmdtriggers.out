@@ -43,6 +43,7 @@ create command trigger snitch_create_tsparser after create text search parser ex
 create command trigger snitch_create_tstmpl after create text search template execute procedure snitch();
 create command trigger snitch_after_alter_function after alter function execute procedure snitch();
 create command trigger snitch_create_cast after create cast execute procedure snitch();
+create command trigger snitch_create_opclass after create operator class execute procedure snitch();
 create command trigger snitch_create_trigger before create trigger execute procedure snitch();
 create command trigger snitch_alter_trigger before alter trigger execute procedure snitch();
 create command trigger snitch_drop_trigger before drop trigger execute procedure snitch();
@@ -57,13 +58,14 @@ create command trigger snitch_alter_type before alter type execute procedure sni
 create command trigger snitch_before_alter_function before alter function execute procedure snitch();
 create command trigger snitch_alter_conversion before alter conversion execute procedure snitch();
 create command trigger snitch_drop_agg before drop aggregate execute procedure snitch();
+create command trigger snitch_drop_domain before drop domain execute procedure snitch();
 create command trigger snitch_before_drop_tsconf before drop text search configuration execute procedure snitch();
 create command trigger snitch_before_drop_tsdict before drop text search dictionary execute procedure snitch();
 create command trigger snitch_before_drop_tsparser before drop text search parser execute procedure snitch();
 create command trigger snitch_before_drop_tstmpl before drop text search template execute procedure snitch();
 create command trigger snitch_vacuum before vacuum execute procedure snitch();
 create command trigger snitch_reindex before reindex execute procedure snitch();
-WARNING:  REINDEX DATABASE is not supported
+WARNING:  REINDEX DATABASE triggers are not supported
 DETAIL:  The command trigger will not fire on REINDEX DATABASE.
 create schema cmd;
 NOTICE:  snitch: BEFORE any CREATE SCHEMA
@@ -74,7 +76,6 @@ NOTICE:  snitch: BEFORE any CREATE SCHEMA
 NOTICE:  snitch: BEFORE CREATE SCHEMA <NULL> cmd2
 NOTICE:  snitch: AFTER any CREATE SCHEMA
 create role regbob;
-ERROR:  role "regbob" already exists
 create table cmd.foo(id bigserial primary key);
 NOTICE:  snitch: BEFORE any CREATE TABLE
 NOTICE:  CREATE TABLE will create implicit sequence "foo_id_seq" for serial column "foo.id"
@@ -263,7 +264,7 @@ NOTICE:  snitch: BEFORE any VACUUM
 NOTICE:  snitch: BEFORE VACUUM <NULL> <NULL>
 reindex table cmd.foo;
 NOTICE:  snitch: BEFORE any REINDEX
-NOTICE:  snitch: BEFORE REINDEX <NULL> cmd
+NOTICE:  snitch: BEFORE REINDEX cmd foo
 NOTICE:  snitch: AFTER any REINDEX
 set session_replication_role to replica;
 create table cmd.bar();
@@ -271,6 +272,10 @@ reset session_replication_role;
 create index idx_foo on cmd.foo(t);
 NOTICE:  snitch: BEFORE any CREATE INDEX
 NOTICE:  snitch: AFTER any CREATE INDEX
+reindex index cmd.idx_foo;
+NOTICE:  snitch: BEFORE any REINDEX
+NOTICE:  snitch: BEFORE REINDEX cmd idx_foo
+NOTICE:  snitch: AFTER any REINDEX
 drop index cmd.idx_foo;
 NOTICE:  snitch: BEFORE any DROP INDEX
 NOTICE:  snitch: AFTER any DROP INDEX
@@ -441,6 +446,10 @@ alter domain cmd.us_postal_code set schema cmd2;
 NOTICE:  snitch: BEFORE any ALTER DOMAIN
 NOTICE:  snitch: BEFORE ALTER DOMAIN cmd us_postal_code
 NOTICE:  snitch: AFTER any ALTER DOMAIN
+drop domain cmd2.us_postal_code;
+NOTICE:  snitch: BEFORE any DROP DOMAIN
+NOTICE:  snitch: BEFORE DROP DOMAIN cmd2 us_postal_code
+NOTICE:  snitch: AFTER any DROP DOMAIN
 create function cmd.trigfunc() returns trigger language plpgsql as
 $$ begin raise notice 'trigfunc';  end;$$;
 NOTICE:  snitch: BEFORE any CREATE FUNCTION
@@ -456,7 +465,8 @@ NOTICE:  snitch: BEFORE ALTER TRIGGER cmd footg
 NOTICE:  snitch: AFTER any ALTER TRIGGER
 drop trigger foo_trigger on cmd.foo;
 NOTICE:  snitch: BEFORE any DROP TRIGGER
-ERROR:  unexpected name list length (3)
+NOTICE:  snitch: BEFORE DROP TRIGGER <NULL> foo_trigger
+NOTICE:  snitch: AFTER any DROP TRIGGER
 create conversion test for 'utf8' to 'sjis' from utf8_to_sjis;
 NOTICE:  snitch: BEFORE any CREATE CONVERSION
 NOTICE:  snitch: AFTER any CREATE CONVERSION
@@ -473,6 +483,13 @@ NOTICE:  snitch: AFTER any DROP CONVERSION
 drop conversion test;
 NOTICE:  snitch: BEFORE any DROP CONVERSION
 NOTICE:  snitch: AFTER any DROP CONVERSION
+create operator class test_op_class
+   for type anyenum using hash as
+   operator 1  =,
+   function 1  hashenum(anyenum);
+NOTICE:  snitch: BEFORE any CREATE OPERATOR CLASS
+NOTICE:  snitch: AFTER CREATE OPERATOR CLASS public test_op_class
+NOTICE:  snitch: AFTER any CREATE OPERATOR CLASS
 create text search configuration test (parser = "default");
 NOTICE:  snitch: BEFORE any CREATE TEXT SEARCH CONFIGURATION
 NOTICE:  snitch: AFTER CREATE TEXT SEARCH CONFIGURATION public test
@@ -549,12 +566,10 @@ NOTICE:  snitch: AFTER any DROP SCHEMA
 drop schema cmd2 cascade;
 NOTICE:  snitch: BEFORE any DROP SCHEMA
 NOTICE:  snitch: BEFORE DROP SCHEMA <NULL> cmd2
-NOTICE:  drop cascades to type cmd2.us_postal_code
 NOTICE:  snitch: AFTER any DROP SCHEMA
 drop role regbob;
 NOTICE:  snitch: BEFORE any DROP ROLE
-ERROR:  role "regbob" cannot be dropped because some objects depend on it
-DETAIL:  3 objects in database foo
+NOTICE:  snitch: AFTER any DROP ROLE
 drop command trigger snitch_before;
 drop command trigger snitch_after;
 drop command trigger snitch_create_table;
@@ -575,6 +590,7 @@ drop command trigger snitch_create_tsparser;
 drop command trigger snitch_create_tstmpl;
 drop command trigger snitch_after_alter_function;
 drop command trigger snitch_create_cast;
+drop command trigger snitch_create_opclass;
 drop command trigger snitch_create_trigger;
 drop command trigger snitch_alter_trigger;
 drop command trigger snitch_drop_trigger;
@@ -589,6 +605,7 @@ drop command trigger snitch_alter_type;
 drop command trigger snitch_before_alter_function;
 drop command trigger snitch_alter_conversion;
 drop command trigger snitch_drop_agg;
+drop command trigger snitch_drop_domain;
 drop command trigger snitch_before_drop_tsconf;
 drop command trigger snitch_before_drop_tsdict;
 drop command trigger snitch_before_drop_tsparser;
