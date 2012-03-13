@@ -892,7 +892,6 @@ standard_ProcessUtility(Node *parsetree,
 				List	   *stmts;
 				ListCell   *l;
 				LOCKMODE	lockmode;
-				CommandContextData cmd;
 
 				/*
 				 * Figure out lock mode, and acquire lock.  This also does
@@ -905,21 +904,6 @@ standard_ProcessUtility(Node *parsetree,
 
 				if (OidIsValid(relid))
 				{
-					/*
-					 * Call BEFORE ALTER TABLE triggers
-					 */
-					InitCommandContext(&cmd, parsetree, false);
-
-					if (CommandFiresTriggers(&cmd))
-					{
-						cmd.objectId = relid;
-						cmd.objectname = atstmt->relation->relname;
-						cmd.schemaname = get_namespace_name(
-							RangeVarGetCreationNamespace(atstmt->relation));
-
-						ExecBeforeCommandTriggers(&cmd);
-					}
-
 					/* Run parse analysis ... */
 					stmts = transformAlterTableStmt(atstmt, queryString);
 
@@ -948,9 +932,6 @@ standard_ProcessUtility(Node *parsetree,
 						if (lnext(l) != NULL)
 							CommandCounterIncrement();
 					}
-					/* Call AFTER ALTER TABLE triggers */
-					if (CommandFiresAfterTriggers(&cmd))
-						ExecAfterCommandTriggers(&cmd);
 				}
 				else
 					ereport(NOTICE,
@@ -2714,10 +2695,6 @@ GetCommandLogLevel(Node *parsetree)
 			break;
 
 		case T_CreateTrigStmt:
-			lev = LOGSTMT_DDL;
-			break;
-
-		case T_DropPropertyStmt:
 			lev = LOGSTMT_DDL;
 			break;
 

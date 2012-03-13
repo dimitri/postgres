@@ -1940,24 +1940,6 @@ typedef struct DropStmt
 } DropStmt;
 
 /* ----------------------
- *		Drop Rule|Trigger Statement
- *
- * In general this may be used for dropping any property of a relation;
- * for example, someday soon we may have DROP ATTRIBUTE.
- * ----------------------
- */
-
-typedef struct DropPropertyStmt
-{
-	NodeTag		type;
-	RangeVar   *relation;		/* owning relation */
-	char	   *property;		/* name of rule, trigger, etc */
-	ObjectType	removeType;		/* OBJECT_RULE or OBJECT_TRIGGER */
-	DropBehavior behavior;		/* RESTRICT or CASCADE behavior */
-	bool		missing_ok;		/* skip error if missing? */
-} DropPropertyStmt;
-
-/* ----------------------
  *				Truncate Table Statement
  * ----------------------
  */

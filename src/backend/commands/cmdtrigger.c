@@ -570,9 +570,10 @@ call_cmdtrigger_procedure(CommandContext cmd,
 }
 
 /*
- * A BEFORE command trigger can choose to "abort" the command by returning
- * false. This function is called by ExecBeforeOrInsteadOfCommandTriggers() so
- * is not exposed to other modules.
+ * Execute the procedures attached to the command. We pass the list of
+ * procedures to use (either cmd->before or cmd->after) explicitely.
+ *
+ * The when argument allows to fill the trigger special variables.
  */
 static void
 exec_command_triggers_internal(CommandContext cmd, List *procs, const char *when)
@@ -593,8 +594,8 @@ exec_command_triggers_internal(CommandContext cmd, List *procs, const char *when
  * always NIL when list_triggers is false.
  *
  * In case of ANY trigger init we don't want to list triggers associated with
- * the real command tag, we have another API to do that, see
- * ExecBeforeAnyCommandTriggers() and ExecAfterAnyCommandTriggers().
+ * the real command tag but the ANY command triggers. That form is used in
+ * utility.c standard_ProcessUtility() function.
  */
 void
 InitCommandContext(CommandContext cmd, const Node *stmt, bool list_any_triggers)
@@ -647,7 +648,10 @@ InitCommandContext(CommandContext cmd, const Node *stmt, bool list_any_triggers)
 bool
 CommandFiresTriggers(CommandContext cmd)
 {
-	if (cmd != NULL && (cmd->before != NIL || cmd->after != NIL))
+	if (cmd == NULL)
+		return false;
+
+	if (cmd->before != NIL || cmd->after != NIL)
 	{
 		cmd->oldmctx = CurrentMemoryContext;
 		cmd->cmdmctx =
@@ -687,8 +691,11 @@ CommandFiresAfterTriggers(CommandContext cmd)
 void
 ExecBeforeCommandTriggers(CommandContext cmd)
 {
+	if (cmd == NULL)
+		return;
+
 	/* that will execute under command trigger memory context */
-	if (cmd != NULL && cmd->before != NIL)
+	if (cmd->before != NIL)
 		exec_command_triggers_internal(cmd, cmd->before, "BEFORE");
 
 	/* switch back to the command Memory Context now */
@@ -698,8 +705,11 @@ ExecBeforeCommandTriggers(CommandContext cmd)
 void
 ExecAfterCommandTriggers(CommandContext cmd)
 {
+	if (cmd == NULL)
+		return;
+
 	/* that will execute under command trigger memory context */
-	if (cmd != NULL && cmd->after != NIL)
+	if (cmd->after != NIL)
 		exec_command_triggers_internal(cmd, cmd->after, "AFTER");
 
 	/* switch back to the command Memory Context now */

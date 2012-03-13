@@ -2621,14 +2621,32 @@ void
 AlterTable(Oid relid, LOCKMODE lockmode, AlterTableStmt *stmt)
 {
 	Relation	rel;
+	CommandContextData cmd;
 
 	/* Caller is required to provide an adequate lock. */
 	rel = relation_open(relid, NoLock);
 
 	CheckTableNotInUse(rel, "ALTER TABLE");
 
+	/* Call BEFORE ALTER TABLE triggers */
+	InitCommandContext(&cmd, (Node *)stmt, false);
+
+	if (CommandFiresTriggers(&cmd))
+	{
+		cmd.objectId = relid;
+		cmd.objectname = stmt->relation->relname;
+		cmd.schemaname = get_namespace_name(
+			RangeVarGetCreationNamespace(stmt->relation));
+
+		ExecBeforeCommandTriggers(&cmd);
+	}
+
 	ATController(rel, stmt->cmds, interpretInhOption(stmt->relation->inhOpt),
 				 lockmode);
+
+	/* Call AFTER ALTER TABLE triggers */
+	if (CommandFiresAfterTriggers(&cmd))
+		ExecAfterCommandTriggers(&cmd);
 }
 
 /*
