@@ -7,8 +7,7 @@ create or replace function any_snitch
 as $$
 begin
   -- can't output the objectid here that would break pg_regress
-  -- don't output objectname and schemaname, NULL in an ANY command trigger
-  raise notice 'snitch: % any %', tg_when, cmd_tag;
+  raise notice 'snitch: % any % %.%', tg_when, cmd_tag, schemaname, objectname;
 end;
 $$;
 
@@ -18,7 +17,7 @@ create or replace function snitch
 as $$
 begin
   -- can't output the objectid here that would break pg_regress
-  raise notice 'snitch: % % % %', tg_when, cmd_tag, schemaname, objectname;
+  raise notice 'snitch: % % %.%', tg_when, cmd_tag, schemaname, objectname;
 end;
 $$;
 
