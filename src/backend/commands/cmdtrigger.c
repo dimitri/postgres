@@ -115,7 +115,7 @@ InsertCmdTriggerTuple(Relation tgrel,
 /*
  * Create a trigger.  Returns the OID of the created trigger.
  */
-void
+Oid
 CreateCmdTrigger(CreateCmdTrigStmt *stmt, const char *queryString)
 {
 	Relation	tgrel;
@@ -203,6 +203,8 @@ CreateCmdTrigger(CreateCmdTrigStmt *stmt, const char *queryString)
 									funcoid, stmt->timing);
 
 	heap_close(tgrel, RowExclusiveLock);
+
+	return trigoid;
 }
 
 /*
@@ -440,15 +442,25 @@ check_cmdtrigger_name(const char *trigname, Relation tgrel)
  * have to call before and after the command.
  */
 static bool
-ListCommandTriggers(CommandContext cmd)
+ListCommandTriggers(CommandContext cmd, bool list_any_triggers)
 {
 	int         count = 0;
 	Relation	rel, irel;
 	SysScanDesc scandesc;
 	HeapTuple	tuple;
 	ScanKeyData entry[1];
+	char *tag;
 
-	cmd->before = cmd->after = NIL;
+	if (list_any_triggers)
+	{
+		tag = "ANY";
+		cmd->before_any = cmd->after_any = NIL;
+	}
+	else
+	{
+		tag = cmd->tag;
+		cmd->before = cmd->after = NIL;
+	}
 
 	rel = heap_open(CmdTriggerRelationId, AccessShareLock);
 	irel = index_open(CmdTriggerCommandNameIndexId, AccessShareLock);
@@ -456,7 +468,7 @@ ListCommandTriggers(CommandContext cmd)
 	ScanKeyInit(&entry[0],
 				Anum_pg_cmdtrigger_ctgcommand,
 				BTEqualStrategyNumber, F_NAMEEQ,
-				CStringGetDatum(cmd->tag));
+				CStringGetDatum(tag));
 
 	scandesc = systable_beginscan_ordered(rel, irel, SnapshotNow, 1, entry);
 
@@ -482,12 +494,21 @@ ListCommandTriggers(CommandContext cmd)
 		switch (form->ctgtype)
 		{
 			case CMD_TRIGGER_FIRED_BEFORE:
-				cmd->before = lappend_oid(cmd->before, form->ctgfoid);
+			{
+				if (list_any_triggers)
+					cmd->before_any = lappend_oid(cmd->before_any, form->ctgfoid);
+				else
+					cmd->before = lappend_oid(cmd->before, form->ctgfoid);
 				break;
-
+			}
 			case CMD_TRIGGER_FIRED_AFTER:
-				cmd->after = lappend_oid(cmd->after, form->ctgfoid);
+			{
+				if (list_any_triggers)
+					cmd->after_any = lappend_oid(cmd->after_any, form->ctgfoid);
+				else
+					cmd->after = lappend_oid(cmd->after, form->ctgfoid);
 				break;
+			}
 		}
 		count++;
 	}
@@ -500,9 +521,7 @@ ListCommandTriggers(CommandContext cmd)
 }
 
 static bool
-call_cmdtrigger_procedure(CommandContext cmd,
-						  RegProcedure proc,
-						  const char *when)
+call_cmdtrigger_procedure(CommandContext cmd, RegProcedure proc, const char *when)
 {
 	FmgrInfo	flinfo;
 	FunctionCallInfoData fcinfo;
@@ -576,29 +595,63 @@ call_cmdtrigger_procedure(CommandContext cmd,
  * The when argument allows to fill the trigger special variables.
  */
 static void
-exec_command_triggers_internal(CommandContext cmd, List *procs, const char *when)
+exec_command_triggers_internal(CommandContext cmd, char when)
 {
-	ListCell   *cell;
+	char		*whenstr;
+	ListCell	*cell;
 
-	foreach(cell, procs)
+	switch (when)
 	{
-		Oid proc = lfirst_oid(cell);
-		call_cmdtrigger_procedure(cmd, (RegProcedure)proc, when);
+		case CMD_TRIGGER_FIRED_BEFORE:
+		{
+			whenstr = "BEFORE";
+
+			foreach(cell, cmd->before_any)
+			{
+				Oid proc = lfirst_oid(cell);
+
+				call_cmdtrigger_procedure(cmd, (RegProcedure)proc, whenstr);
+			}
+			foreach(cell, cmd->before)
+			{
+				Oid proc = lfirst_oid(cell);
+
+				call_cmdtrigger_procedure(cmd, (RegProcedure)proc, whenstr);
+			}
+			break;
+		}
+		case CMD_TRIGGER_FIRED_AFTER:
+		{
+			whenstr = "AFTER";
+
+			foreach(cell, cmd->after)
+			{
+				Oid proc = lfirst_oid(cell);
+
+				call_cmdtrigger_procedure(cmd, (RegProcedure)proc, whenstr);
+			}
+			foreach(cell, cmd->after_any)
+			{
+				Oid proc = lfirst_oid(cell);
+
+				call_cmdtrigger_procedure(cmd, (RegProcedure)proc, whenstr);
+			}
+			break;
+		}
+		default:
+			elog(ERROR, "unrecognized command trigger condition: %c", when);
+			break;
 	}
+
 }
 
 /*
  * Routine to call to setup a CommandContextData structure.
  *
- * This ensures that cmd->before and cmd->after are set to meaningful values,
- * always NIL when list_triggers is false.
- *
- * In case of ANY trigger init we don't want to list triggers associated with
- * the real command tag but the ANY command triggers. That form is used in
- * utility.c standard_ProcessUtility() function.
+ * This ensures that cmd->before and cmd->after are set to meaningful values.
  */
 void
-InitCommandContext(CommandContext cmd, const Node *stmt, bool list_any_triggers)
+InitCommandContext(CommandContext cmd, const Node *stmt)
 {
 	cmd->tag = (char *) CreateCommandTag((Node *)stmt);
 	cmd->parsetree  = (Node *)stmt;
@@ -607,20 +660,13 @@ InitCommandContext(CommandContext cmd, const Node *stmt, bool list_any_triggers)
 	cmd->schemaname = NULL;
 	cmd->before     = NIL;
 	cmd->after      = NIL;
+	cmd->before_any = NIL;
+	cmd->after_any  = NIL;
 	cmd->oldmctx    = NULL;
 	cmd->cmdmctx    = NULL;
 
-	if (list_any_triggers)
-	{
-		/* list procedures for "ANY" command */
-		char *tag = cmd->tag;
-
-		cmd->tag = "ANY";
-		ListCommandTriggers(cmd);
-		cmd->tag = tag;
-	}
-	else
-		ListCommandTriggers(cmd);
+	ListCommandTriggers(cmd, true);   /* list ANY command triggers */
+	ListCommandTriggers(cmd, false);  /* and triggers for this command tag */
 }
 
 /*
@@ -651,7 +697,8 @@ CommandFiresTriggers(CommandContext cmd)
 	if (cmd == NULL)
 		return false;
 
-	if (cmd->before != NIL || cmd->after != NIL)
+	if (cmd->before != NIL || cmd->before_any != NIL
+		 || cmd->after != NIL || cmd->after_any != NIL)
 	{
 		cmd->oldmctx = CurrentMemoryContext;
 		cmd->cmdmctx =
@@ -675,7 +722,11 @@ CommandFiresTriggers(CommandContext cmd)
 bool
 CommandFiresAfterTriggers(CommandContext cmd)
 {
-	if (cmd != NULL && cmd->after != NIL)
+	if (cmd == NULL)
+		return false;
+
+	if (cmd->before != NIL || cmd->before_any != NIL
+		|| cmd->after != NIL || cmd->after_any != NIL)
 	{
 		MemoryContextSwitchTo(cmd->cmdmctx);
 		return true;
@@ -695,8 +746,7 @@ ExecBeforeCommandTriggers(CommandContext cmd)
 		return;
 
 	/* that will execute under command trigger memory context */
-	if (cmd->before != NIL)
-		exec_command_triggers_internal(cmd, cmd->before, "BEFORE");
+	exec_command_triggers_internal(cmd, CMD_TRIGGER_FIRED_BEFORE);
 
 	/* switch back to the command Memory Context now */
 	MemoryContextSwitchTo(cmd->oldmctx);
@@ -709,8 +759,7 @@ ExecAfterCommandTriggers(CommandContext cmd)
 		return;
 
 	/* that will execute under command trigger memory context */
-	if (cmd->after != NIL)
-		exec_command_triggers_internal(cmd, cmd->after, "AFTER");
+	exec_command_triggers_internal(cmd, CMD_TRIGGER_FIRED_AFTER);
 
 	/* switch back to the command Memory Context now */
 	MemoryContextSwitchTo(cmd->oldmctx);

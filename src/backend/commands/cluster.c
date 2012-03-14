@@ -102,7 +102,7 @@ cluster(ClusterStmt *stmt, bool isTopLevel)
 {
 	CommandContextData cmd;
 
-	InitCommandContext(&cmd, (Node *)stmt, false);
+	InitCommandContext(&cmd, (Node *)stmt);
 
 	if (stmt->relation != NULL)
 	{

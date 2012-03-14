@@ -127,7 +127,7 @@ vacuum(VacuumStmt *vacstmt, Oid relid, bool do_toast,
 	if (!IsAutoVacuumWorkerProcess())
 	{
 		CommandContextData cmd;
-		InitCommandContext(&cmd, (Node *)vacstmt, false);
+		InitCommandContext(&cmd, (Node *)vacstmt);
 
 		if (CommandFiresTriggers(&cmd))
 		{

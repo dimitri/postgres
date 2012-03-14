@@ -129,7 +129,7 @@ RemoveObjects(DropStmt *stmt)
 		/*
 		 * Call BEFORE DROP command triggers
 		 */
-		InitCommandContext(&cmd, (Node *)stmt, false);
+		InitCommandContext(&cmd, (Node *)stmt);
 
 		if (CommandFiresTriggers(&cmd))
 		{

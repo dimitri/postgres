@@ -592,7 +592,7 @@ DefineOpClass(CreateOpClassStmt *stmt)
 	}
 
 	/* Call BEFORE CREATE OPERATOR CLASS command triggers */
-	InitCommandContext(&cmd, (Node *)stmt, false);
+	InitCommandContext(&cmd, (Node *)stmt);
 
 	if (CommandFiresTriggers(&cmd))
 	{
@@ -782,7 +782,7 @@ DefineOpFamily(CreateOpFamilyStmt *stmt)
 				 errmsg("must be superuser to create an operator family")));
 
 	/* Call BEFORE CREATE OPERATOR FAMILY command triggers */
-	InitCommandContext(&cmd, (Node *)stmt, false);
+	InitCommandContext(&cmd, (Node *)stmt);
 
 	if (CommandFiresTriggers(&cmd))
 	{
@@ -858,7 +858,7 @@ AlterOpFamily(AlterOpFamilyStmt *stmt)
 				 errmsg("must be superuser to alter an operator family")));
 
 	/* Call BEFORE ALTER OPERATOR FAMILY command triggers */
-	InitCommandContext(&cmd, (Node *)stmt, false);
+	InitCommandContext(&cmd, (Node *)stmt);
 
 	if (CommandFiresTriggers(&cmd))
 	{

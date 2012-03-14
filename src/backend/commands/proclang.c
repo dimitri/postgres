@@ -73,7 +73,7 @@ CreateProceduralLanguage(CreatePLangStmt *stmt)
 	Oid			funcargtypes[1];
 	CommandContextData cmd;
 
-	InitCommandContext(&cmd, (Node *)stmt, false);
+	InitCommandContext(&cmd, (Node *)stmt);
 
 	/*
 	 * If we have template information for the language, ignore the supplied

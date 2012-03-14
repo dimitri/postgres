@@ -30,6 +30,8 @@ typedef struct CommandContextData
 	Node *parsetree;		/* command parsetree, given as an internal */
 	List *before;			/* procedures to call before the command */
 	List *after;			/* procedures to call after the command */
+	List *before_any;		/* procedures to call before any command */
+	List *after_any;		/* procedures to call after any command */
 	MemoryContext oldmctx;	/* Memory Context to switch back to */
 	MemoryContext cmdmctx;	/* Memory Context for the command triggers */
 } CommandContextData;
@@ -38,13 +40,13 @@ typedef struct CommandContextData *CommandContext;
 
 extern CommandContext command_context;
 
-extern void CreateCmdTrigger(CreateCmdTrigStmt *stmt, const char *queryString);
+extern Oid CreateCmdTrigger(CreateCmdTrigStmt *stmt, const char *queryString);
 extern void RemoveCmdTriggerById(Oid ctrigOid);
 extern Oid	get_cmdtrigger_oid(const char *trigname, bool missing_ok);
 extern void AlterCmdTrigger(AlterCmdTrigStmt *stmt);
 extern void RenameCmdTrigger(List *name, const char *newname);
 
-extern void InitCommandContext(CommandContext cmd, const Node *stmt, bool list_triggers);
+extern void InitCommandContext(CommandContext cmd, const Node *stmt);
 extern bool CommandFiresTriggers(CommandContext cmd);
 extern bool CommandFiresAfterTriggers(CommandContext cmd);
 extern void ExecBeforeCommandTriggers(CommandContext cmd);

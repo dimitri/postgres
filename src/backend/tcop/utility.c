@@ -517,11 +517,6 @@ standard_ProcessUtility(Node *parsetree,
 	if (completionTag)
 		completionTag[0] = '\0';
 
-	/* call the BEFORE ANY COMMAND triggers first */
-	InitCommandContext(&cmd, parsetree, true);
-
-	call_before_cmdtriggers(parsetree, &cmd);
-
 	switch (nodeTag(parsetree))
 	{
 			/*
@@ -686,10 +681,8 @@ standard_ProcessUtility(Node *parsetree,
 				CreateStmt *stmt = (CreateStmt *) parsetree;
 				CommandContextData cmd;
 
-				/*
-				 * Call BEFORE CREATE TABLE triggers
-				 */
-				InitCommandContext(&cmd, parsetree, false);
+				/* Prepare BEFORE CREATE TABLE triggers */
+				InitCommandContext(&cmd, parsetree);
 
 				/* Run parse analysis ... */
 				stmts = transformCreateStmt(stmt, queryString);
@@ -945,10 +938,8 @@ standard_ProcessUtility(Node *parsetree,
 				AlterDomainStmt *stmt = (AlterDomainStmt *) parsetree;
 				CommandContextData cmd;
 
-				/*
-				 * Prepare BEFORE ALTER DOMAIN triggers
-				 */
-				InitCommandContext(&cmd, parsetree, false);
+				/* Prepare BEFORE ALTER DOMAIN triggers */
+				InitCommandContext(&cmd, parsetree);
 
 				/*
 				 * Some or all of these functions are recursive to cover
@@ -1016,7 +1007,7 @@ standard_ProcessUtility(Node *parsetree,
 				DefineStmt *stmt = (DefineStmt *) parsetree;
 				CommandContextData cmd;
 
-				InitCommandContext(&cmd, parsetree, false);
+				InitCommandContext(&cmd, parsetree);
 
 				switch (stmt->kind)
 				{
@@ -1065,7 +1056,7 @@ standard_ProcessUtility(Node *parsetree,
 				CompositeTypeStmt *stmt = (CompositeTypeStmt *) parsetree;
 				CommandContextData cmd;
 
-				InitCommandContext(&cmd, parsetree, false);
+				InitCommandContext(&cmd, parsetree);
 				DefineCompositeType(stmt->typevar, stmt->coldeflist, &cmd);
 			}
 			break;
@@ -1106,7 +1097,7 @@ standard_ProcessUtility(Node *parsetree,
 				IndexStmt  *stmt = (IndexStmt *) parsetree;
 				CommandContextData cmd;
 
-				InitCommandContext(&cmd, parsetree, false);
+				InitCommandContext(&cmd, parsetree);
 
 				if (stmt->concurrent)
 					PreventTransactionChain(isTopLevel,
@@ -1218,7 +1209,7 @@ standard_ProcessUtility(Node *parsetree,
 				LoadStmt   *stmt = (LoadStmt *) parsetree;
 				CommandContextData cmd;
 
-				InitCommandContext(&cmd, parsetree, false);
+				InitCommandContext(&cmd, parsetree);
 
 				if (CommandFiresTriggers(&cmd))
 				{
@@ -1359,7 +1350,7 @@ standard_ProcessUtility(Node *parsetree,
 				ReindexStmt *stmt = (ReindexStmt *) parsetree;
 				CommandContextData cmd;
 
-				InitCommandContext(&cmd, parsetree, false);
+				InitCommandContext(&cmd, parsetree);
 
 				/* we choose to allow this during "read only" transactions */
 				PreventCommandDuringRecovery("REINDEX");
@@ -1426,9 +1417,6 @@ standard_ProcessUtility(Node *parsetree,
 				 (int) nodeTag(parsetree));
 			break;
 	}
-
-	/* call the AFTER ANY COMMAND triggers */
-	call_after_cmdtriggers(parsetree, &cmd);
 }
 
 /*

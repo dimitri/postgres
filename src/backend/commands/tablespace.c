@@ -815,7 +815,6 @@ RenameTableSpace(const char *oldname, const char *newname)
 	HeapScanDesc scan;
 	HeapTuple	tup;
 	HeapTuple	newtuple;
-	Oid  oid;
 	Form_pg_tablespace newform;
 
 	/* Search pg_tablespace */
@@ -833,7 +832,6 @@ RenameTableSpace(const char *oldname, const char *newname)
 				 errmsg("tablespace \"%s\" does not exist",
 						oldname)));
 
-	oid = HeapTupleGetOid(tup);
 	newtuple = heap_copytuple(tup);
 	newform = (Form_pg_tablespace) GETSTRUCT(newtuple);
 

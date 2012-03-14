@@ -850,7 +850,7 @@ AlterTSDictionary(AlterTSDictionaryStmt *stmt)
 					   dictoptions);
 
 	/* Call BEFORE ALTER TEXT SEARCH DICTIONARY command triggers */
-	InitCommandContext(&cmd, (Node *)stmt, false);
+	InitCommandContext(&cmd, (Node *)stmt);
 
 	if (CommandFiresTriggers(&cmd))
 	{
@@ -1848,7 +1848,7 @@ AlterTSConfiguration(AlterTSConfigurationStmt *stmt)
 					   NameListToString(stmt->cfgname));
 
 	/* Call BEFORE ALTER TEXT SEARCH CONFIGURATION command triggers */
-	InitCommandContext(&cmd, (Node *)stmt, false);
+	InitCommandContext(&cmd, (Node *)stmt);
 
 	if (CommandFiresTriggers(&cmd))
 	{

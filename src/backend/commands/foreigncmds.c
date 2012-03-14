@@ -669,7 +669,7 @@ CreateForeignDataWrapper(CreateFdwStmt *stmt)
 						stmt->fdwname)));
 
 	/* Call BEFORE CREATE FOREIGN DATA WRAPPER triggers */
-	InitCommandContext(&cmd, (Node *)stmt, false);
+	InitCommandContext(&cmd, (Node *)stmt);
 
 	if (CommandFiresTriggers(&cmd))
 	{
@@ -801,7 +801,7 @@ AlterForeignDataWrapper(AlterFdwStmt *stmt)
 	fdwId = HeapTupleGetOid(tp);
 
 	/* Call BEFORE ALTER FOREIGN DATA WRAPPER triggers */
-	InitCommandContext(&cmd, (Node *)stmt, false);
+	InitCommandContext(&cmd, (Node *)stmt);
 
 	if (CommandFiresTriggers(&cmd))
 	{
@@ -1004,7 +1004,7 @@ CreateForeignServer(CreateForeignServerStmt *stmt)
 		aclcheck_error(aclresult, ACL_KIND_FDW, fdw->fdwname);
 
 	/* Call BEFORE CREATE SERVER triggers */
-	InitCommandContext(&cmd, (Node *)stmt, false);
+	InitCommandContext(&cmd, (Node *)stmt);
 
 	if (CommandFiresTriggers(&cmd))
 	{
@@ -1127,7 +1127,7 @@ AlterForeignServer(AlterForeignServerStmt *stmt)
 					   stmt->servername);
 
 	/* Call BEFORE ALTER SERVER triggers */
-	InitCommandContext(&cmd, (Node *)stmt, false);
+	InitCommandContext(&cmd, (Node *)stmt);
 
 	if (CommandFiresTriggers(&cmd))
 	{
@@ -1296,7 +1296,7 @@ CreateUserMapping(CreateUserMappingStmt *stmt)
 	fdw = GetForeignDataWrapper(srv->fdwid);
 
 	/* Call BEFORE CREATE USER MAPPING triggers */
-	InitCommandContext(&cmd, (Node *)stmt, false);
+	InitCommandContext(&cmd, (Node *)stmt);
 
 	if (CommandFiresTriggers(&cmd))
 	{
@@ -1406,7 +1406,7 @@ AlterUserMapping(AlterUserMappingStmt *stmt)
 		elog(ERROR, "cache lookup failed for user mapping %u", umId);
 
 	/* Call BEFORE ALTER USER MAPPING triggers */
-	InitCommandContext(&cmd, (Node *)stmt, false);
+	InitCommandContext(&cmd, (Node *)stmt);
 
 	if (CommandFiresTriggers(&cmd))
 	{
@@ -1530,7 +1530,7 @@ RemoveUserMapping(DropUserMappingStmt *stmt)
 	user_mapping_ddl_aclcheck(useId, srv->serverid, srv->servername);
 
 	/* Call BEFORE DROP USER MAPPING triggers */
-	InitCommandContext(&cmd, (Node *)stmt, false);
+	InitCommandContext(&cmd, (Node *)stmt);
 
 	if (CommandFiresTriggers(&cmd))
 	{

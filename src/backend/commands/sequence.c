@@ -214,7 +214,7 @@ DefineSequence(CreateSeqStmt *seq)
 	stmt->if_not_exists = false;
 
 	/* Prepare BEFORE CREATE SEQUENCE triggers */
-	InitCommandContext(&cmd, (Node *)seq, false);
+	InitCommandContext(&cmd, (Node *)seq);
 
 	seqoid = DefineRelation(stmt, RELKIND_SEQUENCE, seq->ownerId, &cmd);
 	Assert(seqoid != InvalidOid);
@@ -474,7 +474,7 @@ AlterSequence(AlterSeqStmt *stmt)
 	/*
 	 * Call BEFORE ALTER SEQUENCE triggers
 	 */
-	InitCommandContext(&cmd, (Node *)stmt, false);
+	InitCommandContext(&cmd, (Node *)stmt);
 
 	if (CommandFiresTriggers(&cmd))
 	{

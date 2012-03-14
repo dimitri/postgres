@@ -975,7 +975,7 @@ CreateFunction(CreateFunctionStmt *stmt, const char *queryString)
 	/*
 	 * Call BEFORE CREATE FUNCTION triggers
 	 */
-	InitCommandContext(&cmd, (Node *)stmt, false);
+	InitCommandContext(&cmd, (Node *)stmt);
 
 	if (CommandFiresTriggers(&cmd))
 	{
@@ -1435,7 +1435,7 @@ AlterFunction(AlterFunctionStmt *stmt)
 	}
 
 	/* Call BEFORE ALTER FUNCTION command triggers */
-	InitCommandContext(&cmd, (Node *)stmt, false);
+	InitCommandContext(&cmd, (Node *)stmt);
 
 	if (CommandFiresTriggers(&cmd))
 	{
@@ -1772,7 +1772,7 @@ CreateCast(CreateCastStmt *stmt)
 	}
 
 	/* Call BEFORE CREATE CAST command triggers */
-	InitCommandContext(&cmd, (Node *)stmt, false);
+	InitCommandContext(&cmd, (Node *)stmt);
 
 	if (CommandFiresTriggers(&cmd))
 	{

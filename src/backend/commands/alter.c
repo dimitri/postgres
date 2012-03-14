@@ -49,7 +49,7 @@ void
 ExecRenameStmt(RenameStmt *stmt)
 {
 	CommandContextData cmd;
-	InitCommandContext(&cmd, (Node *)stmt, false);
+	InitCommandContext(&cmd, (Node *)stmt);
 
 	switch (stmt->renameType)
 	{
@@ -161,7 +161,7 @@ void
 ExecAlterObjectSchemaStmt(AlterObjectSchemaStmt *stmt)
 {
 	CommandContextData cmd;
-	InitCommandContext(&cmd, (Node *)stmt, false);
+	InitCommandContext(&cmd, (Node *)stmt);
 
 	switch (stmt->objectType)
 	{
@@ -485,7 +485,7 @@ ExecAlterOwnerStmt(AlterOwnerStmt *stmt)
 	Oid			newowner = get_role_oid(stmt->newowner, false);
 	CommandContextData cmd;
 
-	InitCommandContext(&cmd, (Node *)stmt, false);
+	InitCommandContext(&cmd, (Node *)stmt);
 
 	switch (stmt->objectType)
 	{

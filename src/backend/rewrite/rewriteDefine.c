@@ -201,7 +201,7 @@ DefineRule(RuleStmt *stmt, const char *queryString)
 	transformRuleStmt(stmt, queryString, &actions, &whereClause);
 
 	/* Prepare command context */
-	InitCommandContext(&cmd, (Node *)stmt, false);
+	InitCommandContext(&cmd, (Node *)stmt);
 
 	/*
 	 * Find and lock the relation.  Lock level should match
