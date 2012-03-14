@@ -188,7 +188,6 @@ create domain cmd.us_postal_code as text check(value ~ '^\d{5}$' or value ~ '^\d
 alter domain cmd.us_postal_code set not null;
 alter domain cmd.us_postal_code set default 90210;
 alter domain cmd.us_postal_code drop default;
-alter domain cmd.us_postal_code set not null;
 alter domain cmd.us_postal_code drop not null;
 alter domain cmd.us_postal_code add constraint dummy_constraint check (value ~ '^\d{8}$');
 alter domain cmd.us_postal_code drop constraint dummy_constraint;

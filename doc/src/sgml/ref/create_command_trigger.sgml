@@ -194,6 +194,11 @@ CREATE COMMAND TRIGGER <replaceable class="PARAMETER">name</replaceable> { BEFOR
       DATABASE</literal>.
      </para>
      <para>
+      The command <literal>ALTER TYPE ... ADD VALUE ...</literal> prevents
+      transaction control entirely, thus no command trigger will get fired
+      when it's used.
+     </para>
+     <para>
       Commands that are related to transaction control (such
       as <literal>BEGIN</literal> or <literal>COMMIT</literal>), related to
       prepared plans

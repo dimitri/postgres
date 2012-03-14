@@ -597,52 +597,39 @@ call_cmdtrigger_procedure(CommandContext cmd, RegProcedure proc, const char *whe
 static void
 exec_command_triggers_internal(CommandContext cmd, char when)
 {
+	List		*procs[2];
 	char		*whenstr;
 	ListCell	*cell;
+	int i;
 
 	switch (when)
 	{
 		case CMD_TRIGGER_FIRED_BEFORE:
-		{
 			whenstr = "BEFORE";
-
-			foreach(cell, cmd->before_any)
-			{
-				Oid proc = lfirst_oid(cell);
-
-				call_cmdtrigger_procedure(cmd, (RegProcedure)proc, whenstr);
-			}
-			foreach(cell, cmd->before)
-			{
-				Oid proc = lfirst_oid(cell);
-
-				call_cmdtrigger_procedure(cmd, (RegProcedure)proc, whenstr);
-			}
+			procs[0] = cmd->before_any;
+			procs[1] = cmd->before;
 			break;
-		}
+
 		case CMD_TRIGGER_FIRED_AFTER:
-		{
 			whenstr = "AFTER";
-
-			foreach(cell, cmd->after)
-			{
-				Oid proc = lfirst_oid(cell);
-
-				call_cmdtrigger_procedure(cmd, (RegProcedure)proc, whenstr);
-			}
-			foreach(cell, cmd->after_any)
-			{
-				Oid proc = lfirst_oid(cell);
-
-				call_cmdtrigger_procedure(cmd, (RegProcedure)proc, whenstr);
-			}
+			procs[0] = cmd->after;
+			procs[1] = cmd->after_any;
 			break;
-		}
+
 		default:
 			elog(ERROR, "unrecognized command trigger condition: %c", when);
 			break;
 	}
 
+	for(i=0; i<2; i++)
+	{
+		foreach(cell, procs[i])
+		{
+			Oid proc = lfirst_oid(cell);
+
+			call_cmdtrigger_procedure(cmd, (RegProcedure)proc, whenstr);
+		}
+	}
 }
 
 /*
@@ -665,8 +652,25 @@ InitCommandContext(CommandContext cmd, const Node *stmt)
 	cmd->oldmctx    = NULL;
 	cmd->cmdmctx    = NULL;
 
-	ListCommandTriggers(cmd, true);   /* list ANY command triggers */
-	ListCommandTriggers(cmd, false);  /* and triggers for this command tag */
+	/* Specifically drop support for command triggers on command triggers */
+	switch (nodeTag(stmt))
+	{
+		case T_RenameStmt:
+			if (((RenameStmt *) stmt)->renameType == OBJECT_CMDTRIGGER)
+				return;
+
+		case T_DropStmt:
+			if (((DropStmt *) stmt)->removeType == OBJECT_CMDTRIGGER)
+				return;
+
+		case T_IndexStmt:
+			if (((IndexStmt *)stmt)->concurrent)
+				return;
+
+		default:
+			ListCommandTriggers(cmd, true);   /* list ANY command triggers */
+			ListCommandTriggers(cmd, false);  /* and triggers for this command tag */
+	}
 }
 
 /*

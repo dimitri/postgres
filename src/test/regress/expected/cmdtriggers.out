@@ -77,11 +77,11 @@ NOTICE:  snitch: BEFORE CREATE SCHEMA <NULL> cmd2
 NOTICE:  snitch: AFTER any CREATE SCHEMA
 create role regbob;
 create table cmd.foo(id bigserial primary key);
-NOTICE:  snitch: BEFORE any CREATE TABLE
 NOTICE:  CREATE TABLE will create implicit sequence "foo_id_seq" for serial column "foo.id"
 NOTICE:  snitch: BEFORE any CREATE SEQUENCE
 NOTICE:  snitch: AFTER CREATE SEQUENCE cmd foo_id_seq
 NOTICE:  snitch: AFTER any CREATE SEQUENCE
+NOTICE:  snitch: BEFORE any CREATE TABLE
 NOTICE:  snitch: BEFORE any CREATE INDEX
 NOTICE:  CREATE TABLE / PRIMARY KEY will create implicit index "foo_pkey" for table "foo"
 NOTICE:  snitch: AFTER any CREATE INDEX
@@ -404,8 +404,6 @@ NOTICE:  snitch: BEFORE any CREATE TYPE
 NOTICE:  snitch: BEFORE CREATE TYPE cmd bug_status
 NOTICE:  snitch: AFTER any CREATE TYPE
 alter type cmd.bug_status add value 'wontfix';
-NOTICE:  snitch: BEFORE any ALTER TYPE
-NOTICE:  snitch: AFTER any ALTER TYPE
 create domain cmd.us_postal_code as text check(value ~ '^\d{5}$' or value ~ '^\d{5}-\d{4}$');
 NOTICE:  snitch: BEFORE any CREATE DOMAIN
 NOTICE:  snitch: AFTER CREATE DOMAIN cmd us_postal_code
@@ -419,10 +417,6 @@ NOTICE:  snitch: BEFORE any ALTER DOMAIN
 NOTICE:  snitch: BEFORE ALTER DOMAIN cmd us_postal_code
 NOTICE:  snitch: AFTER any ALTER DOMAIN
 alter domain cmd.us_postal_code drop default;
-NOTICE:  snitch: BEFORE any ALTER DOMAIN
-NOTICE:  snitch: BEFORE ALTER DOMAIN cmd us_postal_code
-NOTICE:  snitch: AFTER any ALTER DOMAIN
-alter domain cmd.us_postal_code set not null;
 NOTICE:  snitch: BEFORE any ALTER DOMAIN
 NOTICE:  snitch: BEFORE ALTER DOMAIN cmd us_postal_code
 NOTICE:  snitch: AFTER any ALTER DOMAIN
@@ -568,8 +562,6 @@ NOTICE:  snitch: BEFORE any DROP SCHEMA
 NOTICE:  snitch: BEFORE DROP SCHEMA <NULL> cmd2
 NOTICE:  snitch: AFTER any DROP SCHEMA
 drop role regbob;
-NOTICE:  snitch: BEFORE any DROP ROLE
-NOTICE:  snitch: AFTER any DROP ROLE
 drop command trigger snitch_before;
 drop command trigger snitch_after;
 drop command trigger snitch_create_table;
