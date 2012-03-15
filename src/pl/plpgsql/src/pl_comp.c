@@ -263,7 +263,8 @@ do_compile(FunctionCallInfo fcinfo,
 		   bool forValidator)
 {
 	Form_pg_proc procStruct = (Form_pg_proc) GETSTRUCT(procTup);
-	bool		is_trigger = CALLED_AS_TRIGGER(fcinfo);
+	bool		is_dml_trigger = CALLED_AS_TRIGGER(fcinfo);
+	bool		is_cmd_trigger = CALLED_AS_COMMAND_TRIGGER(fcinfo);
 	Datum		prosrcdatum;
 	bool		isnull;
 	char	   *proc_source;
@@ -345,11 +346,21 @@ do_compile(FunctionCallInfo fcinfo,
 	function->fn_oid = fcinfo->flinfo->fn_oid;
 	function->fn_xmin = HeapTupleHeaderGetXmin(procTup->t_data);
 	function->fn_tid = procTup->t_self;
-	function->fn_is_trigger = is_trigger;
 	function->fn_input_collation = fcinfo->fncollation;
 	function->fn_cxt = func_cxt;
 	function->out_param_varno = -1;		/* set up for no OUT param */
 	function->resolve_option = plpgsql_variable_conflict;
+
+	if (is_dml_trigger)
+		function->fn_is_trigger = plpgsql_dml_trigger;
+	else if (is_cmd_trigger)
+		function->fn_is_trigger = plpgsql_cmd_trigger;
+	else
+		function->fn_is_trigger = plpgsql_not_trigger;
+
+	elog(NOTICE, "PHOQUE: %c %d",
+		 is_cmd_trigger ? 't' : 'f',
+		 (int) function->fn_is_trigger);
 
 	/*
 	 * Initialize the compiler, particularly the namespace stack.  The
@@ -367,9 +378,9 @@ do_compile(FunctionCallInfo fcinfo,
 									 sizeof(PLpgSQL_datum *) * datums_alloc);
 	datums_last = 0;
 
-	switch (is_trigger)
+	switch (function->fn_is_trigger)
 	{
-		case false:
+		case plpgsql_not_trigger:
 
 			/*
 			 * Fetch info about the procedure's parameters. Allocations aren't
@@ -568,7 +579,7 @@ do_compile(FunctionCallInfo fcinfo,
 			ReleaseSysCache(typeTup);
 			break;
 
-		case true:
+		case plpgsql_dml_trigger:
 			/* Trigger procedure's return type is unknown yet */
 			function->fn_rettype = InvalidOid;
 			function->fn_retbyval = false;
@@ -672,8 +683,32 @@ do_compile(FunctionCallInfo fcinfo,
 
 			break;
 
+		case plpgsql_cmd_trigger:
+			elog(NOTICE, "PHOQUE");
+
+			function->fn_rettype = VOIDOID;
+			function->fn_retbyval = false;
+			function->fn_retistuple = true;
+			function->fn_retset = false;
+
+			/* shouldn't be any declared arguments */
+			if (procStruct->pronargs != 0)
+				ereport(ERROR,
+						(errcode(ERRCODE_INVALID_FUNCTION_DEFINITION),
+						 errmsg("command trigger functions cannot have declared arguments")));
+
+			/* Add the variable tg_when */
+			var = plpgsql_build_variable("tg_when", 0,
+										 plpgsql_build_datatype(TEXTOID,
+																-1,
+											   function->fn_input_collation),
+										 true);
+			function->tg_when_varno = var->dno;
+			break;
+
 		default:
-			elog(ERROR, "unrecognized function typecode: %d", (int) is_trigger);
+			elog(ERROR, "unrecognized function typecode: %d",
+				 (int) function->fn_is_trigger);
 			break;
 	}
 
@@ -803,7 +838,7 @@ plpgsql_compile_inline(char *proc_source)
 	compile_tmp_cxt = MemoryContextSwitchTo(func_cxt);
 
 	function->fn_signature = pstrdup(func_name);
-	function->fn_is_trigger = false;
+	function->fn_is_trigger = plpgsql_not_trigger;
 	function->fn_input_collation = InvalidOid;
 	function->fn_cxt = func_cxt;
 	function->out_param_varno = -1;		/* set up for no OUT param */

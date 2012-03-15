@@ -23,22 +23,38 @@
  */
 typedef struct CommandContextData
 {
-	char *tag;				/* Command Tag */
-	Oid   objectId;			/* oid of the existing object, if any */
-	char *schemaname;		/* schemaname or NULL if not relevant */
-	char *objectname;		/* objectname */
-	Node *parsetree;		/* command parsetree, given as an internal */
-	List *before;			/* procedures to call before the command */
-	List *after;			/* procedures to call after the command */
-	List *before_any;		/* procedures to call before any command */
-	List *after_any;		/* procedures to call after any command */
+	char		*tag;			/* Command Tag */
+	Oid			 objectId;		/* oid of the existing object, if any */
+	char		*schemaname;	/* schemaname or NULL if not relevant */
+	char		*objectname;	/* objectname */
+	Node		*parsetree;		/* command parsetree, given as an internal */
+	List		*before;		/* procedures to call before the command */
+	List		*after;			/* procedures to call after the command */
+	List		*before_any;	/* procedures to call before any command */
+	List		*after_any;		/* procedures to call after any command */
 	MemoryContext oldmctx;	/* Memory Context to switch back to */
 	MemoryContext cmdmctx;	/* Memory Context for the command triggers */
 } CommandContextData;
 
 typedef struct CommandContextData *CommandContext;
 
-extern CommandContext command_context;
+/*
+ * CommandTriggerData is the node type that is passed as fmgr "context" info
+ * when a function is called by the command trigger manager.
+ */
+#define CALLED_AS_COMMAND_TRIGGER(fcinfo) \
+	((fcinfo)->context != NULL && IsA((fcinfo)->context, CommandTriggerData))
+
+typedef struct CommandTriggerData
+{
+	NodeTag		 type;
+	char        *when;			/* Either BEFORE or AFTER */
+	char		*tag;			/* Command Tag */
+	Oid			 objectId;		/* oid of the existing object, if any */
+	char		*schemaname;	/* schemaname or NULL if not relevant */
+	char		*objectname;	/* objectname */
+	Node		*parsetree;		/* command parsetree, given as an internal */
+} CommandTriggerData;
 
 extern Oid CreateCmdTrigger(CreateCmdTrigStmt *stmt, const char *queryString);
 extern void RemoveCmdTriggerById(Oid ctrigOid);

@@ -119,9 +119,6 @@ Oid
 CreateCmdTrigger(CreateCmdTrigStmt *stmt, const char *queryString)
 {
 	Relation	tgrel;
-	/* cmd trigger args: when, cmd_tag, objectId, schemaname, objectname [,parsetree] */
-	Oid			fargtypes[5] = {TEXTOID, TEXTOID, OIDOID, TEXTOID, TEXTOID};
-	Oid			fargtypes_c[6] = {TEXTOID, TEXTOID, OIDOID, TEXTOID, TEXTOID, INTERNALOID};
 	Oid			funcoid, trigoid;
 	Oid			funcrettype;
 
@@ -134,9 +131,7 @@ CreateCmdTrigger(CreateCmdTrigStmt *stmt, const char *queryString)
 	 * Only C coded functions can accept an argument of type internal, so we
 	 * don't have to explicitely check about the prolang here.
 	 */
-	funcoid = LookupFuncName(stmt->funcname, 6, fargtypes_c, true);
-	if (funcoid == InvalidOid)
-		funcoid = LookupFuncName(stmt->funcname, 5, fargtypes, false);
+	funcoid = LookupFuncName(stmt->funcname, 0, NULL, true);
 
 	/* we need the trigger type to validate the return type */
 	funcrettype = get_func_rettype(funcoid);
@@ -520,72 +515,41 @@ ListCommandTriggers(CommandContext cmd, bool list_any_triggers)
 	return count > 0;
 }
 
-static bool
+static void
 call_cmdtrigger_procedure(CommandContext cmd, RegProcedure proc, const char *when)
 {
 	FmgrInfo	flinfo;
 	FunctionCallInfoData fcinfo;
 	PgStat_FunctionCallUsage fcusage;
-	Datum		result;
-	HeapTuple	procedureTuple;
-	Form_pg_proc procedureStruct;
-	int         nargs = 5;
+	CommandTriggerData trigdata;
 
 	fmgr_info(proc, &flinfo);
 
 	/*
-	 * we need the procedure's language here to know how many args to call it
-	 * with
+	 * Prepare the command trigger function context from the Command Context.
+	 * We prepare a dedicated Node here so as not to publish internal data.
 	 */
-	procedureTuple = SearchSysCache1(PROCOID, ObjectIdGetDatum(proc));
-	if (!HeapTupleIsValid(procedureTuple))
-		elog(ERROR, "cache lookup failed for function %u", proc);
-	procedureStruct = (Form_pg_proc) GETSTRUCT(procedureTuple);
+	trigdata.type		= T_CommandTriggerData;
+	trigdata.when		= (char *)when;
+	trigdata.tag		= cmd->tag;
+	trigdata.objectId	= cmd->objectId;
+	trigdata.schemaname = cmd->schemaname;
+	trigdata.objectname = cmd->objectname;
+	trigdata.parsetree	= cmd->parsetree;
 
-	if (procedureStruct->prolang == ClanguageId)
-		nargs = 6;
+	/*
+	 * Call the function, passing no arguments but setting a context.
+	 */
+	InitFunctionCallInfoData(fcinfo, &flinfo, 0, InvalidOid,
+							 (Node *) &trigdata, NULL);
 
-	ReleaseSysCache(procedureTuple);
-
-	/* Can't use OidFunctionCallN because we might get a NULL result */
-	InitFunctionCallInfoData(fcinfo, &flinfo, nargs, InvalidOid, NULL, NULL);
-
-	fcinfo.arg[0] = PointerGetDatum(cstring_to_text(pstrdup(when)));
-
-	/* We support triggers ON ANY COMMAND so all fields here are nullable. */
-	if (cmd->tag != NULL)
-		fcinfo.arg[1] = PointerGetDatum(cstring_to_text(pstrdup(cmd->tag)));
-
-	fcinfo.arg[2] = ObjectIdGetDatum(cmd->objectId);
-
-	if (cmd->schemaname != NULL)
-		fcinfo.arg[3] = PointerGetDatum(cstring_to_text(pstrdup(cmd->schemaname)));
-
-	if (cmd->objectname != NULL)
-		fcinfo.arg[4] = PointerGetDatum(cstring_to_text(pstrdup(cmd->objectname)));
-
-	fcinfo.argnull[0] = false;
-	fcinfo.argnull[1] = cmd->tag == NULL;
-	fcinfo.argnull[2] = cmd->objectId == InvalidOid;
-	fcinfo.argnull[3] = cmd->schemaname == NULL;
-	fcinfo.argnull[4] = cmd->objectname == NULL;
-
-	if (nargs == 6)
-	{
-		fcinfo.arg[5] = PointerGetDatum(cmd->parsetree);
-		fcinfo.argnull[5] = false;
-	}
+	elog(NOTICE, "BLURPS: %c", CALLED_AS_COMMAND_TRIGGER(&fcinfo)?'t':'f');
 
 	pgstat_init_function_usage(&fcinfo, &fcusage);
-
-	result = FunctionCallInvoke(&fcinfo);
-
+	FunctionCallInvoke(&fcinfo);
 	pgstat_end_function_usage(&fcusage, true);
 
-
-	if (!fcinfo.isnull && DatumGetBool(result) == false)
-		return false;
-	return true;
+	return;
 }
 
 /*

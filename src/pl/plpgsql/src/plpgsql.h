@@ -20,6 +20,7 @@
 
 #include "access/xact.h"
 #include "commands/trigger.h"
+#include "commands/cmdtrigger.h"
 #include "executor/spi.h"
 
 /**********************************************************************
@@ -675,6 +676,12 @@ typedef struct PLpgSQL_func_hashkey
 	Oid			argtypes[FUNC_MAX_ARGS];
 } PLpgSQL_func_hashkey;
 
+typedef enum PLpgSQL_trigtype
+{
+	plpgsql_dml_trigger,
+	plpgsql_cmd_trigger,
+	plpgsql_not_trigger
+} PLpgSQL_trigtype;
 
 typedef struct PLpgSQL_function
 {								/* Complete compiled function	  */
@@ -682,7 +689,7 @@ typedef struct PLpgSQL_function
 	Oid			fn_oid;
 	TransactionId fn_xmin;
 	ItemPointerData fn_tid;
-	bool		fn_is_trigger;
+	PLpgSQL_trigtype fn_is_trigger;
 	Oid			fn_input_collation;
 	PLpgSQL_func_hashkey *fn_hashkey;	/* back-link to hashtable key */
 	MemoryContext fn_cxt;
@@ -920,6 +927,8 @@ extern Datum plpgsql_exec_function(PLpgSQL_function *func,
 					  FunctionCallInfo fcinfo);
 extern HeapTuple plpgsql_exec_trigger(PLpgSQL_function *func,
 					 TriggerData *trigdata);
+extern void plpgsql_exec_command_trigger(PLpgSQL_function *func,
+					 CommandTriggerData *trigdata);
 extern void plpgsql_xact_cb(XactEvent event, void *arg);
 extern void plpgsql_subxact_cb(SubXactEvent event, SubTransactionId mySubid,
 				   SubTransactionId parentSubid, void *arg);
