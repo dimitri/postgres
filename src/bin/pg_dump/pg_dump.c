@@ -3171,7 +3171,7 @@ getCollations(Archive *fout, int *numCollations)
 	PGresult   *res;
 	int			ntups;
 	int			i;
-	PQExpBuffer query = createPQExpBuffer();
+	PQExpBuffer query;
 	CollInfo   *collinfo;
 	int			i_tableoid;
 	int			i_oid;
@@ -3185,6 +3185,8 @@ getCollations(Archive *fout, int *numCollations)
 		*numCollations = 0;
 		return NULL;
 	}
+
+	query = createPQExpBuffer();
 
 	/*
 	 * find all collations, including builtin collations; we filter out
@@ -6240,7 +6242,7 @@ getTSParsers(Archive *fout, int *numTSParsers)
 	PGresult   *res;
 	int			ntups;
 	int			i;
-	PQExpBuffer query = createPQExpBuffer();
+	PQExpBuffer query;
 	TSParserInfo *prsinfo;
 	int			i_tableoid;
 	int			i_oid;
@@ -6258,6 +6260,8 @@ getTSParsers(Archive *fout, int *numTSParsers)
 		*numTSParsers = 0;
 		return NULL;
 	}
+
+	query = createPQExpBuffer();
 
 	/*
 	 * find all text search objects, including builtin ones; we filter out
@@ -6330,7 +6334,7 @@ getTSDictionaries(Archive *fout, int *numTSDicts)
 	PGresult   *res;
 	int			ntups;
 	int			i;
-	PQExpBuffer query = createPQExpBuffer();
+	PQExpBuffer query;
 	TSDictInfo *dictinfo;
 	int			i_tableoid;
 	int			i_oid;
@@ -6346,6 +6350,8 @@ getTSDictionaries(Archive *fout, int *numTSDicts)
 		*numTSDicts = 0;
 		return NULL;
 	}
+
+	query = createPQExpBuffer();
 
 	/* Make sure we are in proper schema */
 	selectSourceSchema(fout, "pg_catalog");
@@ -6413,7 +6419,7 @@ getTSTemplates(Archive *fout, int *numTSTemplates)
 	PGresult   *res;
 	int			ntups;
 	int			i;
-	PQExpBuffer query = createPQExpBuffer();
+	PQExpBuffer query;
 	TSTemplateInfo *tmplinfo;
 	int			i_tableoid;
 	int			i_oid;
@@ -6428,6 +6434,8 @@ getTSTemplates(Archive *fout, int *numTSTemplates)
 		*numTSTemplates = 0;
 		return NULL;
 	}
+
+	query = createPQExpBuffer();
 
 	/* Make sure we are in proper schema */
 	selectSourceSchema(fout, "pg_catalog");
@@ -6488,7 +6496,7 @@ getTSConfigurations(Archive *fout, int *numTSConfigs)
 	PGresult   *res;
 	int			ntups;
 	int			i;
-	PQExpBuffer query = createPQExpBuffer();
+	PQExpBuffer query;
 	TSConfigInfo *cfginfo;
 	int			i_tableoid;
 	int			i_oid;
@@ -6503,6 +6511,8 @@ getTSConfigurations(Archive *fout, int *numTSConfigs)
 		*numTSConfigs = 0;
 		return NULL;
 	}
+
+	query = createPQExpBuffer();
 
 	/* Make sure we are in proper schema */
 	selectSourceSchema(fout, "pg_catalog");
@@ -9543,16 +9553,18 @@ dumpCast(Archive *fout, CastInfo *cast)
 			appendPQExpBuffer(defqry, "WITH INOUT");
 			break;
 		case COERCION_METHOD_FUNCTION:
+		{
+			char   *fsig = format_function_signature(fout, funcInfo, true);
 
 			/*
 			 * Always qualify the function name, in case it is not in
 			 * pg_catalog schema (format_function_signature won't qualify it).
 			 */
-			appendPQExpBuffer(defqry, "WITH FUNCTION %s.",
-							  fmtId(funcInfo->dobj.namespace->dobj.name));
-			appendPQExpBuffer(defqry, "%s",
-						  format_function_signature(fout, funcInfo, true));
+			appendPQExpBuffer(defqry, "WITH FUNCTION %s.%s",
+							  fmtId(funcInfo->dobj.namespace->dobj.name), fsig);
+			free(fsig);
 			break;
+		}
 		default:
 			write_msg(NULL, "WARNING: bogus value in pg_cast.castmethod field\n");
 	}

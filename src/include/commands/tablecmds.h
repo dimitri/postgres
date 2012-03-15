@@ -51,6 +51,7 @@ extern void SetRelationHasSubclass(Oid relationId, bool relhassubclass);
 extern void renameatt(RenameStmt *stmt, CommandContext cmd);
 
 extern void RenameRelation(RenameStmt *stmt, CommandContext cmd);
+extern void RenameConstraint(RenameStmt *stmt, CommandContext cmd);
 
 extern void RenameRelationInternal(Oid myrelid,
 								   const char *newrelname, CommandContext cmd);

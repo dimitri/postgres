@@ -148,9 +148,8 @@ report_clusters_compatible(void)
 	}
 
 	pg_log(PG_REPORT, "\n"
-		   "If pg_upgrade fails after this point, you must re-initdb the new cluster\n"
-		   "before continuing.  You will also need to remove the \".old\" suffix from\n"
-		   "%s/global/pg_control.old.\n", old_cluster.pgdata);
+		   "If pg_upgrade fails after this point, you must re-initdb the\n"
+		   "new cluster before continuing.\n");
 }
 
 
@@ -166,12 +165,13 @@ issue_warnings(char *sequence_script_file_name)
 		if (sequence_script_file_name)
 		{
 			prep_status("Adjusting sequences");
-			exec_prog(true,
-					  SYSTEMQUOTE "\"%s/psql\" --set ON_ERROR_STOP=on "
+			exec_prog(true, true, UTILITY_LOG_FILE,
+					  SYSTEMQUOTE "\"%s/psql\" --echo-queries "
+					  "--set ON_ERROR_STOP=on "
 					  "--no-psqlrc --port %d --username \"%s\" "
-					  "-f \"%s\" --dbname template1 >> \"%s\"" SYSTEMQUOTE,
+					  "-f \"%s\" --dbname template1 >> \"%s\" 2>&1" SYSTEMQUOTE,
 					  new_cluster.bindir, new_cluster.port, os_info.user,
-					  sequence_script_file_name, log_opts.filename2);
+					  sequence_script_file_name, UTILITY_LOG_FILE);
 			unlink(sequence_script_file_name);
 			check_ok();
 		}
@@ -198,8 +198,8 @@ output_completion_banner(char *deletion_script_file_name)
 	/* Did we copy the free space files? */
 	if (GET_MAJOR_VERSION(old_cluster.major_version) >= 804)
 		pg_log(PG_REPORT,
-			   "Optimizer statistics are not transferred by pg_upgrade so consider\n"
-			   "running:\n"
+			   "Optimizer statistics are not transferred by pg_upgrade so\n"
+			   "consider running:\n"
 			   "    vacuumdb --all --analyze-only\n"
 			   "on the newly-upgraded cluster.\n\n");
 	else
@@ -394,10 +394,10 @@ create_script_for_old_cluster_deletion(char **deletion_script_file_name)
 
 	prep_status("Creating script to delete old cluster");
 
-	snprintf(*deletion_script_file_name, MAXPGPATH, "%s/delete_old_cluster.%s",
-			 os_info.cwd, SCRIPT_EXT);
+	snprintf(*deletion_script_file_name, MAXPGPATH, "delete_old_cluster.%s",
+			 SCRIPT_EXT);
 
-	if ((script = fopen(*deletion_script_file_name, "w")) == NULL)
+	if ((script = fopen_priv(*deletion_script_file_name, "w")) == NULL)
 		pg_log(PG_FATAL, "Could not open file \"%s\": %s\n",
 			   *deletion_script_file_name, getErrorText(errno));
 
@@ -542,8 +542,8 @@ check_for_isn_and_int8_passing_mismatch(ClusterInfo *cluster)
 		return;
 	}
 
-	snprintf(output_path, sizeof(output_path), "%s/contrib_isn_and_int8_pass_by_value.txt",
-			 os_info.cwd);
+	snprintf(output_path, sizeof(output_path),
+			 "contrib_isn_and_int8_pass_by_value.txt");
 
 	for (dbnum = 0; dbnum < cluster->dbarr.ndbs; dbnum++)
 	{
@@ -570,7 +570,7 @@ check_for_isn_and_int8_passing_mismatch(ClusterInfo *cluster)
 		for (rowno = 0; rowno < ntups; rowno++)
 		{
 			found = true;
-			if (script == NULL && (script = fopen(output_path, "w")) == NULL)
+			if (script == NULL && (script = fopen_priv(output_path, "w")) == NULL)
 				pg_log(PG_FATAL, "Could not open file \"%s\": %s\n",
 					   output_path, getErrorText(errno));
 			if (!db_used)
@@ -629,8 +629,7 @@ check_for_reg_data_type_usage(ClusterInfo *cluster)
 
 	prep_status("Checking for reg* system OID user data types");
 
-	snprintf(output_path, sizeof(output_path), "%s/tables_using_reg.txt",
-			 os_info.cwd);
+	snprintf(output_path, sizeof(output_path), "tables_using_reg.txt");
 
 	for (dbnum = 0; dbnum < cluster->dbarr.ndbs; dbnum++)
 	{
@@ -676,7 +675,7 @@ check_for_reg_data_type_usage(ClusterInfo *cluster)
 		for (rowno = 0; rowno < ntups; rowno++)
 		{
 			found = true;
-			if (script == NULL && (script = fopen(output_path, "w")) == NULL)
+			if (script == NULL && (script = fopen_priv(output_path, "w")) == NULL)
 				pg_log(PG_FATAL, "Could not open file \"%s\": %s\n",
 					   output_path, getErrorText(errno));
 			if (!db_used)

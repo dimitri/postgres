@@ -284,7 +284,8 @@ DefineTSParser(List *names, List *parameters, CommandContext cmd)
 	makeParserDependencies(tup);
 
 	/* Post creation hook for new text search parser */
-	InvokeObjectAccessHook(OAT_POST_CREATE, TSParserRelationId, prsOid, 0);
+	InvokeObjectAccessHook(OAT_POST_CREATE,
+						   TSParserRelationId, prsOid, 0, NULL);
 
 	heap_freetuple(tup);
 
@@ -614,7 +615,7 @@ DefineTSDictionary(List *names, List *parameters, CommandContext cmd)
 
 	/* Post creation hook for new text search dictionary */
 	InvokeObjectAccessHook(OAT_POST_CREATE,
-						   TSDictionaryRelationId, dictOid, 0);
+						   TSDictionaryRelationId, dictOid, 0, NULL);
 
 	heap_freetuple(tup);
 
@@ -1153,7 +1154,8 @@ DefineTSTemplate(List *names, List *parameters, CommandContext cmd)
 	makeTSTemplateDependencies(tup);
 
 	/* Post creation hook for new text search template */
-	InvokeObjectAccessHook(OAT_POST_CREATE, TSTemplateRelationId, dictOid, 0);
+	InvokeObjectAccessHook(OAT_POST_CREATE,
+						   TSTemplateRelationId, dictOid, 0, NULL);
 
 	heap_freetuple(tup);
 
@@ -1572,7 +1574,8 @@ DefineTSConfiguration(List *names, List *parameters, CommandContext cmd)
 	makeConfigurationDependencies(tup, false, mapRel);
 
 	/* Post creation hook for new text search configuration */
-	InvokeObjectAccessHook(OAT_POST_CREATE, TSConfigRelationId, cfgOid, 0);
+	InvokeObjectAccessHook(OAT_POST_CREATE,
+						   TSConfigRelationId, cfgOid, 0, NULL);
 
 	heap_freetuple(tup);
 

@@ -1588,7 +1588,7 @@ InsertExtensionTuple(const char *extName, Oid extOwner,
 	}
 	/* Post creation hook for new extension */
 	InvokeObjectAccessHook(OAT_POST_CREATE,
-						   ExtensionRelationId, extensionOid, 0);
+						   ExtensionRelationId, extensionOid, 0, NULL);
 
 	return extensionOid;
 }
