@@ -678,9 +678,9 @@ typedef struct PLpgSQL_func_hashkey
 
 typedef enum PLpgSQL_trigtype
 {
-	plpgsql_dml_trigger,
-	plpgsql_cmd_trigger,
-	plpgsql_not_trigger
+	PLPGSQL_DML_TRIGGER,
+	PLPGSQL_CMD_TRIGGER,
+	PLPGSQL_NOT_TRIGGER
 } PLpgSQL_trigtype;
 
 typedef struct PLpgSQL_function
@@ -719,6 +719,11 @@ typedef struct PLpgSQL_function
 	int			tg_table_schema_varno;
 	int			tg_nargs_varno;
 	int			tg_argv_varno;
+
+	int			tg_tag_varno;
+	int			tg_objectid_varno;
+	int			tg_schemaname_varno;
+	int			tg_objectname_varno;
 
 	PLpgSQL_resolve_option resolve_option;
 

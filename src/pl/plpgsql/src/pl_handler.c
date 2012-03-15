@@ -227,7 +227,8 @@ plpgsql_validator(PG_FUNCTION_ARGS)
 	Oid		   *argtypes;
 	char	  **argnames;
 	char	   *argmodes;
-	bool		istrigger = false;
+	bool		is_dml_trigger = false;
+	bool		is_cmd_trigger = false;
 	int			i;
 
 	/* Get the new function's pg_proc entry */
@@ -245,7 +246,9 @@ plpgsql_validator(PG_FUNCTION_ARGS)
 		/* we assume OPAQUE with no arguments means a trigger */
 		if (proc->prorettype == TRIGGEROID ||
 			(proc->prorettype == OPAQUEOID && proc->pronargs == 0))
-			istrigger = true;
+			is_dml_trigger = true;
+		else if (proc->prorettype == CMDTRIGGEROID)
+			is_cmd_trigger = true;
 		else if (proc->prorettype != RECORDOID &&
 				 proc->prorettype != VOIDOID &&
 				 !IsPolymorphicType(proc->prorettype))
@@ -276,7 +279,6 @@ plpgsql_validator(PG_FUNCTION_ARGS)
 	{
 		FunctionCallInfoData fake_fcinfo;
 		FmgrInfo	flinfo;
-		TriggerData trigdata;
 		int			rc;
 
 		/*
@@ -294,10 +296,18 @@ plpgsql_validator(PG_FUNCTION_ARGS)
 		fake_fcinfo.flinfo = &flinfo;
 		flinfo.fn_oid = funcoid;
 		flinfo.fn_mcxt = CurrentMemoryContext;
-		if (istrigger)
+		if (is_dml_trigger)
 		{
+			TriggerData trigdata;
 			MemSet(&trigdata, 0, sizeof(trigdata));
 			trigdata.type = T_TriggerData;
+			fake_fcinfo.context = (Node *) &trigdata;
+		}
+		else if (is_cmd_trigger)
+		{
+			CommandTriggerData trigdata;
+			MemSet(&trigdata, 0, sizeof(trigdata));
+			trigdata.type = T_CommandTriggerData;
 			fake_fcinfo.context = (Node *) &trigdata;
 		}
 

@@ -188,10 +188,10 @@ CreateCmdTrigger(CreateCmdTrigStmt *stmt, const char *queryString)
 				 errmsg("REINDEX DATABASE triggers are not supported"),
 				 errdetail("The command trigger will not fire on REINDEX DATABASE.")));
 
-	if (funcrettype != VOIDOID)
+	if (funcrettype != CMDTRIGGEROID)
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_OBJECT_DEFINITION),
-				 errmsg("function \"%s\" must return type \"void\"",
+				 errmsg("function \"%s\" must return type \"trigger\"",
 						NameListToString(stmt->funcname))));
 
 	trigoid = InsertCmdTriggerTuple(tgrel, stmt->command, stmt->trigname,
@@ -542,8 +542,6 @@ call_cmdtrigger_procedure(CommandContext cmd, RegProcedure proc, const char *whe
 	 */
 	InitFunctionCallInfoData(fcinfo, &flinfo, 0, InvalidOid,
 							 (Node *) &trigdata, NULL);
-
-	elog(NOTICE, "BLURPS: %c", CALLED_AS_COMMAND_TRIGGER(&fcinfo)?'t':'f');
 
 	pgstat_init_function_usage(&fcinfo, &fcusage);
 	FunctionCallInvoke(&fcinfo);

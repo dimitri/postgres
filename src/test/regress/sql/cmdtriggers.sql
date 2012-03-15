@@ -1,23 +1,23 @@
 --
 -- COMMAND TRIGGERS
 --
-create or replace function any_snitch
- (in tg_when text, in cmd_tag text, in objectid oid, in schemaname text, in objectname text)
- returns void language plpgsql
+create or replace function any_snitch()
+ returns command trigger
+ language plpgsql
 as $$
 begin
-  -- can't output the objectid here that would break pg_regress
-  raise notice 'snitch: % any % %.%', tg_when, cmd_tag, schemaname, objectname;
+  -- can't output tg_objectid here that would break pg_regress
+  raise notice 'snitch: % any % %.%', tg_when, tg_tag, tg_schemaname, tg_objectname;
 end;
 $$;
 
-create or replace function snitch
- (in tg_when text, in cmd_tag text, in objectid oid, in schemaname text, in objectname text)
- returns void language plpgsql
+create or replace function snitch()
+ returns command trigger
+ language plpgsql
 as $$
 begin
-  -- can't output the objectid here that would break pg_regress
-  raise notice 'snitch: % % %.%', tg_when, cmd_tag, schemaname, objectname;
+  -- can't output tg_objectid here that would break pg_regress
+  raise notice 'snitch: % % %.%', tg_when, tg_tag, tg_schemaname, tg_objectname;
 end;
 $$;
 

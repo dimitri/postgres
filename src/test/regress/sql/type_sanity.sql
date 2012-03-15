@@ -104,6 +104,7 @@ WHERE p1.typinput = p2.oid AND p1.typtype in ('b', 'p') AND NOT
 
 -- As of 8.0, this check finds refcursor, which is borrowing
 -- other types' I/O routines
+-- As of 9.2, this also finds cmdtrigger.
 SELECT p1.oid, p1.typname, p2.oid, p2.proname
 FROM pg_type AS p1, pg_proc AS p2
 WHERE p1.typinput = p2.oid AND p1.typtype in ('b', 'p') AND NOT
@@ -130,6 +131,7 @@ ORDER BY 1;
 
 -- As of 8.0, this check finds refcursor, which is borrowing
 -- other types' I/O routines
+-- In 9.2 cmdtrigger is borrowing trigger routines
 SELECT p1.oid, p1.typname, p2.oid, p2.proname
 FROM pg_type AS p1, pg_proc AS p2
 WHERE p1.typoutput = p2.oid AND p1.typtype in ('b', 'p') AND NOT

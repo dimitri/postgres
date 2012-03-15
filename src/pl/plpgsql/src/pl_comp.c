@@ -352,15 +352,11 @@ do_compile(FunctionCallInfo fcinfo,
 	function->resolve_option = plpgsql_variable_conflict;
 
 	if (is_dml_trigger)
-		function->fn_is_trigger = plpgsql_dml_trigger;
+		function->fn_is_trigger = PLPGSQL_DML_TRIGGER;
 	else if (is_cmd_trigger)
-		function->fn_is_trigger = plpgsql_cmd_trigger;
+		function->fn_is_trigger = PLPGSQL_CMD_TRIGGER;
 	else
-		function->fn_is_trigger = plpgsql_not_trigger;
-
-	elog(NOTICE, "PHOQUE: %c %d",
-		 is_cmd_trigger ? 't' : 'f',
-		 (int) function->fn_is_trigger);
+		function->fn_is_trigger = PLPGSQL_NOT_TRIGGER;
 
 	/*
 	 * Initialize the compiler, particularly the namespace stack.  The
@@ -380,7 +376,7 @@ do_compile(FunctionCallInfo fcinfo,
 
 	switch (function->fn_is_trigger)
 	{
-		case plpgsql_not_trigger:
+		case PLPGSQL_NOT_TRIGGER:
 
 			/*
 			 * Fetch info about the procedure's parameters. Allocations aren't
@@ -579,7 +575,7 @@ do_compile(FunctionCallInfo fcinfo,
 			ReleaseSysCache(typeTup);
 			break;
 
-		case plpgsql_dml_trigger:
+		case PLPGSQL_DML_TRIGGER:
 			/* Trigger procedure's return type is unknown yet */
 			function->fn_rettype = InvalidOid;
 			function->fn_retbyval = false;
@@ -683,9 +679,7 @@ do_compile(FunctionCallInfo fcinfo,
 
 			break;
 
-		case plpgsql_cmd_trigger:
-			elog(NOTICE, "PHOQUE");
-
+		case PLPGSQL_CMD_TRIGGER:
 			function->fn_rettype = VOIDOID;
 			function->fn_retbyval = false;
 			function->fn_retistuple = true;
@@ -704,6 +698,39 @@ do_compile(FunctionCallInfo fcinfo,
 											   function->fn_input_collation),
 										 true);
 			function->tg_when_varno = var->dno;
+
+			/* Add the variable tg_tag */
+			var = plpgsql_build_variable("tg_tag", 0,
+										 plpgsql_build_datatype(TEXTOID,
+																-1,
+											   function->fn_input_collation),
+										 true);
+			function->tg_tag_varno = var->dno;
+
+			/* Add the variable tg_objectid */
+			var = plpgsql_build_variable("tg_objectid", 0,
+										 plpgsql_build_datatype(OIDOID,
+																-1,
+																InvalidOid),
+										 true);
+			function->tg_objectid_varno = var->dno;
+
+			/* Add the variable tg_schemaname */
+			var = plpgsql_build_variable("tg_schemaname", 0,
+										 plpgsql_build_datatype(NAMEOID,
+																-1,
+																InvalidOid),
+										 true);
+			function->tg_schemaname_varno = var->dno;
+
+			/* Add the variable tg_objectname */
+			var = plpgsql_build_variable("tg_objectname", 0,
+										 plpgsql_build_datatype(NAMEOID,
+																-1,
+																InvalidOid),
+										 true);
+			function->tg_objectname_varno = var->dno;
+
 			break;
 
 		default:
@@ -838,7 +865,7 @@ plpgsql_compile_inline(char *proc_source)
 	compile_tmp_cxt = MemoryContextSwitchTo(func_cxt);
 
 	function->fn_signature = pstrdup(func_name);
-	function->fn_is_trigger = plpgsql_not_trigger;
+	function->fn_is_trigger = PLPGSQL_NOT_TRIGGER;
 	function->fn_input_collation = InvalidOid;
 	function->fn_cxt = func_cxt;
 	function->out_param_varno = -1;		/* set up for no OUT param */

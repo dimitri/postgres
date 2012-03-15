@@ -810,7 +810,48 @@ void plpgsql_exec_command_trigger(PLpgSQL_function *func,
 	var->isnull = false;
 	var->freeval = true;
 
-	elog(NOTICE, "TG_WHEN: %s", trigdata->when);
+	var = (PLpgSQL_var *) (estate.datums[func->tg_tag_varno]);
+	var->value = CStringGetTextDatum(trigdata->tag);
+	var->isnull = false;
+	var->freeval = true;
+
+	var = (PLpgSQL_var *) (estate.datums[func->tg_objectid_varno]);
+	if (trigdata->objectId == InvalidOid)
+	{
+		var->isnull = true;
+	}
+	else
+	{
+		var->value = ObjectIdGetDatum(trigdata->objectId);
+		var->isnull = false;
+	}
+	var->freeval = false;
+
+	var = (PLpgSQL_var *) (estate.datums[func->tg_schemaname_varno]);
+	if (trigdata->schemaname == NULL)
+	{
+		var->isnull = true;
+	}
+	else
+	{
+		var->value = DirectFunctionCall1(namein,
+										 CStringGetDatum(trigdata->schemaname));
+		var->isnull = false;
+	}
+	var->freeval = true;
+
+	var = (PLpgSQL_var *) (estate.datums[func->tg_objectname_varno]);
+	if (trigdata->objectname == NULL)
+	{
+		var->isnull = true;
+	}
+	else
+	{
+		var->value = DirectFunctionCall1(namein,
+										 CStringGetDatum(trigdata->objectname));
+		var->isnull = false;
+	}
+	var->freeval = true;
 
 	/*
 	 * Let the instrumentation plugin peek at this function

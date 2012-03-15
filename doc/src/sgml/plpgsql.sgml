@@ -3377,7 +3377,10 @@ RAISE unique_violation USING MESSAGE = 'Duplicate user ID: ' || user_id;
    <secondary>in PL/pgSQL</secondary>
   </indexterm>
 
-  <para>
+  <sect2 id="plpgsql-dml-trigger">
+   <title>Triggers on data change</title>
+
+   <para>
     <application>PL/pgSQL</application> can be used to define trigger
     procedures. A trigger procedure is created with the
     <command>CREATE FUNCTION</> command, declaring it as a function with
@@ -3924,6 +3927,113 @@ UPDATE sales_fact SET units_sold = units_sold * 2;
 SELECT * FROM sales_summary_bytime;
 </programlisting>
    </example>
+</sect2>
+
+  <sect2 id="plpgsql-cmd-trigger">
+   <title>Triggers on commands</title>
+
+   <para>
+    <application>PL/pgSQL</application> can be used to define trigger
+    procedures. A trigger procedure is created with the
+    <command>CREATE FUNCTION</> command, declaring it as a function with
+    no arguments and a return type of <type>command trigger</type>.
+   </para>
+
+  <para>
+   When a <application>PL/pgSQL</application> function is called as a
+   trigger, several special variables are created automatically in the
+   top-level block. They are:
+
+   <variablelist>
+    <varlistentry>
+    <varlistentry>
+     <term><varname>TG_TAG</varname></term>
+     <listitem>
+      <para>
+       Data type <type>text</type>; variable that contains the command tag
+       for which the trigger is fired.
+      </para>
+     </listitem>
+    </varlistentry>
+
+    <varlistentry>
+     <term><varname>TG_WHEN</varname></term>
+     <listitem>
+      <para>
+       Data type <type>text</type>; a string of
+       <literal>BEFORE</literal> or <literal>AFTER</literal> depending on
+       the trigger's definition.
+      </para>
+     </listitem>
+    </varlistentry>
+
+    <varlistentry>
+     <term><varname>TG_OBJECTID</varname></term>
+     <listitem>
+      <para>
+       Data type <type>oid</type>; the object ID of the object that caused
+       the trigger invocation. <literal>NULL</literal> when the function is
+       called <literal>AFTER</literal> a drop command.
+      </para>
+     </listitem>
+    </varlistentry>
+
+    <varlistentry>
+     <term><varname>TG_SCHEMANAME</varname></term>
+     <listitem>
+      <para>
+       Data type <type>name</type>; the name of the schema of the object
+       that caused the trigger invocation. Can be <literal>NULL</literal>
+       for objects not located in a schema.
+      </para>
+     </listitem>
+    </varlistentry>
+
+    <varlistentry>
+     <term><varname>TG_OBJECTNAME</varname></term>
+     <listitem>
+      <para>
+       Data type <type>name</type>; the name of the object that caused the trigger
+       invocation. Can be <literal>NULL</literal>.
+      </para>
+     </listitem>
+    </varlistentry>
+   </variablelist>
+  </para>
+
+  <para>
+   The command trigger function return's value is not used.
+  </para>
+
+   <para>
+    <xref linkend="plpgsql-cmd-trigger-example"> shows an example of a
+    command trigger procedure in <application>PL/pgSQL</application>.
+   </para>
+
+   <example id="plpgsql-cmd-trigger-example">
+    <title>A <application>PL/pgSQL</application> Command Trigger Procedure</title>
+
+    <para>
+     This example trigger just raise a <literal>NOTICE</literal> message
+     each time a supported command is executed.
+    </para>
+
+<programlisting>
+create or replace function snitch()
+ returns command trigger
+ language plpgsql
+as $$
+begin
+  raise notice 'snitch: % % %.% [%]',
+               tg_when, tg_tag, tg_schemaname, tg_objectname, tg_objectid;
+end;
+$$;
+
+create command trigger snitch_before before any command execute procedure any_snitch();
+create command trigger snitch_after after any command execute procedure any_snitch();
+</programlisting>
+   </example>
+  </sect2>
 
   </sect1>
 

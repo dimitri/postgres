@@ -128,9 +128,14 @@ CREATE COMMAND TRIGGER <replaceable class="PARAMETER">name</replaceable> { BEFOR
 
   <para>
    The command trigger can be specified to fire before or after the command
-   is executed. A command trigger's function must
-   return <literal>void</literal>. It can then only abort the execution of
-   the command by raising an exception.
+   is executed. A command trigger's function must return <literal>command
+   trigger</literal>. It can then only abort the execution of the command by
+   raising an exception.
+  </para>
+
+  <para>
+   If multiple triggers of the same kind are defined for the same event,
+   they will be fired in alphabetical order by name.
   </para>
 
   <para>
@@ -242,16 +247,6 @@ CREATE COMMAND TRIGGER <replaceable class="PARAMETER">name</replaceable> { BEFOR
       type <literal>internal</literal>, which is a pointer to
       the <literal>Node *</literal> parse tree.
      </para>
-     <para>
-      The command trigger function is called with the
-      parameters <literal>tg_when</literal> (which is set to either 'BEFORE'
-      or 'AFTER'), <literal>command
-      tag</literal>, <literal>objectid</literal> (can be null in case of a
-      BEFORE CREATE or an AFTER DROP command trigger
-      timing), <literal>schemaname</literal> (can be null for objects not
-      living in a schema) and <literal>object name</literal> (can be null
-      for any command triggers).
-     </para>
     </listitem>
    </varlistentry>
 
@@ -277,11 +272,10 @@ CREATE COMMAND TRIGGER <replaceable class="PARAMETER">name</replaceable> { BEFOR
    Forbids the execution of any DDL command:
 
 <programlisting>
-CREATE OR REPLACE FUNCTION abort_any_command
- (tg_when text, cmd_tag text, objectid oid, schemaname text, objectname text)
- RETURNS void LANGUAGE plpgsql AS $$
+CREATE OR REPLACE FUNCTION abort_any_command()
+ RETURNS command trigger LANGUAGE plpgsql AS $$
 BEGIN
-  RAISE EXCEPTION 'command % is disabled' % cmd_tag;
+  RAISE EXCEPTION 'command % is disabled' % tg_tag;
 END;
 $$;
 
@@ -294,13 +288,12 @@ CREATE COMMAND TRIGGER abort_ddl
    a <literal>CREATE TABLE</literal> command is run:
 
 <programlisting>
-CREATE OR REPLACE FUNCTION enforce_local_style
- (tg_when text, cmd_tag text, objectid oid, schemaname text, objectname text)
- RETURNS void LANGUAGE plpgsql AS $$
+CREATE OR REPLACE FUNCTION enforce_local_style()
+ RETURNS command trigger LANGUAGE plpgsql AS $$
 BEGIN
-  IF substring(objectname, 0, 4) NOT IN ('ab_', 'cz_', 'fr_')
+  IF substring(tg_objectname, 0, 4) NOT IN ('ab_', 'cz_', 'fr_')
   THEN
-    RAISE EXCEPTION 'invalid relation name: %', objectname;
+    RAISE EXCEPTION 'invalid relation name: %', tg_objectname;
   END IF;
 END;
 $$;

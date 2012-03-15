@@ -12293,6 +12293,7 @@ ColId:		IDENT									{ $$ = $1; }
 /* Type/function identifier --- names that can be type or function names.
  */
 type_function_name:	IDENT							{ $$ = $1; }
+			| COMMAND TRIGGER						{ $$ = "cmdtrigger"; }
 			| unreserved_keyword					{ $$ = pstrdup($1); }
 			| type_func_name_keyword				{ $$ = pstrdup($1); }
 		;
