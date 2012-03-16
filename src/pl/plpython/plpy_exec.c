@@ -342,6 +342,74 @@ PLy_exec_trigger(FunctionCallInfo fcinfo, PLyProcedure *proc)
 	return rv;
 }
 
+/* command trigger handler
+ */
+void
+PLy_exec_command_trigger(FunctionCallInfo fcinfo, PLyProcedure *proc)
+{
+	CommandTriggerData *tdata;
+
+	Assert(CALLED_AS_COMMAND_TRIGGER(fcinfo));
+
+	tdata = (CommandTriggerData *) fcinfo->context;
+
+	PG_TRY();
+	{
+		/* build command trigger args */
+		PyObject   *pltwhen,
+			*plttag,
+			*pltobjectid,
+			*pltschemaname,
+			*pltobjectname;
+		PyObject   *volatile pltdata = NULL;
+		char	   *stroid;
+
+		pltdata = PyDict_New();
+		if (!pltdata)
+			PLy_elog(ERROR, "could not create new dictionary while building command trigger arguments");
+
+		pltwhen = PyString_FromString(tdata->when);
+		PyDict_SetItemString(pltdata, "when", pltwhen);
+		Py_DECREF(pltwhen);
+
+		plttag = PyString_FromString(tdata->tag);
+		PyDict_SetItemString(pltdata, "tag", plttag);
+		Py_DECREF(plttag);
+
+		stroid = DatumGetCString(
+			DirectFunctionCall1(oidout, ObjectIdGetDatum(tdata->objectId)));
+		pltobjectid = PyString_FromString(stroid);
+		PyDict_SetItemString(pltdata, "objectId", pltobjectid);
+		Py_DECREF(pltobjectid);
+		pfree(stroid);
+
+		pltobjectname = PyString_FromString(tdata->objectname);
+		PyDict_SetItemString(pltdata, "objectname", pltobjectname);
+		Py_DECREF(pltobjectname);
+
+		pltschemaname = PyString_FromString(tdata->schemaname);
+		PyDict_SetItemString(pltdata, "schemaname", pltschemaname);
+		Py_DECREF(pltschemaname);
+
+		/* now call the procedure */
+		PLy_procedure_call(proc, "TD", pltdata);
+
+		/*
+		 * Disconnect from SPI manager
+		 */
+		if (SPI_finish() != SPI_OK_FINISH)
+			elog(ERROR, "SPI_finish failed");
+
+	}
+	PG_CATCH();
+	{
+		PG_RE_THROW();
+	}
+	PG_END_TRY();
+
+	return;
+}
+
 /* helper functions for Python code execution */
 
 static PyObject *

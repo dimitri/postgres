@@ -63,6 +63,7 @@ PG_FUNCTION_INFO_V1(plpython2_inline_handler);
 
 
 static bool PLy_procedure_is_trigger(Form_pg_proc procStruct);
+static bool PLy_procedure_is_command_trigger(Form_pg_proc procStruct);
 static void plpython_error_callback(void *arg);
 static void plpython_inline_error_callback(void *arg);
 static void PLy_init_interp(void);
@@ -156,7 +157,7 @@ plpython_validator(PG_FUNCTION_ARGS)
 	Oid			funcoid = PG_GETARG_OID(0);
 	HeapTuple	tuple;
 	Form_pg_proc procStruct;
-	bool		is_trigger;
+	bool		is_dml_trigger, is_cmd_trigger;
 
 	if (!check_function_bodies)
 	{
@@ -169,11 +170,12 @@ plpython_validator(PG_FUNCTION_ARGS)
 		elog(ERROR, "cache lookup failed for function %u", funcoid);
 	procStruct = (Form_pg_proc) GETSTRUCT(tuple);
 
-	is_trigger = PLy_procedure_is_trigger(procStruct);
+	is_dml_trigger = PLy_procedure_is_trigger(procStruct);
+	is_cmd_trigger = PLy_procedure_is_command_trigger(procStruct);
 
 	ReleaseSysCache(tuple);
 
-	PLy_procedure_get(funcoid, is_trigger);
+	PLy_procedure_get(funcoid, is_dml_trigger, is_cmd_trigger);
 
 	PG_RETURN_VOID();
 }
@@ -220,14 +222,20 @@ plpython_call_handler(PG_FUNCTION_ARGS)
 		{
 			HeapTuple	trv;
 
-			proc = PLy_procedure_get(fcinfo->flinfo->fn_oid, true);
+			proc = PLy_procedure_get(fcinfo->flinfo->fn_oid, true, false);
 			exec_ctx->curr_proc = proc;
 			trv = PLy_exec_trigger(fcinfo, proc);
 			retval = PointerGetDatum(trv);
 		}
+		else if (CALLED_AS_COMMAND_TRIGGER(fcinfo))
+		{
+			proc = PLy_procedure_get(fcinfo->flinfo->fn_oid, false, true);
+			exec_ctx->curr_proc = proc;
+			PLy_exec_command_trigger(fcinfo, proc);
+		}
 		else
 		{
-			proc = PLy_procedure_get(fcinfo->flinfo->fn_oid, false);
+			proc = PLy_procedure_get(fcinfo->flinfo->fn_oid, false, false);
 			exec_ctx->curr_proc = proc;
 			retval = PLy_exec_function(fcinfo, proc);
 		}
@@ -335,6 +343,11 @@ static bool PLy_procedure_is_trigger(Form_pg_proc procStruct)
 	return (procStruct->prorettype == TRIGGEROID ||
 			(procStruct->prorettype == OPAQUEOID &&
 			 procStruct->pronargs == 0));
+}
+
+static bool PLy_procedure_is_command_trigger(Form_pg_proc procStruct)
+{
+	return (procStruct->prorettype == CMDTRIGGEROID);
 }
 
 static void
