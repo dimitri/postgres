@@ -218,6 +218,7 @@ create text search dictionary test_stem (
    template = snowball,
    language = 'english', stopwords = 'english'
 );
+alter text search dictionary test_stem (StopWords = dutch );
 
 create text search parser test_parser (
   start = prsd_start,

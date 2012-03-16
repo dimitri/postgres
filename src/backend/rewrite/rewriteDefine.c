@@ -492,8 +492,7 @@ DefineQueryRewrite(char *rulename,
 	{
 		cmd->objectId = InvalidOid;
 		cmd->objectname = rulename;
-		cmd->schemaname =
-			get_namespace_name(RelationGetNamespace(event_relation));
+		cmd->schemaname = NULL;	/* rules are not schema qualified */
 
 		ExecBeforeCommandTriggers(cmd);
 	}

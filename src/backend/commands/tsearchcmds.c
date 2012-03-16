@@ -857,7 +857,7 @@ AlterTSDictionary(AlterTSDictionaryStmt *stmt)
 	{
 		Form_pg_ts_dict form = (Form_pg_ts_dict) GETSTRUCT(tup);
 		cmd.objectId = dictId;
-		cmd.objectname = NameStr(form->dictname);
+		cmd.objectname = pstrdup(NameStr(form->dictname));
 		cmd.schemaname = get_namespace_name(form->dictnamespace);
 
 		ExecBeforeCommandTriggers(&cmd);
@@ -1858,7 +1858,7 @@ AlterTSConfiguration(AlterTSConfigurationStmt *stmt)
 		Form_pg_ts_config form = (Form_pg_ts_config) GETSTRUCT(tup);
 
 		cmd.objectId = HeapTupleGetOid(tup);
-		cmd.objectname = NameStr(form->cfgname);
+		cmd.objectname = pstrdup(NameStr(form->cfgname));
 		cmd.schemaname = get_namespace_name(form->cfgnamespace);
 
 		ExecBeforeCommandTriggers(&cmd);

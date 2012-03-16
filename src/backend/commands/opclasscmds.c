@@ -869,7 +869,7 @@ AlterOpFamily(AlterOpFamilyStmt *stmt)
 		opfForm = (Form_pg_opfamily) GETSTRUCT(htup);
 
 		cmd.objectId = opfamilyoid;
-		cmd.objectname = NameStr(opfForm->opfname);
+		cmd.objectname = pstrdup(NameStr(opfForm->opfname));
 		cmd.schemaname = get_namespace_name(opfForm->opfnamespace);
 
 		ReleaseSysCache(htup);

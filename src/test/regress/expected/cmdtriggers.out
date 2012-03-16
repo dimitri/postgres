@@ -449,9 +449,9 @@ NOTICE:  snitch: BEFORE any CREATE FUNCTION cmd.trigfunc
 NOTICE:  snitch: AFTER CREATE FUNCTION cmd.trigfunc
 NOTICE:  snitch: AFTER any CREATE FUNCTION cmd.trigfunc
 create trigger footg before update on cmd.foo for each row execute procedure cmd.trigfunc();
-NOTICE:  snitch: BEFORE any CREATE TRIGGER cmd.footg
-NOTICE:  snitch: BEFORE CREATE TRIGGER cmd.footg
-NOTICE:  snitch: AFTER any CREATE TRIGGER cmd.footg
+NOTICE:  snitch: BEFORE any CREATE TRIGGER <NULL>.footg
+NOTICE:  snitch: BEFORE CREATE TRIGGER <NULL>.footg
+NOTICE:  snitch: AFTER any CREATE TRIGGER <NULL>.footg
 alter trigger footg on cmd.foo rename to foo_trigger;
 NOTICE:  snitch: BEFORE any ALTER TRIGGER cmd.footg
 NOTICE:  snitch: BEFORE ALTER TRIGGER cmd.footg
@@ -494,6 +494,9 @@ create text search dictionary test_stem (
 NOTICE:  snitch: BEFORE any CREATE TEXT SEARCH DICTIONARY public.test_stem
 NOTICE:  snitch: AFTER CREATE TEXT SEARCH DICTIONARY public.test_stem
 NOTICE:  snitch: AFTER any CREATE TEXT SEARCH DICTIONARY public.test_stem
+alter text search dictionary test_stem (StopWords = dutch );
+NOTICE:  snitch: BEFORE any ALTER TEXT SEARCH DICTIONARY public.test_stem
+NOTICE:  snitch: AFTER any ALTER TEXT SEARCH DICTIONARY public.test_stem
 create text search parser test_parser (
   start = prsd_start,
   gettoken = prsd_nexttoken,
