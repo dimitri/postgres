@@ -3933,19 +3933,18 @@ SELECT * FROM sales_summary_bytime;
    <title>Triggers on commands</title>
 
    <para>
-    <application>PL/pgSQL</application> can be used to define trigger
-    procedures. A trigger procedure is created with the
+    <application>PL/pgSQL</application> can be used to define command
+    trigger procedures. A command trigger procedure is created with the
     <command>CREATE FUNCTION</> command, declaring it as a function with
     no arguments and a return type of <type>command trigger</type>.
    </para>
 
   <para>
    When a <application>PL/pgSQL</application> function is called as a
-   trigger, several special variables are created automatically in the
-   top-level block. They are:
+   command trigger, several special variables are created automatically
+   in the top-level block. They are:
 
    <variablelist>
-    <varlistentry>
     <varlistentry>
      <term><varname>TG_TAG</varname></term>
      <listitem>
@@ -4002,7 +4001,7 @@ SELECT * FROM sales_summary_bytime;
   </para>
 
   <para>
-   The command trigger function return's value is not used.
+   The command trigger function's return value is not used.
   </para>
 
    <para>
@@ -4014,23 +4013,20 @@ SELECT * FROM sales_summary_bytime;
     <title>A <application>PL/pgSQL</application> Command Trigger Procedure</title>
 
     <para>
-     This example trigger just raise a <literal>NOTICE</literal> message
+     This example trigger simply raises a <literal>NOTICE</literal> message
      each time a supported command is executed.
     </para>
 
 <programlisting>
-create or replace function snitch()
- returns command trigger
- language plpgsql
-as $$
-begin
-  raise notice 'snitch: % % %.% [%]',
+CREATE OR REPLACE FUNCTION snitch() RETURNS command trigger AS $$
+BEGIN
+    RAISE NOTICE 'snitch: % % %.% [%]',
                tg_when, tg_tag, tg_schemaname, tg_objectname, tg_objectid;
-end;
-$$;
+END;
+$$ LANGUAGE plpgsql;
 
-create command trigger snitch_before before any command execute procedure any_snitch();
-create command trigger snitch_after after any command execute procedure any_snitch();
+CREATE COMMAND TRIGGER snitch_before BEFORE ANY COMMAND EXECUTE PROCEDURE snitch();
+CREATE COMMAND TRIGGER snitch_after AFTER ANY COMMAND EXECUTE PROCEDURE snitch();
 </programlisting>
    </example>
   </sect2>

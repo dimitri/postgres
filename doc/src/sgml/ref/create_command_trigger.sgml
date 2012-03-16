@@ -30,7 +30,6 @@ CREATE COMMAND TRIGGER <replaceable class="PARAMETER">name</replaceable> { BEFOR
 <phrase>where <replaceable class="parameter">command</replaceable> can be one of:</phrase>
 
     ALTER AGGREGATE
-    ALTER CAST
     ALTER COLLATION
     ALTER CONVERSION
     ALTER DOMAIN
@@ -56,6 +55,7 @@ CREATE COMMAND TRIGGER <replaceable class="PARAMETER">name</replaceable> { BEFOR
     ALTER VIEW
     CLUSTER
     CREATE AGGREGATE
+    CREATE CAST
     CREATE COLLATION
     CREATE CONVERSION
     CREATE DOMAIN
@@ -186,14 +186,12 @@ CREATE COMMAND TRIGGER <replaceable class="PARAMETER">name</replaceable> { BEFOR
       That leaves out the following list of non supported commands.
      </para>
      <para>
-      Commands that refers to global objects, such as databases, tablespaces
-      and roles are not supported. As command triggers are per-database, it
-      would be weird to affect e.g. a tablespace depending on which database
-      you are connected to.
+      Commands that refer to global objects, such as databases, tablespaces
+      and roles, are not supported.
      </para>
      <para>
       Commands that exercise their own transaction control are only
-      supported in <literal>BEFORE</literal> command triggers, that's the
+      supported in <literal>BEFORE</literal> command triggers.  This is the
       case for <literal>VACUUM</literal>, <literal>CLUSTER</literal>,
       <literal>CREATE INDEX CONCURRENTLY</literal>, and <literal>REINDEX
       DATABASE</literal>.
@@ -220,11 +218,6 @@ CREATE COMMAND TRIGGER <replaceable class="PARAMETER">name</replaceable> { BEFOR
       not to be able to take over control from a superuser.
      </para>
      <para>
-      Triggers on ANY command support more commands than just this list, and
-      will provide NULL values for every argument except for the argument
-      that determines whether the trigger was before or after the command
-      event, and the command tag.
-
       Triggers on <literal>ANY</literal> command support more commands than
       just this list, and will only provide the <literal>command
       tag</literal> argument as <literal>NOT NULL</literal>. Supporting more
@@ -238,12 +231,12 @@ CREATE COMMAND TRIGGER <replaceable class="PARAMETER">name</replaceable> { BEFOR
     <term><replaceable class="parameter">function_name</replaceable></term>
     <listitem>
      <para>
-      A user-supplied function that is declared as taking 5 arguments of
-      type text, text, oid, text, text and returning void.
+      A user-supplied function that is declared as taking no argument and
+      returning type <literal>command trigger</literal>.
      </para>
      <para>
       If your command trigger is implemented in <literal>C</literal> then it
-      will be called with yet another argument, of
+      will be called with an argument, of
       type <literal>internal</literal>, which is a pointer to
       the <literal>Node *</literal> parse tree.
      </para>
@@ -275,7 +268,7 @@ CREATE COMMAND TRIGGER <replaceable class="PARAMETER">name</replaceable> { BEFOR
 CREATE OR REPLACE FUNCTION abort_any_command()
  RETURNS command trigger LANGUAGE plpgsql AS $$
 BEGIN
-  RAISE EXCEPTION 'command % is disabled' % tg_tag;
+  RAISE EXCEPTION 'command % is disabled', tg_tag;
 END;
 $$;
 
