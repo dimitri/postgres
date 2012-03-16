@@ -191,7 +191,7 @@ CreateCmdTrigger(CreateCmdTrigStmt *stmt, const char *queryString)
 	if (funcrettype != CMDTRIGGEROID)
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_OBJECT_DEFINITION),
-				 errmsg("function \"%s\" must return type \"command trigger\"",
+				 errmsg("function \"%s\" must return type \"command_trigger\"",
 						NameListToString(stmt->funcname))));
 
 	trigoid = InsertCmdTriggerTuple(tgrel, stmt->command, stmt->trigname,

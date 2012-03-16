@@ -2,7 +2,7 @@
 -- COMMAND TRIGGERS
 --
 create or replace function any_snitch()
- returns command trigger
+ returns command_trigger
  language plpgsql
 as $$
 begin
@@ -12,7 +12,7 @@ end;
 $$;
 
 create or replace function snitch()
- returns command trigger
+ returns command_trigger
  language plpgsql
 as $$
 begin
