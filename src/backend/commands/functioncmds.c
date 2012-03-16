@@ -1399,6 +1399,19 @@ AlterFunction(AlterFunctionStmt *stmt)
 					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 					 errmsg("ROWS is not applicable when function does not return a set")));
 	}
+
+	/* Call BEFORE ALTER FUNCTION command triggers */
+	InitCommandContext(&cmd, (Node *)stmt);
+
+	if (CommandFiresTriggers(&cmd))
+	{
+		cmd.objectId = HeapTupleGetOid(tup);
+		cmd.objectname = pstrdup(NameStr(procForm->proname));
+		cmd.schemaname = get_namespace_name(procForm->pronamespace);
+
+		ExecBeforeCommandTriggers(&cmd);
+	}
+
 	if (set_items)
 	{
 		Datum		datum;
@@ -1432,18 +1445,6 @@ AlterFunction(AlterFunctionStmt *stmt)
 
 		tup = heap_modify_tuple(tup, RelationGetDescr(rel),
 								repl_val, repl_null, repl_repl);
-	}
-
-	/* Call BEFORE ALTER FUNCTION command triggers */
-	InitCommandContext(&cmd, (Node *)stmt);
-
-	if (CommandFiresTriggers(&cmd))
-	{
-		cmd.objectId = InvalidOid;
-		cmd.objectname = pstrdup(NameStr(procForm->proname));
-		cmd.schemaname = get_namespace_name(procForm->pronamespace);
-
-		ExecBeforeCommandTriggers(&cmd);
 	}
 
 	/* Do the update */
