@@ -48,7 +48,8 @@ typedef struct PLyProcedureEntry
 
 /* PLyProcedure manipulation */
 extern char *PLy_procedure_name(PLyProcedure *proc);
-extern PLyProcedure *PLy_procedure_get(Oid fn_oid, Oid fn_rel, bool is_trigger);
+extern PLyProcedure *PLy_procedure_get(Oid fn_oid, Oid fn_rel,
+									   bool is_dml_trigger, bool is_evt_trigger);
 extern void PLy_procedure_compile(PLyProcedure *proc, const char *src);
 extern void PLy_procedure_delete(PLyProcedure *proc);
 

@@ -9,6 +9,7 @@
 #include "access/htup_details.h"
 #include "access/xact.h"
 #include "catalog/pg_type.h"
+#include "commands/event_trigger.h"
 #include "commands/trigger.h"
 #include "executor/spi.h"
 #include "funcapi.h"
@@ -330,6 +331,57 @@ PLy_exec_trigger(FunctionCallInfo fcinfo, PLyProcedure *proc)
 	Py_DECREF(plrv);
 
 	return rv;
+}
+
+/*
+ * Event trigger handler
+ */
+void
+PLy_exec_event_trigger(FunctionCallInfo fcinfo, PLyProcedure *proc)
+{
+	EventTriggerData *tdata;
+
+	Assert(CALLED_AS_EVENT_TRIGGER(fcinfo));
+
+	tdata = (EventTriggerData *) fcinfo->context;
+
+	PG_TRY();
+	{
+		/* build command trigger args */
+		PyObject   *pltevent, *plttag;
+		PyObject   *volatile pltdata = NULL;
+		char	   *stroid;
+
+		pltdata = PyDict_New();
+		if (!pltdata)
+			PLy_elog(ERROR, "could not create new dictionary while building command trigger arguments");
+
+		pltevent = PyString_FromString(tdata->event);
+		PyDict_SetItemString(pltdata, "event", pltevent);
+		Py_DECREF(pltevent);
+
+		plttag = PyString_FromString(tdata->tag);
+		PyDict_SetItemString(pltdata, "tag", plttag);
+		Py_DECREF(plttag);
+
+
+		/* now call the procedure */
+		PLy_procedure_call(proc, "TD", pltdata);
+
+		/*
+		 * Disconnect from SPI manager
+		 */
+		if (SPI_finish() != SPI_OK_FINISH)
+			elog(ERROR, "SPI_finish failed");
+
+	}
+	PG_CATCH();
+	{
+		PG_RE_THROW();
+	}
+	PG_END_TRY();
+
+	return;
 }
 
 /* helper functions for Python code execution */

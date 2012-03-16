@@ -9,6 +9,7 @@
 #include "access/htup_details.h"
 #include "catalog/pg_proc.h"
 #include "catalog/pg_type.h"
+#include "commands/event_trigger.h"
 #include "commands/trigger.h"
 #include "executor/spi.h"
 #include "miscadmin.h"
@@ -65,6 +66,7 @@ PG_FUNCTION_INFO_V1(plpython2_inline_handler);
 
 
 static bool PLy_procedure_is_trigger(Form_pg_proc procStruct);
+static bool PLy_procedure_is_event_trigger(Form_pg_proc procStruct);
 static void plpython_error_callback(void *arg);
 static void plpython_inline_error_callback(void *arg);
 static void PLy_init_interp(void);
@@ -158,7 +160,7 @@ plpython_validator(PG_FUNCTION_ARGS)
 	Oid			funcoid = PG_GETARG_OID(0);
 	HeapTuple	tuple;
 	Form_pg_proc procStruct;
-	bool		is_trigger;
+	bool		is_dml_trigger, is_evt_trigger;
 
 	if (!check_function_bodies)
 	{
@@ -171,12 +173,13 @@ plpython_validator(PG_FUNCTION_ARGS)
 		elog(ERROR, "cache lookup failed for function %u", funcoid);
 	procStruct = (Form_pg_proc) GETSTRUCT(tuple);
 
-	is_trigger = PLy_procedure_is_trigger(procStruct);
+	is_dml_trigger = PLy_procedure_is_trigger(procStruct);
+	is_evt_trigger = PLy_procedure_is_event_trigger(procStruct);
 
 	ReleaseSysCache(tuple);
 
 	/* We can't validate triggers against any particular table ... */
-	PLy_procedure_get(funcoid, InvalidOid, is_trigger);
+	PLy_procedure_get(funcoid, InvalidOid, is_dml_trigger, is_evt_trigger);
 
 	PG_RETURN_VOID();
 }
@@ -225,14 +228,21 @@ plpython_call_handler(PG_FUNCTION_ARGS)
 			Relation	tgrel = ((TriggerData *) fcinfo->context)->tg_relation;
 			HeapTuple	trv;
 
-			proc = PLy_procedure_get(funcoid, RelationGetRelid(tgrel), true);
+			proc = PLy_procedure_get(funcoid, RelationGetRelid(tgrel),
+									 true, false);
 			exec_ctx->curr_proc = proc;
 			trv = PLy_exec_trigger(fcinfo, proc);
 			retval = PointerGetDatum(trv);
 		}
+		else if (CALLED_AS_EVENT_TRIGGER(fcinfo))
+		{
+			proc = PLy_procedure_get(fcinfo->flinfo->fn_oid, InvalidOid, false, true);
+			exec_ctx->curr_proc = proc;
+			PLy_exec_event_trigger(fcinfo, proc);
+		}
 		else
 		{
-			proc = PLy_procedure_get(funcoid, InvalidOid, false);
+			proc = PLy_procedure_get(funcoid, InvalidOid, false, false);
 			exec_ctx->curr_proc = proc;
 			retval = PLy_exec_function(fcinfo, proc);
 		}
@@ -341,6 +351,11 @@ PLy_procedure_is_trigger(Form_pg_proc procStruct)
 	return (procStruct->prorettype == TRIGGEROID ||
 			(procStruct->prorettype == OPAQUEOID &&
 			 procStruct->pronargs == 0));
+}
+
+static bool PLy_procedure_is_event_trigger(Form_pg_proc procStruct)
+{
+	return (procStruct->prorettype == EVENTTRIGGEROID);
 }
 
 static void
