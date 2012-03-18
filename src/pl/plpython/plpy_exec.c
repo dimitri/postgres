@@ -350,7 +350,6 @@ PLy_exec_event_trigger(FunctionCallInfo fcinfo, PLyProcedure *proc)
 		/* build command trigger args */
 		PyObject   *pltevent, *plttag;
 		PyObject   *volatile pltdata = NULL;
-		char	   *stroid;
 
 		pltdata = PyDict_New();
 		if (!pltdata)
