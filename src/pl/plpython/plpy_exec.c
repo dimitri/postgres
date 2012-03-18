@@ -364,7 +364,6 @@ PLy_exec_event_trigger(FunctionCallInfo fcinfo, PLyProcedure *proc)
 		PyDict_SetItemString(pltdata, "tag", plttag);
 		Py_DECREF(plttag);
 
-
 		/* now call the procedure */
 		PLy_procedure_call(proc, "TD", pltdata);
 
