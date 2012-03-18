@@ -406,3 +406,22 @@ SELECT * FROM a;
 DROP TABLE a;
 INSERT INTO b DEFAULT VALUES;
 SELECT * FROM b;
+-- test plpython command triggers
+create or replace function pysnitch() returns command_trigger language plpythonu as $$
+  plpy.notice("  pysnitch: %s %s %s.%s [%s]" %
+              (TD["when"], TD["tag"], TD["schemaname"], TD["objectname"]));
+$$;
+
+create command trigger py_a_snitch after any command execute procedure pysnitch();
+create command trigger py_b_snitch before any command execute procedure pysnitch();
+
+create or replace function foobar() returns int language sql as $$select 1;$$;
+alter function foobar() cost 77;
+drop function foobar();
+
+create table foo();
+drop table foo;
+
+drop command trigger py_a_snitch;
+drop command trigger py_b_snitch;
+>>>>>>> Add regression tests for command triggers in pltcl, plpython and plperl.

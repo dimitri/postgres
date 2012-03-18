@@ -559,3 +559,21 @@ $$ language pltcl immutable;
 
 select tcl_date_week(2010,1,24);
 select tcl_date_week(2001,10,24);
+
+-- test pltcl command triggers
+create or replace function tclsnitch() returns command_trigger language pltcl as $$
+  elog NOTICE " tclsnitch: $TG_when $TG_tag $TG_schemaname $TG_objectname"
+$$;
+
+create command trigger tcl_a_snitch after any command execute procedure tclsnitch();
+create command trigger tcl_b_snitch before any command execute procedure tclsnitch();
+
+create or replace function foobar() returns int language sql as $$select 1;$$;
+alter function foobar() cost 77;
+drop function foobar();
+
+create table foo();
+drop table foo;
+
+drop command trigger tcl_a_snitch;
+drop command trigger tcl_b_snitch;

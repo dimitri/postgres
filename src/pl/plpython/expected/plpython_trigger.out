@@ -634,3 +634,30 @@ SELECT * FROM b;
  1234
 (1 row)
 
+create or replace function pysnitch() returns command_trigger language plpythonu as $$
+  plpy.notice("  pysnitch: %s %s %s.%s [%s]" %
+              (TD["when"], TD["tag"], TD["schemaname"], TD["objectname"]));
+$$;
+create command trigger py_a_snitch after any command execute procedure pysnitch();
+create command trigger py_b_snitch before any command execute procedure pysnitch();
+create or replace function foobar() returns int language sql as $$select 1;$$;
+ERROR:  TypeError: not enough arguments for format string
+CONTEXT:  Traceback (most recent call last):
+  PL/Python function "pysnitch", line 3, in <module>
+    (TD["when"], TD["tag"], TD["schemaname"], TD["objectname"]));
+PL/Python function "pysnitch"
+alter function foobar() cost 77;
+ERROR:  function foobar() does not exist
+drop function foobar();
+ERROR:  function foobar() does not exist
+create table foo();
+ERROR:  TypeError: not enough arguments for format string
+CONTEXT:  Traceback (most recent call last):
+  PL/Python function "pysnitch", line 3, in <module>
+    (TD["when"], TD["tag"], TD["schemaname"], TD["objectname"]));
+PL/Python function "pysnitch"
+drop table foo;
+ERROR:  table "foo" does not exist
+drop command trigger py_a_snitch;
+drop command trigger py_b_snitch;
+>>>>>>> Add regression tests for command triggers in pltcl, plpython and plperl.
