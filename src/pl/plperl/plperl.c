@@ -234,8 +234,11 @@ static void set_interp_require(bool trusted);
 
 static Datum plperl_func_handler(PG_FUNCTION_ARGS);
 static Datum plperl_trigger_handler(PG_FUNCTION_ARGS);
+static void plperl_command_trigger_handler(PG_FUNCTION_ARGS);
 
-static plperl_proc_desc *compile_plperl_function(Oid fn_oid, bool is_trigger);
+static plperl_proc_desc *compile_plperl_function(Oid fn_oid,
+												 bool is_dml_trigger,
+												 bool is_cmd_trigger);
 
 static SV  *plperl_hash_from_tuple(HeapTuple tuple, TupleDesc tupdesc);
 static SV  *plperl_hash_from_datum(Datum attr);
@@ -1567,6 +1570,35 @@ plperl_trigger_build_args(FunctionCallInfo fcinfo)
 }
 
 
+/* Set up the arguments for a command trigger call. */
+static SV  *
+plperl_command_trigger_build_args(FunctionCallInfo fcinfo)
+{
+	CommandTriggerData *tdata;
+	char	   *objectid;
+	HV		   *hv;
+
+	hv = newHV();
+	hv_ksplit(hv, 12);			/* pre-grow the hash */
+
+	tdata = (CommandTriggerData *) fcinfo->context;
+
+	hv_store_string(hv, "when", cstr2sv(tdata->when));
+	hv_store_string(hv, "tag", cstr2sv(tdata->tag));
+
+	if (tdata->objectId == InvalidOid)
+		objectid = pstrdup("NULL");
+	else
+		objectid = DatumGetCString(
+			DirectFunctionCall1(oidout, ObjectIdGetDatum(tdata->objectId)));
+	hv_store_string(hv, "objectid", cstr2sv(objectid));
+
+	hv_store_string(hv, "objectname", cstr2sv(tdata->objectname == NULL ? "NULL" : tdata->objectname));
+	hv_store_string(hv, "schemaname", cstr2sv(tdata->schemaname == NULL ? "NULL" : tdata->schemaname));
+
+	return newRV_noinc((SV *) hv);
+}
+
 /* Set up the new tuple returned from a trigger. */
 
 static HeapTuple
@@ -1668,6 +1700,8 @@ plperl_call_handler(PG_FUNCTION_ARGS)
 	{
 		if (CALLED_AS_TRIGGER(fcinfo))
 			retval = PointerGetDatum(plperl_trigger_handler(fcinfo));
+		else if (CALLED_AS_COMMAND_TRIGGER(fcinfo))
+			plperl_command_trigger_handler(fcinfo);
 		else
 			retval = plperl_func_handler(fcinfo);
 	}
@@ -1794,7 +1828,7 @@ plperl_validator(PG_FUNCTION_ARGS)
 	Oid		   *argtypes;
 	char	  **argnames;
 	char	   *argmodes;
-	bool		istrigger = false;
+	bool		is_dml_trigger = false, is_cmd_trigger = false;
 	int			i;
 
 	/* Get the new function's pg_proc entry */
@@ -1806,13 +1840,15 @@ plperl_validator(PG_FUNCTION_ARGS)
 	functyptype = get_typtype(proc->prorettype);
 
 	/* Disallow pseudotype result */
-	/* except for TRIGGER, RECORD, or VOID */
+	/* except for TRIGGER, CMDTRIGGER, RECORD, or VOID */
 	if (functyptype == TYPTYPE_PSEUDO)
 	{
 		/* we assume OPAQUE with no arguments means a trigger */
 		if (proc->prorettype == TRIGGEROID ||
 			(proc->prorettype == OPAQUEOID && proc->pronargs == 0))
-			istrigger = true;
+			is_dml_trigger = true;
+		else if (proc->prorettype == CMDTRIGGEROID)
+			is_cmd_trigger = true;
 		else if (proc->prorettype != RECORDOID &&
 				 proc->prorettype != VOIDOID)
 			ereport(ERROR,
@@ -1839,7 +1875,7 @@ plperl_validator(PG_FUNCTION_ARGS)
 	/* Postpone body checks if !check_function_bodies */
 	if (check_function_bodies)
 	{
-		(void) compile_plperl_function(funcoid, istrigger);
+		(void) compile_plperl_function(funcoid, is_dml_trigger, is_cmd_trigger);
 	}
 
 	/* the result of a validator is ignored */
@@ -2110,6 +2146,62 @@ plperl_call_perl_trigger_func(plperl_proc_desc *desc, FunctionCallInfo fcinfo,
 }
 
 
+static void
+plperl_call_perl_command_trigger_func(plperl_proc_desc *desc,
+									  FunctionCallInfo fcinfo,
+									  SV *td)
+{
+	dSP;
+	SV	*retval,
+			   *TDsv;
+	int	 count;
+
+	ENTER;
+	SAVETMPS;
+
+	TDsv = get_sv("_TD", 0);
+	if (!TDsv)
+		elog(ERROR, "couldn't fetch $_TD");
+
+	save_item(TDsv);			/* local $_TD */
+	sv_setsv(TDsv, td);
+
+	PUSHMARK(sp);
+	PUTBACK;
+
+	/* Do NOT use G_KEEPERR here */
+	count = perl_call_sv(desc->reference, G_SCALAR | G_EVAL);
+
+	SPAGAIN;
+
+	if (count != 1)
+	{
+		PUTBACK;
+		FREETMPS;
+		LEAVE;
+		elog(ERROR, "didn't get a return item from trigger function");
+	}
+
+	if (SvTRUE(ERRSV))
+	{
+		(void) POPs;
+		PUTBACK;
+		FREETMPS;
+		LEAVE;
+		/* XXX need to find a way to assign an errcode here */
+		ereport(ERROR,
+				(errmsg("%s", strip_trailing_ws(sv2cstr(ERRSV)))));
+	}
+
+	retval = newSVsv(POPs);
+
+	PUTBACK;
+	FREETMPS;
+	LEAVE;
+
+	return;
+}
+
 static Datum
 plperl_func_handler(PG_FUNCTION_ARGS)
 {
@@ -2129,7 +2221,7 @@ plperl_func_handler(PG_FUNCTION_ARGS)
 	if (SPI_connect() != SPI_OK_CONNECT)
 		elog(ERROR, "could not connect to SPI manager");
 
-	prodesc = compile_plperl_function(fcinfo->flinfo->fn_oid, false);
+	prodesc = compile_plperl_function(fcinfo->flinfo->fn_oid, false, false);
 	current_call_data->prodesc = prodesc;
 
 	/* Set a callback for error reporting */
@@ -2249,7 +2341,7 @@ plperl_trigger_handler(PG_FUNCTION_ARGS)
 		elog(ERROR, "could not connect to SPI manager");
 
 	/* Find or compile the function */
-	prodesc = compile_plperl_function(fcinfo->flinfo->fn_oid, true);
+	prodesc = compile_plperl_function(fcinfo->flinfo->fn_oid, true, false);
 	current_call_data->prodesc = prodesc;
 
 	/* Set a callback for error reporting */
@@ -2339,6 +2431,51 @@ plperl_trigger_handler(PG_FUNCTION_ARGS)
 }
 
 
+static void
+plperl_command_trigger_handler(PG_FUNCTION_ARGS)
+{
+	plperl_proc_desc *prodesc;
+	SV		   *svTD;
+	ErrorContextCallback pl_error_context;
+
+	/*
+	 * Create the call_data before connecting to SPI, so that it is not
+	 * allocated in the SPI memory context
+	 */
+	current_call_data = (plperl_call_data *) palloc0(sizeof(plperl_call_data));
+	current_call_data->fcinfo = fcinfo;
+
+	/* Connect to SPI manager */
+	if (SPI_connect() != SPI_OK_CONNECT)
+		elog(ERROR, "could not connect to SPI manager");
+
+	/* Find or compile the function */
+	prodesc = compile_plperl_function(fcinfo->flinfo->fn_oid, false, true);
+	current_call_data->prodesc = prodesc;
+
+	/* Set a callback for error reporting */
+	pl_error_context.callback = plperl_exec_callback;
+	pl_error_context.previous = error_context_stack;
+	pl_error_context.arg = prodesc->proname;
+	error_context_stack = &pl_error_context;
+
+	activate_interpreter(prodesc->interp);
+
+	svTD = plperl_command_trigger_build_args(fcinfo);
+	plperl_call_perl_command_trigger_func(prodesc, fcinfo, svTD);
+
+	if (SPI_finish() != SPI_OK_FINISH)
+		elog(ERROR, "SPI_finish() failed");
+
+	/* Restore the previous error callback */
+	error_context_stack = pl_error_context.previous;
+
+	SvREFCNT_dec(svTD);
+
+	return;
+}
+
+
 static bool
 validate_plperl_function(plperl_proc_ptr *proc_ptr, HeapTuple procTup)
 {
@@ -2378,7 +2515,7 @@ validate_plperl_function(plperl_proc_ptr *proc_ptr, HeapTuple procTup)
 
 
 static plperl_proc_desc *
-compile_plperl_function(Oid fn_oid, bool is_trigger)
+compile_plperl_function(Oid fn_oid, bool is_dml_trigger, bool is_cmd_trigger)
 {
 	HeapTuple	procTup;
 	Form_pg_proc procStruct;
@@ -2403,7 +2540,7 @@ compile_plperl_function(Oid fn_oid, bool is_trigger)
 
 	/* Try to find function in plperl_proc_hash */
 	proc_key.proc_id = fn_oid;
-	proc_key.is_trigger = is_trigger;
+	proc_key.is_trigger = is_dml_trigger;
 	proc_key.user_id = GetUserId();
 
 	proc_ptr = hash_search(plperl_proc_hash, &proc_key,
@@ -2480,7 +2617,7 @@ compile_plperl_function(Oid fn_oid, bool is_trigger)
 		 * Get the required information for input conversion of the
 		 * return value.
 		 ************************************************************/
-		if (!is_trigger)
+		if (!is_dml_trigger && !is_cmd_trigger)
 		{
 			typeTup =
 				SearchSysCache1(TYPEOID,
@@ -2538,7 +2675,7 @@ compile_plperl_function(Oid fn_oid, bool is_trigger)
 		 * Get the required information for output conversion
 		 * of all procedure arguments
 		 ************************************************************/
-		if (!is_trigger)
+		if (!is_dml_trigger && !is_cmd_trigger)
 		{
 			prodesc->nargs = procStruct->pronargs;
 			for (i = 0; i < prodesc->nargs; i++)
