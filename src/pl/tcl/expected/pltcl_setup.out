@@ -519,3 +519,26 @@ select tcl_date_week(2001,10,24);
  42
 (1 row)
 
+-- test pltcl command triggers
+create or replace function tclsnitch() returns command_trigger language pltcl as $$
+  elog NOTICE " tclsnitch: $TG_when $TG_tag $TG_schemaname $TG_objectname"
+$$;
+create command trigger tcl_a_snitch after any command execute procedure tclsnitch();
+create command trigger tcl_b_snitch before any command execute procedure tclsnitch();
+create or replace function foobar() returns int language sql as $$select 1;$$;
+NOTICE:   tclsnitch: BEFORE CREATE FUNCTION public foobar
+NOTICE:   tclsnitch: AFTER CREATE FUNCTION public foobar
+alter function foobar() cost 77;
+NOTICE:   tclsnitch: BEFORE ALTER FUNCTION public foobar
+NOTICE:   tclsnitch: AFTER ALTER FUNCTION public foobar
+drop function foobar();
+NOTICE:   tclsnitch: BEFORE DROP FUNCTION public foobar
+NOTICE:   tclsnitch: AFTER DROP FUNCTION public foobar
+create table foo();
+NOTICE:   tclsnitch: BEFORE CREATE TABLE public foo
+NOTICE:   tclsnitch: AFTER CREATE TABLE public foo
+drop table foo;
+NOTICE:   tclsnitch: BEFORE DROP TABLE public foo
+NOTICE:   tclsnitch: AFTER DROP TABLE public foo
+drop command trigger tcl_a_snitch;
+drop command trigger tcl_b_snitch;
