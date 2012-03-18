@@ -1139,7 +1139,7 @@ pltcl_command_trigger_handler(PG_FUNCTION_ARGS, bool pltrusted)
 {
 	pltcl_proc_desc *prodesc;
 	Tcl_Interp *volatile interp;
-	CommandTriggerData *trigdata = (CommandTriggerData *) fcinfo->context;
+	CommandTriggerData *tdata = (CommandTriggerData *) fcinfo->context;
 	char	   *stroid;
 	Tcl_DString tcl_cmd;
 	int			tcl_rc;
@@ -1164,16 +1164,19 @@ pltcl_command_trigger_handler(PG_FUNCTION_ARGS, bool pltrusted)
 	Tcl_DStringAppendElement(&tcl_cmd, prodesc->internal_proname);
 	PG_TRY();
 	{
-		Tcl_DStringAppendElement(&tcl_cmd, trigdata->when);
-		Tcl_DStringAppendElement(&tcl_cmd, trigdata->tag);
+		Tcl_DStringAppendElement(&tcl_cmd, tdata->when);
+		Tcl_DStringAppendElement(&tcl_cmd, tdata->tag);
 
-		stroid = DatumGetCString(
-			DirectFunctionCall1(oidout, ObjectIdGetDatum(trigdata->objectId)));
+		if (tdata->objectId == InvalidOid)
+			stroid = pstrdup("NULL");
+		else
+			stroid = DatumGetCString(
+				DirectFunctionCall1(oidout, ObjectIdGetDatum(tdata->objectId)));
 		Tcl_DStringAppendElement(&tcl_cmd, stroid);
 		pfree(stroid);
 
-		Tcl_DStringAppendElement(&tcl_cmd, trigdata->schemaname);
-		Tcl_DStringAppendElement(&tcl_cmd, trigdata->objectname);
+		Tcl_DStringAppendElement(&tcl_cmd, tdata->schemaname);
+		Tcl_DStringAppendElement(&tcl_cmd, tdata->objectname);
 	}
 	PG_CATCH();
 	{

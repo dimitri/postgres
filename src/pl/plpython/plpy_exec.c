@@ -376,18 +376,23 @@ PLy_exec_command_trigger(FunctionCallInfo fcinfo, PLyProcedure *proc)
 		PyDict_SetItemString(pltdata, "tag", plttag);
 		Py_DECREF(plttag);
 
-		stroid = DatumGetCString(
-			DirectFunctionCall1(oidout, ObjectIdGetDatum(tdata->objectId)));
+		if (tdata->objectId == InvalidOid)
+			stroid = pstrdup("NULL");
+		else
+			stroid = DatumGetCString(
+				DirectFunctionCall1(oidout, ObjectIdGetDatum(tdata->objectId)));
 		pltobjectid = PyString_FromString(stroid);
 		PyDict_SetItemString(pltdata, "objectId", pltobjectid);
 		Py_DECREF(pltobjectid);
 		pfree(stroid);
 
-		pltobjectname = PyString_FromString(tdata->objectname);
+		pltobjectname = PyString_FromString(
+			tdata->objectname == NULL ? "NULL" : tdata->objectname);
 		PyDict_SetItemString(pltdata, "objectname", pltobjectname);
 		Py_DECREF(pltobjectname);
 
-		pltschemaname = PyString_FromString(tdata->schemaname);
+		pltschemaname = PyString_FromString(
+			tdata->schemaname == NULL ? "NULL" : tdata->schemaname);
 		PyDict_SetItemString(pltdata, "schemaname", pltschemaname);
 		Py_DECREF(pltschemaname);
 
