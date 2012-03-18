@@ -521,6 +521,8 @@ SELECT 'doesn''t' AS ret
      <secondary>in PL/Tcl</secondary>
     </indexterm>
 
+    <sect2 id="plctl-dml-trigger">
+
     <para>
      Trigger procedures can be written in PL/Tcl.
      <productname>PostgreSQL</productname> requires that a procedure that is to be called
@@ -709,6 +711,73 @@ CREATE TRIGGER trig_mytab_modcount BEFORE INSERT OR UPDATE ON mytab
      name; that's supplied from the trigger arguments.  This lets the
      trigger procedure be reused with different tables.
     </para>
+    </sect2>
+
+    <sect2 id="plctl-cmd-trigger">
+    <para>
+     Command trigger procedures can be written in PL/Tcl.
+     <productname>PostgreSQL</productname> requires that a procedure that is to be called
+     as a trigger must be declared as a function with no arguments
+     and a return type of <literal>command_trigger</>.
+    </para>
+
+    <para>
+     The information from the trigger manager is passed to the procedure body
+     in the following variables:
+
+     <variablelist>
+
+      <varlistentry>
+       <term><varname>$TG_when</varname></term>
+       <listitem>
+        <para>
+         The timing of the event that fires the trigger, either the
+         string <literal>BEFORE</literal> or <literal>AFTER</literal>.
+        </para>
+       </listitem>
+      </varlistentry>
+
+      <varlistentry>
+       <term><varname>$TG_tag</varname></term>
+       <listitem>
+        <para>
+         The command tag for which the trigger is fired.
+        </para>
+       </listitem>
+      </varlistentry>
+
+      <varlistentry>
+       <term><varname>$TG_objectid</varname></term>
+       <listitem>
+        <para>
+         The object ID of the object that caused the trigger procedure
+         to be invoked.
+        </para>
+       </listitem>
+      </varlistentry>
+
+      <varlistentry>
+       <term><varname>$TG_objectname</varname></term>
+       <listitem>
+        <para>
+         The name of the objectthat caused the trigger procedure
+         to be invoked.
+        </para>
+       </listitem>
+      </varlistentry>
+
+      <varlistentry>
+       <term><varname>$TG_schemaname</varname></term>
+       <listitem>
+        <para>
+         The schema of the object that caused the trigger procedure to be
+         invoked, or <literal>NULL</literal> if the object is not qualified.
+        </para>
+       </listitem>
+      </varlistentry>
+     </variablelist>
+    </para>
+      </sect2>
    </sect1>
 
    <sect1 id="pltcl-unknown">

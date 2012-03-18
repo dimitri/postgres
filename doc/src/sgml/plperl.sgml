@@ -634,7 +634,7 @@ SELECT init_hosts_query();
 SELECT query_hosts('192.168.1.0/30');
 SELECT release_hosts_query();
 
-    query_hosts    
+    query_hosts
 -----------------
  (1,192.168.1.1)
  (2,192.168.1.2)
@@ -1026,6 +1026,8 @@ $$ LANGUAGE plperl;
  <sect1 id="plperl-triggers">
   <title>PL/Perl Triggers</title>
 
+  <sect2 id="plperl-dml-triggers">
+
   <para>
    PL/Perl can be used to write trigger functions.  In a trigger function,
    the hash reference <varname>$_TD</varname> contains information about the
@@ -1209,6 +1211,74 @@ CREATE TRIGGER test_valid_id_trig
     FOR EACH ROW EXECUTE PROCEDURE valid_id();
 </programlisting>
   </para>
+  </sect2>
+
+    <sect2 id="plperl-cmd-trigger">
+    <para>
+     Command trigger procedures can be written in PL/Perl.
+     <productname>PostgreSQL</productname> requires that a procedure that is to be called
+     as a trigger must be declared as a function with no arguments
+     and a return type of <literal>command_trigger</>.
+    </para>
+
+    <para>
+     The information from the trigger manager is passed to the procedure body
+     in the following variables:
+
+     <variablelist>
+
+      <varlistentry>
+       <term><varname>$_TD-&gt;{when}</varname></term>
+       <listitem>
+        <para>
+         The timing of the event that fires the trigger, either the
+         string <literal>BEFORE</literal> or <literal>AFTER</literal>.
+        </para>
+       </listitem>
+      </varlistentry>
+
+      <varlistentry>
+       <term><varname>$_TD-&gt;{tag}</varname></term>
+       <listitem>
+        <para>
+         The command tag for which the trigger is fired.
+        </para>
+       </listitem>
+      </varlistentry>
+
+      <varlistentry>
+       <term><varname>$_TD-&gt;{objectid}</varname></term>
+       <listitem>
+        <para>
+         The object ID of the object that caused the trigger procedure
+         to be invoked.
+        </para>
+       </listitem>
+      </varlistentry>
+
+      <varlistentry>
+       <term><varname>$_TD-&gt;{objectname}</varname></term>
+       <listitem>
+        <para>
+         The name of the objectthat caused the trigger procedure
+         to be invoked.
+        </para>
+       </listitem>
+      </varlistentry>
+
+      <varlistentry>
+       <term><varname>$_TD-&gt;{schemaname}</varname></term>
+       <listitem>
+        <para>
+         The schema of the object that caused the trigger procedure to be
+         invoked, or <literal>NULL</literal> if the object is not qualified.
+        </para>
+       </listitem>
+      </varlistentry>
+     </variablelist>
+    </para>
+      </sect2>
+
  </sect1>
 
  <sect1 id="plperl-under-the-hood">
