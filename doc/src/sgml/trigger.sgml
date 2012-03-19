@@ -34,7 +34,7 @@
   </para>
 
   <sect1 id="command-triggers">
-   <title>Overview of Trigger Behavior</title>
+   <title>Overview of Command Trigger Behavior</title>
 
    <para>
     A trigger is a specification that the database should automatically

@@ -757,6 +757,12 @@ $$ LANGUAGE plpythonu;
   </indexterm>
 
   <sect2 id="plpython-dml-trigger">
+     <title>Trigger Procedures on Data Modification in PL/Python</title>
+
+     <indexterm>
+      <primary>trigger</primary>
+      <secondary>in PL/Python</secondary>
+     </indexterm>
 
   <para>
    When a function is used as a trigger, the dictionary
@@ -866,6 +872,13 @@ $$ LANGUAGE plpythonu;
   </sect2>
 
    <sect2 id="plpython-cmd-trigger">
+     <title>Trigger Procedures on Commands in PL/Python </title>
+
+     <indexterm>
+      <primary>command trigger</primary>
+      <secondary>in PL/Python</secondary>
+     </indexterm>
+
     <para>
      Command trigger procedures can be written in PL/Python.
      <productname>PostgreSQL</productname> requires that a procedure that is to be called

@@ -1027,6 +1027,12 @@ $$ LANGUAGE plperl;
   <title>PL/Perl Triggers</title>
 
   <sect2 id="plperl-dml-triggers">
+     <title>Trigger Procedures on Data Modification in PL/Perl </title>
+
+     <indexterm>
+      <primary>trigger</primary>
+      <secondary>in PL/Perl</secondary>
+     </indexterm>
 
   <para>
    PL/Perl can be used to write trigger functions.  In a trigger function,
@@ -1214,6 +1220,13 @@ CREATE TRIGGER test_valid_id_trig
   </sect2>
 
     <sect2 id="plperl-cmd-trigger">
+     <title>Trigger Procedures on Commands in PL/Perl </title>
+
+     <indexterm>
+      <primary>command trigger</primary>
+      <secondary>in PL/Perl</secondary>
+     </indexterm>
+
     <para>
      Command trigger procedures can be written in PL/Perl.
      <productname>PostgreSQL</productname> requires that a procedure that is to be called
