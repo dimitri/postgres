@@ -2208,7 +2208,7 @@ plperl_call_perl_event_trigger_func(plperl_proc_desc *desc,
 	ENTER;
 	SAVETMPS;
 
-	TDsv = get_sv("_TD", 0);
+	TDsv = get_sv("main::_TD", 0);
 	if (!TDsv)
 		elog(ERROR, "couldn't fetch $_TD");
 
