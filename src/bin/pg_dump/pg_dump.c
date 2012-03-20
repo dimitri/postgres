@@ -2374,8 +2374,6 @@ dumpBlobs(Archive *fout, void *arg)
 		PQclear(res);
 	} while (ntups > 0);
 
-	PQclear(res);
-
 	return 1;
 }
 
