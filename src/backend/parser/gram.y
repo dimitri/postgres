@@ -4306,6 +4306,8 @@ trigger_command:
 			   | CREATE LANGUAGE					{ $$ = "CREATE LANGUAGE"; }
 			   | CREATE FUNCTION					{ $$ = "CREATE FUNCTION"; }
 			   | CREATE TABLE						{ $$ = "CREATE TABLE"; }
+			   | CREATE TABLE AS					{ $$ = "CREATE TABLE AS"; }
+			   | SELECT INTO						{ $$ = "SELECT INTO"; }
 			   | CREATE SERVER						{ $$ = "CREATE SERVER"; }
 			   | CREATE FOREIGN TABLE				{ $$ = "CREATE FOREIGN TABLE"; }
 			   | CREATE FOREIGN DATA_P WRAPPER		{ $$ = "CREATE FOREIGN DATA WRAPPER"; }

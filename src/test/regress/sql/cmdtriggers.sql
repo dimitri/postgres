@@ -29,6 +29,8 @@ alter command trigger snitch_before set enable;
 alter command trigger snitch_after_ rename to snitch_after;
 
 create command trigger snitch_create_table after create table execute procedure snitch();
+create command trigger snitch_create_table_as after create table as execute procedure snitch();
+create command trigger snitch_select_into after select into execute procedure snitch();
 create command trigger snitch_create_seq after create sequence execute procedure snitch();
 create command trigger snitch_create_view after create view execute procedure snitch();
 create command trigger snitch_alter_table after alter table execute procedure snitch();
@@ -79,6 +81,11 @@ create role regbob;
 create table cmd.foo(id bigserial primary key);
 create view cmd.v as select * from cmd.foo;
 alter table cmd.foo add column t text;
+
+create table cmd.bar as select 1;
+drop table cmd.bar;
+select 1 into cmd.bar;
+drop table cmd.bar;
 
 create table test9 (id int, stuff text);
 alter table test9 rename to test;
@@ -251,6 +258,8 @@ drop command trigger snitch_before;
 drop command trigger snitch_after;
 
 drop command trigger snitch_create_table;
+drop command trigger snitch_create_table_as;
+drop command trigger snitch_select_into;
 drop command trigger snitch_create_seq;
 drop command trigger snitch_create_view;
 drop command trigger snitch_alter_table;

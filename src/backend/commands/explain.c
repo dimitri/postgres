@@ -169,7 +169,7 @@ ExplainQuery(ExplainStmt *stmt, const char *queryString,
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 				 errmsg("EXPLAIN option BUFFERS requires ANALYZE")));
-	
+
 	/* if the timing was not set explicitly, set default value */
 	es.timing = (timing_set) ? es.timing : es.analyze;
 
@@ -423,7 +423,7 @@ ExplainOnePlan(PlannedStmt *plannedstmt, IntoClause *into, ExplainState *es,
 	 * AS, we'd better use the appropriate tuple receiver.
 	 */
 	if (into)
-		dest = CreateIntoRelDestReceiver(into);
+		dest = CreateIntoRelDestReceiver(into, NULL);
 	else
 		dest = None_Receiver;
 
