@@ -293,11 +293,12 @@ get_extension_feature_oids(const char *feature, bool missing_ok,
 
 	heap_close(rel, AccessShareLock);
 
-	if (!OidIsValid(featoid) && !missing_ok)
+	if (!OidIsValid(*featoid) && !missing_ok)
 		ereport(ERROR,
 				(errcode(ERRCODE_UNDEFINED_OBJECT),
-				 errmsg("extension's feature \"%s\" is not installed",
-						feature)));
+				 errmsg("feature \"%s\" is not currently provided",
+						feature),
+				 errhint("Please install an extension that provides it first")));
 }
 
 /*
@@ -319,7 +320,6 @@ get_required_extension_features(List *requires,
 		char	   *curreq = (char *) lfirst(lc);
 		Oid			reqext, featoid, reqschema;
 
-		/* use get_extension_providing error message for missing requirements */
 		get_extension_feature_oids(curreq, false, &reqext, &featoid);
 		reqschema = get_extension_schema(reqext);
 		*requiredFeatures = lappend_oid(*requiredFeatures, featoid);
@@ -1774,7 +1774,7 @@ insert_extension_features(const char *extName, ObjectAddress extObject,
 		char       *feature = (char *) lfirst(lc);
 		insert_extension_feature(rel, extObject, feature);
 
-		provides_itself = (strcmp(feature, extName) == 0);
+		provides_itself = provides_itself || (strcmp(feature, extName) == 0);
 	}
 
 	if (!provides_itself)
@@ -2293,20 +2293,20 @@ get_available_versions_for_extension(ExtensionControlFile *pcontrol,
 		}
 		/* provides */
 		nulls[6] = false;
-		if (control->provides == NIL)
-		{
-			Datum	   *datums;
-			ArrayType  *a;
+		/* if (control->provides == NIL) */
+		/* { */
+		/* 	Datum	   *datums; */
+		/* 	ArrayType  *a; */
 
-			datums = (Datum *) palloc(1 * sizeof(Datum));
-			datums[0] =
-				DirectFunctionCall1(namein, CStringGetDatum(pcontrol->name));
-			a = construct_array(datums, 1,
-								NAMEOID,
-								NAMEDATALEN, false, 'c');
-			values[6] = PointerGetDatum(a);
-		}
-		else
+		/* 	datums = (Datum *) palloc(1 * sizeof(Datum)); */
+		/* 	datums[0] = */
+		/* 		DirectFunctionCall1(namein, CStringGetDatum(pcontrol->name)); */
+		/* 	a = construct_array(datums, 1, */
+		/* 						NAMEOID, */
+		/* 						NAMEDATALEN, false, 'c'); */
+		/* 	values[6] = PointerGetDatum(a); */
+		/* } */
+		/* else */
 		{
 			Datum	   *datums;
 			int			ndatums;

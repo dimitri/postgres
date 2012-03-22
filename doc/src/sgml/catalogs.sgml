@@ -3067,7 +3067,7 @@
   <title><structname>pg_extension_feature</structname></title>
 
   <indexterm zone="catalog-pg-extension-feature">
-   <primary>pg_extension</primary>
+   <primary>pg_extension_feature</primary>
   </indexterm>
 
   <para>
@@ -3077,7 +3077,7 @@
   </para>
 
   <table>
-   <title><structname>pg_extension_features</> Columns</title>
+   <title><structname>pg_extension_feature</> Columns</title>
 
    <tgroup cols="4">
     <thead>

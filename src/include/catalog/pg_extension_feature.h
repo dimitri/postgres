@@ -2,7 +2,7 @@
  *
  * pg_extension_feature.h
  *	  definition of the system "extension feature" relation
- *	  (pg_extension_features), that traks what features an extension provides
+ *	  (pg_extension_features), that tracks what features an extension provides
  *
  *
  * Portions Copyright (c) 1996-2011, PostgreSQL Global Development Group
