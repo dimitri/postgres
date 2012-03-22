@@ -2293,20 +2293,6 @@ get_available_versions_for_extension(ExtensionControlFile *pcontrol,
 		}
 		/* provides */
 		nulls[6] = false;
-		/* if (control->provides == NIL) */
-		/* { */
-		/* 	Datum	   *datums; */
-		/* 	ArrayType  *a; */
-
-		/* 	datums = (Datum *) palloc(1 * sizeof(Datum)); */
-		/* 	datums[0] = */
-		/* 		DirectFunctionCall1(namein, CStringGetDatum(pcontrol->name)); */
-		/* 	a = construct_array(datums, 1, */
-		/* 						NAMEOID, */
-		/* 						NAMEDATALEN, false, 'c'); */
-		/* 	values[6] = PointerGetDatum(a); */
-		/* } */
-		/* else */
 		{
 			Datum	   *datums;
 			int			ndatums;
