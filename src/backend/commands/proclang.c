@@ -131,6 +131,7 @@ CreateProceduralLanguage(CreatePLangStmt *stmt)
 										 false, /* isAgg */
 										 false, /* isWindowFunc */
 										 false, /* security_definer */
+										 false,	/* isLeakProof */
 										 false, /* isStrict */
 										 PROVOLATILE_VOLATILE,
 										 buildoidvector(funcargtypes, 0),
@@ -166,6 +167,7 @@ CreateProceduralLanguage(CreatePLangStmt *stmt)
 											false,		/* isAgg */
 											false,		/* isWindowFunc */
 											false,		/* security_definer */
+											false,		/* isLeakProof */
 											true,		/* isStrict */
 											PROVOLATILE_VOLATILE,
 											buildoidvector(funcargtypes, 1),
@@ -204,6 +206,7 @@ CreateProceduralLanguage(CreatePLangStmt *stmt)
 										 false, /* isAgg */
 										 false, /* isWindowFunc */
 										 false, /* security_definer */
+										 false,	/* isLeakProof */
 										 true,	/* isStrict */
 										 PROVOLATILE_VOLATILE,
 										 buildoidvector(funcargtypes, 1),
@@ -425,7 +428,7 @@ create_proc_lang(const char *languageName, bool replace,
 
 	/* Post creation hook for new procedural language */
 	InvokeObjectAccessHook(OAT_POST_CREATE,
-						   LanguageRelationId, myself.objectId, 0);
+						   LanguageRelationId, myself.objectId, 0, NULL);
 
 	heap_close(rel, RowExclusiveLock);
 }

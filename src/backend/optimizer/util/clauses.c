@@ -93,6 +93,7 @@ static bool contain_subplans_walker(Node *node, void *context);
 static bool contain_mutable_functions_walker(Node *node, void *context);
 static bool contain_volatile_functions_walker(Node *node, void *context);
 static bool contain_nonstrict_functions_walker(Node *node, void *context);
+static bool contain_leaky_functions_walker(Node *node, void *context);
 static Relids find_nonnullable_rels_walker(Node *node, bool top_level);
 static List *find_nonnullable_vars_walker(Node *node, bool top_level);
 static bool is_strict_saop(ScalarArrayOpExpr *expr, bool falseOK);
@@ -1129,6 +1130,145 @@ contain_nonstrict_functions_walker(Node *node, void *context)
 								  context);
 }
 
+/*****************************************************************************
+ *        Check clauses for non-leakproof functions
+ *****************************************************************************/
+
+/*
+ * contain_leaky_functions
+ *      Recursively search for leaky functions within a clause.
+ *
+ * Returns true if any function call with side-effect may be present in the
+ * clause.  Qualifiers from outside the a security_barrier view should not
+ * be pushed down into the view, lest the contents of tuples intended to be
+ * filtered out be revealed via side effects.
+ */
+bool
+contain_leaky_functions(Node *clause)
+{
+	return contain_leaky_functions_walker(clause, NULL);
+}
+
+static bool
+contain_leaky_functions_walker(Node *node, void *context)
+{
+	if (node == NULL)
+		return false;
+
+	switch (nodeTag(node))
+	{
+		case T_Var:
+        case T_Const:
+        case T_Param:
+		case T_ArrayExpr:
+		case T_NamedArgExpr:
+		case T_BoolExpr:
+		case T_RelabelType:
+		case T_CaseExpr:
+		case T_CaseTestExpr:
+		case T_RowExpr:
+		case T_MinMaxExpr:
+		case T_NullTest:
+		case T_BooleanTest:
+		case T_List:
+			/*
+			 * We know these node types don't contain function calls; but
+			 * something further down in the node tree might.
+			 */
+			break;
+
+		case T_FuncExpr:
+			{
+				FuncExpr *expr = (FuncExpr *) node;
+
+				if (!get_func_leakproof(expr->funcid))
+					return true;
+			}
+			break;
+
+		case T_OpExpr:
+		case T_DistinctExpr:	/* struct-equivalent to OpExpr */
+		case T_NullIfExpr:		/* struct-equivalent to OpExpr */
+			{
+				OpExpr *expr = (OpExpr *) node;
+
+				set_opfuncid(expr);
+				if (!get_func_leakproof(expr->opfuncid))
+					return true;
+			}
+			break;
+
+		case T_ScalarArrayOpExpr:
+			{
+				ScalarArrayOpExpr *expr = (ScalarArrayOpExpr *) node;
+
+				set_sa_opfuncid(expr);
+				if (!get_func_leakproof(expr->opfuncid))
+					return true;
+			}
+			break;
+
+		case T_CoerceViaIO:
+			{
+				CoerceViaIO *expr = (CoerceViaIO *) node;
+				Oid		funcid;
+				Oid		ioparam;
+				bool	varlena;
+
+				getTypeInputInfo(exprType((Node *)expr->arg),
+								 &funcid, &ioparam);
+				if (!get_func_leakproof(funcid))
+					return true;
+
+				getTypeOutputInfo(expr->resulttype, &funcid, &varlena);
+				if (!get_func_leakproof(funcid))
+					return true;
+			}
+			break;
+
+		case T_ArrayCoerceExpr:
+			{
+				ArrayCoerceExpr *expr = (ArrayCoerceExpr *) node;
+				Oid		funcid;
+				Oid		ioparam;
+				bool	varlena;
+
+				getTypeInputInfo(exprType((Node *)expr->arg),
+								 &funcid, &ioparam);
+				if (!get_func_leakproof(funcid))
+					return true;
+				getTypeOutputInfo(expr->resulttype, &funcid, &varlena);
+				if (!get_func_leakproof(funcid))
+					return true;
+			}
+			break;
+
+		case T_RowCompareExpr:
+			{
+				RowCompareExpr *rcexpr = (RowCompareExpr *) node;
+				ListCell   *opid;
+
+				foreach(opid, rcexpr->opnos)
+				{
+					Oid		funcid = get_opcode(lfirst_oid(opid));
+
+					if (!get_func_leakproof(funcid))
+						return true;
+				}
+			}
+			break;
+
+		default:
+			/*
+			 * If we don't recognize the node tag, assume it might be leaky.
+			 * This prevents an unexpected security hole if someone adds a new
+			 * node type that can call a function.
+			 */
+			return true;
+	}
+	return expression_tree_walker(node, contain_leaky_functions_walker,
+								  context);
+}
 
 /*
  * find_nonnullable_rels
@@ -4018,7 +4158,7 @@ inline_function(Oid funcid, Oid result_type, Oid result_collid,
 	pstate->p_sourcetext = src;
 	sql_fn_parser_setup(pstate, pinfo);
 
-	querytree = transformStmt(pstate, linitial(raw_parsetree_list));
+	querytree = transformTopLevelStmt(pstate, linitial(raw_parsetree_list));
 
 	free_parsestate(pstate);
 
@@ -4028,7 +4168,6 @@ inline_function(Oid funcid, Oid result_type, Oid result_collid,
 	if (!IsA(querytree, Query) ||
 		querytree->commandType != CMD_SELECT ||
 		querytree->utilityStmt ||
-		querytree->intoClause ||
 		querytree->hasAggs ||
 		querytree->hasWindowFuncs ||
 		querytree->hasSubLinks ||
@@ -4538,12 +4677,11 @@ inline_set_returning_function(PlannerInfo *root, RangeTblEntry *rte)
 	querytree = linitial(querytree_list);
 
 	/*
-	 * The single command must be a regular results-returning SELECT.
+	 * The single command must be a plain SELECT.
 	 */
 	if (!IsA(querytree, Query) ||
 		querytree->commandType != CMD_SELECT ||
-		querytree->utilityStmt ||
-		querytree->intoClause)
+		querytree->utilityStmt)
 		goto fail;
 
 	/*

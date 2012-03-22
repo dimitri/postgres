@@ -2749,6 +2749,8 @@ freePGconn(PGconn *conn)
 		free(conn->events[i].name);
 	}
 
+	if (conn->client_encoding_initial)
+		free(conn->client_encoding_initial);
 	if (conn->events)
 		free(conn->events);
 	if (conn->pghost)
@@ -4301,6 +4303,7 @@ conninfo_array_parse(const char *const * keywords, const char *const * values,
 	{
 		printfPQExpBuffer(errorMessage,
 						  libpq_gettext("out of memory\n"));
+		PQconninfoFree(str_options);
 		return NULL;
 	}
 	memcpy(options, PQconninfoOptions, sizeof(PQconninfoOptions));
@@ -4328,6 +4331,7 @@ conninfo_array_parse(const char *const * keywords, const char *const * values,
 						 libpq_gettext("invalid connection option \"%s\"\n"),
 								  pname);
 				PQconninfoFree(options);
+				PQconninfoFree(str_options);
 				return NULL;
 			}
 
@@ -4372,6 +4376,7 @@ conninfo_array_parse(const char *const * keywords, const char *const * values,
 					printfPQExpBuffer(errorMessage,
 									  libpq_gettext("out of memory\n"));
 					PQconninfoFree(options);
+					PQconninfoFree(str_options);
 					return NULL;
 				}
 			}

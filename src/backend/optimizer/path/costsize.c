@@ -3583,7 +3583,7 @@ void
 set_subquery_size_estimates(PlannerInfo *root, RelOptInfo *rel)
 {
 	PlannerInfo *subroot = rel->subroot;
-	RangeTblEntry *rte;
+	RangeTblEntry *rte PG_USED_FOR_ASSERTS_ONLY;
 	ListCell   *lc;
 
 	/* Should only be applied to base relations that are subqueries */
@@ -3745,7 +3745,7 @@ set_cte_size_estimates(PlannerInfo *root, RelOptInfo *rel, Plan *cteplan)
  * using what will be purely datatype-driven estimates from the targetlist.
  * There is no way to do anything sane with the rows value, so we just put
  * a default estimate and hope that the wrapper can improve on it.	The
- * wrapper's PlanForeignScan function will be called momentarily.
+ * wrapper's GetForeignRelSize function will be called momentarily.
  *
  * The rel's targetlist and restrictinfo list must have been constructed
  * already.

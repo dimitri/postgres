@@ -478,7 +478,7 @@ typedef NameData *Name;
  * PointerIsValid
  *		True iff pointer is valid.
  */
-#define PointerIsValid(pointer) ((void*)(pointer) != NULL)
+#define PointerIsValid(pointer) ((const void*)(pointer) != NULL)
 
 /*
  * PointerIsAligned
@@ -708,6 +708,18 @@ typedef NameData *Name;
 #define STATUS_EOF				(-2)
 #define STATUS_FOUND			(1)
 #define STATUS_WAITING			(2)
+
+
+/*
+ * Append PG_USED_FOR_ASSERTS_ONLY to definitions of variables that are only
+ * used in assert-enabled builds, to avoid compiler warnings about unused
+ * variables in assert-disabled builds.
+ */
+#ifdef USE_ASSERT_CHECKING
+#define PG_USED_FOR_ASSERTS_ONLY
+#else
+#define PG_USED_FOR_ASSERTS_ONLY __attribute__((unused))
+#endif
 
 
 /* gettext domain name mangling */

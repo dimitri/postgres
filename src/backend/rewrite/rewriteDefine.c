@@ -178,7 +178,7 @@ InsertRule(char *rulname,
 
 	/* Post creation hook for new rule */
 	InvokeObjectAccessHook(OAT_POST_CREATE,
-						   RewriteRelationId, rewriteObjectId, 0);
+						   RewriteRelationId, rewriteObjectId, 0, NULL);
 
 	heap_close(pg_rewrite_desc, RowExclusiveLock);
 
@@ -323,8 +323,7 @@ DefineQueryRewrite(char *rulename,
 		query = (Query *) linitial(action);
 		if (!is_instead ||
 			query->commandType != CMD_SELECT ||
-			query->utilityStmt != NULL ||
-			query->intoClause != NULL)
+			query->utilityStmt != NULL)
 			ereport(ERROR,
 					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 				 errmsg("rules on SELECT must have action INSTEAD SELECT")));

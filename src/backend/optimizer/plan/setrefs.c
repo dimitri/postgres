@@ -15,7 +15,6 @@
  */
 #include "postgres.h"
 
-#include "access/hash.h"
 #include "access/transam.h"
 #include "catalog/pg_type.h"
 #include "nodes/makefuncs.h"
@@ -23,6 +22,7 @@
 #include "optimizer/pathnode.h"
 #include "optimizer/planmain.h"
 #include "optimizer/tlist.h"
+#include "tcop/utility.h"
 #include "utils/lsyscache.h"
 #include "utils/syscache.h"
 
@@ -429,6 +429,8 @@ set_plan_refs(PlannerInfo *root, Plan *plan, int rtoffset)
 					fix_scan_list(root, splan->scan.plan.targetlist, rtoffset);
 				splan->scan.plan.qual =
 					fix_scan_list(root, splan->scan.plan.qual, rtoffset);
+				splan->fdw_exprs =
+					fix_scan_list(root, splan->fdw_exprs, rtoffset);
 			}
 			break;
 
@@ -1830,14 +1832,11 @@ record_plan_function_dependency(PlannerInfo *root, Oid funcid)
 		/*
 		 * It would work to use any syscache on pg_proc, but the easiest is
 		 * PROCOID since we already have the function's OID at hand.  Note
-		 * that plancache.c knows we use PROCOID.  Also, we're perhaps
-		 * assuming more than we should about how CatalogCacheComputeHashValue
-		 * computes hash values...
+		 * that plancache.c knows we use PROCOID.
 		 */
 		inval_item->cacheId = PROCOID;
-		inval_item->hashValue =
-			DatumGetUInt32(DirectFunctionCall1(hashoid,
-											   ObjectIdGetDatum(funcid)));
+		inval_item->hashValue = GetSysCacheHashValue1(PROCOID,
+													  ObjectIdGetDatum(funcid));
 
 		root->glob->invalItems = lappend(root->glob->invalItems, inval_item);
 	}
@@ -1889,16 +1888,14 @@ extract_query_dependencies_walker(Node *node, PlannerInfo *context)
 		Query	   *query = (Query *) node;
 		ListCell   *lc;
 
-		if (query->commandType == CMD_UTILITY)
+		while (query->commandType == CMD_UTILITY)
 		{
-			/* Ignore utility statements, except EXPLAIN */
-			if (IsA(query->utilityStmt, ExplainStmt))
-			{
-				query = (Query *) ((ExplainStmt *) query->utilityStmt)->query;
-				Assert(IsA(query, Query));
-				Assert(query->commandType != CMD_UTILITY);
-			}
-			else
+			/*
+			 * Ignore utility statements, except those (such as EXPLAIN) that
+			 * contain a parsed-but-not-planned query.
+			 */
+			query = UtilityContainsQuery(query->utilityStmt);
+			if (query == NULL)
 				return false;
 		}
 

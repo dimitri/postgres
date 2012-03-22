@@ -1399,7 +1399,6 @@ simplify_EXISTS_query(Query *query)
 	 * are complex.
 	 */
 	if (query->commandType != CMD_SELECT ||
-		query->intoClause ||
 		query->setOperations ||
 		query->hasAggs ||
 		query->hasWindowFuncs ||
@@ -2137,6 +2136,8 @@ finalize_plan(PlannerInfo *root, Plan *plan, Bitmapset *valid_params,
 			break;
 
 		case T_ForeignScan:
+			finalize_primnode((Node *) ((ForeignScan *) plan)->fdw_exprs,
+							  &context);
 			context.paramids = bms_add_members(context.paramids, scan_params);
 			break;
 

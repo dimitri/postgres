@@ -991,7 +991,7 @@ execute_extension_script(Oid extensionOid, ExtensionControlFile *control,
 
 		/*
 		 * If it's not relocatable, substitute the target schema name for
-		 * occcurrences of @extschema@.
+		 * occurrences of @extschema@.
 		 *
 		 * For a relocatable extension, we needn't do this.  There cannot be
 		 * any need for @extschema@, else it wouldn't be relocatable.
@@ -1660,7 +1660,7 @@ InsertExtensionTuple(const char *extName, Oid extOwner,
 
 	/* Post creation hook for new extension */
 	InvokeObjectAccessHook(OAT_POST_CREATE,
-						   ExtensionRelationId, extensionOid, 0);
+						   ExtensionRelationId, extensionOid, 0, NULL);
 
 	return extensionOid;
 }

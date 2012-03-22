@@ -126,11 +126,9 @@ get_control_data(ClusterInfo *cluster, bool live_check)
 	/* we have the result of cmd in "output". so parse it line by line now */
 	while (fgets(bufin, sizeof(bufin), output))
 	{
-		if (log_opts.debug)
-			fputs(bufin, log_opts.debug_fd);
+		pg_log(PG_VERBOSE, "%s", bufin);
 
 #ifdef WIN32
-
 		/*
 		 * Due to an installer bug, LANG=C doesn't work for PG 8.3.3, but does
 		 * work 8.2.6 and 8.3.7, so check for non-ASCII output and suggest a
@@ -516,11 +514,12 @@ check_control_data(ControlData *oldctrl,
 
 
 void
-rename_old_pg_control(void)
+disable_old_cluster(void)
 {
 	char		old_path[MAXPGPATH],
 				new_path[MAXPGPATH];
 
+	/* rename pg_control so old server cannot be accidentally started */
 	prep_status("Adding \".old\" suffix to old global/pg_control");
 
 	snprintf(old_path, sizeof(old_path), "%s/global/pg_control", old_cluster.pgdata);
@@ -528,4 +527,10 @@ rename_old_pg_control(void)
 	if (pg_mv_file(old_path, new_path) != 0)
 		pg_log(PG_FATAL, "Unable to rename %s to %s.\n", old_path, new_path);
 	check_ok();
+
+	pg_log(PG_REPORT, "\n"
+		   "If you want to start the old cluster, you will need to remove\n"
+		   "the \".old\" suffix from %s/global/pg_control.old.\n"
+		   "Because \"link\" mode was used, the old cluster cannot be safely\n"
+		   "started once the new cluster has been started.\n\n", old_cluster.pgdata);
 }

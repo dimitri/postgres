@@ -1408,12 +1408,6 @@ transformSubLink(ParseState *pstate, SubLink *sublink)
 		qtree->commandType != CMD_SELECT ||
 		qtree->utilityStmt != NULL)
 		elog(ERROR, "unexpected non-SELECT command in SubLink");
-	if (qtree->intoClause)
-		ereport(ERROR,
-				(errcode(ERRCODE_SYNTAX_ERROR),
-				 errmsg("subquery cannot have SELECT INTO"),
-				 parser_errposition(pstate,
-								 exprLocation((Node *) qtree->intoClause))));
 
 	sublink->subselect = (Node *) qtree;
 
@@ -1692,6 +1686,9 @@ static Node *
 transformRowExpr(ParseState *pstate, RowExpr *r)
 {
 	RowExpr    *newr = makeNode(RowExpr);
+	char		fname[16];
+	int			fnum;
+	ListCell   *lc;
 
 	/* Transform the field expressions */
 	newr->args = transformExpressionList(pstate, r->args);
@@ -1699,7 +1696,16 @@ transformRowExpr(ParseState *pstate, RowExpr *r)
 	/* Barring later casting, we consider the type RECORD */
 	newr->row_typeid = RECORDOID;
 	newr->row_format = COERCE_IMPLICIT_CAST;
-	newr->colnames = NIL;		/* ROW() has anonymous columns */
+
+	/* ROW() has anonymous columns, so invent some field names */
+	newr->colnames = NIL;
+	fnum = 1;
+	foreach(lc, newr->args)
+	{
+		snprintf(fname, sizeof(fname), "f%d", fnum++);
+		newr->colnames = lappend(newr->colnames, makeString(pstrdup(fname)));
+	}
+
 	newr->location = r->location;
 
 	return (Node *) newr;

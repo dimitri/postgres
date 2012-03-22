@@ -233,7 +233,6 @@ standard_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 	result->rtable = glob->finalrtable;
 	result->resultRelations = glob->resultRelations;
 	result->utilityStmt = parse->utilityStmt;
-	result->intoClause = parse->intoClause;
 	result->subplans = glob->subplans;
 	result->rewindPlanIDs = glob->rewindPlanIDs;
 	result->rowMarks = glob->finalrowmarks;
@@ -772,7 +771,8 @@ inheritance_planner(PlannerInfo *root)
 		 * then fool around with subquery RTEs.
 		 */
 		subroot.parse = (Query *)
-			adjust_appendrel_attrs((Node *) parse,
+			adjust_appendrel_attrs(root,
+								   (Node *) parse,
 								   appinfo);
 
 		/*
