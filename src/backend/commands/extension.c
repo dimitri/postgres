@@ -272,7 +272,7 @@ get_extension_feature_oids(const char *feature, bool missing_ok,
 				BTEqualStrategyNumber, F_NAMEEQ,
 				CStringGetDatum(feature));
 
-	scandesc = systable_beginscan(rel, ExtensionFeatureIndexId, true,
+	scandesc = systable_beginscan(rel, ExtensionFeatureNameIndexId, true,
 								  SnapshotNow, 1, entry);
 
 	tuple = systable_getnext(scandesc);
@@ -1845,7 +1845,7 @@ list_extension_features(Oid extoid, struct feature **features)
 	*features = (struct feature *) palloc(size * sizeof(struct feature));
 
 	rel = heap_open(ExtensionFeatureRelationId, AccessShareLock);
-	irel = index_open(ExtensionFeatureIndexId, AccessShareLock);
+	irel = index_open(ExtensionFeatureExtensionNameIndexId, AccessShareLock);
 
 	ScanKeyInit(&entry[0],
 				Anum_pg_extension_feature_extoid,
