@@ -151,7 +151,7 @@ create_empty_extension(PG_FUNCTION_ARGS)
 	Datum		extConfig;
 	Datum		extCondition;
 	List	   *requiredExtensions;
-	List       *features = NIL;	/* FIXME, get features from catalogs */
+	List       *features = NIL;	/* 9.3 should get features from catalogs */
 
 	if (PG_ARGISNULL(4))
 		extConfig = PointerGetDatum(NULL);
