@@ -24,8 +24,8 @@ $$;
 create command trigger snitch_before before any command execute procedure any_snitch();
 create command trigger snitch_after_ after  any command execute procedure any_snitch();
 
-alter command trigger snitch_before set disable;
-alter command trigger snitch_before set enable;
+alter command trigger snitch_before disable;
+alter command trigger snitch_before enable;
 alter command trigger snitch_after_ rename to snitch_after;
 
 create command trigger snitch_create_table after create table execute procedure snitch();

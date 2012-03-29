@@ -4409,11 +4409,11 @@ DropCmdTrigStmt:
 		;
 
 AlterCmdTrigStmt:
-			ALTER COMMAND TRIGGER name SET enable_trigger
+			ALTER COMMAND TRIGGER name enable_trigger
 				{
 					AlterCmdTrigStmt *n = makeNode(AlterCmdTrigStmt);
 					n->trigname   = $4;
-					n->tgenabled  = $6;
+					n->tgenabled  = $5;
 					$$ = (Node *) n;
 				}
 		;
