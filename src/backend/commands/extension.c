@@ -73,7 +73,7 @@ typedef struct ExtensionControlFile
 	bool		relocatable;	/* is ALTER EXTENSION SET SCHEMA supported? */
 	bool		superuser;		/* must be superuser to install? */
 	int			encoding;		/* encoding of the script file, or -1 */
-	List	   *requires;		/* names of prerequisite extensions */
+	List	   *requires;		/* names of prerequisite features */
 	List	   *provides;		/* names of provided features */
 } ExtensionControlFile;
 
@@ -257,8 +257,8 @@ get_extension_schema(Oid ext_oid)
  * Given a feature name, returns its pg_extension_feature oid.
  */
 static void
-get_extension_feature_oids(const char *feature, bool missing_ok,
-						   Oid *extoid, Oid *featoid)
+lookup_extension_feature(const char *feature, bool missing_ok,
+						 Oid *extoid, Oid *featoid)
 {
 	Relation	rel;
 	SysScanDesc scandesc;
@@ -320,7 +320,7 @@ get_required_extension_features(List *requires,
 		char	   *curreq = (char *) lfirst(lc);
 		Oid			reqext, featoid, reqschema;
 
-		get_extension_feature_oids(curreq, false, &reqext, &featoid);
+		lookup_extension_feature(curreq, false, &reqext, &featoid);
 		reqschema = get_extension_schema(reqext);
 		*requiredFeatures = lappend_oid(*requiredFeatures, featoid);
 		*requiredSchemas = lappend_oid(*requiredSchemas, reqschema);
@@ -653,7 +653,7 @@ parse_extension_control_file(ExtensionControlFile *control,
 				/* syntax error in name list */
 				ereport(ERROR,
 						(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-				 errmsg("parameter \"%s\" must be a list of extension names",
+				 errmsg("parameter \"%s\" must be a list of extension features",
 						item->name)));
 			}
 		}
@@ -668,7 +668,7 @@ parse_extension_control_file(ExtensionControlFile *control,
 				/* syntax error in name list */
 				ereport(ERROR,
 						(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-				 errmsg("parameter \"%s\" must be a list of extension names",
+				 errmsg("parameter \"%s\" must be a list of extension featuress",
 						item->name)));
 			}
 		}
@@ -1797,12 +1797,14 @@ insert_extension_feature(Relation rel,
 	/*
 	 * Build a nice error message when the feature is already installed..
 	 */
-	get_extension_feature_oids(feature, true, &ext, &featoid);
+	lookup_extension_feature(feature, true, &ext, &featoid);
 	if (featoid != InvalidOid)
 		ereport(ERROR,
 				(errcode(ERRCODE_DUPLICATE_OBJECT),
-				 errmsg("extension feature \"%s\" already exists [%u]",
-						feature, featoid)));
+				 errmsg("extension \"%s\" provides feature \"%s\", but existing extension \"%s\" already provides this feature",
+						get_extension_name(extObject.objectId),
+						feature,
+						get_extension_name(ext))));
 
 	/*
 	 * Build and insert the pg_extension_feature tuple
@@ -2309,7 +2311,7 @@ get_available_versions_for_extension(ExtensionControlFile *pcontrol,
 				char	   *curreq = (char *) lfirst(lc);
 
 				/* don't add the extension's name more than once in there */
-				if (strcmp(curreq,pcontrol->name) != 0)
+				if (strcmp(curreq, pcontrol->name) != 0)
 					datums[ndatums++] =
 						DirectFunctionCall1(namein, CStringGetDatum(curreq));
 			}
