@@ -340,6 +340,7 @@ void
 PLy_exec_event_trigger(FunctionCallInfo fcinfo, PLyProcedure *proc)
 {
 	EventTriggerData *tdata;
+	PyObject   *volatile pltdata = NULL;
 
 	Assert(CALLED_AS_EVENT_TRIGGER(fcinfo));
 
@@ -349,7 +350,6 @@ PLy_exec_event_trigger(FunctionCallInfo fcinfo, PLyProcedure *proc)
 	{
 		/* build command trigger args */
 		PyObject   *pltevent, *plttag;
-		PyObject   *volatile pltdata = NULL;
 
 		pltdata = PyDict_New();
 		if (!pltdata)
@@ -372,9 +372,11 @@ PLy_exec_event_trigger(FunctionCallInfo fcinfo, PLyProcedure *proc)
 		if (SPI_finish() != SPI_OK_FINISH)
 			elog(ERROR, "SPI_finish failed");
 
+		Py_XDECREF(pltdata);
 	}
 	PG_CATCH();
 	{
+		Py_XDECREF(pltdata);
 		PG_RE_THROW();
 	}
 	PG_END_TRY();
