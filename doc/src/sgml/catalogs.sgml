@@ -1892,14 +1892,14 @@
       <entry><structfield>ctgname</structfield></entry>
       <entry><type>name</type></entry>
       <entry></entry>
-      <entry>Trigger's name (unique)</entry>
+      <entry>Trigger name (unique)</entry>
      </row>
 
      <row>
       <entry><structfield>ctgcommand</structfield></entry>
       <entry><type>name</type></entry>
       <entry></entry>
-      <entry>Command TAG of the command this trigger fires for.</entry>
+      <entry>Command tag of the command this trigger fires for.</entry>
      </row>
 
      <row>
@@ -1907,12 +1907,12 @@
       <entry><type>oid</type></entry>
       <entry><literal><link linkend="catalog-pg-proc"><structname>pg_proc</structname></link>.oid</literal></entry>
       <entry>
-       The OID of the function that is called by this command trigger.
+       The OID of the function called by this command trigger.
       </entry>
      </row>
 
      <row>
-      <entry><structfield>contype</structfield></entry>
+      <entry><structfield>ctgtype</structfield></entry>
       <entry><type>char</type></entry>
       <entry></entry>
       <entry>
