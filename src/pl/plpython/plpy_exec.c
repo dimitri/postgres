@@ -347,6 +347,7 @@ PLy_exec_trigger(FunctionCallInfo fcinfo, PLyProcedure *proc)
 void
 PLy_exec_command_trigger(FunctionCallInfo fcinfo, PLyProcedure *proc)
 {
+	PyObject   *volatile pltdata = NULL;
 	CommandTriggerData *tdata;
 
 	Assert(CALLED_AS_COMMAND_TRIGGER(fcinfo));
@@ -361,7 +362,6 @@ PLy_exec_command_trigger(FunctionCallInfo fcinfo, PLyProcedure *proc)
 			*pltobjectid,
 			*pltschemaname,
 			*pltobjectname;
-		PyObject   *volatile pltdata = NULL;
 		char	   *stroid;
 
 		pltdata = PyDict_New();
@@ -377,24 +377,34 @@ PLy_exec_command_trigger(FunctionCallInfo fcinfo, PLyProcedure *proc)
 		Py_DECREF(plttag);
 
 		if (tdata->objectId == InvalidOid)
-			stroid = pstrdup("NULL");
+			PyDict_SetItemString(pltdata, "objectId", Py_None);
 		else
+		{
 			stroid = DatumGetCString(
 				DirectFunctionCall1(oidout, ObjectIdGetDatum(tdata->objectId)));
-		pltobjectid = PyString_FromString(stroid);
-		PyDict_SetItemString(pltdata, "objectId", pltobjectid);
+			pltobjectid = PyString_FromString(stroid);
+			PyDict_SetItemString(pltdata, "objectId", pltobjectid);
+			pfree(stroid);
+		}
 		Py_DECREF(pltobjectid);
-		pfree(stroid);
 
-		pltobjectname = PyString_FromString(
-			tdata->objectname == NULL ? "NULL" : tdata->objectname);
-		PyDict_SetItemString(pltdata, "objectname", pltobjectname);
-		Py_DECREF(pltobjectname);
+		if (tdata->objectname == NULL)
+			PyDict_SetItemString(pltdata, "objectname", Py_None);
+		else
+		{
+			pltobjectname = PyString_FromString(tdata->objectname);
+			PyDict_SetItemString(pltdata, "objectname", pltobjectname);
+			Py_DECREF(pltobjectname);
+		}
 
-		pltschemaname = PyString_FromString(
-			tdata->schemaname == NULL ? "NULL" : tdata->schemaname);
-		PyDict_SetItemString(pltdata, "schemaname", pltschemaname);
-		Py_DECREF(pltschemaname);
+		if (tdata->schemaname == NULL)
+			PyDict_SetItemString(pltdata, "schemaname", Py_None);
+		else
+		{
+			pltschemaname = PyString_FromString(tdata->schemaname);
+			PyDict_SetItemString(pltdata, "schemaname", pltschemaname);
+			Py_DECREF(pltschemaname);
+		}
 
 		/* now call the procedure */
 		PLy_procedure_call(proc, "TD", pltdata);
@@ -405,9 +415,11 @@ PLy_exec_command_trigger(FunctionCallInfo fcinfo, PLyProcedure *proc)
 		if (SPI_finish() != SPI_OK_FINISH)
 			elog(ERROR, "SPI_finish failed");
 
+		Py_XDECREF(pltdata);
 	}
 	PG_CATCH();
 	{
+		Py_XDECREF(pltdata);
 		PG_RE_THROW();
 	}
 	PG_END_TRY();

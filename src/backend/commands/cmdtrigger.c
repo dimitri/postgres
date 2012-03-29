@@ -268,7 +268,7 @@ AlterCmdTrigger(AlterCmdTrigStmt *stmt)
 	if (!HeapTupleIsValid(tup))
 		ereport(ERROR,
 				(errcode(ERRCODE_UNDEFINED_OBJECT),
-				 errmsg("trigger \"%s\" does not exist, skipping",
+				 errmsg("trigger \"%s\" does not exist",
 						stmt->trigname)));
 
 	/* Copy tuple so we can modify it below */
@@ -324,7 +324,7 @@ RenameCmdTrigger(List *name, const char *newname)
 	if (!HeapTupleIsValid(tup))
 		ereport(ERROR,
 				(errcode(ERRCODE_UNDEFINED_OBJECT),
-				 errmsg("command trigger \"%s\" does not exist, skipping",
+				 errmsg("command trigger \"%s\" does not exist",
 						trigname)));
 
 	/* Copy tuple so we can modify it below */
@@ -377,7 +377,7 @@ get_cmdtrigger_oid(const char *trigname, bool missing_ok)
 		if (!missing_ok)
 			ereport(ERROR,
 						(errcode(ERRCODE_UNDEFINED_OBJECT),
-							 errmsg("command trigger \"%s\" does not exist, skipping",
+							 errmsg("command trigger \"%s\" does not exist",
 							 trigname)));
 		oid = InvalidOid;
 	}
