@@ -69,8 +69,8 @@ ExecRenameStmt(RenameStmt *stmt)
 			RenameConversion(stmt->object, stmt->newname, &cmd);
 			break;
 
-		case OBJECT_CMDTRIGGER:
-			RenameCmdTrigger(stmt->object, stmt->newname);
+		case OBJECT_EVENT_TRIGGER:
+			RenameEventTrigger(stmt->object, stmt->newname);
 			break;
 
 		case OBJECT_DATABASE:

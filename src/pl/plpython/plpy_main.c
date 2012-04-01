@@ -227,7 +227,7 @@ plpython_call_handler(PG_FUNCTION_ARGS)
 			trv = PLy_exec_trigger(fcinfo, proc);
 			retval = PointerGetDatum(trv);
 		}
-		else if (CALLED_AS_COMMAND_TRIGGER(fcinfo))
+		else if (CALLED_AS_EVENT_TRIGGER(fcinfo))
 		{
 			proc = PLy_procedure_get(fcinfo->flinfo->fn_oid, false, true);
 			exec_ctx->curr_proc = proc;

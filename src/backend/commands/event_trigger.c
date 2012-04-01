@@ -18,13 +18,13 @@
 #include "catalog/dependency.h"
 #include "catalog/indexing.h"
 #include "catalog/objectaccess.h"
-#include "catalog/pg_cmdtrigger.h"
+#include "catalog/pg_event_trigger.h"
 #include "catalog/pg_language.h"
 #include "catalog/pg_proc.h"
 #include "catalog/pg_trigger.h"
 #include "catalog/pg_type.h"
-#include "commands/cmdtrigger.h"
 #include "commands/dbcommands.h"
+#include "commands/event_trigger.h"
 #include "commands/trigger.h"
 #include "parser/parse_func.h"
 #include "pgstat.h"
@@ -39,7 +39,12 @@
 #include "utils/syscache.h"
 #include "tcop/utility.h"
 
-static void check_cmdtrigger_name(const char *trigname, Relation tgrel);
+/*
+ * Event Trigger cache.
+ */
+List *EventTriggerCache[EVTG_COMMAND_COUND][EVTG_EVENTS_COUNT];
+
+static void check_event_trigger_name(const char *trigname, Relation tgrel);
 
 /*
  * Check permission: command triggers are only available for superusers. Raise
@@ -50,7 +55,7 @@ static void check_cmdtrigger_name(const char *trigname, Relation tgrel);
  * written by the database owner and now running with superuser privileges.
  */
 static void
-CheckCmdTriggerPrivileges()
+CheckEventTriggerPrivileges()
 {
 	if (!superuser())
 		ereport(ERROR,
@@ -65,25 +70,44 @@ CheckCmdTriggerPrivileges()
  * row.
  */
 static Oid
-InsertCmdTriggerTuple(Relation tgrel,
-					  char *command, char *trigname, Oid funcoid, char ctgtype)
+InsertEventTriggerTuple(Relation tgrel, char *trigname, char *event,
+						Oid funcoid, char evttype, List *cmdlist)
 {
 	Oid         trigoid;
 	HeapTuple	tuple;
 	Datum		values[Natts_pg_trigger];
 	bool		nulls[Natts_pg_trigger];
 	ObjectAddress myself, referenced;
+	ArrayType  *tagArray;
 
 	/*
 	 * Build the new pg_trigger tuple.
 	 */
 	memset(nulls, false, sizeof(nulls));
 
-	values[Anum_pg_cmdtrigger_ctgcommand - 1] = NameGetDatum(command);
-	values[Anum_pg_cmdtrigger_ctgname - 1] = NameGetDatum(trigname);
-	values[Anum_pg_cmdtrigger_ctgfoid - 1] = ObjectIdGetDatum(funcoid);
-	values[Anum_pg_cmdtrigger_ctgtype - 1] = CharGetDatum(ctgtype);
-	values[Anum_pg_cmdtrigger_ctgenabled - 1] = CharGetDatum(TRIGGER_FIRES_ON_ORIGIN);
+	values[Anum_pg_event_trigger_evtevent - 1] = NameGetDatum(event);
+	values[Anum_pg_event_trigger_evtname - 1] = NameGetDatum(trigname);
+	values[Anum_pg_event_trigger_evtfoid - 1] = ObjectIdGetDatum(funcoid);
+	values[Anum_pg_event_trigger_evttype - 1] = CharGetDatum(evttype);
+	values[Anum_pg_event_trigger_evtenabled - 1] = CharGetDatum(TRIGGER_FIRES_ON_ORIGIN);
+
+	if (cmdlist == NIL)
+		tagArray = NULL;
+	else
+	{
+		ListCell	lc;
+		Datum	   *tags;
+		int			i = 0, l = list_length(cmdlist);
+
+		tags = (Datum *) palloc(l * sizeof(Datum));
+
+		foreach(cell, cmdlist)
+		{
+			tags[i++] = Int16GetDatum(lfirst_int(cell));
+		}
+		tagArray = construct_array(tags, l, INT2OID, 2, true, 's');
+	}
+	values[Anum_pg_event_trigger_evttags - 1] = PointerGetDatum(tagArray);
 
 	tuple = heap_form_tuple(tgrel->rd_att, values, nulls);
 
@@ -116,13 +140,13 @@ InsertCmdTriggerTuple(Relation tgrel,
  * Create a trigger.  Returns the OID of the created trigger.
  */
 Oid
-CreateCmdTrigger(CreateCmdTrigStmt *stmt, const char *queryString)
+CreateEventTrigger(CreateEventTrigStmt *stmt, const char *queryString)
 {
 	Relation	tgrel;
 	Oid			funcoid, trigoid;
 	Oid			funcrettype;
 
-	CheckCmdTriggerPrivileges();
+	CheckEventTriggerPrivileges();
 
 	/*
 	 * Find and validate the trigger function. When the function is coded in C
@@ -140,7 +164,7 @@ CreateCmdTrigger(CreateCmdTrigStmt *stmt, const char *queryString)
 	 * Generate the trigger's OID now, so that we can use it in the name if
 	 * needed.
 	 */
-	tgrel = heap_open(CmdTriggerRelationId, RowExclusiveLock);
+	tgrel = heap_open(EventTriggerRelationId, RowExclusiveLock);
 
 	/*
 	 * Scan pg_cmdtrigger for existing triggers on command. We do this only
@@ -151,7 +175,7 @@ CreateCmdTrigger(CreateCmdTrigStmt *stmt, const char *queryString)
 	 * NOTE that this is cool only because we have AccessExclusiveLock on
 	 * the relation, so the trigger set won't be changing underneath us.
 	 */
-	check_cmdtrigger_name(stmt->trigname, tgrel);
+	check_event_trigger_name(stmt->trigname, tgrel);
 
 	/*
 	 * Add some restrictions. We don't allow for AFTER command triggers on
@@ -163,6 +187,7 @@ CreateCmdTrigger(CreateCmdTrigStmt *stmt, const char *queryString)
 	 * captured here, so we just document that not AFTER command trigger
 	 * will get run.
 	 */
+	/*
 	if (stmt->timing == CMD_TRIGGER_FIRED_AFTER
 		&& (strcmp(stmt->command, "VACUUM") == 0))
 		ereport(ERROR,
@@ -193,9 +218,10 @@ CreateCmdTrigger(CreateCmdTrigStmt *stmt, const char *queryString)
 				(errcode(ERRCODE_INVALID_OBJECT_DEFINITION),
 				 errmsg("function \"%s\" must return type \"command_trigger\"",
 						NameListToString(stmt->funcname))));
+	*/
 
-	trigoid = InsertCmdTriggerTuple(tgrel, stmt->command, stmt->trigname,
-									funcoid, stmt->timing);
+	trigoid = InsertEventTriggerTuple(tgrel, stmt->trigname, stmt->event,
+									  funcoid, stmt->timing, stmt->cmdlist);
 
 	heap_close(tgrel, RowExclusiveLock);
 
@@ -206,14 +232,14 @@ CreateCmdTrigger(CreateCmdTrigStmt *stmt, const char *queryString)
  * Guts of command trigger deletion.
  */
 void
-RemoveCmdTriggerById(Oid trigOid)
+RemoveEventTriggerById(Oid trigOid)
 {
 	Relation	tgrel;
 	SysScanDesc tgscan;
 	ScanKeyData skey[1];
 	HeapTuple	tup;
 
-	tgrel = heap_open(CmdTriggerRelationId, RowExclusiveLock);
+	tgrel = heap_open(EventTriggerRelationId, RowExclusiveLock);
 
 	/*
 	 * Find the trigger to delete.
@@ -223,12 +249,12 @@ RemoveCmdTriggerById(Oid trigOid)
 				BTEqualStrategyNumber, F_OIDEQ,
 				ObjectIdGetDatum(trigOid));
 
-	tgscan = systable_beginscan(tgrel, CmdTriggerOidIndexId, true,
+	tgscan = systable_beginscan(tgrel, EventTriggerOidIndexId, true,
 								SnapshotNow, 1, skey);
 
 	tup = systable_getnext(tgscan);
 	if (!HeapTupleIsValid(tup))
-		elog(ERROR, "could not find tuple for command trigger %u", trigOid);
+		elog(ERROR, "could not find tuple for event trigger %u", trigOid);
 
 	/*
 	 * Delete the pg_cmdtrigger tuple.
@@ -240,27 +266,27 @@ RemoveCmdTriggerById(Oid trigOid)
 }
 
 /*
- * ALTER TRIGGER foo ON COMMAND ... ENABLE|DISABLE|ENABLE ALWAYS|REPLICA
+ * ALTER EVENT TRIGGER foo ON COMMAND ... ENABLE|DISABLE|ENABLE ALWAYS|REPLICA
  */
 void
-AlterCmdTrigger(AlterCmdTrigStmt *stmt)
+AlterEventTrigger(AlterEventTrigStmt *stmt)
 {
 	Relation	tgrel;
 	SysScanDesc tgscan;
 	ScanKeyData skey[1];
 	HeapTuple	tup;
-	Form_pg_cmdtrigger cmdForm;
+	Form_pg_cmdtrigger evtForm;
 	char        tgenabled = pstrdup(stmt->tgenabled)[0]; /* works with gram.y */
 
-	CheckCmdTriggerPrivileges();
+	CheckEventTriggerPrivileges();
 
 	tgrel = heap_open(CmdTriggerRelationId, RowExclusiveLock);
 	ScanKeyInit(&skey[0],
-				Anum_pg_cmdtrigger_ctgname,
+				Anum_pg_event_trigger_evtname,
 				BTEqualStrategyNumber, F_NAMEEQ,
 				CStringGetDatum(stmt->trigname));
 
-	tgscan = systable_beginscan(tgrel, CmdTriggerNameIndexId, true,
+	tgscan = systable_beginscan(tgrel, EventTriggerNameIndexId, true,
 								SnapshotNow, 1, skey);
 
 	tup = systable_getnext(tgscan);
@@ -273,11 +299,11 @@ AlterCmdTrigger(AlterCmdTrigStmt *stmt)
 
 	/* Copy tuple so we can modify it below */
 	tup = heap_copytuple(tup);
-	cmdForm = (Form_pg_cmdtrigger) GETSTRUCT(tup);
+	evtForm = (Form_pg_event_trigger) GETSTRUCT(tup);
 
 	systable_endscan(tgscan);
 
-	cmdForm->ctgenabled = tgenabled;
+	evtForm->evtenabled = tgenabled;
 
 	simple_heap_update(tgrel, &tup->t_self, tup);
 	CatalogUpdateIndexes(tgrel, tup);
@@ -291,13 +317,13 @@ AlterCmdTrigger(AlterCmdTrigStmt *stmt)
  * Rename command trigger
  */
 void
-RenameCmdTrigger(List *name, const char *newname)
+RenameEventTrigger(List *name, const char *newname)
 {
 	SysScanDesc tgscan;
 	ScanKeyData skey[1];
 	HeapTuple	tup;
 	Relation	rel;
-	Form_pg_cmdtrigger cmdForm;
+	Form_pg_event_trigger evtForm;
 	char *trigname;
 
 	Assert(list_length(name) == 1);
@@ -329,7 +355,7 @@ RenameCmdTrigger(List *name, const char *newname)
 
 	/* Copy tuple so we can modify it below */
 	tup = heap_copytuple(tup);
-	cmdForm = (Form_pg_cmdtrigger) GETSTRUCT(tup);
+	evtForm = (Form_pg_event_trigger) GETSTRUCT(tup);
 
 	systable_endscan(tgscan);
 
@@ -343,13 +369,13 @@ RenameCmdTrigger(List *name, const char *newname)
 }
 
 /*
- * get_cmdtrigger_oid - Look up a trigger by name to find its OID.
+ * get_event_trigger_oid - Look up an event trigger by name to find its OID.
  *
  * If missing_ok is false, throw an error if trigger not found.  If
  * true, just return InvalidOid.
  */
 Oid
-get_cmdtrigger_oid(const char *trigname, bool missing_ok)
+get_event_trigger_oid(const char *trigname, bool missing_ok)
 {
 	Relation	tgrel;
 	ScanKeyData skey[1];
@@ -360,14 +386,14 @@ get_cmdtrigger_oid(const char *trigname, bool missing_ok)
 	/*
 	 * Find the trigger, verify permissions, set up object address
 	 */
-	tgrel = heap_open(CmdTriggerRelationId, AccessShareLock);
+	tgrel = heap_open(EventTriggerRelationId, AccessShareLock);
 
 	ScanKeyInit(&skey[0],
-				Anum_pg_cmdtrigger_ctgname,
+				Anum_pg_event_trigger_evtname,
 				BTEqualStrategyNumber, F_NAMEEQ,
 				CStringGetDatum(trigname));
 
-	tgscan = systable_beginscan(tgrel, CmdTriggerNameIndexId, true,
+	tgscan = systable_beginscan(tgrel, EventTriggerNameIndexId, true,
 								SnapshotNow, 1, skey);
 
 	tup = systable_getnext(tgscan);
@@ -377,7 +403,7 @@ get_cmdtrigger_oid(const char *trigname, bool missing_ok)
 		if (!missing_ok)
 			ereport(ERROR,
 						(errcode(ERRCODE_UNDEFINED_OBJECT),
-							 errmsg("command trigger \"%s\" does not exist",
+							 errmsg("event trigger \"%s\" does not exist",
 							 trigname)));
 		oid = InvalidOid;
 	}
@@ -392,22 +418,22 @@ get_cmdtrigger_oid(const char *trigname, bool missing_ok)
 }
 
 /*
- * Scan pg_cmdtrigger for existing triggers on command. We do this only to
+ * Scan pg_event_trigger for existing triggers on event. We do this only to
  * give a nice error message if there's already a trigger of the same name.
  */
 void
-check_cmdtrigger_name(const char *trigname, Relation tgrel)
+check_event_trigger_name(const char *trigname, Relation tgrel)
 {
 	SysScanDesc tgscan;
 	ScanKeyData skey[1];
 	HeapTuple	tuple;
 
 	ScanKeyInit(&skey[0],
-				Anum_pg_cmdtrigger_ctgname,
+				Anum_pg_event_trigger_evtname,
 				BTEqualStrategyNumber, F_NAMEEQ,
 				CStringGetDatum(trigname));
 
-	tgscan = systable_beginscan(tgrel, CmdTriggerNameIndexId, true,
+	tgscan = systable_beginscan(tgrel, EventTriggerNameIndexId, true,
 								SnapshotNow, 1, skey);
 
 	tuple = systable_getnext(tgscan);
@@ -415,8 +441,24 @@ check_cmdtrigger_name(const char *trigname, Relation tgrel)
 	if (HeapTupleIsValid(tuple))
 		ereport(ERROR,
 				(errcode(ERRCODE_DUPLICATE_OBJECT),
-				 errmsg("command trigger \"%s\" already exists", trigname)));
+				 errmsg("event trigger \"%s\" already exists", trigname)));
 	systable_endscan(tgscan);
+}
+
+/*
+ * Scan the pg_event_trigger catalogs and build the EventTriggerCache, which is
+ * an array of commands indexing arrays of events containing the List of
+ * function to call, in order.
+ *
+ * The idea is that the code to fetch the list of functions to process gets as
+ * simple as the following:
+ *
+ *  foreach(cell, EventTriggerCache[EVTG_VACUUM][EVTG_COMMAND_START])
+ */
+void
+BuildEventTriggerCache()
+{
+
 }
 
 /*
@@ -425,11 +467,14 @@ check_cmdtrigger_name(const char *trigname, Relation tgrel)
  * We call the functions that matches the command triggers definitions in
  * alphabetical order, and give them those arguments:
  *
+ *   toplevel command tag, text
  *   command tag, text
  *   objectId, oid
  *   schemaname, text
  *   objectname, text
  *
+ * Those are passed down as special "context" magic variables and need specific
+ * support in each PL that wants to support command triggers. All core PL do.
  */
 
 /*
@@ -614,15 +659,15 @@ InitCommandContext(CommandContext cmd, const Node *stmt)
 	cmd->oldmctx    = NULL;
 	cmd->cmdmctx    = NULL;
 
-	/* Specifically drop support for command triggers on command triggers */
+	/* Specifically drop support for event triggers on event triggers */
 	switch (nodeTag(stmt))
 	{
 		case T_RenameStmt:
-			if (((RenameStmt *) stmt)->renameType == OBJECT_CMDTRIGGER)
+			if (((RenameStmt *) stmt)->renameType == OBJECT_EVENT_TRIGGER)
 				return;
 
 		case T_DropStmt:
-			if (((DropStmt *) stmt)->removeType == OBJECT_CMDTRIGGER)
+			if (((DropStmt *) stmt)->removeType == OBJECT_EVENT_TRIGGER)
 				return;
 
 		case T_IndexStmt:

@@ -264,7 +264,7 @@ do_compile(FunctionCallInfo fcinfo,
 {
 	Form_pg_proc procStruct = (Form_pg_proc) GETSTRUCT(procTup);
 	bool		is_dml_trigger = CALLED_AS_TRIGGER(fcinfo);
-	bool		is_cmd_trigger = CALLED_AS_COMMAND_TRIGGER(fcinfo);
+	bool		is_cmd_trigger = CALLED_AS_EVENT_TRIGGER(fcinfo);
 	Datum		prosrcdatum;
 	bool		isnull;
 	char	   *proc_source;

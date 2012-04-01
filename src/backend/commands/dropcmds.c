@@ -21,7 +21,7 @@
 #include "catalog/objectaddress.h"
 #include "catalog/pg_class.h"
 #include "catalog/pg_proc.h"
-#include "commands/cmdtrigger.h"
+#include "commands/eventtrigger.h"
 #include "commands/defrem.h"
 #include "miscadmin.h"
 #include "nodes/makefuncs.h"
@@ -241,7 +241,7 @@ does_not_exist_skipping(ObjectType objtype, List *objname, List *objargs)
 			args = NameListToString(list_truncate(objname,
 												  list_length(objname) - 1));
 			break;
-		case OBJECT_CMDTRIGGER:
+		case OBJECT_EVENT_TRIGGER:
 			msg = gettext_noop("trigger \"%s\" for command \"%s\" does not exist, skipping");
 			name = NameListToString(objname);
 			args = strVal(linitial(objargs));
@@ -313,7 +313,7 @@ get_object_name(CommandContext cmd, ObjectType objtype,
 		case OBJECT_AGGREGATE:
 		case OBJECT_OPERATOR:
 		case OBJECT_LANGUAGE:
-		case OBJECT_CMDTRIGGER:
+		case OBJECT_EVENT_TRIGGER:
 		case OBJECT_FDW:
 		case OBJECT_FOREIGN_SERVER:
 		case OBJECT_OPCLASS:

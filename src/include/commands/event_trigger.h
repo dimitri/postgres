@@ -10,18 +10,33 @@
  *
  *-------------------------------------------------------------------------
  */
-#ifndef CMDTRIGGER_H
-#define CMDTRIGGER_H
+#ifndef EVENT_TRIGGER_H
+#define EVENT_TRIGGER_H
 
 #include "nodes/parsenodes.h"
 
 /*
- * Command Trigger Procedure are passed 4 arguments which are maintained in a
- * global (bachend private) variable, command_context. That allows each command
- * implementation to fill in the context then call the Exec...CommandTriggers
- * API functions.
+ * Cache the event triggers in a format that's suitable to finding which
+ * function to call at "hook" points in the code. The catalogs are not helpful
+ * at search time, because we can't both edit a single catalog entry per each
+ * command, have a user friendly syntax and find what we need in a single index
+ * scan.
+ *
+ * This cache is indexed by Event Command id (see pg_event_trigger.h) then
+ * Event Id. It's containing a list of function oid.
  */
-typedef struct CommandContextData
+extern List *EventTriggerCache[][];
+
+/*
+ * To be able to call user defined function on event triggers, the places in
+ * the code that support that have to fill-in an EventContextData structure
+ * containing some information about what's happening.
+ *
+ * Some more information is filled in by InitEventContext(), which will search
+ * for functions to run in the catalogs, depending on which event triggers are
+ * defined and the event being prepared (command, subcommand, etc).
+ */
+typedef struct EventContextData
 {
 	char		*tag;			/* Command Tag */
 	Oid			 objectId;		/* oid of the existing object, if any */
@@ -34,21 +49,22 @@ typedef struct CommandContextData
 	List		*after_any;		/* procedures to call after any command */
 	MemoryContext oldmctx;	/* Memory Context to switch back to */
 	MemoryContext cmdmctx;	/* Memory Context for the command triggers */
-} CommandContextData;
+} EventContextData;
 
-typedef struct CommandContextData *CommandContext;
+typedef struct EventContextData *EventContext;
 
 /*
  * CommandTriggerData is the node type that is passed as fmgr "context" info
  * when a function is called by the command trigger manager.
  */
-#define CALLED_AS_COMMAND_TRIGGER(fcinfo) \
-	((fcinfo)->context != NULL && IsA((fcinfo)->context, CommandTriggerData))
+#define CALLED_AS_EVENT_TRIGGER(fcinfo) \
+	((fcinfo)->context != NULL && IsA((fcinfo)->context, EventTriggerData))
 
-typedef struct CommandTriggerData
+typedef struct EventTriggerData
 {
 	NodeTag		 type;
 	char        *when;			/* Either BEFORE or AFTER */
+	char		*toplevel;		/* TopLevel Command Tag */
 	char		*tag;			/* Command Tag */
 	Oid			 objectId;		/* oid of the existing object, if any */
 	char		*schemaname;	/* schemaname or NULL if not relevant */
@@ -56,11 +72,11 @@ typedef struct CommandTriggerData
 	Node		*parsetree;		/* command parsetree, given as an internal */
 } CommandTriggerData;
 
-extern Oid CreateCmdTrigger(CreateCmdTrigStmt *stmt, const char *queryString);
-extern void RemoveCmdTriggerById(Oid ctrigOid);
-extern Oid	get_cmdtrigger_oid(const char *trigname, bool missing_ok);
-extern void AlterCmdTrigger(AlterCmdTrigStmt *stmt);
-extern void RenameCmdTrigger(List *name, const char *newname);
+extern Oid CreateEventTrigger(CreateEventTrigStmt *stmt, const char *queryString);
+extern void RemoveEventTriggerById(Oid ctrigOid);
+extern Oid	get_event_trigger_oid(const char *trigname, bool missing_ok);
+extern void AlterEventTrigger(AlterEventTrigStmt *stmt);
+extern void RenameEventTrigger(List *name, const char *newname);
 
 extern void InitCommandContext(CommandContext cmd, const Node *stmt);
 extern bool CommandFiresTriggers(CommandContext cmd);
@@ -70,4 +86,4 @@ extern void ExecBeforeAnyCommandTriggers(CommandContext cmd);
 extern void ExecAfterCommandTriggers(CommandContext cmd);
 extern void ExecAfterAnyCommandTriggers(CommandContext cmd);
 
-#endif   /* CMD_TRIGGER_H */
+#endif   /* EVENT_TRIGGER_H */

@@ -195,7 +195,7 @@ static void processCASbits(int cas_bits, int location, const char *constrType,
 }
 
 %type <node>	stmt schema_stmt
-		AlterCmdTrigStmt
+		AlterEventTrigStmt
 		AlterDatabaseStmt AlterDatabaseSetStmt AlterDomainStmt AlterEnumStmt
 		AlterFdwStmt AlterForeignServerStmt AlterGroupStmt
 		AlterObjectSchemaStmt AlterOwnerStmt AlterSeqStmt AlterTableStmt
@@ -209,11 +209,11 @@ static void processCASbits(int cas_bits, int location, const char *constrType,
 		CreateOpFamilyStmt AlterOpFamilyStmt CreatePLangStmt
 		CreateSchemaStmt CreateSeqStmt CreateStmt CreateTableSpaceStmt
 		CreateFdwStmt CreateForeignServerStmt CreateForeignTableStmt
-		CreateAssertStmt CreateTrigStmt CreateCmdTrigStmt
+		CreateAssertStmt CreateTrigStmt CreateEventTrigStmt
 		CreateUserStmt CreateUserMappingStmt CreateRoleStmt
 		CreatedbStmt DeclareCursorStmt DefineStmt DeleteStmt DiscardStmt DoStmt
 		DropGroupStmt DropOpClassStmt DropOpFamilyStmt DropPLangStmt DropStmt
-		DropAssertStmt DropTrigStmt DropCmdTrigStmt DropRuleStmt DropCastStmt
+		DropAssertStmt DropTrigStmt DropEventTrigStmt DropRuleStmt DropCastStmt
 		DropRoleStmt DropUserStmt DropdbStmt DropTableSpaceStmt DropFdwStmt
 		DropForeignServerStmt DropUserMappingStmt ExplainStmt FetchStmt
 		GrantStmt GrantRoleStmt IndexStmt InsertStmt ListenStmt LoadStmt
@@ -265,11 +265,12 @@ static void processCASbits(int cas_bits, int location, const char *constrType,
 %type <list>	OptSchemaEltList
 
 %type <boolean> TriggerForSpec TriggerForType
-%type <ival>	TriggerActionTime CmdTriggerActionTime
-%type <list>	TriggerEvents TriggerOneEvent
+%type <ival>	TriggerActionTime EventTriggerActionTime
+%type <list>	TriggerEvents TriggerOneEvent trigger_command_list
 %type <value>	TriggerFuncArg
 %type <node>	TriggerWhen
-%type <str>		trigger_command enable_trigger
+%type <str>		enable_trigger event_trigger_variable
+%tupe <ival>    event_name trigger_command
 
 %type <str>		copy_file_name
 				database_name access_method_clause access_method attr_name
@@ -497,7 +498,7 @@ static void processCASbits(int cas_bits, int location, const char *constrType,
 
 	CACHE CALLED CASCADE CASCADED CASE CAST CATALOG_P CHAIN CHAR_P
 	CHARACTER CHARACTERISTICS CHECK CHECKPOINT CLASS CLOSE
-	CLUSTER COALESCE COLLATE COLLATION COLUMN COMMAND COMMENT COMMENTS COMMIT
+	CLUSTER COALESCE COLLATE COLLATION COLUMN COMMENT COMMENTS COMMIT
 	COMMITTED CONCURRENTLY CONFIGURATION CONNECTION CONSTRAINT CONSTRAINTS
 	CONTENT_P CONTINUE_P CONVERSION_P COPY COST CREATE
 	CROSS CSV CURRENT_P
@@ -508,7 +509,7 @@ static void processCASbits(int cas_bits, int location, const char *constrType,
 	DEFERRABLE DEFERRED DEFINER DELETE_P DELIMITER DELIMITERS DESC
 	DICTIONARY DISABLE_P DISCARD DISTINCT DO DOCUMENT_P DOMAIN_P DOUBLE_P DROP
 
-	EACH ELSE ENABLE_P ENCODING ENCRYPTED END_P ENUM_P ESCAPE EXCEPT
+	EACH ELSE ENABLE_P ENCODING ENCRYPTED END_P ENUM_P ESCAPE EVENT EXCEPT
 	EXCLUDE EXCLUDING EXCLUSIVE EXECUTE EXISTS EXPLAIN
 	EXTENSION EXTERNAL EXTRACT
 
@@ -677,7 +678,7 @@ stmtmulti:	stmtmulti ';' stmt
 		;
 
 stmt :
-			AlterCmdTrigStmt
+			AlterEventTrigStmt
 			| AlterDatabaseStmt
 			| AlterDatabaseSetStmt
 			| AlterDefaultPrivilegesStmt
@@ -729,7 +730,7 @@ stmt :
 			| CreateStmt
 			| CreateTableSpaceStmt
 			| CreateTrigStmt
-			| CreateCmdTrigStmt
+			| CreateEventTrigStmt
 			| CreateRoleStmt
 			| CreateUserStmt
 			| CreateUserMappingStmt
@@ -753,7 +754,7 @@ stmt :
 			| DropStmt
 			| DropTableSpaceStmt
 			| DropTrigStmt
-			| DropCmdTrigStmt
+			| DropEventTrigStmt
 			| DropRoleStmt
 			| DropUserStmt
 			| DropUserMappingStmt
@@ -4261,37 +4262,89 @@ DropTrigStmt:
 /*****************************************************************************
  *
  *		QUERIES :
- *				CREATE COMMAND TRIGGER ... BEFORE|AFTER COMMAND ...
- *				DROP COMMAND TRIGGER ... BEFORE|AFTER ...
+ *				CREATE EVENT TRIGGER ...
+ *				DROP EVENT TRIGGER ...
+ *				ALTER EVENT TRIGGER ...
  *
  *****************************************************************************/
 
-CreateCmdTrigStmt:
-			CREATE COMMAND TRIGGER name CmdTriggerActionTime trigger_command
+CreateEventTrigStmt:
+			CREATE EVENT TRIGGER name EventTriggerActionTime event_name
 			EXECUTE PROCEDURE func_name '(' ')'
 				{
-					CreateCmdTrigStmt *n = makeNode(CreateCmdTrigStmt);
+					CreateEventTrigStmt *n = makeNode(CreateEventTrigStmt);
 					n->trigname = $4;
 					n->timing   = $5;
-					n->command  = $6;
+					n->event    = $6;
 					n->funcname = $9;
+					n->variable = NULL;
 					$$ = (Node *)n;
 				}
-	      | CREATE COMMAND TRIGGER name CmdTriggerActionTime ANY COMMAND
+			| CREATE EVENT TRIGGER name EventTriggerActionTime event_name
+			WHEN event_trigger_variable IN_P '(' trigger_command_list ')'
 			EXECUTE PROCEDURE func_name '(' ')'
 				{
-					CreateCmdTrigStmt *n = makeNode(CreateCmdTrigStmt);
+					CreateEventTrigStmt *n = makeNode(CreateEventTrigStmt);
 					n->trigname = $4;
 					n->timing   = $5;
-					n->command  = "ANY";
-					n->funcname = $10;
+					n->event    = $6;
+					n->variable = $8;
+					n->cmdlist  = $11;
+					n->funcname = $15;
 					$$ = (Node *)n;
 				}
 		;
 
-CmdTriggerActionTime:
-			BEFORE						{ $$ = CMD_TRIGGER_FIRED_BEFORE; }
-			| AFTER						{ $$ = CMD_TRIGGER_FIRED_AFTER; }
+EventTriggerActionTime:
+			BEFORE						{ $$ = EVTG_FIRED_BEFORE; }
+			| INSTEAD OF				{ $$ = EVTG_FIRED_INSTEAD_OF; }
+		;
+
+event_name:
+			IDENT
+				{
+					/*
+					 * We handle identifiers that aren't parser keywords with
+					 * the following special-case codes, to avoid bloating the
+					 * size of the main parser.
+					 */
+					if (strcmp($1, "command_start") == 0)
+						$$ = EVTG_COMMAND_START;
+					else if (strcmp($1, "commend_end") == 0)
+						$$ = EVTG_COMMAND_START;
+					else if (strcmp($1, "security_check") == 0)
+						$$ = EVTG_SECURITY_CHECK;
+					else if (strcmp($1, "consistency_check") == 0)
+						$$ = EVTG_CONSISTENCY_CHECK;
+					else if (strcmp($1, "name_lookup") == 0)
+						$$ = EVTG_NAME_LOOKUP;
+					else
+						ereport(ERROR,
+								(errcode(ERRCODE_SYNTAX_ERROR),
+								 errmsg("unrecognized event name \"%s\"", $1),
+									 parser_errposition(@1)));
+				}
+		;
+
+event_trigger_variable:
+			IDENT
+				{
+					if (strcmp($1, "tag") == 0)
+						$$ = "TAG";
+/*
+ * We aim to support more variables here, but as of now only the current
+ * command tag is supported.
+ *
+
+					else if (strcmp($1, "toplevel") == 0)
+						$$ = "toplevel";
+*/
+					else
+						ereport(ERROR,
+								(errcode(ERRCODE_SYNTAX_ERROR),
+								 errmsg("unrecognized event variable \"%s\"", $1),
+									 parser_errposition(@1)));
+				}
 		;
 
 /*
@@ -4300,107 +4353,113 @@ CmdTriggerActionTime:
  * we don't support Command Triggers on every possible command that PostgreSQL
  * supports, this list should match with the implementation.
  */
-trigger_command:
-               CREATE SCHEMA						{ $$ = "CREATE SCHEMA"; }
-			   | CREATE EXTENSION					{ $$ = "CREATE EXTENSION"; }
-			   | CREATE LANGUAGE					{ $$ = "CREATE LANGUAGE"; }
-			   | CREATE FUNCTION					{ $$ = "CREATE FUNCTION"; }
-			   | CREATE TABLE						{ $$ = "CREATE TABLE"; }
-			   | CREATE TABLE AS					{ $$ = "CREATE TABLE AS"; }
-			   | SELECT INTO						{ $$ = "SELECT INTO"; }
-			   | CREATE SERVER						{ $$ = "CREATE SERVER"; }
-			   | CREATE FOREIGN TABLE				{ $$ = "CREATE FOREIGN TABLE"; }
-			   | CREATE FOREIGN DATA_P WRAPPER		{ $$ = "CREATE FOREIGN DATA WRAPPER"; }
-			   | CREATE USER MAPPING				{ $$ = "CREATE USER MAPPING"; }
-			   | CREATE INDEX						{ $$ = "CREATE INDEX"; }
-			   | CREATE SEQUENCE					{ $$ = "CREATE SEQUENCE"; }
-			   | CREATE VIEW						{ $$ = "CREATE VIEW"; }
-			   | CREATE RULE						{ $$ = "CREATE RULE"; }
-			   | CREATE AGGREGATE					{ $$ = "CREATE AGGREGATE"; }
-			   | CREATE OPERATOR					{ $$ = "CREATE OPERATOR"; }
-			   | CREATE COLLATION					{ $$ = "CREATE COLLATION"; }
-			   | CREATE TEXT_P SEARCH PARSER		{ $$ = "CREATE TEXT SEARCH PARSER"; }
-			   | CREATE TEXT_P SEARCH DICTIONARY	{ $$ = "CREATE TEXT SEARCH DICTIONARY"; }
-			   | CREATE TEXT_P SEARCH TEMPLATE		{ $$ = "CREATE TEXT SEARCH TEMPLATE"; }
-			   | CREATE TEXT_P SEARCH CONFIGURATION	{ $$ = "CREATE TEXT SEARCH CONFIGURATION"; }
-			   | CREATE TYPE_P						{ $$ = "CREATE TYPE"; }
-			   | CREATE DOMAIN_P					{ $$ = "CREATE DOMAIN"; }
-			   | CREATE TRIGGER						{ $$ = "CREATE TRIGGER"; }
-			   | CREATE CONVERSION_P				{ $$ = "CREATE CONVERSION"; }
-			   | CREATE CAST						{ $$ = "CREATE CAST"; }
-			   | CREATE OPERATOR CLASS				{ $$ = "CREATE OPERATOR CLASS"; }
-			   | CREATE OPERATOR FAMILY				{ $$ = "CREATE OPERATOR FAMILY"; }
-               | ALTER SCHEMA						{ $$ = "ALTER SCHEMA"; }
-			   | ALTER EXTENSION					{ $$ = "ALTER EXTENSION"; }
-			   | ALTER LANGUAGE						{ $$ = "ALTER LANGUAGE"; }
-			   | ALTER FUNCTION						{ $$ = "ALTER FUNCTION"; }
-			   | ALTER TABLE						{ $$ = "ALTER TABLE"; }
-			   | ALTER SERVER						{ $$ = "ALTER SERVER"; }
-			   | ALTER FOREIGN TABLE				{ $$ = "ALTER FOREIGN TABLE"; }
-			   | ALTER FOREIGN DATA_P WRAPPER		{ $$ = "ALTER FOREIGN DATA WRAPPER"; }
-			   | ALTER USER MAPPING					{ $$ = "ALTER USER MAPPING"; }
-			   | ALTER SEQUENCE						{ $$ = "ALTER SEQUENCE"; }
-			   | ALTER VIEW							{ $$ = "ALTER VIEW"; }
-			   | ALTER AGGREGATE					{ $$ = "ALTER AGGREGATE"; }
-			   | ALTER OPERATOR						{ $$ = "ALTER OPERATOR"; }
-			   | ALTER OPERATOR CLASS				{ $$ = "ALTER OPERATOR CLASS"; }
-			   | ALTER OPERATOR FAMILY				{ $$ = "ALTER OPERATOR FAMILY"; }
-			   | ALTER COLLATION					{ $$ = "ALTER COLLATION"; }
-			   | ALTER TEXT_P SEARCH PARSER			{ $$ = "ALTER TEXT SEARCH PARSER"; }
-			   | ALTER TEXT_P SEARCH DICTIONARY		{ $$ = "ALTER TEXT SEARCH DICTIONARY"; }
-			   | ALTER TEXT_P SEARCH TEMPLATE		{ $$ = "ALTER TEXT SEARCH TEMPLATE"; }
-			   | ALTER TEXT_P SEARCH CONFIGURATION	{ $$ = "ALTER TEXT SEARCH CONFIGURATION"; }
-			   | ALTER TYPE_P						{ $$ = "ALTER TYPE"; }
-			   | ALTER DOMAIN_P						{ $$ = "ALTER DOMAIN"; }
-			   | ALTER TRIGGER						{ $$ = "ALTER TRIGGER"; }
-			   | ALTER CONVERSION_P					{ $$ = "ALTER CONVERSION"; }
-			   | DROP TABLE							{ $$ = "DROP TABLE"; }
-			   | DROP SEQUENCE						{ $$ = "DROP SEQUENCE"; }
-			   | DROP VIEW							{ $$ = "DROP VIEW"; }
-			   | DROP INDEX							{ $$ = "DROP INDEX"; }
-			   | DROP TYPE_P						{ $$ = "DROP TYPE"; }
-			   | DROP DOMAIN_P						{ $$ = "DROP DOMAIN"; }
-			   | DROP COLLATION						{ $$ = "DROP COLLATION"; }
-			   | DROP CONVERSION_P					{ $$ = "DROP CONVERSION"; }
-			   | DROP SCHEMA						{ $$ = "DROP SCHEMA"; }
-			   | DROP EXTENSION						{ $$ = "DROP EXTENSION"; }
-			   | DROP TEXT_P SEARCH PARSER			{ $$ = "DROP TEXT SEARCH PARSER"; }
-			   | DROP TEXT_P SEARCH DICTIONARY		{ $$ = "DROP TEXT SEARCH DICTIONARY"; }
-			   | DROP TEXT_P SEARCH TEMPLATE		{ $$ = "DROP TEXT SEARCH TEMPLATE"; }
-			   | DROP TEXT_P SEARCH CONFIGURATION	{ $$ = "DROP TEXT SEARCH CONFIGURATION"; }
-			   | DROP LANGUAGE						{ $$ = "DROP LANGUAGE"; }
-			   | DROP SERVER						{ $$ = "DROP SERVER"; }
-			   | DROP FOREIGN TABLE					{ $$ = "DROP FOREIGN TABLE"; }
-			   | DROP FOREIGN DATA_P WRAPPER		{ $$ = "DROP FOREIGN DATA WRAPPER"; }
-			   | DROP USER MAPPING					{ $$ = "DROP USER MAPPING"; }
-			   | DROP TRIGGER						{ $$ = "DROP TRIGGER"; }
-			   | DROP OPERATOR CLASS				{ $$ = "DROP OPERATOR CLASS"; }
-			   | DROP OPERATOR FAMILY				{ $$ = "DROP OPERATOR FAMILY"; }
-			   | DROP FUNCTION						{ $$ = "DROP FUNCTION"; }
-			   | DROP AGGREGATE						{ $$ = "DROP AGGREGATE"; }
-			   | DROP OPERATOR						{ $$ = "DROP OPERATOR"; }
-			   | DROP CAST							{ $$ = "DROP CAST"; }
-			   | DROP RULE							{ $$ = "DROP RULE"; }
-			   | REINDEX							{ $$ = "REINDEX"; }
-			   | VACUUM								{ $$ = "VACUUM"; }
-			   | CLUSTER							{ $$ = "CLUSTER"; }
-			   | LOAD								{ $$ = "LOAD"; }
+trigger_command_list:
+		  trigger_command							{ $$ = list_make1_int($1); }
+		| trigger_command_list ',' trigger_command	{ $$ = lappend_int($1, $3); }
 		;
 
-DropCmdTrigStmt:
-			DROP COMMAND TRIGGER name opt_drop_behavior
+
+trigger_command:
+		   ALTER AGGREGATE						{ $$ = EVTG_ALTER_AGGREGATE; }
+		   | ALTER COLLATION					{ $$ = EVTG_ALTER_COLLATION; }
+		   | ALTER CONVERSION_P					{ $$ = EVTG_ALTER_CONVERSION; }
+		   | ALTER DOMAIN_P						{ $$ = EVTG_ALTER_DOMAIN; }
+		   | ALTER EXTENSION					{ $$ = EVTG_ALTER_EXTENSION; }
+		   | ALTER FOREIGN DATA_P WRAPPER		{ $$ = EVTG_ALTER_FOREIGN_DATA_WRAPPER; }
+		   | ALTER FOREIGN TABLE				{ $$ = EVTG_ALTER_FOREIGN_TABLE; }
+		   | ALTER FUNCTION						{ $$ = EVTG_ALTER_FUNCTION; }
+		   | ALTER LANGUAGE						{ $$ = EVTG_ALTER_LANGUAGE; }
+		   | ALTER OPERATOR						{ $$ = EVTG_ALTER_OPERATOR; }
+		   | ALTER OPERATOR CLASS				{ $$ = EVTG_ALTER_OPERATOR_CLASS; }
+		   | ALTER OPERATOR FAMILY				{ $$ = EVTG_ALTER_OPERATOR_FAMILY; }
+		   | ALTER SEQUENCE						{ $$ = EVTG_ALTER_SEQUENCE; }
+		   | ALTER SERVER						{ $$ = EVTG_ALTER_SERVER; }
+           | ALTER SCHEMA						{ $$ = EVTG_ALTER_SCHEMA; }
+		   | ALTER TABLE						{ $$ = EVTG_ALTER_TABLE; }
+		   | ALTER TEXT_P SEARCH CONFIGURATION	{ $$ = EVTG_ALTER_TEXT_SEARCH_CONFIGURATION; }
+		   | ALTER TEXT_P SEARCH DICTIONARY		{ $$ = EVTG_ALTER_TEXT_SEARCH_DICTIONARY; }
+		   | ALTER TEXT_P SEARCH PARSER			{ $$ = EVTG_ALTER_TEXT_SEARCH_PARSER; }
+		   | ALTER TEXT_P SEARCH TEMPLATE		{ $$ = EVTG_ALTER_TEXT_SEARCH_TEMPLATE; }
+		   | ALTER TRIGGER						{ $$ = EVTG_ALTER_TRIGGER; }
+		   | ALTER TYPE_P						{ $$ = EVTG_ALTER_TYPE; }
+		   | ALTER USER MAPPING					{ $$ = EVTG_ALTER_USER_MAPPING; }
+		   | ALTER VIEW							{ $$ = EVTG_ALTER_VIEW; }
+		   | CLUSTER							{ $$ = EVTG_CLUSTER; }
+		   | CREATE AGGREGATE					{ $$ = EVTG_CREATE_AGGREGATE; }
+		   | CREATE CAST						{ $$ = EVTG_CREATE_CAST; }
+		   | CREATE COLLATION					{ $$ = EVTG_CREATE_COLLATION; }
+		   | CREATE CONVERSION_P				{ $$ = EVTG_CREATE_CONVERSION; }
+		   | CREATE DOMAIN_P					{ $$ = EVTG_CREATE_DOMAIN; }
+		   | CREATE EXTENSION					{ $$ = EVTG_CREATE_EXTENSION; }
+		   | CREATE FOREIGN DATA_P WRAPPER		{ $$ = EVTG_CREATE_FOREIGN_DATA_WRAPPER; }
+		   | CREATE FOREIGN TABLE				{ $$ = EVTG_CREATE_FOREIGN_TABLE; }
+		   | CREATE FUNCTION					{ $$ = EVTG_CREATE_FUNCTION; }
+		   | CREATE INDEX						{ $$ = EVTG_CREATE_INDEX; }
+		   | CREATE LANGUAGE					{ $$ = EVTG_CREATE_LANGUAGE; }
+		   | CREATE OPERATOR					{ $$ = EVTG_CREATE_OPERATOR; }
+		   | CREATE OPERATOR CLASS				{ $$ = EVTG_CREATE_OPERATOR_CLASS; }
+		   | CREATE OPERATOR FAMILY				{ $$ = EVTG_CREATE_OPERATOR_FAMILY; }
+		   | CREATE RULE						{ $$ = EVTG_CREATE_RULE; }
+		   | CREATE SEQUENCE					{ $$ = EVTG_CREATE_SEQUENCE; }
+		   | CREATE SERVER						{ $$ = EVTG_CREATE_SERVER; }
+           | CREATE SCHEMA						{ $$ = EVTG_CREATE_SCHEMA; }
+		   | CREATE TABLE						{ $$ = EVTG_CREATE_TABLE; }
+		   | CREATE TABLE AS					{ $$ = EVTG_CREATE_TABLE_AS; }
+		   | CREATE TEXT_P SEARCH CONFIGURATION	{ $$ = EVTG_CREATE_TEXT_SEARCH_CONFIGURATION; }
+		   | CREATE TEXT_P SEARCH DICTIONARY	{ $$ = EVTG_CREATE_TEXT_SEARCH_DICTIONARY; }
+		   | CREATE TEXT_P SEARCH PARSER		{ $$ = EVTG_CREATE_TEXT_SEARCH_PARSER; }
+		   | CREATE TEXT_P SEARCH TEMPLATE		{ $$ = EVTG_CREATE_TEXT_SEARCH_TEMPLATE; }
+		   | CREATE TRIGGER						{ $$ = EVTG_CREATE_TRIGGER; }
+		   | CREATE TYPE_P						{ $$ = EVTG_CREATE_TYPE; }
+		   | CREATE USER MAPPING				{ $$ = EVTG_CREATE_USER_MAPPING; }
+		   | CREATE VIEW						{ $$ = EVTG_CREATE_VIEW; }
+		   | DROP AGGREGATE						{ $$ = EVTG_DROP_AGGREGATE; }
+		   | DROP CAST							{ $$ = EVTG_DROP_CAST; }
+		   | DROP COLLATION						{ $$ = EVTG_DROP_COLLATION; }
+		   | DROP CONVERSION_P					{ $$ = EVTG_DROP_CONVERSION; }
+		   | DROP DOMAIN_P						{ $$ = EVTG_DROP_DOMAIN; }
+		   | DROP EXTENSION						{ $$ = EVTG_DROP_EXTENSION; }
+		   | DROP FOREIGN DATA_P WRAPPER		{ $$ = EVTG_DROP_FOREIGN_DATA_WRAPPER; }
+		   | DROP FOREIGN TABLE					{ $$ = EVTG_DROP_FOREIGN_TABLE; }
+		   | DROP FUNCTION						{ $$ = EVTG_DROP_FUNCTION; }
+		   | DROP INDEX							{ $$ = EVTG_DROP_INDEX; }
+		   | DROP LANGUAGE						{ $$ = EVTG_DROP_LANGUAGE; }
+		   | DROP OPERATOR						{ $$ = EVTG_DROP_OPERATOR; }
+		   | DROP OPERATOR CLASS				{ $$ = EVTG_DROP_OPERATOR_CLASS; }
+		   | DROP OPERATOR FAMILY				{ $$ = EVTG_DROP_OPERATOR_FAMILY; }
+		   | DROP RULE							{ $$ = EVTG_DROP_RULE; }
+		   | DROP SCHEMA						{ $$ = EVTG_DROP_SCHEMA; }
+		   | DROP SEQUENCE						{ $$ = EVTG_DROP_SEQUENCE; }
+		   | DROP SERVER						{ $$ = EVTG_DROP_SERVER; }
+		   | DROP TABLE							{ $$ = EVTG_DROP_TABLE; }
+		   | DROP TEXT_P SEARCH CONFIGURATION	{ $$ = EVTG_DROP_TEXT_SEARCH_CONFIGURATION; }
+		   | DROP TEXT_P SEARCH DICTIONARY		{ $$ = EVTG_DROP_TEXT_SEARCH_DICTIONARY; }
+		   | DROP TEXT_P SEARCH PARSER			{ $$ = EVTG_DROP_TEXT_SEARCH_PARSER; }
+		   | DROP TEXT_P SEARCH TEMPLATE		{ $$ = EVTG_DROP_TEXT_SEARCH_TEMPLATE; }
+		   | DROP TRIGGER						{ $$ = EVTG_DROP_TRIGGER; }
+		   | DROP TYPE_P						{ $$ = EVTG_DROP_TYPE; }
+		   | DROP USER MAPPING					{ $$ = EVTG_DROP_USER_MAPPING; }
+		   | DROP VIEW							{ $$ = EVTG_DROP_VIEW; }
+		   | LOAD								{ $$ = EVTG_LOAD; }
+		   | REINDEX							{ $$ = EVTG_REINDEX; }
+		   | SELECT INTO						{ $$ = EVTG_SELECT_INTO; }
+		   | VACUUM								{ $$ = EVTG_VACUUM; }
+		;
+
+DropEventTrigStmt:
+			DROP EVENT TRIGGER name opt_drop_behavior
 				{
 					DropStmt *n = makeNode(DropStmt);
-					n->removeType = OBJECT_CMDTRIGGER;
+					n->removeType = OBJECT_EVENT_TRIGGER;
 					n->objects = list_make1(list_make1(makeString($4)));
 					n->behavior = $5;
 					n->missing_ok = false;
 					$$ = (Node *) n;
 				}
-			| DROP COMMAND TRIGGER IF_P EXISTS name opt_drop_behavior
+			| DROP EVENT TRIGGER IF_P EXISTS name opt_drop_behavior
 				{
 					DropStmt *n = makeNode(DropStmt);
-					n->removeType = OBJECT_CMDTRIGGER;
+					n->removeType = OBJECT_EVENT_TRIGGER;
 					n->objects = list_make1(list_make1(makeString($6)));
 					n->behavior = $7;
 					n->missing_ok = true;
@@ -4408,10 +4467,10 @@ DropCmdTrigStmt:
 				}
 		;
 
-AlterCmdTrigStmt:
-			ALTER COMMAND TRIGGER name enable_trigger
+AlterEventTrigStmt:
+			ALTER EVENT TRIGGER name enable_trigger
 				{
-					AlterCmdTrigStmt *n = makeNode(AlterCmdTrigStmt);
+					AlterCmdTrigStmt *n = makeNode(AlterEventTrigStmt);
 					n->trigname   = $4;
 					n->tgenabled  = $5;
 					$$ = (Node *) n;

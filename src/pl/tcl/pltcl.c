@@ -639,7 +639,7 @@ pltcl_handler(PG_FUNCTION_ARGS, bool pltrusted)
 			pltcl_current_fcinfo = NULL;
 			retval = PointerGetDatum(pltcl_trigger_handler(fcinfo, pltrusted));
 		}
-		else if (CALLED_AS_COMMAND_TRIGGER(fcinfo))
+		else if (CALLED_AS_EVENT_TRIGGER(fcinfo))
 		{
 			pltcl_current_fcinfo = NULL;
 			pltcl_command_trigger_handler(fcinfo, pltrusted);

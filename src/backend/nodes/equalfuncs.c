@@ -1787,17 +1787,20 @@ _equalCreateTrigStmt(const CreateTrigStmt *a, const CreateTrigStmt *b)
 }
 
 static bool
-_equalCreateCmdTrigStmt(const CreateCmdTrigStmt *a, const CreateCmdTrigStmt *b)
+_equalCreateEventTrigStmt(const CreateEventTrigStmt *a, const CreateEventTrigStmt *b)
 {
 	COMPARE_STRING_FIELD(trigname);
+	COMPARE_STRING_FIELD(eventname);
 	COMPARE_SCALAR_FIELD(timing);
 	COMPARE_NODE_FIELD(funcname);
+	COMPARE_STRING_FIELD(variable);
+	COMPARE_NODE_FIELD(cmdlist);
 
 	return true;
 }
 
 static bool
-_equalAlterCmdTrigStmt(const AlterCmdTrigStmt *a, const AlterCmdTrigStmt *b)
+_equalAlterEventTrigStmt(const AlterEventTrigStmt *a, const AlterEventTrigStmt *b)
 {
 	COMPARE_STRING_FIELD(trigname);
 	COMPARE_STRING_FIELD(tgenabled);
@@ -2883,11 +2886,11 @@ equal(const void *a, const void *b)
 		case T_CreateTrigStmt:
 			retval = _equalCreateTrigStmt(a, b);
 			break;
-		case T_CreateCmdTrigStmt:
-			retval = _equalCreateCmdTrigStmt(a, b);
+		case T_CreateEventTrigStmt:
+			retval = _equalCreateEventTrigStmt(a, b);
 			break;
-		case T_AlterCmdTrigStmt:
-			retval = _equalAlterCmdTrigStmt(a, b);
+		case T_AlterEventTrigStmt:
+			retval = _equalAlterEventTrigStmt(a, b);
 			break;
 		case T_CreatePLangStmt:
 			retval = _equalCreatePLangStmt(a, b);

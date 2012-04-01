@@ -14,7 +14,7 @@
 #ifndef EXTENSION_H
 #define EXTENSION_H
 
-#include "commands/cmdtrigger.h"
+#include "commands/event_trigger.h"
 #include "nodes/parsenodes.h"
 
 

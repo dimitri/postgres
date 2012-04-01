@@ -1105,13 +1105,13 @@ typedef enum ObjectType
 	OBJECT_AGGREGATE,
 	OBJECT_ATTRIBUTE,			/* type's attribute, when distinct from column */
 	OBJECT_CAST,
-	OBJECT_CMDTRIGGER,
 	OBJECT_COLUMN,
 	OBJECT_CONSTRAINT,
 	OBJECT_COLLATION,
 	OBJECT_CONVERSION,
 	OBJECT_DATABASE,
 	OBJECT_DOMAIN,
+	OBJECT_EVENT_TRIGGER,
 	OBJECT_EXTENSION,
 	OBJECT_FDW,
 	OBJECT_FOREIGN_SERVER,
@@ -1732,27 +1732,28 @@ typedef struct CreateTrigStmt
  *		Create COMMAND TRIGGER Statement
  * ----------------------
  */
-typedef struct CreateCmdTrigStmt
+typedef struct CreateEventTrigStmt
 {
 	NodeTag		type;
-	char	   *command;		/* command's name */
 	char	   *trigname;		/* TRIGGER's name */
-	/* timing uses the TRIGGER_TYPE bits defined in catalog/pg_trigger.h */
-	char		timing;			/* BEFORE, AFTER */
+	int			event;			/* event's identifier */
+	char		timing;			/* BEFORE, INSTEAD OF */
 	List	   *funcname;		/* qual. name of function to call */
+	char	   *variable;		/* variable used in the where clause */
+	List       *cmdlist;		/* list of commands to fire for */
 } CreateCmdTrigStmt;
 
 /* ----------------------
  *		Alter COMMAND TRIGGER Statement
  * ----------------------
  */
-typedef struct AlterCmdTrigStmt
+typedef struct AlterEventTrigStmt
 {
 	NodeTag		type;
 	char	   *trigname;		/* TRIGGER's name */
 	char       *tgenabled;		/* trigger's firing configuration WRT
 								 * session_replication_role */
-} AlterCmdTrigStmt;
+} AlterEventTrigStmt;
 
 /* ----------------------
  *		Create/Drop PROCEDURAL LANGUAGE Statements

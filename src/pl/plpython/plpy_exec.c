@@ -350,7 +350,7 @@ PLy_exec_command_trigger(FunctionCallInfo fcinfo, PLyProcedure *proc)
 	PyObject   *volatile pltdata = NULL;
 	CommandTriggerData *tdata;
 
-	Assert(CALLED_AS_COMMAND_TRIGGER(fcinfo));
+	Assert(CALLED_AS_EVENT_TRIGGER(fcinfo));
 
 	tdata = (CommandTriggerData *) fcinfo->context;
 

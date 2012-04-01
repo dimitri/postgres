@@ -25,7 +25,6 @@
 #include "commands/alter.h"
 #include "commands/async.h"
 #include "commands/cluster.h"
-#include "commands/cmdtrigger.h"
 #include "commands/comment.h"
 #include "commands/collationcmds.h"
 #include "commands/conversioncmds.h"
@@ -34,6 +33,7 @@
 #include "commands/dbcommands.h"
 #include "commands/defrem.h"
 #include "commands/discard.h"
+#include "commands/event_trigger.h"
 #include "commands/explain.h"
 #include "commands/extension.h"
 #include "commands/lockcmds.h"
@@ -184,8 +184,8 @@ check_xact_readonly(Node *parsetree)
 		case T_CommentStmt:
 		case T_DefineStmt:
 		case T_CreateCastStmt:
-		case T_CreateCmdTrigStmt:
-		case T_AlterCmdTrigStmt:
+		case T_CreateEventTrigStmt:
+		case T_AlterEventTrigStmt:
 		case T_CreateConversionStmt:
 		case T_CreatedbStmt:
 		case T_CreateDomainStmt:
@@ -1109,12 +1109,12 @@ standard_ProcessUtility(Node *parsetree,
 								 InvalidOid, InvalidOid, false);
 			break;
 
-		case T_CreateCmdTrigStmt:
-			CreateCmdTrigger((CreateCmdTrigStmt *) parsetree, queryString);
+		case T_CreateEventTrigStmt:
+			CreateEventTrigger((CreateEventTrigStmt *) parsetree, queryString);
 			break;
 
-		case T_AlterCmdTrigStmt:
-			(void) AlterCmdTrigger((AlterCmdTrigStmt *) parsetree);
+		case T_AlterEventTrigStmt:
+			(void) AlterEventTrigger((AlterEventTrigStmt *) parsetree);
 			break;
 
 		case T_CreatePLangStmt:
@@ -1522,8 +1522,8 @@ AlterObjectTypeCommandTag(ObjectType objtype)
 		case OBJECT_TRIGGER:
 			tag = "ALTER TRIGGER";
 			break;
-		case OBJECT_CMDTRIGGER:
-			tag = "ALTER COMMAND TRIGGER";
+		case OBJECT_EVENT_TRIGGER:
+			tag = "ALTER EVENT TRIGGER";
 			break;
 		case OBJECT_TSCONFIGURATION:
 			tag = "ALTER TEXT SEARCH CONFIGURATION";
@@ -1794,8 +1794,8 @@ CreateCommandTag(Node *parsetree)
 				case OBJECT_TRIGGER:
 					tag = "DROP TRIGGER";
 					break;
-				case OBJECT_CMDTRIGGER:
-					tag = "DROP COMMAND TRIGGER";
+				case OBJECT_EVENT_TRIGGER:
+					tag = "DROP EVENT TRIGGER";
 					break;
 				case OBJECT_RULE:
 					tag = "DROP RULE";
@@ -2050,12 +2050,12 @@ CreateCommandTag(Node *parsetree)
 			tag = "CREATE TRIGGER";
 			break;
 
-		case T_CreateCmdTrigStmt:
-			tag = "CREATE COMMAND TRIGGER";
+		case T_CreateEventTrigStmt:
+			tag = "CREATE EVENT TRIGGER";
 			break;
 
-		case T_AlterCmdTrigStmt:
-			tag = "ALTER COMMAND TRIGGER";
+		case T_AlterEventTrigStmt:
+			tag = "ALTER EVENT TRIGGER";
 			break;
 
 		case T_CreatePLangStmt:
@@ -2560,11 +2560,11 @@ GetCommandLogLevel(Node *parsetree)
 			lev = LOGSTMT_DDL;
 			break;
 
-		case T_CreateCmdTrigStmt:
+		case T_CreateEventTrigStmt:
 			lev = LOGSTMT_DDL;
 			break;
 
-		case T_AlterCmdTrigStmt:
+		case T_AlterEventTrigStmt:
 			lev = LOGSTMT_DDL;
 			break;
 

@@ -234,12 +234,12 @@ DECLARE_UNIQUE_INDEX(pg_trigger_tgrelid_tgname_index, 2701, on pg_trigger using 
 DECLARE_UNIQUE_INDEX(pg_trigger_oid_index, 2702, on pg_trigger using btree(oid oid_ops));
 #define TriggerOidIndexId  2702
 
-DECLARE_UNIQUE_INDEX(pg_cmdtrigger_ctgname_index, 3467, on pg_cmdtrigger using btree(ctgname name_ops));
-#define CmdTriggerNameIndexId  3467
-DECLARE_INDEX(pg_cmdtrigger_ctgcommand_index, 3468, on pg_cmdtrigger using btree(ctgcommand name_ops));
-#define CmdTriggerCommandNameIndexId 3468
-DECLARE_UNIQUE_INDEX(pg_cmdtrigger_oid_index, 3469, on pg_cmdtrigger using btree(oid oid_ops));
-#define CmdTriggerOidIndexId  3469
+DECLARE_UNIQUE_INDEX(pg_event_trigger_evtname_index, 3467, on pg_event_trigger using btree(evtname name_ops));
+#define EventTriggerNameIndexId  3467
+DECLARE_INDEX(pg_event_trigger_evtcommand_index, 3468, on pg_event_trigger using btree(ctgevent name_ops));
+#define EventTriggerEventNameIndexId 3468
+DECLARE_UNIQUE_INDEX(pg_event_trigger_oid_index, 3469, on pg_event_trigger using btree(oid oid_ops));
+#define EventTriggerOidIndexId  3469
 
 DECLARE_UNIQUE_INDEX(pg_ts_config_cfgname_index, 3608, on pg_ts_config using btree(cfgname name_ops, cfgnamespace oid_ops));
 #define TSConfigNameNspIndexId	3608

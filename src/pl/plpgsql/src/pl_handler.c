@@ -118,7 +118,7 @@ plpgsql_call_handler(PG_FUNCTION_ARGS)
 		if (CALLED_AS_TRIGGER(fcinfo))
 			retval = PointerGetDatum(plpgsql_exec_trigger(func,
 										   (TriggerData *) fcinfo->context));
-		else if (CALLED_AS_COMMAND_TRIGGER(fcinfo))
+		else if (CALLED_AS_EVENT_TRIGGER(fcinfo))
 			plpgsql_exec_command_trigger(func,
 										 (CommandTriggerData *) fcinfo->context);
 		else

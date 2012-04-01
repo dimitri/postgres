@@ -21,7 +21,7 @@
 #include "catalog/objectaddress.h"
 #include "catalog/pg_authid.h"
 #include "catalog/pg_cast.h"
-#include "catalog/pg_cmdtrigger.h"
+#include "catalog/pg_event_trigger.h"
 #include "catalog/pg_collation.h"
 #include "catalog/pg_constraint.h"
 #include "catalog/pg_conversion.h"
@@ -45,7 +45,7 @@
 #include "catalog/pg_ts_parser.h"
 #include "catalog/pg_ts_template.h"
 #include "catalog/pg_type.h"
-#include "commands/cmdtrigger.h"
+#include "commands/eventtrigger.h"
 #include "commands/dbcommands.h"
 #include "commands/defrem.h"
 #include "commands/extension.h"
@@ -206,8 +206,8 @@ static ObjectPropertyType ObjectProperty[] =
 		InvalidAttrNumber
 	},
 	{
-		CmdTriggerRelationId,
-		CmdTriggerOidIndexId,
+		EventTriggerRelationId,
+		EventTriggerOidIndexId,
 		-1,
 		InvalidAttrNumber
 	},
@@ -257,7 +257,7 @@ static ObjectAddress get_object_address_type(ObjectType objtype,
 						List *objname, bool missing_ok);
 static ObjectAddress get_object_address_opcf(ObjectType objtype, List *objname,
 						List *objargs, bool missing_ok);
-static ObjectAddress get_object_address_cmdtrigger(ObjectType objtype,
+static ObjectAddress get_object_address_event_trigger(ObjectType objtype,
 						List *objname, bool missing_ok);
 static ObjectPropertyType *get_object_property_data(Oid class_id);
 
@@ -327,9 +327,9 @@ get_object_address(ObjectType objtype, List *objname, List *objargs,
 				address = get_object_address_relobject(objtype, objname,
 													   &relation, missing_ok);
 				break;
-			case OBJECT_CMDTRIGGER:
-				address = get_object_address_cmdtrigger(objtype, objname,
-														missing_ok);
+			case OBJECT_EVENT_TRIGGER:
+				address = get_object_address_event_trigger(objtype, objname,
+														   missing_ok);
 				break;
 			case OBJECT_DATABASE:
 			case OBJECT_EXTENSION:
@@ -919,17 +919,18 @@ get_object_address_opcf(ObjectType objtype,
  * Find the ObjectAddress for a command trigger.
  */
 static ObjectAddress
-get_object_address_cmdtrigger(ObjectType objtype, List *objname, bool missing_ok)
+get_object_address_event_trigger(ObjectType objtype,
+								 List *objname, bool missing_ok)
 {
 	char *name;
 	ObjectAddress address;
 
-	Assert(list_length(objname) == 1); /* command triggers are not schema qualified */
+	Assert(list_length(objname) == 1); /* event triggers are not schema qualified */
 
 	name = strVal(linitial(objname));
 
-	address.classId = CmdTriggerRelationId;
-	address.objectId = get_cmdtrigger_oid(name, missing_ok);
+	address.classId = EventTriggerRelationId;
+	address.objectId = get_event_trigger_oid(name, missing_ok);
 	address.objectSubId = 0;
 
 	return address;
@@ -1088,7 +1089,7 @@ check_object_ownership(Oid roleid, ObjectType objtype, ObjectAddress address,
 			break;
 		case OBJECT_TSPARSER:
 		case OBJECT_TSTEMPLATE:
-		case OBJECT_CMDTRIGGER:
+		case OBJECT_EVENT_TRIGGER:
 			/* We treat these object types as being owned by superusers */
 			if (!superuser_arg(roleid))
 				ereport(ERROR,
