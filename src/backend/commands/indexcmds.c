@@ -319,7 +319,7 @@ DefineIndex(RangeVar *heapRelation,
 			bool skip_build,
 			bool quiet,
 			bool concurrent,
-			CommandContext cmd)
+			EventContext evt)
 {
 	Oid		   *typeObjectId;
 	Oid		   *collationObjectId;
@@ -577,18 +577,18 @@ DefineIndex(RangeVar *heapRelation,
 	/*
 	 * Call BEFORE CREATE INDEX triggers
 	 *
-	 * cmd.tag and cmd.parseetree must have been prepared for us by the caller.
+	 * evt.tag and evt.parseetree must have been prepared for us by the caller.
 	 *
 	 * Bootstrap code must be able to skip command triggers, it's passing NULL
-	 * as the CommandContext pointer.
+	 * as the EventContext pointer.
 	 */
-	if (CommandFiresTriggers(cmd))
+	if (CommandFiresTriggers(evt))
 	{
-		cmd->objectId = InvalidOid;
-		cmd->objectname = indexRelationName;
-		cmd->schemaname = get_namespace_name(namespaceId);
+		evt->objectId = InvalidOid;
+		evt->objectname = indexRelationName;
+		evt->schemaname = get_namespace_name(namespaceId);
 
-		ExecBeforeCommandTriggers(cmd);
+		ExecBeforeCommandTriggers(evt);
 	}
 
 	/*
@@ -645,10 +645,10 @@ DefineIndex(RangeVar *heapRelation,
 		heap_close(rel, NoLock);
 
 		/* Call AFTER CREATE INDEX triggers */
-		if (CommandFiresAfterTriggers(cmd))
+		if (CommandFiresAfterTriggers(evt))
 		{
-			cmd->objectId = indexRelationId;
-			ExecAfterCommandTriggers(cmd);
+			evt->objectId = indexRelationId;
+			ExecAfterCommandTriggers(evt);
 		}
 		return indexRelationId;
 	}
@@ -1765,7 +1765,7 @@ ChooseIndexColumnNames(List *indexElems)
  *		Recreate a specific index.
  */
 void
-ReindexIndex(RangeVar *indexRelation, CommandContext cmd)
+ReindexIndex(RangeVar *indexRelation, EventContext evt)
 {
 	Oid			indOid;
 	Oid			heapOid = InvalidOid;
@@ -1776,7 +1776,7 @@ ReindexIndex(RangeVar *indexRelation, CommandContext cmd)
 									  RangeVarCallbackForReindexIndex,
 									  (void *) &heapOid);
 
-	reindex_index(indOid, false, cmd);
+	reindex_index(indOid, false, evt);
 }
 
 /*
@@ -1843,7 +1843,7 @@ RangeVarCallbackForReindexIndex(const RangeVar *relation,
  *		Recreate all indexes of a table (and of its toast table, if any)
  */
 void
-ReindexTable(RangeVar *relation, CommandContext cmd)
+ReindexTable(RangeVar *relation, EventContext evt)
 {
 	Oid			heapOid;
 
@@ -1851,7 +1851,7 @@ ReindexTable(RangeVar *relation, CommandContext cmd)
 	heapOid = RangeVarGetRelidExtended(relation, ShareLock, false, false,
 									   RangeVarCallbackOwnsTable, NULL);
 
-	if (!reindex_relation(heapOid, REINDEX_REL_PROCESS_TOAST, cmd))
+	if (!reindex_relation(heapOid, REINDEX_REL_PROCESS_TOAST, evt))
 		ereport(NOTICE,
 				(errmsg("table \"%s\" has no indexes",
 						relation->relname)));

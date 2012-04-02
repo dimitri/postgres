@@ -20,8 +20,8 @@
 #include "catalog/indexing.h"
 #include "catalog/namespace.h"
 #include "catalog/pg_namespace.h"
-#include "commands/cmdtrigger.h"
 #include "commands/dbcommands.h"
+#include "commands/event_trigger.h"
 #include "commands/schemacmds.h"
 #include "miscadmin.h"
 #include "parser/parse_utilcmd.h"
@@ -33,7 +33,7 @@
 
 
 static void AlterSchemaOwner_internal(HeapTuple tup, Relation rel,
-									  Oid newOwnerId, CommandContext cmd);
+									  Oid newOwnerId, EventContext evt);
 
 /*
  * CREATE SCHEMA
@@ -51,7 +51,7 @@ CreateSchemaCommand(CreateSchemaStmt *stmt, const char *queryString)
 	Oid			saved_uid;
 	int			save_sec_context;
 	AclResult	aclresult;
-	CommandContextData cmd;
+	EventContextData evt;
 
 	GetUserIdAndSecContext(&saved_uid, &save_sec_context);
 
@@ -87,15 +87,15 @@ CreateSchemaCommand(CreateSchemaStmt *stmt, const char *queryString)
 	/*
 	 * Call BEFORE CREATE SCHEMA triggers (before changing authorization)
 	 */
-	InitCommandContext(&cmd, (Node *)stmt);
+	InitCommandContext(&evt, (Node *)stmt);
 
-	if (CommandFiresTriggers(&cmd))
+	if (CommandFiresTriggers(&evt))
 	{
 		cmd.objectId = InvalidOid;
 		cmd.objectname = (char *)schemaName;
 		cmd.schemaname = NULL;		/* a schema does not live in another schema */
 
-		ExecBeforeCommandTriggers(&cmd);
+		ExecBeforeCommandTriggers(&evt);
 	}
 	/*
 	 * If the requested authorization is different from the current user,
@@ -162,10 +162,10 @@ CreateSchemaCommand(CreateSchemaStmt *stmt, const char *queryString)
 	SetUserIdAndSecContext(saved_uid, save_sec_context);
 
 	/* Call AFTER CREATE SCHEMA triggers */
-	if (CommandFiresAfterTriggers(&cmd))
+	if (CommandFiresAfterTriggers(&evt))
 	{
 		cmd.objectId = namespaceId;
-		ExecAfterCommandTriggers(&cmd);
+		ExecAfterCommandTriggers(&evt);
 	}
 }
 
@@ -197,7 +197,7 @@ RemoveSchemaById(Oid schemaOid)
  * Rename schema
  */
 void
-RenameSchema(const char *oldname, const char *newname, CommandContext cmd)
+RenameSchema(const char *oldname, const char *newname, EventContext evt)
 {
 	HeapTuple	tup;
 	Relation	rel;
@@ -235,13 +235,13 @@ RenameSchema(const char *oldname, const char *newname, CommandContext cmd)
 		   errdetail("The prefix \"pg_\" is reserved for system schemas.")));
 
 	/* Call BEFORE ALTER SCHEMA triggers */
-	if (CommandFiresTriggers(cmd))
+	if (CommandFiresTriggers(evt))
 	{
-		cmd->objectId = HeapTupleGetOid(tup);
-		cmd->objectname = pstrdup(oldname);
-		cmd->schemaname = NULL;
+		evt->objectId = HeapTupleGetOid(tup);
+		evt->objectname = pstrdup(oldname);
+		evt->schemaname = NULL;
 
-		ExecBeforeCommandTriggers(cmd);
+		ExecBeforeCommandTriggers(evt);
 	}
 
 	/* rename */
@@ -253,10 +253,10 @@ RenameSchema(const char *oldname, const char *newname, CommandContext cmd)
 	heap_freetuple(tup);
 
 	/* Call AFTER ALTER SCHEMA triggers */
-	if (CommandFiresAfterTriggers(cmd))
+	if (CommandFiresAfterTriggers(evt))
 	{
-		cmd->objectname = pstrdup(newname);
-		ExecAfterCommandTriggers(cmd);
+		evt->objectname = pstrdup(newname);
+		ExecAfterCommandTriggers(evt);
 	}
 }
 
@@ -284,7 +284,7 @@ AlterSchemaOwner_oid(Oid oid, Oid newOwnerId)
  * Change schema owner
  */
 void
-AlterSchemaOwner(const char *name, Oid newOwnerId, CommandContext cmd)
+AlterSchemaOwner(const char *name, Oid newOwnerId, EventContext evt)
 {
 	HeapTuple	tup;
 	Relation	rel;
@@ -297,7 +297,7 @@ AlterSchemaOwner(const char *name, Oid newOwnerId, CommandContext cmd)
 				(errcode(ERRCODE_UNDEFINED_SCHEMA),
 				 errmsg("schema \"%s\" does not exist", name)));
 
-	AlterSchemaOwner_internal(tup, rel, newOwnerId, cmd);
+	AlterSchemaOwner_internal(tup, rel, newOwnerId, evt);
 
 	ReleaseSysCache(tup);
 
@@ -306,7 +306,7 @@ AlterSchemaOwner(const char *name, Oid newOwnerId, CommandContext cmd)
 
 static void
 AlterSchemaOwner_internal(HeapTuple tup, Relation rel, Oid newOwnerId,
-						  CommandContext cmd)
+						  EventContext evt)
 {
 	Form_pg_namespace nspForm;
 
@@ -354,13 +354,13 @@ AlterSchemaOwner_internal(HeapTuple tup, Relation rel, Oid newOwnerId,
 						   get_database_name(MyDatabaseId));
 
 		/* Call BEFORE ALTER SCHEMA triggers */
-		if (CommandFiresTriggers(cmd))
+		if (CommandFiresTriggers(evt))
 		{
-			cmd->objectId = HeapTupleGetOid(tup);
-			cmd->objectname = pstrdup(NameStr(nspForm->nspname));
-			cmd->schemaname = NULL;
+			evt->objectId = HeapTupleGetOid(tup);
+			evt->objectname = pstrdup(NameStr(nspForm->nspname));
+			evt->schemaname = NULL;
 
-			ExecBeforeCommandTriggers(cmd);
+			ExecBeforeCommandTriggers(evt);
 		}
 
 		memset(repl_null, false, sizeof(repl_null));
@@ -396,7 +396,7 @@ AlterSchemaOwner_internal(HeapTuple tup, Relation rel, Oid newOwnerId,
 								newOwnerId);
 
 		/* Call AFTER ALTER SCHEMA triggers */
-		if (CommandFiresAfterTriggers(cmd))
-			ExecAfterCommandTriggers(cmd);
+		if (CommandFiresAfterTriggers(evt))
+			ExecAfterCommandTriggers(evt);
 	}
 }

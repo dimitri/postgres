@@ -52,7 +52,7 @@
 
 
 static void AlterOperatorOwner_internal(Relation rel, Oid operOid, Oid newOwnerId,
-										CommandContext cmd);
+										EventContext evt);
 
 /*
  * DefineOperator
@@ -63,7 +63,7 @@ static void AlterOperatorOwner_internal(Relation rel, Oid operOid, Oid newOwnerI
  * 'parameters' is a list of DefElem
  */
 void
-DefineOperator(List *names, List *parameters, CommandContext cmd)
+DefineOperator(List *names, List *parameters, EventContext evt)
 {
 	char	   *oprName;
 	Oid			oprNamespace;
@@ -312,7 +312,7 @@ DefineOperator(List *names, List *parameters, CommandContext cmd)
 				   joinOid,		/* optional join sel. procedure name */
 				   canMerge,	/* operator merges */
 				   canHash, 	/* operator hashes */
-				   cmd);
+				   evt);
 }
 
 
@@ -355,7 +355,7 @@ AlterOperatorOwner_oid(Oid operOid, Oid newOwnerId)
  */
 void
 AlterOperatorOwner(List *name, TypeName *typeName1, TypeName *typeName2,
-				   Oid newOwnerId, CommandContext cmd)
+				   Oid newOwnerId, EventContext evt)
 {
 	Oid			operOid;
 	Relation	rel;
@@ -366,14 +366,14 @@ AlterOperatorOwner(List *name, TypeName *typeName1, TypeName *typeName2,
 									  typeName1, typeName2,
 									  false, -1);
 
-	AlterOperatorOwner_internal(rel, operOid, newOwnerId, cmd);
+	AlterOperatorOwner_internal(rel, operOid, newOwnerId, evt);
 
 	heap_close(rel, NoLock);
 }
 
 static void
 AlterOperatorOwner_internal(Relation rel, Oid operOid, Oid newOwnerId,
-							CommandContext cmd)
+							EventContext evt)
 {
 	HeapTuple	tup;
 	AclResult	aclresult;
@@ -414,13 +414,13 @@ AlterOperatorOwner_internal(Relation rel, Oid operOid, Oid newOwnerId,
 		}
 
 		/* Call BEFORE ALTER OPERATOR triggers */
-		if (CommandFiresTriggers(cmd))
+		if (CommandFiresTriggers(evt))
 		{
-			cmd->objectId = operOid;
-			cmd->objectname = pstrdup(NameStr(oprForm->oprname));
-			cmd->schemaname = get_namespace_name(oprForm->oprnamespace);
+			evt->objectId = operOid;
+			evt->objectname = pstrdup(NameStr(oprForm->oprname));
+			evt->schemaname = get_namespace_name(oprForm->oprnamespace);
 
-			ExecBeforeCommandTriggers(cmd);
+			ExecBeforeCommandTriggers(evt);
 		}
 
 		/*
@@ -439,8 +439,8 @@ AlterOperatorOwner_internal(Relation rel, Oid operOid, Oid newOwnerId,
 	heap_freetuple(tup);
 
 	/* Call AFTER ALTER OPERATOR triggers */
-	if (CommandFiresAfterTriggers(cmd))
-		ExecAfterCommandTriggers(cmd);
+	if (CommandFiresAfterTriggers(evt))
+		ExecAfterCommandTriggers(evt);
 }
 
 /*
@@ -448,7 +448,7 @@ AlterOperatorOwner_internal(Relation rel, Oid operOid, Oid newOwnerId,
  */
 void
 AlterOperatorNamespace(List *names, List *argtypes, const char *newschema,
-					   CommandContext cmd)
+					   EventContext evt)
 {
 	List	   *operatorName = names;
 	TypeName   *typeName1 = (TypeName *) linitial(argtypes);
@@ -472,7 +472,7 @@ AlterOperatorNamespace(List *names, List *argtypes, const char *newschema,
 						 Anum_pg_operator_oprname,
 						 Anum_pg_operator_oprnamespace,
 						 Anum_pg_operator_oprowner,
-						 ACL_KIND_OPER, cmd);
+						 ACL_KIND_OPER, evt);
 
 	heap_close(rel, RowExclusiveLock);
 }

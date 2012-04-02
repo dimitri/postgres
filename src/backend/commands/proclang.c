@@ -54,7 +54,7 @@ static Oid create_proc_lang(const char *languageName, bool replace,
 				 Oid valOid, bool trusted);
 static PLTemplate *find_language_template(const char *languageName);
 static void AlterLanguageOwner_internal(HeapTuple tup, Relation rel,
-										Oid newOwnerId, CommandContext cmd);
+										Oid newOwnerId, EventContext evt);
 
 
 /* ---------------------------------------------------------------------
@@ -71,9 +71,9 @@ CreateProceduralLanguage(CreatePLangStmt *stmt)
 				loid;
 	Oid			funcrettype;
 	Oid			funcargtypes[1];
-	CommandContextData cmd;
+	EventContextData evt;
 
-	InitCommandContext(&cmd, (Node *)stmt);
+	InitCommandContext(&evt, (Node *)stmt);
 
 	/*
 	 * If we have template information for the language, ignore the supplied
@@ -227,13 +227,13 @@ CreateProceduralLanguage(CreatePLangStmt *stmt)
 			valOid = InvalidOid;
 
 		/* Call BEFORE CREATE LANGUAGE command triggers */
-		if (CommandFiresTriggers(&cmd))
+		if (CommandFiresTriggers(&evt))
 		{
 			cmd.objectId = InvalidOid;
 			cmd.objectname = stmt->plname;
 			cmd.schemaname = NULL;
 
-			ExecBeforeCommandTriggers(&cmd);
+			ExecBeforeCommandTriggers(&evt);
 		}
 
 		/* ok, create it */
@@ -242,10 +242,10 @@ CreateProceduralLanguage(CreatePLangStmt *stmt)
 								valOid, pltemplate->tmpltrusted);
 
 		/* Call AFTER CREATE LANGUAGE command triggers */
-		if (CommandFiresAfterTriggers(&cmd))
+		if (CommandFiresAfterTriggers(&evt))
 		{
 			cmd.objectId = loid;
-			ExecAfterCommandTriggers(&cmd);
+			ExecAfterCommandTriggers(&evt);
 		}
 	}
 	else
@@ -319,13 +319,13 @@ CreateProceduralLanguage(CreatePLangStmt *stmt)
 			valOid = InvalidOid;
 
 		/* Call BEFORE CREATE LANGUAGE command triggers */
-		if (CommandFiresTriggers(&cmd))
+		if (CommandFiresTriggers(&evt))
 		{
 			cmd.objectId = InvalidOid;
 			cmd.objectname = stmt->plname;
 			cmd.schemaname = NULL;
 
-			ExecBeforeCommandTriggers(&cmd);
+			ExecBeforeCommandTriggers(&evt);
 		}
 
 		/* ok, create it */
@@ -334,10 +334,10 @@ CreateProceduralLanguage(CreatePLangStmt *stmt)
 								valOid, stmt->pltrusted);
 
 		/* Call AFTER CREATE LANGUAGE command triggers */
-		if (CommandFiresAfterTriggers(&cmd))
+		if (CommandFiresAfterTriggers(&evt))
 		{
 			cmd.objectId = loid;
-			ExecAfterCommandTriggers(&cmd);
+			ExecAfterCommandTriggers(&evt);
 		}
 	}
 }
@@ -576,7 +576,7 @@ DropProceduralLanguageById(Oid langOid)
  * Rename language
  */
 void
-RenameLanguage(const char *oldname, const char *newname, CommandContext cmd)
+RenameLanguage(const char *oldname, const char *newname, EventContext evt)
 {
 	HeapTuple	tup;
 	Relation	rel;
@@ -601,13 +601,13 @@ RenameLanguage(const char *oldname, const char *newname, CommandContext cmd)
 					   oldname);
 
 	/* Call BEFORE ALTER SERVER triggers */
-	if (CommandFiresTriggers(cmd))
+	if (CommandFiresTriggers(evt))
 	{
-		cmd->objectId = HeapTupleGetOid(tup);
-		cmd->objectname = pstrdup(oldname);
-		cmd->schemaname = NULL;
+		evt->objectId = HeapTupleGetOid(tup);
+		evt->objectname = pstrdup(oldname);
+		evt->schemaname = NULL;
 
-		ExecBeforeCommandTriggers(cmd);
+		ExecBeforeCommandTriggers(evt);
 	}
 
 	/* rename */
@@ -619,10 +619,10 @@ RenameLanguage(const char *oldname, const char *newname, CommandContext cmd)
 	heap_freetuple(tup);
 
 	/* Call AFTER ALTER LANGUAGE triggers */
-	if (CommandFiresAfterTriggers(cmd))
+	if (CommandFiresAfterTriggers(evt))
 	{
-		cmd->objectname = pstrdup(newname);
-		ExecAfterCommandTriggers(cmd);
+		evt->objectname = pstrdup(newname);
+		ExecAfterCommandTriggers(evt);
 	}
 }
 
@@ -630,7 +630,7 @@ RenameLanguage(const char *oldname, const char *newname, CommandContext cmd)
  * Change language owner
  */
 void
-AlterLanguageOwner(const char *name, Oid newOwnerId, CommandContext cmd)
+AlterLanguageOwner(const char *name, Oid newOwnerId, EventContext evt)
 {
 	HeapTuple	tup;
 	Relation	rel;
@@ -643,7 +643,7 @@ AlterLanguageOwner(const char *name, Oid newOwnerId, CommandContext cmd)
 				(errcode(ERRCODE_UNDEFINED_OBJECT),
 				 errmsg("language \"%s\" does not exist", name)));
 
-	AlterLanguageOwner_internal(tup, rel, newOwnerId, cmd);
+	AlterLanguageOwner_internal(tup, rel, newOwnerId, evt);
 
 	ReleaseSysCache(tup);
 
@@ -678,7 +678,7 @@ AlterLanguageOwner_oid(Oid oid, Oid newOwnerId)
  */
 static void
 AlterLanguageOwner_internal(HeapTuple tup, Relation rel, Oid newOwnerId,
-							CommandContext cmd)
+							EventContext evt)
 {
 	Form_pg_language lanForm;
 
@@ -707,13 +707,13 @@ AlterLanguageOwner_internal(HeapTuple tup, Relation rel, Oid newOwnerId,
 		check_is_member_of_role(GetUserId(), newOwnerId);
 
 		/* Call BEFORE ALTER LANGUAGE triggers */
-		if (CommandFiresTriggers(cmd))
+		if (CommandFiresTriggers(evt))
 		{
-			cmd->objectId = HeapTupleGetOid(tup);
-			cmd->objectname = pstrdup(NameStr(lanForm->lanname));
-			cmd->schemaname = NULL;
+			evt->objectId = HeapTupleGetOid(tup);
+			evt->objectname = pstrdup(NameStr(lanForm->lanname));
+			evt->schemaname = NULL;
 
-			ExecBeforeCommandTriggers(cmd);
+			ExecBeforeCommandTriggers(evt);
 		}
 
 		memset(repl_null, false, sizeof(repl_null));
@@ -750,8 +750,8 @@ AlterLanguageOwner_internal(HeapTuple tup, Relation rel, Oid newOwnerId,
 								newOwnerId);
 
 		/* Call AFTER ALTER LANGUAGE triggers */
-		if (CommandFiresAfterTriggers(cmd))
-			ExecAfterCommandTriggers(cmd);
+		if (CommandFiresAfterTriggers(evt))
+			ExecAfterCommandTriggers(evt);
 	}
 }
 

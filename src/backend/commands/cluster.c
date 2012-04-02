@@ -100,9 +100,9 @@ static void reform_and_rewrite_tuple(HeapTuple tuple,
 void
 cluster(ClusterStmt *stmt, bool isTopLevel)
 {
-	CommandContextData cmd;
+	EventContextData evt;
 
-	InitCommandContext(&cmd, (Node *)stmt);
+	InitCommandContext(&evt, (Node *)stmt);
 
 	if (stmt->relation != NULL)
 	{
@@ -177,7 +177,7 @@ cluster(ClusterStmt *stmt, bool isTopLevel)
 		heap_close(rel, NoLock);
 
 		/* Do the job */
-		cluster_rel(tableOid, indexOid, false, stmt->verbose, -1, -1, &cmd);
+		cluster_rel(tableOid, indexOid, false, stmt->verbose, -1, -1, &evt);
 	}
 	else
 	{
@@ -190,8 +190,8 @@ cluster(ClusterStmt *stmt, bool isTopLevel)
 		ListCell   *rv;
 
 		/* Call BEFORE CLUSTER command triggers, all slots are NULL */
-		if (CommandFiresTriggers(&cmd))
-			ExecBeforeCommandTriggers(&cmd);
+		if (CommandFiresTriggers(&evt))
+			ExecBeforeCommandTriggers(&evt);
 
 		/*
 		 * We cannot run this form of CLUSTER inside a user transaction block;
@@ -263,7 +263,7 @@ cluster(ClusterStmt *stmt, bool isTopLevel)
  */
 void
 cluster_rel(Oid tableOid, Oid indexOid, bool recheck, bool verbose,
-			int freeze_min_age, int freeze_table_age, CommandContext cmd)
+			int freeze_min_age, int freeze_table_age, EventContext evt)
 {
 	Relation	OldHeap;
 
@@ -385,13 +385,13 @@ cluster_rel(Oid tableOid, Oid indexOid, bool recheck, bool verbose,
 		check_index_is_clusterable(OldHeap, indexOid, recheck, AccessExclusiveLock);
 
 	/* Call BEFORE CLUSTER command trigger */
-	if (CommandFiresTriggers(cmd))
+	if (CommandFiresTriggers(evt))
 	{
-		cmd->objectId = RelationGetRelid(OldHeap);
-		cmd->objectname = RelationGetRelationName(OldHeap);
-		cmd->schemaname = get_namespace_name(RelationGetNamespace(OldHeap));
+		evt->objectId = RelationGetRelid(OldHeap);
+		evt->objectname = RelationGetRelationName(OldHeap);
+		evt->schemaname = get_namespace_name(RelationGetNamespace(OldHeap));
 
-		ExecBeforeCommandTriggers(cmd);
+		ExecBeforeCommandTriggers(evt);
 	}
 
 	/*

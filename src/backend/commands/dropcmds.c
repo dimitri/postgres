@@ -35,7 +35,7 @@
 static void does_not_exist_skipping(ObjectType objtype,
 									List *objname, List *objargs);
 
-static void	get_object_name(CommandContext cmd,
+static void	get_object_name(EventContext evt,
 							ObjectType objtype,
 							Oid objectId, List *objname);
 
@@ -57,7 +57,7 @@ RemoveObjects(DropStmt *stmt)
 	ListCell   *cell1;
 	ListCell   *cell2 = NULL;
 	int i = 0, n = list_length(stmt->objects);
-	CommandContext *cmds = (CommandContext *) palloc(n * sizeof(CommandContext));
+	EventContext evt = (CommandContext *) palloc(n * sizeof(CommandContext));
 
 	objects = new_object_addresses();
 
@@ -68,7 +68,7 @@ RemoveObjects(DropStmt *stmt)
 		List	   *objargs = NIL;
 		Relation	relation = NULL;
 		Oid			namespaceId;
-		CommandContextData cmd;
+		EventContextData evt;
 
 		if (stmt->arguments)
 		{
@@ -87,7 +87,7 @@ RemoveObjects(DropStmt *stmt)
 		if (!OidIsValid(address.objectId))
 		{
 			does_not_exist_skipping(stmt->removeType, objname, objargs);
-			cmds[i++] = NULL;
+			evts[i++] = NULL;
 			continue;
 		}
 
@@ -129,17 +129,17 @@ RemoveObjects(DropStmt *stmt)
 		/*
 		 * Call BEFORE DROP command triggers
 		 */
-		InitCommandContext(&cmd, (Node *)stmt);
+		InitCommandContext(&evt, (Node *)stmt);
 
-		if (CommandFiresTriggers(&cmd))
+		if (CommandFiresTriggers(&evt))
 		{
-			cmd.objectId = address.objectId;
-			get_object_name(&cmd, stmt->removeType, address.objectId, objname);
-			cmd.schemaname = get_namespace_name(namespaceId);
+			evt.objectId = address.objectId;
+			get_object_name(&evt, stmt->removeType, address.objectId, objname);
+			evt.schemaname = get_namespace_name(namespaceId);
 
-			ExecBeforeCommandTriggers(&cmd);
+			ExecBeforeCommandTriggers(&evt);
 		}
-		cmds[i++] = &cmd;
+		evts[i++] = &evt;
 
 		add_exact_object_address(&address, objects);
 	}
@@ -150,10 +150,10 @@ RemoveObjects(DropStmt *stmt)
 	/* Call AFTER DROP command triggers */
 	for(i = 0; i<n; i++)
 	{
-		if (CommandFiresAfterTriggers(cmds[i]))
+		if (CommandFiresAfterTriggers(evts[i]))
 		{
-			cmds[i]->objectId = InvalidOid;
-			ExecAfterCommandTriggers(cmds[i]);
+			evts[i]->objectId = InvalidOid;
+			ExecAfterCommandTriggers(evts[i]);
 		}
 	}
 	free_object_addresses(objects);
@@ -282,24 +282,24 @@ does_not_exist_skipping(ObjectType objtype, List *objname, List *objargs)
 }
 
 /*
- * Fill in the CommandContext name, with the non-qualified part fo the name.
+ * Fill in the EventContext name, with the non-qualified part fo the name.
  */
 static void
-get_object_name(CommandContext cmd, ObjectType objtype,
+get_object_name(EventContext evt, ObjectType objtype,
 				Oid objectId, List *objname)
 {
 	switch (objtype)
 	{
 		case OBJECT_TYPE:
 		case OBJECT_DOMAIN:
-			cmd->objectname = format_type_be_without_namespace(objectId);
+			evt->objectname = format_type_be_without_namespace(objectId);
 			break;
 		case OBJECT_CAST:
-			cmd->objectname = NULL;
+			evt->objectname = NULL;
 			break;
 		case OBJECT_RULE:
 		case OBJECT_TRIGGER:
-			cmd->objectname = pstrdup(strVal(llast(objname)));
+			evt->objectname = pstrdup(strVal(llast(objname)));
 			break;
 		case OBJECT_COLLATION:
 		case OBJECT_CONVERSION:
@@ -321,9 +321,9 @@ get_object_name(CommandContext cmd, ObjectType objtype,
 		{
 			int len = list_length(objname);
 			if (len == 1)
-				cmd->objectname = pstrdup(strVal(linitial(objname)));
+				evt->objectname = pstrdup(strVal(linitial(objname)));
 			else if (len == 2)
-				cmd->objectname = pstrdup(strVal(lsecond(objname)));
+				evt->objectname = pstrdup(strVal(lsecond(objname)));
 			else
 				elog(ERROR, "unexpected name list length (%d)", len);
 			break;

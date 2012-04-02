@@ -31,7 +31,7 @@
 #include "utils/syscache.h"
 
 static void AlterConversionOwner_internal(Relation rel, Oid conversionOid,
-							  Oid newOwnerId, CommandContext cmd);
+							  Oid newOwnerId, EventContext evt);
 
 /*
  * CREATE CONVERSION
@@ -50,7 +50,7 @@ CreateConversionCommand(CreateConversionStmt *stmt)
 	List	   *func_name = stmt->func_name;
 	static Oid	funcargs[] = {INT4OID, INT4OID, CSTRINGOID, INTERNALOID, INT4OID};
 	char		result[1];
-	CommandContextData cmd;
+	EventContextData evt;
 
 	/* Convert list of names to a name and namespace */
 	namespaceId = QualifiedNameGetCreationNamespace(stmt->conversion_name,
@@ -111,15 +111,15 @@ CreateConversionCommand(CreateConversionStmt *stmt)
 					 Int32GetDatum(0));
 
 	/* Call BEFORE CREATE CONVERSION command triggers */
-	InitCommandContext(&cmd, (Node *)stmt);
+	InitCommandContext(&evt, (Node *)stmt);
 
-	if (CommandFiresTriggers(&cmd))
+	if (CommandFiresTriggers(&evt))
 	{
 		cmd.objectId = InvalidOid;
 		cmd.objectname = conversion_name;
 		cmd.schemaname = get_namespace_name(namespaceId);
 
-		ExecBeforeCommandTriggers(&cmd);
+		ExecBeforeCommandTriggers(&evt);
 	}
 
 	/*
@@ -130,10 +130,10 @@ CreateConversionCommand(CreateConversionStmt *stmt)
 							   from_encoding, to_encoding, funcoid, stmt->def);
 
 	/* Call AFTER CREATE CONVERSION command triggers */
-	if (CommandFiresAfterTriggers(&cmd))
+	if (CommandFiresAfterTriggers(&evt))
 	{
 		cmd.objectId = convOid;
-		ExecAfterCommandTriggers(&cmd);
+		ExecAfterCommandTriggers(&evt);
 	}
 }
 
@@ -141,7 +141,7 @@ CreateConversionCommand(CreateConversionStmt *stmt)
  * Rename conversion
  */
 void
-RenameConversion(List *name, const char *newname, CommandContext cmd)
+RenameConversion(List *name, const char *newname, EventContext evt)
 {
 	Oid			conversionOid;
 	Oid			namespaceOid;
@@ -180,13 +180,13 @@ RenameConversion(List *name, const char *newname, CommandContext cmd)
 					   get_namespace_name(namespaceOid));
 
 	/* Call BEFORE ALTER CONVERSION triggers */
-	if (CommandFiresTriggers(cmd))
+	if (CommandFiresTriggers(evt))
 	{
-		cmd->objectId = HeapTupleGetOid(tup);
-		cmd->objectname = pstrdup(NameStr((((Form_pg_conversion) GETSTRUCT(tup))->conname)));
-		cmd->schemaname = get_namespace_name(namespaceOid);
+		evt->objectId = HeapTupleGetOid(tup);
+		evt->objectname = pstrdup(NameStr((((Form_pg_conversion) GETSTRUCT(tup))->conname)));
+		evt->schemaname = get_namespace_name(namespaceOid);
 
-		ExecBeforeCommandTriggers(cmd);
+		ExecBeforeCommandTriggers(evt);
 	}
 
 	/* rename */
@@ -198,10 +198,10 @@ RenameConversion(List *name, const char *newname, CommandContext cmd)
 	heap_freetuple(tup);
 
 	/* Call AFTER ALTER CONVERSION triggers */
-	if (CommandFiresAfterTriggers(cmd))
+	if (CommandFiresAfterTriggers(evt))
 	{
-		cmd->objectname = pstrdup(newname);
-		ExecAfterCommandTriggers(cmd);
+		evt->objectname = pstrdup(newname);
+		ExecAfterCommandTriggers(evt);
 	}
 }
 
@@ -209,7 +209,7 @@ RenameConversion(List *name, const char *newname, CommandContext cmd)
  * Change conversion owner, by name
  */
 void
-AlterConversionOwner(List *name, Oid newOwnerId, CommandContext cmd)
+AlterConversionOwner(List *name, Oid newOwnerId, EventContext evt)
 {
 	Oid			conversionOid;
 	Relation	rel;
@@ -218,7 +218,7 @@ AlterConversionOwner(List *name, Oid newOwnerId, CommandContext cmd)
 
 	conversionOid = get_conversion_oid(name, false);
 
-	AlterConversionOwner_internal(rel, conversionOid, newOwnerId, cmd);
+	AlterConversionOwner_internal(rel, conversionOid, newOwnerId, evt);
 
 	heap_close(rel, NoLock);
 }
@@ -227,13 +227,13 @@ AlterConversionOwner(List *name, Oid newOwnerId, CommandContext cmd)
  * Change conversion owner, by oid
  */
 void
-AlterConversionOwner_oid(Oid conversionOid, Oid newOwnerId, CommandContext cmd)
+AlterConversionOwner_oid(Oid conversionOid, Oid newOwnerId, EventContext evt)
 {
 	Relation	rel;
 
 	rel = heap_open(ConversionRelationId, RowExclusiveLock);
 
-	AlterConversionOwner_internal(rel, conversionOid, newOwnerId, cmd);
+	AlterConversionOwner_internal(rel, conversionOid, newOwnerId, evt);
 
 	heap_close(rel, NoLock);
 }
@@ -246,7 +246,7 @@ AlterConversionOwner_oid(Oid conversionOid, Oid newOwnerId, CommandContext cmd)
  */
 static void
 AlterConversionOwner_internal(Relation rel, Oid conversionOid, Oid newOwnerId,
-							  CommandContext cmd)
+							  EventContext evt)
 {
 	Form_pg_conversion convForm;
 	HeapTuple	tup;
@@ -288,13 +288,13 @@ AlterConversionOwner_internal(Relation rel, Oid conversionOid, Oid newOwnerId,
 		}
 
 		/* Call BEFORE ALTER CONVERSION triggers */
-		if (CommandFiresTriggers(cmd))
+		if (CommandFiresTriggers(evt))
 		{
-			cmd->objectId = HeapTupleGetOid(tup);
-			cmd->objectname = pstrdup(NameStr(convForm->conname));
-			cmd->schemaname = get_namespace_name(convForm->connamespace);
+			evt->objectId = HeapTupleGetOid(tup);
+			evt->objectname = pstrdup(NameStr(convForm->conname));
+			evt->schemaname = get_namespace_name(convForm->connamespace);
 
-			ExecBeforeCommandTriggers(cmd);
+			ExecBeforeCommandTriggers(evt);
 		}
 
 		/*
@@ -311,8 +311,8 @@ AlterConversionOwner_internal(Relation rel, Oid conversionOid, Oid newOwnerId,
 								newOwnerId);
 
 		/* Call AFTER ALTER CONVERSION triggers */
-		if (CommandFiresAfterTriggers(cmd))
-			ExecAfterCommandTriggers(cmd);
+		if (CommandFiresAfterTriggers(evt))
+			ExecAfterCommandTriggers(evt);
 	}
 
 	heap_freetuple(tup);
@@ -322,7 +322,7 @@ AlterConversionOwner_internal(Relation rel, Oid conversionOid, Oid newOwnerId,
  * Execute ALTER CONVERSION SET SCHEMA
  */
 void
-AlterConversionNamespace(List *name, const char *newschema, CommandContext cmd)
+AlterConversionNamespace(List *name, const char *newschema, EventContext evt)
 {
 	Oid			convOid,
 				nspOid;
@@ -340,7 +340,7 @@ AlterConversionNamespace(List *name, const char *newschema, CommandContext cmd)
 						 Anum_pg_conversion_conname,
 						 Anum_pg_conversion_connamespace,
 						 Anum_pg_conversion_conowner,
-						 ACL_KIND_CONVERSION, cmd);
+						 ACL_KIND_CONVERSION, evt);
 
 	heap_close(rel, RowExclusiveLock);
 }

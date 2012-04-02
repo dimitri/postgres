@@ -67,7 +67,7 @@
 
 
 static void AlterFunctionOwner_internal(Relation rel, HeapTuple tup,
-										Oid newOwnerId, CommandContext cmd);
+										Oid newOwnerId, EventContext evt);
 
 
 /*
@@ -829,7 +829,7 @@ CreateFunction(CreateFunctionStmt *stmt, const char *queryString)
 	HeapTuple	languageTuple;
 	Form_pg_language languageStruct;
 	List	   *as_clause;
-	CommandContextData cmd;
+	EventContextData evt;
 
 	/* Convert list of names to a name and namespace */
 	namespaceId = QualifiedNameGetCreationNamespace(stmt->funcname,
@@ -975,15 +975,15 @@ CreateFunction(CreateFunctionStmt *stmt, const char *queryString)
 	/*
 	 * Call BEFORE CREATE FUNCTION triggers
 	 */
-	InitCommandContext(&cmd, (Node *)stmt);
+	InitCommandContext(&evt, (Node *)stmt);
 
-	if (CommandFiresTriggers(&cmd))
+	if (CommandFiresTriggers(&evt))
 	{
 		cmd.objectId = InvalidOid;
 		cmd.objectname = (char *)funcname;
 		cmd.schemaname = get_namespace_name(namespaceId);
 
-		ExecBeforeCommandTriggers(&cmd);
+		ExecBeforeCommandTriggers(&evt);
 	}
 	/*
 	 * And now that we have all the parameters, and know we're permitted to do
@@ -1015,10 +1015,10 @@ CreateFunction(CreateFunctionStmt *stmt, const char *queryString)
 						prorows);
 
 	/* Call AFTER CREATE FUNCTION triggers */
-	if (CommandFiresAfterTriggers(&cmd))
+	if (CommandFiresAfterTriggers(&evt))
 	{
 		cmd.objectId = procOid;
-		ExecAfterCommandTriggers(&cmd);
+		ExecAfterCommandTriggers(&evt);
 	}
 }
 
@@ -1077,7 +1077,7 @@ RemoveFunctionById(Oid funcOid)
  * Rename function
  */
 void
-RenameFunction(List *name, List *argtypes, const char *newname, CommandContext cmd)
+RenameFunction(List *name, List *argtypes, const char *newname, EventContext evt)
 {
 	Oid			procOid;
 	Oid			namespaceOid;
@@ -1132,13 +1132,13 @@ RenameFunction(List *name, List *argtypes, const char *newname, CommandContext c
 					   get_namespace_name(namespaceOid));
 
 	/* Call BEFORE ALTER FUNCTION triggers */
-	if (CommandFiresTriggers(cmd))
+	if (CommandFiresTriggers(evt))
 	{
-		cmd->objectId = procOid;
-		cmd->objectname = pstrdup(NameStr(procForm->proname));
-		cmd->schemaname = get_namespace_name(namespaceOid);
+		evt->objectId = procOid;
+		evt->objectname = pstrdup(NameStr(procForm->proname));
+		evt->schemaname = get_namespace_name(namespaceOid);
 
-		ExecBeforeCommandTriggers(cmd);
+		ExecBeforeCommandTriggers(evt);
 	}
 
 	/* rename */
@@ -1150,10 +1150,10 @@ RenameFunction(List *name, List *argtypes, const char *newname, CommandContext c
 	heap_freetuple(tup);
 
 	/* Call AFTER ALTER FUNCTION triggers */
-	if (CommandFiresAfterTriggers(cmd))
+	if (CommandFiresAfterTriggers(evt))
 	{
-		cmd->objectname = pstrdup(newname);
-		ExecAfterCommandTriggers(cmd);
+		evt->objectname = pstrdup(newname);
+		ExecAfterCommandTriggers(evt);
 	}
 }
 
@@ -1162,7 +1162,7 @@ RenameFunction(List *name, List *argtypes, const char *newname, CommandContext c
  */
 void
 AlterFunctionOwner(List *name, List *argtypes, Oid newOwnerId,
-				   CommandContext cmd)
+				   EventContext evt)
 {
 	Relation	rel;
 	Oid			procOid;
@@ -1183,7 +1183,7 @@ AlterFunctionOwner(List *name, List *argtypes, Oid newOwnerId,
 						NameListToString(name)),
 				 errhint("Use ALTER AGGREGATE to change owner of aggregate functions.")));
 
-	AlterFunctionOwner_internal(rel, tup, newOwnerId, cmd);
+	AlterFunctionOwner_internal(rel, tup, newOwnerId, evt);
 
 	heap_close(rel, NoLock);
 }
@@ -1192,7 +1192,7 @@ AlterFunctionOwner(List *name, List *argtypes, Oid newOwnerId,
  * Change function owner by Oid
  */
 void
-AlterFunctionOwner_oid(Oid procOid, Oid newOwnerId, CommandContext cmd)
+AlterFunctionOwner_oid(Oid procOid, Oid newOwnerId, EventContext evt)
 {
 	Relation	rel;
 	HeapTuple	tup;
@@ -1202,14 +1202,14 @@ AlterFunctionOwner_oid(Oid procOid, Oid newOwnerId, CommandContext cmd)
 	tup = SearchSysCache1(PROCOID, ObjectIdGetDatum(procOid));
 	if (!HeapTupleIsValid(tup)) /* should not happen */
 		elog(ERROR, "cache lookup failed for function %u", procOid);
-	AlterFunctionOwner_internal(rel, tup, newOwnerId, cmd);
+	AlterFunctionOwner_internal(rel, tup, newOwnerId, evt);
 
 	heap_close(rel, NoLock);
 }
 
 static void
 AlterFunctionOwner_internal(Relation rel, HeapTuple tup, Oid newOwnerId,
-							CommandContext cmd)
+							EventContext evt)
 {
 	Form_pg_proc procForm;
 	AclResult	aclresult;
@@ -1256,13 +1256,13 @@ AlterFunctionOwner_internal(Relation rel, HeapTuple tup, Oid newOwnerId,
 		}
 
 		/* Call BEFORE ALTER FUNCTION triggers */
-		if (CommandFiresTriggers(cmd))
+		if (CommandFiresTriggers(evt))
 		{
-			cmd->objectId = procOid;
-			cmd->objectname = pstrdup(NameStr(procForm->proname));
-			cmd->schemaname = get_namespace_name(procForm->pronamespace);
+			evt->objectId = procOid;
+			evt->objectname = pstrdup(NameStr(procForm->proname));
+			evt->schemaname = get_namespace_name(procForm->pronamespace);
 
-			ExecBeforeCommandTriggers(cmd);
+			ExecBeforeCommandTriggers(evt);
 		}
 		memset(repl_null, false, sizeof(repl_null));
 		memset(repl_repl, false, sizeof(repl_repl));
@@ -1297,8 +1297,8 @@ AlterFunctionOwner_internal(Relation rel, HeapTuple tup, Oid newOwnerId,
 		changeDependencyOnOwner(ProcedureRelationId, procOid, newOwnerId);
 
 		/* Call AFTER ALTER FUNCTION triggers */
-		if (CommandFiresAfterTriggers(cmd))
-			ExecAfterCommandTriggers(cmd);
+		if (CommandFiresAfterTriggers(evt))
+			ExecAfterCommandTriggers(evt);
 	}
 
 	ReleaseSysCache(tup);
@@ -1324,7 +1324,7 @@ AlterFunction(AlterFunctionStmt *stmt)
 	List	   *set_items = NIL;
 	DefElem    *cost_item = NULL;
 	DefElem    *rows_item = NULL;
-	CommandContextData cmd;
+	EventContextData evt;
 
 	rel = heap_open(ProcedureRelationId, RowExclusiveLock);
 
@@ -1401,15 +1401,15 @@ AlterFunction(AlterFunctionStmt *stmt)
 	}
 
 	/* Call BEFORE ALTER FUNCTION command triggers */
-	InitCommandContext(&cmd, (Node *)stmt);
+	InitCommandContext(&evt, (Node *)stmt);
 
-	if (CommandFiresTriggers(&cmd))
+	if (CommandFiresTriggers(&evt))
 	{
 		cmd.objectId = HeapTupleGetOid(tup);
 		cmd.objectname = pstrdup(NameStr(procForm->proname));
 		cmd.schemaname = get_namespace_name(procForm->pronamespace);
 
-		ExecBeforeCommandTriggers(&cmd);
+		ExecBeforeCommandTriggers(&evt);
 	}
 
 	if (set_items)
@@ -1455,8 +1455,8 @@ AlterFunction(AlterFunctionStmt *stmt)
 	heap_freetuple(tup);
 
 	/* Call AFTER ALTER FUNCTION command triggers */
-	if (CommandFiresAfterTriggers(&cmd))
-		ExecAfterCommandTriggers(&cmd);
+	if (CommandFiresAfterTriggers(&evt))
+		ExecAfterCommandTriggers(&evt);
 }
 
 /*
@@ -1553,7 +1553,7 @@ CreateCast(CreateCastStmt *stmt)
 	ObjectAddress myself,
 				referenced;
 	AclResult	aclresult;
-	CommandContextData cmd;
+	EventContextData evt;
 
 	sourcetypeid = typenameTypeId(NULL, stmt->sourcetype);
 	targettypeid = typenameTypeId(NULL, stmt->targettype);
@@ -1773,15 +1773,15 @@ CreateCast(CreateCastStmt *stmt)
 	}
 
 	/* Call BEFORE CREATE CAST command triggers */
-	InitCommandContext(&cmd, (Node *)stmt);
+	InitCommandContext(&evt, (Node *)stmt);
 
-	if (CommandFiresTriggers(&cmd))
+	if (CommandFiresTriggers(&evt))
 	{
 		cmd.objectId = InvalidOid;
 		cmd.objectname = NULL;	/* composite name, not supported */
 		cmd.schemaname = NULL;	/* casts don't live in a namespace */
 
-		ExecBeforeCommandTriggers(&cmd);
+		ExecBeforeCommandTriggers(&evt);
 	}
 
 	relation = heap_open(CastRelationId, RowExclusiveLock);
@@ -1853,10 +1853,10 @@ CreateCast(CreateCastStmt *stmt)
 
 	heap_close(relation, RowExclusiveLock);
 
-	if (CommandFiresAfterTriggers(&cmd))
+	if (CommandFiresAfterTriggers(&evt))
 	{
 		cmd.objectId = castid;
-		ExecAfterCommandTriggers(&cmd);
+		ExecAfterCommandTriggers(&evt);
 	}
 }
 
@@ -1916,7 +1916,7 @@ DropCastById(Oid castOid)
  */
 void
 AlterFunctionNamespace(List *name, List *argtypes, bool isagg,
-					   const char *newschema, CommandContext cmd)
+					   const char *newschema, EventContext evt)
 {
 	Oid			procOid;
 	Oid			nspOid;
@@ -1930,11 +1930,11 @@ AlterFunctionNamespace(List *name, List *argtypes, bool isagg,
 	/* get schema OID and check its permissions */
 	nspOid = LookupCreationNamespace(newschema);
 
-	AlterFunctionNamespace_oid(procOid, nspOid, cmd);
+	AlterFunctionNamespace_oid(procOid, nspOid, evt);
 }
 
 Oid
-AlterFunctionNamespace_oid(Oid procOid, Oid nspOid, CommandContext cmd)
+AlterFunctionNamespace_oid(Oid procOid, Oid nspOid, EventContext evt)
 {
 	Oid			oldNspOid;
 	HeapTuple	tup;
@@ -1970,13 +1970,13 @@ AlterFunctionNamespace_oid(Oid procOid, Oid nspOid, CommandContext cmd)
 						get_namespace_name(nspOid))));
 
 	/* Call BEFORE ALTER FUNCTION triggers */
-	if (CommandFiresTriggers(cmd))
+	if (CommandFiresTriggers(evt))
 	{
-		cmd->objectId = procOid;
-		cmd->objectname = pstrdup(NameStr(proc->proname));
-		cmd->schemaname = get_namespace_name(oldNspOid);
+		evt->objectId = procOid;
+		evt->objectname = pstrdup(NameStr(proc->proname));
+		evt->schemaname = get_namespace_name(oldNspOid);
 
-		ExecBeforeCommandTriggers(cmd);
+		ExecBeforeCommandTriggers(evt);
 	}
 
 	/* OK, modify the pg_proc row */
@@ -1997,10 +1997,10 @@ AlterFunctionNamespace_oid(Oid procOid, Oid nspOid, CommandContext cmd)
 
 	heap_close(procRel, RowExclusiveLock);
 
-	if (CommandFiresAfterTriggers(cmd))
+	if (CommandFiresAfterTriggers(evt))
 	{
-		cmd->schemaname = get_namespace_name(nspOid);
-		ExecAfterCommandTriggers(cmd);
+		evt->schemaname = get_namespace_name(nspOid);
+		ExecAfterCommandTriggers(evt);
 	}
 	return oldNspOid;
 }

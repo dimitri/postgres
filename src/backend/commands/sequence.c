@@ -20,7 +20,7 @@
 #include "catalog/namespace.h"
 #include "catalog/pg_type.h"
 #include "commands/defrem.h"
-#include "commands/cmdtrigger.h"
+#include "commands/event_trigger.h"
 #include "commands/sequence.h"
 #include "commands/tablecmds.h"
 #include "funcapi.h"
@@ -117,7 +117,7 @@ DefineSequence(CreateSeqStmt *seq)
 	bool		null[SEQ_COL_LASTCOL];
 	int			i;
 	NameData	name;
-	CommandContextData cmd;
+	EventContextData evt;
 
 	/* Unlogged sequences are not implemented -- not clear if useful. */
 	if (seq->sequence->relpersistence == RELPERSISTENCE_UNLOGGED)
@@ -214,9 +214,9 @@ DefineSequence(CreateSeqStmt *seq)
 	stmt->if_not_exists = false;
 
 	/* Prepare BEFORE CREATE SEQUENCE triggers */
-	InitCommandContext(&cmd, (Node *)seq);
+	InitCommandContext(&evt, (Node *)seq);
 
-	seqoid = DefineRelation(stmt, RELKIND_SEQUENCE, seq->ownerId, &cmd);
+	seqoid = DefineRelation(stmt, RELKIND_SEQUENCE, seq->ownerId, &evt);
 	Assert(seqoid != InvalidOid);
 
 	rel = heap_open(seqoid, AccessExclusiveLock);
@@ -233,10 +233,10 @@ DefineSequence(CreateSeqStmt *seq)
 	heap_close(rel, NoLock);
 
 	/* Call AFTER CREATE SEQUENCE triggers */
-	if (CommandFiresAfterTriggers(&cmd))
+	if (CommandFiresAfterTriggers(&evt))
 	{
 		cmd.objectId = seqoid;
-		ExecAfterCommandTriggers(&cmd);
+		ExecAfterCommandTriggers(&evt);
 	}
 }
 
@@ -435,7 +435,7 @@ AlterSequence(AlterSeqStmt *stmt)
 	Form_pg_sequence seq;
 	FormData_pg_sequence new;
 	List	   *owned_by;
-	CommandContextData cmd;
+	EventContextData evt;
 
 	/* Open and lock sequence. */
 	relid = RangeVarGetRelid(stmt->sequence, AccessShareLock, stmt->missing_ok);
@@ -474,15 +474,15 @@ AlterSequence(AlterSeqStmt *stmt)
 	/*
 	 * Call BEFORE ALTER SEQUENCE triggers
 	 */
-	InitCommandContext(&cmd, (Node *)stmt);
+	InitCommandContext(&evt, (Node *)stmt);
 
-	if (CommandFiresTriggers(&cmd))
+	if (CommandFiresTriggers(&evt))
 	{
 		cmd.objectId = relid;
 		cmd.objectname = pstrdup(stmt->sequence->relname);
 		cmd.schemaname = pstrdup(stmt->sequence->schemaname);
 
-		ExecBeforeCommandTriggers(&cmd);
+		ExecBeforeCommandTriggers(&evt);
 	}
 
 	START_CRIT_SECTION();
@@ -525,8 +525,8 @@ AlterSequence(AlterSeqStmt *stmt)
 	relation_close(seqrel, NoLock);
 
 	/* Call AFTER ALTER SEQUENCE triggers */
-	if (CommandFiresAfterTriggers(&cmd))
-		ExecAfterCommandTriggers(&cmd);
+	if (CommandFiresAfterTriggers(&evt))
+		ExecAfterCommandTriggers(&evt);
 }
 
 

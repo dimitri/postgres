@@ -42,7 +42,7 @@
 /*
  * Event Trigger cache.
  */
-List *EventTriggerCache[EVTG_COMMAND_COUND][EVTG_EVENTS_COUNT];
+List *EventCommandTriggerCache[][] = NULL;
 
 static void check_event_trigger_name(const char *trigname, Relation tgrel);
 
@@ -453,7 +453,7 @@ check_event_trigger_name(const char *trigname, Relation tgrel)
  * The idea is that the code to fetch the list of functions to process gets as
  * simple as the following:
  *
- *  foreach(cell, EventTriggerCache[EVTG_VACUUM][EVTG_COMMAND_START])
+ *  foreach(cell, EventCommandTriggerCache[TrigEventCommand][TrigEvent])
  */
 void
 BuildEventTriggerCache()
@@ -478,7 +478,7 @@ BuildEventTriggerCache()
  */
 
 /*
- * Scan the catalogs and fill in the CommandContext procedures that we will
+ * Scan the catalogs and fill in the EventContext procedures that we will
  * have to call before and after the command.
  */
 static bool
@@ -566,7 +566,7 @@ call_cmdtrigger_procedure(CommandContext cmd, RegProcedure proc, const char *whe
 	FmgrInfo	flinfo;
 	FunctionCallInfoData fcinfo;
 	PgStat_FunctionCallUsage fcusage;
-	CommandTriggerData trigdata;
+	EventTriggerData trigdata;
 
 	fmgr_info(proc, &flinfo);
 
@@ -574,7 +574,7 @@ call_cmdtrigger_procedure(CommandContext cmd, RegProcedure proc, const char *whe
 	 * Prepare the command trigger function context from the Command Context.
 	 * We prepare a dedicated Node here so as not to publish internal data.
 	 */
-	trigdata.type		= T_CommandTriggerData;
+	trigdata.type		= T_EventTriggerData;
 	trigdata.when		= (char *)when;
 	trigdata.tag		= cmd->tag;
 	trigdata.objectId	= cmd->objectId;
@@ -640,11 +640,11 @@ exec_command_triggers_internal(CommandContext cmd, char when)
 }
 
 /*
- * Routine to call to setup a CommandContextData structure.
+ * Routine to call to setup a EventContextData evt.
  *
  * This ensures that cmd->before and cmd->after are set to meaningful values.
  */
-void
+!void
 InitCommandContext(CommandContext cmd, const Node *stmt)
 {
 	cmd->tag = (char *) CreateCommandTag((Node *)stmt);

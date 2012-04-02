@@ -41,10 +41,10 @@
 #include "catalog/pg_type_fn.h"
 #include "catalog/storage.h"
 #include "catalog/toasting.h"
-#include "commands/cmdtrigger.h"
 #include "commands/cluster.h"
 #include "commands/comment.h"
 #include "commands/defrem.h"
+#include "commands/event_trigger.h"
 #include "commands/sequence.h"
 #include "commands/tablecmds.h"
 #include "commands/tablespace.h"
@@ -415,7 +415,7 @@ static void RangeVarCallbackForAlterRelation(const RangeVar *rv, Oid relid,
  * ----------------------------------------------------------------
  */
 Oid
-DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId, CommandContext cmd)
+DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId, EventContext evt)
 {
 	char		relname[NAMEDATALEN];
 	Oid			namespaceId;
@@ -609,13 +609,13 @@ DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId, CommandContext cmd)
 	}
 
 	/* Exec BEFORE CREATE view|sequence|table|type command triggers */
-	if (CommandFiresTriggers(cmd))
+	if (CommandFiresTriggers(evt))
 	{
-		cmd->objectId = InvalidOid;
-		cmd->objectname = pstrdup(relname);
-		cmd->schemaname = get_namespace_name(namespaceId);
+		evt->objectId = InvalidOid;
+		evt->objectname = pstrdup(relname);
+		evt->schemaname = get_namespace_name(namespaceId);
 
-		ExecBeforeCommandTriggers(cmd);
+		ExecBeforeCommandTriggers(evt);
 	}
 
 	/*
@@ -752,7 +752,7 @@ RemoveRelations(DropStmt *drop)
 	char		relkind;
 	ListCell   *cell;
 	int i = 0, n = list_length(drop->objects);
-	CommandContext *cmds = (CommandContext *) palloc(n * sizeof(CommandContext));
+	EventContext evt = (CommandContext *) palloc(n * sizeof(CommandContext));
 
 	/*
 	 * First we identify all the relations, then we delete them in a single
@@ -799,7 +799,7 @@ RemoveRelations(DropStmt *drop)
 		Oid			relOid;
 		ObjectAddress obj;
 		struct DropRelationCallbackState	state;
-		CommandContextData cmd;
+		EventContextData evt;
 
 		/*
 		 * These next few steps are a great deal like relation_openrv, but we
@@ -825,24 +825,24 @@ RemoveRelations(DropStmt *drop)
 		if (!OidIsValid(relOid))
 		{
 			DropErrorMsgNonExistent(rel->relname, relkind, drop->missing_ok);
-			cmds[i++] = NULL;
+			evts[i++] = NULL;
 			continue;
 		}
 
 		/*
 		 * Call BEFORE DROP command triggers
 		 */
-		InitCommandContext(&cmd, (Node *)drop);
+		InitCommandContext(&evt, (Node *)drop);
 
-		if (CommandFiresTriggers(&cmd))
+		if (CommandFiresTriggers(&evt))
 		{
-			cmd.objectId = relOid;
-			cmd.objectname = get_rel_name(relOid);
-			cmd.schemaname = get_namespace_name(get_rel_namespace(relOid));
+			evt.objectId = relOid;
+			evt.objectname = get_rel_name(relOid);
+			evt.schemaname = get_namespace_name(get_rel_namespace(relOid));
 
-			ExecBeforeCommandTriggers(&cmd);
+			ExecBeforeCommandTriggers(&evt);
 		}
-		cmds[i++] = &cmd;
+		evts[i++] = &evt;
 
 		/* OK, we're ready to delete this one */
 		obj.classId = RelationRelationId;
@@ -857,10 +857,10 @@ RemoveRelations(DropStmt *drop)
 	/* Call AFTER DROP command triggers */
 	for(i = 0; i<n; i++)
 	{
-		if (CommandFiresAfterTriggers(cmds[i]))
+		if (CommandFiresAfterTriggers(evts[i]))
 		{
-			cmds[i]->objectId = InvalidOid;
-			ExecAfterCommandTriggers(cmds[i]);
+			evts[i]->objectId = InvalidOid;
+			ExecAfterCommandTriggers(evts[i]);
 		}
 	}
 
@@ -2342,7 +2342,7 @@ RangeVarCallbackForRenameAttribute(const RangeVar *rv, Oid relid, Oid oldrelid,
  *		renameatt		- changes the name of a attribute in a relation
  */
 void
-renameatt(RenameStmt *stmt, CommandContext cmd)
+renameatt(RenameStmt *stmt, EventContext evt)
 {
 	Oid			relid;
 
@@ -2361,13 +2361,13 @@ renameatt(RenameStmt *stmt, CommandContext cmd)
 	}
 
 	/* BEFORE command triggers */
-	if (CommandFiresTriggers(cmd))
+	if (CommandFiresTriggers(evt))
 	{
-		cmd->objectId = relid;
-		cmd->objectname = stmt->relation->relname;
-		cmd->schemaname = stmt->relation->schemaname;
+		evt->objectId = relid;
+		evt->objectname = stmt->relation->relname;
+		evt->schemaname = stmt->relation->schemaname;
 
-		ExecBeforeCommandTriggers(cmd);
+		ExecBeforeCommandTriggers(evt);
 	}
 
 	renameatt_internal(relid,
@@ -2379,8 +2379,8 @@ renameatt(RenameStmt *stmt, CommandContext cmd)
 					   stmt->behavior);
 
 	/* AFTER command triggers */
-	if (CommandFiresAfterTriggers(cmd))
-		ExecAfterCommandTriggers(cmd);
+	if (CommandFiresAfterTriggers(evt))
+		ExecAfterCommandTriggers(evt);
 }
 
 
@@ -2394,7 +2394,7 @@ rename_constraint_internal(Oid myrelid,
 						   bool recurse,
 						   bool recursing,
 						   int expected_parents,
-						   CommandContext cmd)
+						   EventContext evt)
 {
 	Relation	targetrelation;
 	Oid			constraintOid;
@@ -2413,13 +2413,13 @@ rename_constraint_internal(Oid myrelid,
 			 constraintOid);
 	con = (Form_pg_constraint) GETSTRUCT(tuple);
 
-	if (CommandFiresTriggers(cmd))
+	if (CommandFiresTriggers(evt))
 	{
-		cmd->objectId = myrelid;
-		cmd->objectname = RelationGetRelationName(targetrelation);
-		cmd->schemaname = get_namespace_name(RelationGetNamespace(targetrelation));
+		evt->objectId = myrelid;
+		evt->objectname = RelationGetRelationName(targetrelation);
+		evt->schemaname = get_namespace_name(RelationGetNamespace(targetrelation));
 
-		ExecBeforeCommandTriggers(cmd);
+		ExecBeforeCommandTriggers(evt);
 	}
 
 	if (con->contype == CONSTRAINT_CHECK && !con->conisonly)
@@ -2475,12 +2475,12 @@ rename_constraint_internal(Oid myrelid,
 
 	relation_close(targetrelation, NoLock);		/* close rel but keep lock */
 
-	if (CommandFiresAfterTriggers(cmd))
-		ExecAfterCommandTriggers(cmd);
+	if (CommandFiresAfterTriggers(evt))
+		ExecAfterCommandTriggers(evt);
 }
 
 void
-RenameConstraint(RenameStmt *stmt, CommandContext cmd)
+RenameConstraint(RenameStmt *stmt, EventContext evt)
 {
 	Oid			relid;
 
@@ -2496,14 +2496,14 @@ RenameConstraint(RenameStmt *stmt, CommandContext cmd)
 							   interpretInhOption(stmt->relation->inhOpt),		/* recursive? */
 							   false,	/* recursing? */
 							   0		/* expected inhcount */,
-							   cmd);
+							   evt);
 }
 
 /*
  * Execute ALTER TABLE/INDEX/SEQUENCE/VIEW/FOREIGN TABLE RENAME
  */
 void
-RenameRelation(RenameStmt *stmt, CommandContext cmd)
+RenameRelation(RenameStmt *stmt, EventContext evt)
 {
 	Oid			relid;
 
@@ -2528,7 +2528,7 @@ RenameRelation(RenameStmt *stmt, CommandContext cmd)
 	}
 
 	/* Do the work */
-	RenameRelationInternal(relid, stmt->newname, cmd);
+	RenameRelationInternal(relid, stmt->newname, evt);
 }
 
 /*
@@ -2541,7 +2541,7 @@ RenameRelation(RenameStmt *stmt, CommandContext cmd)
  *			  sequence, AFAIK there's no need for it to be there.
  */
 void
-RenameRelationInternal(Oid myrelid, const char *newrelname, CommandContext cmd)
+RenameRelationInternal(Oid myrelid, const char *newrelname, EventContext evt)
 {
 	Relation	targetrelation;
 	Relation	relrelation;	/* for RELATION relation */
@@ -2573,13 +2573,13 @@ RenameRelationInternal(Oid myrelid, const char *newrelname, CommandContext cmd)
 						newrelname)));
 
 	/* Call BEFORE ALTER relation triggers */
-	if (CommandFiresTriggers(cmd))
+	if (CommandFiresTriggers(evt))
 	{
-		cmd->objectId = HeapTupleGetOid(reltup);
-		cmd->objectname = pstrdup(NameStr(relform->relname));
-		cmd->schemaname = get_namespace_name(namespaceId);
+		evt->objectId = HeapTupleGetOid(reltup);
+		evt->objectname = pstrdup(NameStr(relform->relname));
+		evt->schemaname = get_namespace_name(namespaceId);
 
-		ExecBeforeCommandTriggers(cmd);
+		ExecBeforeCommandTriggers(evt);
 	}
 
 	/*
@@ -2620,10 +2620,10 @@ RenameRelationInternal(Oid myrelid, const char *newrelname, CommandContext cmd)
 	relation_close(targetrelation, NoLock);
 
 	/* Call AFTER ALTER relation triggers */
-	if (CommandFiresAfterTriggers(cmd))
+	if (CommandFiresAfterTriggers(evt))
 	{
-		cmd->objectname = pstrdup(newrelname);
-		ExecAfterCommandTriggers(cmd);
+		evt->objectname = pstrdup(newrelname);
+		ExecAfterCommandTriggers(evt);
 	}
 }
 
@@ -2737,7 +2737,7 @@ void
 AlterTable(Oid relid, LOCKMODE lockmode, AlterTableStmt *stmt)
 {
 	Relation	rel;
-	CommandContextData cmd;
+	EventContextData evt;
 
 	/* Caller is required to provide an adequate lock. */
 	rel = relation_open(relid, NoLock);
@@ -2745,24 +2745,24 @@ AlterTable(Oid relid, LOCKMODE lockmode, AlterTableStmt *stmt)
 	CheckTableNotInUse(rel, "ALTER TABLE");
 
 	/* Call BEFORE ALTER TABLE triggers */
-	InitCommandContext(&cmd, (Node *)stmt);
+	InitCommandContext(&evt, (Node *)stmt);
 
-	if (CommandFiresTriggers(&cmd))
+	if (CommandFiresTriggers(&evt))
 	{
 		cmd.objectId = relid;
 		cmd.objectname = stmt->relation->relname;
 		cmd.schemaname = get_namespace_name(
 			RangeVarGetCreationNamespace(stmt->relation));
 
-		ExecBeforeCommandTriggers(&cmd);
+		ExecBeforeCommandTriggers(&evt);
 	}
 
 	ATController(rel, stmt->cmds, interpretInhOption(stmt->relation->inhOpt),
 				 lockmode);
 
 	/* Call AFTER ALTER TABLE triggers */
-	if (CommandFiresAfterTriggers(&cmd))
-		ExecAfterCommandTriggers(&cmd);
+	if (CommandFiresAfterTriggers(&evt))
+		ExecAfterCommandTriggers(&evt);
 }
 
 /*
@@ -9862,7 +9862,7 @@ AlterTableNamespace(AlterObjectSchemaStmt *stmt)
 	Oid			nspOid;
 	Relation	classRel;
 	RangeVar   *newrv;
-	CommandContextData cmd;
+	EventContextData evt;
 
 	relid = RangeVarGetRelidExtended(stmt->relation, AccessExclusiveLock,
 									 stmt->missing_ok, false,
@@ -9904,15 +9904,15 @@ AlterTableNamespace(AlterObjectSchemaStmt *stmt)
 	CheckSetNamespace(oldNspOid, nspOid, RelationRelationId, relid);
 
 	/* Call BEFORE ALTER TABLE triggers */
-	InitCommandContext(&cmd, (Node *)stmt);
+	InitCommandContext(&evt, (Node *)stmt);
 
-	if (CommandFiresTriggers(&cmd))
+	if (CommandFiresTriggers(&evt))
 	{
 		cmd.objectId = relid;
 		cmd.objectname = stmt->relation->relname;
 		cmd.schemaname = get_namespace_name(oldNspOid);
 
-		ExecBeforeCommandTriggers(&cmd);
+		ExecBeforeCommandTriggers(&evt);
 	}
 
 	/* OK, modify the pg_class row and pg_depend entry */
@@ -9938,10 +9938,10 @@ AlterTableNamespace(AlterObjectSchemaStmt *stmt)
 	relation_close(rel, NoLock);
 
 	/* Call AFTER ALTER TABLE triggers */
-	if (CommandFiresAfterTriggers(&cmd))
+	if (CommandFiresAfterTriggers(&evt))
 	{
 		cmd.schemaname = get_namespace_name(nspOid);
-		ExecAfterCommandTriggers(&cmd);
+		ExecAfterCommandTriggers(&evt);
 	}
 }
 

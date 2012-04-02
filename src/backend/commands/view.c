@@ -100,7 +100,7 @@ isViewOnTempTable_walker(Node *node, void *context)
  */
 static Oid
 DefineVirtualRelation(RangeVar *relation, List *tlist, bool replace,
-					  List *options, CommandContext cmd)
+					  List *options, EventContext evt)
 {
 	Oid			viewOid;
 	LOCKMODE	lockmode;
@@ -173,8 +173,8 @@ DefineVirtualRelation(RangeVar *relation, List *tlist, bool replace,
 	{
 		Relation	rel;
 		TupleDesc	descriptor;
-		List	   *atcmds = NIL;
-		AlterTableCmd *atcmd;
+		List	   *atevts = NIL;
+		AlterTableEvt *atevt;
 
 		/* Relation is already locked, but we must build a relcache entry. */
 		rel = relation_open(viewOid, NoLock);
@@ -197,13 +197,13 @@ DefineVirtualRelation(RangeVar *relation, List *tlist, bool replace,
 		Assert(relation->relpersistence == rel->rd_rel->relpersistence);
 
 		/* Call BEFORE CREATE VIEW triggers */
-		if (CommandFiresTriggers(cmd))
+		if (CommandFiresTriggers(evt))
 		{
-			cmd->objectId = viewOid;
-			cmd->objectname = RelationGetRelationName(rel);
-			cmd->schemaname = get_namespace_name(RelationGetNamespace(rel));
+			evt->objectId = viewOid;
+			evt->objectname = RelationGetRelationName(rel);
+			evt->schemaname = get_namespace_name(RelationGetNamespace(rel));
 
-			ExecBeforeCommandTriggers(cmd);
+			ExecBeforeCommandTriggers(evt);
 		}
 
 		/*
@@ -218,10 +218,10 @@ DefineVirtualRelation(RangeVar *relation, List *tlist, bool replace,
 		 * The new options list replaces the existing options list, even
 		 * if it's empty.
 		 */
-		atcmd = makeNode(AlterTableCmd);
-		atcmd->subtype = AT_ReplaceRelOptions;
-		atcmd->def = (Node *) options;
-		atcmds = lappend(atcmds, atcmd);
+		atevt = makeNode(AlterTableEvt);
+		atevt->subtype = AT_ReplaceRelOptions;
+		atevt->def = (Node *) options;
+		atevts = lappend(atevts, atevt);
 
 		/*
 		 * If new attributes have been added, we must add pg_attribute entries
@@ -240,15 +240,15 @@ DefineVirtualRelation(RangeVar *relation, List *tlist, bool replace,
 					skip--;
 					continue;
 				}
-				atcmd = makeNode(AlterTableCmd);
-				atcmd->subtype = AT_AddColumnToView;
-				atcmd->def = (Node *) lfirst(c);
-				atcmds = lappend(atcmds, atcmd);
+				atevt = makeNode(AlterTableEvt);
+				atevt->subtype = AT_AddColumnToView;
+				atevt->def = (Node *) lfirst(c);
+				atevts = lappend(atevts, atevt);
 			}
 		}
 
 		/* OK, let's do it. */
-		AlterTableInternal(viewOid, atcmds, true);
+		AlterTableInternal(viewOid, atevts, true);
 
 		/*
 		 * Seems okay, so return the OID of the pre-existing view.
@@ -280,7 +280,7 @@ DefineVirtualRelation(RangeVar *relation, List *tlist, bool replace,
 		 * existing view, so we don't need more code to complain if "replace"
 		 * is false).
 		 */
-		relid = DefineRelation(createStmt, RELKIND_VIEW, InvalidOid, cmd);
+		relid = DefineRelation(createStmt, RELKIND_VIEW, InvalidOid, evt);
 		Assert(relid != InvalidOid);
 		return relid;
 	}
@@ -438,7 +438,7 @@ DefineView(ViewStmt *stmt, const char *queryString)
 	Query	   *viewParse;
 	Oid			viewOid;
 	RangeVar   *view;
-	CommandContextData cmd;
+	EventContextData evt;
 
 	/*
 	 * Run parse analysis to convert the raw parse tree to a Query.  Note this
@@ -530,7 +530,7 @@ DefineView(ViewStmt *stmt, const char *queryString)
 	/*
 	 * Prepare BEFORE CREATE VIEW triggers
 	 */
-	InitCommandContext(&cmd, (Node *)stmt);
+	InitCommandContext(&evt, (Node *)stmt);
 
 	/*
 	 * Create the view relation
@@ -539,7 +539,7 @@ DefineView(ViewStmt *stmt, const char *queryString)
 	 * aborted.
 	 */
 	viewOid = DefineVirtualRelation(view, viewParse->targetList,
-									stmt->replace, stmt->options, &cmd);
+									stmt->replace, stmt->options, &evt);
 
 	if (!OidIsValid(viewOid))
 		return;
@@ -563,9 +563,9 @@ DefineView(ViewStmt *stmt, const char *queryString)
 	DefineViewRules(viewOid, viewParse, stmt->replace);
 
 	/* Call AFTER CREATE VIEW triggers */
-	if (CommandFiresAfterTriggers(&cmd))
+	if (CommandFiresAfterTriggers(&evt))
 	{
 		cmd.objectId = viewOid;
-		ExecAfterCommandTriggers(&cmd);
+		ExecAfterCommandTriggers(&evt);
 	}
 }

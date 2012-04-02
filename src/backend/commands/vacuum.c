@@ -30,8 +30,8 @@
 #include "catalog/namespace.h"
 #include "catalog/pg_database.h"
 #include "catalog/pg_namespace.h"
-#include "commands/cmdtrigger.h"
 #include "commands/cluster.h"
+#include "commands/event_trigger.h"
 #include "commands/vacuum.h"
 #include "miscadmin.h"
 #include "pgstat.h"
@@ -126,10 +126,10 @@ vacuum(VacuumStmt *vacstmt, Oid relid, bool do_toast,
 	/* Call BEFORE VACUUM command triggers */
 	if (!IsAutoVacuumWorkerProcess())
 	{
-		CommandContextData cmd;
-		InitCommandContext(&cmd, (Node *)vacstmt);
+		EventContextData evt;
+		InitCommandContext(&evt, (Node *)vacstmt);
 
-		if (CommandFiresTriggers(&cmd))
+		if (CommandFiresTriggers(&evt))
 		{
 			cmd.objectId = relid;
 
@@ -138,7 +138,7 @@ vacuum(VacuumStmt *vacstmt, Oid relid, bool do_toast,
 				cmd.objectname = vacstmt->relation->relname;
 				cmd.schemaname = vacstmt->relation->schemaname;
 			}
-			ExecBeforeCommandTriggers(&cmd);
+			ExecBeforeCommandTriggers(&evt);
 		}
 	}
 

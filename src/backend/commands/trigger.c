@@ -144,7 +144,7 @@ CreateTrigger(CreateTrigStmt *stmt, const char *queryString,
 	Oid			constrrelid = InvalidOid;
 	ObjectAddress myself,
 				referenced;
-	CommandContextData cmd;
+	EventContextData evt;
 
 	rel = heap_openrv(stmt->relation, AccessExclusiveLock);
 
@@ -431,15 +431,15 @@ CreateTrigger(CreateTrigStmt *stmt, const char *queryString,
 	 */
 	if (!isInternal)
 	{
-		InitCommandContext(&cmd, (Node *)stmt);
+		InitCommandContext(&evt, (Node *)stmt);
 
-		if (CommandFiresTriggers(&cmd))
+		if (CommandFiresTriggers(&evt))
 		{
 			cmd.objectId = InvalidOid;
 			cmd.objectname = stmt->trigname;
 			cmd.schemaname = NULL; /* triggers are not schema qualified */
 
-			ExecBeforeCommandTriggers(&cmd);
+			ExecBeforeCommandTriggers(&evt);
 		}
 	}
 
@@ -780,10 +780,10 @@ CreateTrigger(CreateTrigStmt *stmt, const char *queryString,
 	heap_close(rel, NoLock);
 
 	/* Call AFTER CREATE TRIGGER triggers */
-	if (!isInternal && CommandFiresAfterTriggers(&cmd))
+	if (!isInternal && CommandFiresAfterTriggers(&evt))
 	{
 		cmd.objectId = trigoid;
-		ExecAfterCommandTriggers(&cmd);
+		ExecAfterCommandTriggers(&evt);
 	}
 	return trigoid;
 }
@@ -1232,7 +1232,7 @@ RangeVarCallbackForRenameTrigger(const RangeVar *rv, Oid relid, Oid oldrelid,
  *		update row in catalog
  */
 void
-renametrig(RenameStmt *stmt, CommandContext cmd)
+renametrig(RenameStmt *stmt, EventContext evt)
 {
 	Relation	targetrel;
 	Relation	tgrel;
@@ -1300,13 +1300,13 @@ renametrig(RenameStmt *stmt, CommandContext cmd)
 	if (HeapTupleIsValid(tuple = systable_getnext(tgscan)))
 	{
 		/* Call BEFORE ALTER TRIGGER triggers */
-		if (CommandFiresTriggers(cmd))
+		if (CommandFiresTriggers(evt))
 		{
-			cmd->objectId = HeapTupleGetOid(tuple);
-			cmd->objectname = stmt->subname;
-			cmd->schemaname = get_namespace_name(RelationGetNamespace(targetrel));
+			evt->objectId = HeapTupleGetOid(tuple);
+			evt->objectname = stmt->subname;
+			evt->schemaname = get_namespace_name(RelationGetNamespace(targetrel));
 
-			ExecBeforeCommandTriggers(cmd);
+			ExecBeforeCommandTriggers(evt);
 		}
 
 		/*
@@ -1347,10 +1347,10 @@ renametrig(RenameStmt *stmt, CommandContext cmd)
 	relation_close(targetrel, NoLock);
 
 	/* Call AFTER ALTER TRIGGER triggers */
-	if (CommandFiresAfterTriggers(cmd))
+	if (CommandFiresAfterTriggers(evt))
 	{
-		cmd->objectname = stmt->newname;
-		ExecAfterCommandTriggers(cmd);
+		evt->objectname = stmt->newname;
+		ExecAfterCommandTriggers(evt);
 	}
 }
 

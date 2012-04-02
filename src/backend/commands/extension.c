@@ -39,8 +39,8 @@
 #include "catalog/pg_namespace.h"
 #include "catalog/pg_type.h"
 #include "commands/alter.h"
-#include "commands/cmdtrigger.h"
 #include "commands/comment.h"
+#include "commands/event_trigger.h"
 #include "commands/extension.h"
 #include "commands/schemacmds.h"
 #include "funcapi.h"
@@ -1191,7 +1191,7 @@ CreateExtension(CreateExtensionStmt *stmt)
 	List	   *requiredSchemas;
 	Oid			extensionOid;
 	ListCell   *lc;
-	CommandContextData cmd;
+	EventContextData evt;
 
 	/* Check extension name validity before any filesystem access */
 	check_valid_extension_name(stmt->extname);
@@ -1199,15 +1199,15 @@ CreateExtension(CreateExtensionStmt *stmt)
 	/*
 	 * Call BEFORE CREATE EXTENSION triggers
 	 */
-	InitCommandContext(&cmd, (Node *)stmt);
+	InitCommandContext(&evt, (Node *)stmt);
 
-	if (CommandFiresTriggers(&cmd))
+	if (CommandFiresTriggers(&evt))
 	{
 		cmd.objectId = InvalidOid;
 		cmd.objectname = stmt->extname;
 		cmd.schemaname = NULL;
 
-		ExecBeforeCommandTriggers(&cmd);
+		ExecBeforeCommandTriggers(&evt);
 	}
 	/*
 	 * Check for duplicate extension name.	The unique index on
@@ -1226,10 +1226,10 @@ CreateExtension(CreateExtensionStmt *stmt)
 							stmt->extname)));
 
 			/* Call AFTER CREATE EXTENSION triggers */
-			if (CommandFiresAfterTriggers(&cmd))
+			if (CommandFiresAfterTriggers(&evt))
 			{
 				cmd.objectId = extensionOid;
-				ExecAfterCommandTriggers(&cmd);
+				ExecAfterCommandTriggers(&evt);
 			}
 			return;
 		}
@@ -1492,10 +1492,10 @@ CreateExtension(CreateExtensionStmt *stmt)
 						  versionName, updateVersions);
 
 	/* Call AFTER CREATE EXTENSION triggers */
-	if (CommandFiresAfterTriggers(&cmd))
+	if (CommandFiresAfterTriggers(&evt))
 	{
 		cmd.objectId = extensionOid;
-		ExecAfterCommandTriggers(&cmd);
+		ExecAfterCommandTriggers(&evt);
 	}
 }
 
@@ -2216,7 +2216,7 @@ pg_extension_config_dump(PG_FUNCTION_ARGS)
  * Execute ALTER EXTENSION SET SCHEMA
  */
 void
-AlterExtensionNamespace(List *names, const char *newschema, CommandContext cmd)
+AlterExtensionNamespace(List *names, const char *newschema, EventContext evt)
 {
 	char	   *extensionName;
 	Oid			extensionOid;
@@ -2278,13 +2278,13 @@ AlterExtensionNamespace(List *names, const char *newschema, CommandContext cmd)
 	systable_endscan(extScan);
 
 	/* Call BEFORE ALTER EXTENSION triggers */
-	if (CommandFiresTriggers(cmd))
+	if (CommandFiresTriggers(evt))
 	{
-		cmd->objectId = extensionOid;
-		cmd->objectname = extensionName;
-		cmd->schemaname = NULL;
+		evt->objectId = extensionOid;
+		evt->objectname = extensionName;
+		evt->schemaname = NULL;
 
-		ExecBeforeCommandTriggers(cmd);
+		ExecBeforeCommandTriggers(evt);
 	}
 
 	/*
@@ -2384,8 +2384,8 @@ AlterExtensionNamespace(List *names, const char *newschema, CommandContext cmd)
 						NamespaceRelationId, oldNspOid, nspOid);
 
 	/* Call AFTER ALTER EXTENSION triggers */
-	if (CommandFiresAfterTriggers(cmd))
-		ExecAfterCommandTriggers(cmd);
+	if (CommandFiresAfterTriggers(evt))
+		ExecAfterCommandTriggers(evt);
 }
 
 /*
@@ -2407,7 +2407,7 @@ ExecAlterExtensionStmt(AlterExtensionStmt *stmt)
 	Datum		datum;
 	bool		isnull;
 	ListCell   *lc;
-	CommandContextData cmd;
+	EventContextData evt;
 
 	/*
 	 * We use global variables to track the extension being created, so we can
@@ -2462,15 +2462,15 @@ ExecAlterExtensionStmt(AlterExtensionStmt *stmt)
 	/*
 	 * Call BEFORE ALTER EXTENSION triggers
 	 */
-	InitCommandContext(&cmd, (Node *)stmt);
+	InitCommandContext(&evt, (Node *)stmt);
 
-	if (CommandFiresTriggers(&cmd))
+	if (CommandFiresTriggers(&evt))
 	{
 		cmd.objectId = extensionOid;
 		cmd.objectname = stmt->extname;
 		cmd.schemaname = NULL;
 
-		ExecBeforeCommandTriggers(&cmd);
+		ExecBeforeCommandTriggers(&evt);
 	}
 
 	/*
@@ -2541,8 +2541,8 @@ ExecAlterExtensionStmt(AlterExtensionStmt *stmt)
 						  oldVersionName, updateVersions);
 
 	/* Call AFTER ALTER EXTENSION triggers */
-	if (CommandFiresAfterTriggers(&cmd))
-		ExecAfterCommandTriggers(&cmd);
+	if (CommandFiresAfterTriggers(&evt))
+		ExecAfterCommandTriggers(&evt);
 }
 
 /*
@@ -2712,7 +2712,7 @@ ExecAlterExtensionContentsStmt(AlterExtensionContentsStmt *stmt)
 	ObjectAddress object;
 	Relation	relation;
 	Oid			oldExtension;
-	CommandContextData cmd;
+	EventContextData evt;
 
 	extension.classId = ExtensionRelationId;
 	extension.objectId = get_extension_oid(stmt->extname, false);
@@ -2741,7 +2741,7 @@ ExecAlterExtensionContentsStmt(AlterExtensionContentsStmt *stmt)
 	 */
 	oldExtension = getExtensionOfObject(object.classId, object.objectId);
 
-	InitCommandContext(&cmd, (Node *)stmt);
+	InitCommandContext(&evt, (Node *)stmt);
 
 	/* Init the command context no matter what, that's cheap here */
 	cmd.objectId = extension.objectId;
@@ -2761,8 +2761,8 @@ ExecAlterExtensionContentsStmt(AlterExtensionContentsStmt *stmt)
 							get_extension_name(oldExtension))));
 
 		/* Call BEFORE ALTER EXTENSION command triggers */
-		if (CommandFiresTriggers(&cmd))
-			ExecBeforeCommandTriggers(&cmd);
+		if (CommandFiresTriggers(&evt))
+			ExecBeforeCommandTriggers(&evt);
 
 		/*
 		 * OK, add the dependency.
@@ -2782,8 +2782,8 @@ ExecAlterExtensionContentsStmt(AlterExtensionContentsStmt *stmt)
 							stmt->extname)));
 
 		/* Call BEFORE ALTER EXTENSION command triggers */
-		if (CommandFiresTriggers(&cmd))
-			ExecBeforeCommandTriggers(&cmd);
+		if (CommandFiresTriggers(&evt))
+			ExecBeforeCommandTriggers(&evt);
 
 		/*
 		 * OK, drop the dependency.
@@ -2804,6 +2804,6 @@ ExecAlterExtensionContentsStmt(AlterExtensionContentsStmt *stmt)
 		relation_close(relation, NoLock);
 
 	/* Call AFTER ALTER EXTENSION command triggers */
-	if (CommandFiresAfterTriggers(&cmd))
-		ExecAfterCommandTriggers(&cmd);
+	if (CommandFiresAfterTriggers(&evt))
+		ExecAfterCommandTriggers(&evt);
 }

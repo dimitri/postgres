@@ -28,8 +28,8 @@
 #include "catalog/pg_aggregate.h"
 #include "catalog/pg_proc.h"
 #include "catalog/pg_type.h"
-#include "commands/cmdtrigger.h"
 #include "commands/defrem.h"
+#include "commands/event_trigger.h"
 #include "miscadmin.h"
 #include "parser/parse_func.h"
 #include "parser/parse_type.h"
@@ -48,7 +48,7 @@
  */
 void
 DefineAggregate(List *name, List *args, bool oldstyle, List *parameters,
-				CommandContext cmd)
+				EventContext evt)
 {
 	char	   *aggName;
 	Oid			aggNamespace;
@@ -206,7 +206,7 @@ DefineAggregate(List *name, List *args, bool oldstyle, List *parameters,
 					sortoperatorName,	/* sort operator name */
 					transTypeId,	/* transition data type */
 					initval,	/* initial condition */
-					cmd);
+					evt);
 }
 
 
@@ -215,7 +215,7 @@ DefineAggregate(List *name, List *args, bool oldstyle, List *parameters,
  *		Rename an aggregate.
  */
 void
-RenameAggregate(List *name, List *args, const char *newname, CommandContext cmd)
+RenameAggregate(List *name, List *args, const char *newname, EventContext evt)
 {
 	Oid			procOid;
 	Oid			namespaceOid;
@@ -262,13 +262,13 @@ RenameAggregate(List *name, List *args, const char *newname, CommandContext cmd)
 					   get_namespace_name(namespaceOid));
 
 	/* Call BEFORE ALTER AGGREGATE triggers */
-	if (CommandFiresTriggers(cmd))
+	if (CommandFiresTriggers(evt))
 	{
-		cmd->objectId = HeapTupleGetOid(tup);
-		cmd->objectname = pstrdup(NameStr(procForm->proname));
-		cmd->schemaname = get_namespace_name(namespaceOid);
+		evt->objectId = HeapTupleGetOid(tup);
+		evt->objectname = pstrdup(NameStr(procForm->proname));
+		evt->schemaname = get_namespace_name(namespaceOid);
 
-		ExecBeforeCommandTriggers(cmd);
+		ExecBeforeCommandTriggers(evt);
 	}
 
 	/* rename */
@@ -280,10 +280,10 @@ RenameAggregate(List *name, List *args, const char *newname, CommandContext cmd)
 	heap_freetuple(tup);
 
 	/* Call AFTER ALTER AGGREGATE triggers */
-	if (CommandFiresAfterTriggers(cmd))
+	if (CommandFiresAfterTriggers(evt))
 	{
-		cmd->objectname = pstrdup(newname);
-		ExecAfterCommandTriggers(cmd);
+		evt->objectname = pstrdup(newname);
+		ExecAfterCommandTriggers(evt);
 	}
 }
 
@@ -291,7 +291,7 @@ RenameAggregate(List *name, List *args, const char *newname, CommandContext cmd)
  * Change aggregate owner
  */
 void
-AlterAggregateOwner(List *name, List *args, Oid newOwnerId, CommandContext cmd)
+AlterAggregateOwner(List *name, List *args, Oid newOwnerId, EventContext evt)
 {
 	Oid			procOid;
 
@@ -299,5 +299,5 @@ AlterAggregateOwner(List *name, List *args, Oid newOwnerId, CommandContext cmd)
 	procOid = LookupAggNameTypeNames(name, args, false);
 
 	/* The rest is just like a function */
-	AlterFunctionOwner_oid(procOid, newOwnerId, cmd);
+	AlterFunctionOwner_oid(procOid, newOwnerId, evt);
 }

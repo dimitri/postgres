@@ -47,7 +47,7 @@ typedef struct
 	CommandId	output_cid;		/* cmin to insert in output tuples */
 	int			hi_options;		/* heap_insert performance options */
 	BulkInsertState bistate;	/* bulk insert state */
-	CommandContext cmd;		/* Command Context, for command triggers */
+	EventContext evt;			/* Event Context, for event triggers */
 } DR_intorel;
 
 static void intorel_startup(DestReceiver *self, int operation, TupleDesc typeinfo);
@@ -70,14 +70,14 @@ ExecCreateTableAs(CreateTableAsStmt *stmt, const char *queryString,
 	PlannedStmt *plan;
 	QueryDesc *queryDesc;
 	ScanDirection dir;
-	CommandContextData cmd;
+	EventContextData evt;
 
 	/*
 	 * Create the tuple receiver object and insert info it will need
 	 */
-	InitCommandContext(&cmd, (Node *)stmt);
+	InitCommandContext(&evt, (Node *)stmt);
 
-	dest = CreateIntoRelDestReceiver(into, &cmd);
+	dest = CreateIntoRelDestReceiver(into, &evt);
 
 	/*
 	 * The contained Query could be a SELECT, or an EXECUTE utility command.
@@ -191,7 +191,7 @@ GetIntoRelEFlags(IntoClause *intoClause)
  * self->into to be filled in immediately for other callers.
  */
 DestReceiver *
-CreateIntoRelDestReceiver(IntoClause *intoClause, CommandContext cmd)
+CreateIntoRelDestReceiver(IntoClause *intoClause, EventContext evt)
 {
 	DR_intorel *self = (DR_intorel *) palloc0(sizeof(DR_intorel));
 
@@ -201,7 +201,7 @@ CreateIntoRelDestReceiver(IntoClause *intoClause, CommandContext cmd)
 	self->pub.rDestroy = intorel_destroy;
 	self->pub.mydest = DestIntoRel;
 	self->into = intoClause;
-	self->cmd = cmd;
+	self->evt = evt;
 	/* other private fields will be set during intorel_startup */
 
 	return (DestReceiver *) self;
@@ -215,7 +215,7 @@ intorel_startup(DestReceiver *self, int operation, TupleDesc typeinfo)
 {
 	DR_intorel *myState = (DR_intorel *) self;
 	IntoClause *into = myState->into;
-	CommandContext cmd = myState->cmd;
+EventContext evt = myState->evt;
 	CreateStmt *create;
 	Oid intoRelationId;
 	Relation intoRelationDesc;
@@ -309,7 +309,7 @@ intorel_startup(DestReceiver *self, int operation, TupleDesc typeinfo)
 	/*
 	 * Actually create the target table
 	 */
-	intoRelationId = DefineRelation(create, RELKIND_RELATION, InvalidOid, cmd);
+	intoRelationId = DefineRelation(create, RELKIND_RELATION, InvalidOid, evt);
 
 	/*
 	 * If necessary, create a TOAST table for the target table.  Note that

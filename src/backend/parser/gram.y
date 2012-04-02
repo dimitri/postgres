@@ -53,9 +53,10 @@
 
 #include "catalog/index.h"
 #include "catalog/namespace.h"
-#include "catalog/pg_cmdtrigger.h"
+#include "catalog/pg_event_trigger.h"
 #include "catalog/pg_trigger.h"
 #include "commands/defrem.h"
+#include "commands/event_trigger.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
 #include "parser/gramparse.h"
@@ -4309,15 +4310,15 @@ event_name:
 					 * size of the main parser.
 					 */
 					if (strcmp($1, "command_start") == 0)
-						$$ = EVTG_COMMAND_START;
+						$$ = E_CommandStart;
 					else if (strcmp($1, "commend_end") == 0)
-						$$ = EVTG_COMMAND_START;
+						$$ = E_CommandEnd;
 					else if (strcmp($1, "security_check") == 0)
-						$$ = EVTG_SECURITY_CHECK;
+						$$ = E_SecurityCheck;
 					else if (strcmp($1, "consistency_check") == 0)
-						$$ = EVTG_CONSISTENCY_CHECK;
+						$$ = E_ConsistencyCheck;
 					else if (strcmp($1, "name_lookup") == 0)
-						$$ = EVTG_NAME_LOOKUP;
+						$$ = E_NameLookup;
 					else
 						ereport(ERROR,
 								(errcode(ERRCODE_SYNTAX_ERROR),
@@ -4360,90 +4361,90 @@ trigger_command_list:
 
 
 trigger_command:
-		   ALTER AGGREGATE						{ $$ = EVTG_ALTER_AGGREGATE; }
-		   | ALTER COLLATION					{ $$ = EVTG_ALTER_COLLATION; }
-		   | ALTER CONVERSION_P					{ $$ = EVTG_ALTER_CONVERSION; }
-		   | ALTER DOMAIN_P						{ $$ = EVTG_ALTER_DOMAIN; }
-		   | ALTER EXTENSION					{ $$ = EVTG_ALTER_EXTENSION; }
-		   | ALTER FOREIGN DATA_P WRAPPER		{ $$ = EVTG_ALTER_FOREIGN_DATA_WRAPPER; }
-		   | ALTER FOREIGN TABLE				{ $$ = EVTG_ALTER_FOREIGN_TABLE; }
-		   | ALTER FUNCTION						{ $$ = EVTG_ALTER_FUNCTION; }
-		   | ALTER LANGUAGE						{ $$ = EVTG_ALTER_LANGUAGE; }
-		   | ALTER OPERATOR						{ $$ = EVTG_ALTER_OPERATOR; }
-		   | ALTER OPERATOR CLASS				{ $$ = EVTG_ALTER_OPERATOR_CLASS; }
-		   | ALTER OPERATOR FAMILY				{ $$ = EVTG_ALTER_OPERATOR_FAMILY; }
-		   | ALTER SEQUENCE						{ $$ = EVTG_ALTER_SEQUENCE; }
-		   | ALTER SERVER						{ $$ = EVTG_ALTER_SERVER; }
-           | ALTER SCHEMA						{ $$ = EVTG_ALTER_SCHEMA; }
-		   | ALTER TABLE						{ $$ = EVTG_ALTER_TABLE; }
-		   | ALTER TEXT_P SEARCH CONFIGURATION	{ $$ = EVTG_ALTER_TEXT_SEARCH_CONFIGURATION; }
-		   | ALTER TEXT_P SEARCH DICTIONARY		{ $$ = EVTG_ALTER_TEXT_SEARCH_DICTIONARY; }
-		   | ALTER TEXT_P SEARCH PARSER			{ $$ = EVTG_ALTER_TEXT_SEARCH_PARSER; }
-		   | ALTER TEXT_P SEARCH TEMPLATE		{ $$ = EVTG_ALTER_TEXT_SEARCH_TEMPLATE; }
-		   | ALTER TRIGGER						{ $$ = EVTG_ALTER_TRIGGER; }
-		   | ALTER TYPE_P						{ $$ = EVTG_ALTER_TYPE; }
-		   | ALTER USER MAPPING					{ $$ = EVTG_ALTER_USER_MAPPING; }
-		   | ALTER VIEW							{ $$ = EVTG_ALTER_VIEW; }
-		   | CLUSTER							{ $$ = EVTG_CLUSTER; }
-		   | CREATE AGGREGATE					{ $$ = EVTG_CREATE_AGGREGATE; }
-		   | CREATE CAST						{ $$ = EVTG_CREATE_CAST; }
-		   | CREATE COLLATION					{ $$ = EVTG_CREATE_COLLATION; }
-		   | CREATE CONVERSION_P				{ $$ = EVTG_CREATE_CONVERSION; }
-		   | CREATE DOMAIN_P					{ $$ = EVTG_CREATE_DOMAIN; }
-		   | CREATE EXTENSION					{ $$ = EVTG_CREATE_EXTENSION; }
-		   | CREATE FOREIGN DATA_P WRAPPER		{ $$ = EVTG_CREATE_FOREIGN_DATA_WRAPPER; }
-		   | CREATE FOREIGN TABLE				{ $$ = EVTG_CREATE_FOREIGN_TABLE; }
-		   | CREATE FUNCTION					{ $$ = EVTG_CREATE_FUNCTION; }
-		   | CREATE INDEX						{ $$ = EVTG_CREATE_INDEX; }
-		   | CREATE LANGUAGE					{ $$ = EVTG_CREATE_LANGUAGE; }
-		   | CREATE OPERATOR					{ $$ = EVTG_CREATE_OPERATOR; }
-		   | CREATE OPERATOR CLASS				{ $$ = EVTG_CREATE_OPERATOR_CLASS; }
-		   | CREATE OPERATOR FAMILY				{ $$ = EVTG_CREATE_OPERATOR_FAMILY; }
-		   | CREATE RULE						{ $$ = EVTG_CREATE_RULE; }
-		   | CREATE SEQUENCE					{ $$ = EVTG_CREATE_SEQUENCE; }
-		   | CREATE SERVER						{ $$ = EVTG_CREATE_SERVER; }
-           | CREATE SCHEMA						{ $$ = EVTG_CREATE_SCHEMA; }
-		   | CREATE TABLE						{ $$ = EVTG_CREATE_TABLE; }
-		   | CREATE TABLE AS					{ $$ = EVTG_CREATE_TABLE_AS; }
-		   | CREATE TEXT_P SEARCH CONFIGURATION	{ $$ = EVTG_CREATE_TEXT_SEARCH_CONFIGURATION; }
-		   | CREATE TEXT_P SEARCH DICTIONARY	{ $$ = EVTG_CREATE_TEXT_SEARCH_DICTIONARY; }
-		   | CREATE TEXT_P SEARCH PARSER		{ $$ = EVTG_CREATE_TEXT_SEARCH_PARSER; }
-		   | CREATE TEXT_P SEARCH TEMPLATE		{ $$ = EVTG_CREATE_TEXT_SEARCH_TEMPLATE; }
-		   | CREATE TRIGGER						{ $$ = EVTG_CREATE_TRIGGER; }
-		   | CREATE TYPE_P						{ $$ = EVTG_CREATE_TYPE; }
-		   | CREATE USER MAPPING				{ $$ = EVTG_CREATE_USER_MAPPING; }
-		   | CREATE VIEW						{ $$ = EVTG_CREATE_VIEW; }
-		   | DROP AGGREGATE						{ $$ = EVTG_DROP_AGGREGATE; }
-		   | DROP CAST							{ $$ = EVTG_DROP_CAST; }
-		   | DROP COLLATION						{ $$ = EVTG_DROP_COLLATION; }
-		   | DROP CONVERSION_P					{ $$ = EVTG_DROP_CONVERSION; }
-		   | DROP DOMAIN_P						{ $$ = EVTG_DROP_DOMAIN; }
-		   | DROP EXTENSION						{ $$ = EVTG_DROP_EXTENSION; }
-		   | DROP FOREIGN DATA_P WRAPPER		{ $$ = EVTG_DROP_FOREIGN_DATA_WRAPPER; }
-		   | DROP FOREIGN TABLE					{ $$ = EVTG_DROP_FOREIGN_TABLE; }
-		   | DROP FUNCTION						{ $$ = EVTG_DROP_FUNCTION; }
-		   | DROP INDEX							{ $$ = EVTG_DROP_INDEX; }
-		   | DROP LANGUAGE						{ $$ = EVTG_DROP_LANGUAGE; }
-		   | DROP OPERATOR						{ $$ = EVTG_DROP_OPERATOR; }
-		   | DROP OPERATOR CLASS				{ $$ = EVTG_DROP_OPERATOR_CLASS; }
-		   | DROP OPERATOR FAMILY				{ $$ = EVTG_DROP_OPERATOR_FAMILY; }
-		   | DROP RULE							{ $$ = EVTG_DROP_RULE; }
-		   | DROP SCHEMA						{ $$ = EVTG_DROP_SCHEMA; }
-		   | DROP SEQUENCE						{ $$ = EVTG_DROP_SEQUENCE; }
-		   | DROP SERVER						{ $$ = EVTG_DROP_SERVER; }
-		   | DROP TABLE							{ $$ = EVTG_DROP_TABLE; }
-		   | DROP TEXT_P SEARCH CONFIGURATION	{ $$ = EVTG_DROP_TEXT_SEARCH_CONFIGURATION; }
-		   | DROP TEXT_P SEARCH DICTIONARY		{ $$ = EVTG_DROP_TEXT_SEARCH_DICTIONARY; }
-		   | DROP TEXT_P SEARCH PARSER			{ $$ = EVTG_DROP_TEXT_SEARCH_PARSER; }
-		   | DROP TEXT_P SEARCH TEMPLATE		{ $$ = EVTG_DROP_TEXT_SEARCH_TEMPLATE; }
-		   | DROP TRIGGER						{ $$ = EVTG_DROP_TRIGGER; }
-		   | DROP TYPE_P						{ $$ = EVTG_DROP_TYPE; }
-		   | DROP USER MAPPING					{ $$ = EVTG_DROP_USER_MAPPING; }
-		   | DROP VIEW							{ $$ = EVTG_DROP_VIEW; }
-		   | LOAD								{ $$ = EVTG_LOAD; }
-		   | REINDEX							{ $$ = EVTG_REINDEX; }
-		   | SELECT INTO						{ $$ = EVTG_SELECT_INTO; }
-		   | VACUUM								{ $$ = EVTG_VACUUM; }
+		   ALTER AGGREGATE						{ $$ = E_AlterAggregate; }
+		   | ALTER COLLATION					{ $$ = E_AlterCollation; }
+		   | ALTER CONVERSION_P					{ $$ = E_AlterConversion; }
+		   | ALTER DOMAIN_P						{ $$ = E_AlterDomain; }
+		   | ALTER EXTENSION					{ $$ = E_AlterExtension; }
+		   | ALTER FOREIGN DATA_P WRAPPER		{ $$ = E_AlterForeignDataWrapper; }
+		   | ALTER FOREIGN TABLE				{ $$ = E_AlterForeignTable; }
+		   | ALTER FUNCTION						{ $$ = E_AlterFunction; }
+		   | ALTER LANGUAGE						{ $$ = E_AlterLanguage; }
+		   | ALTER OPERATOR						{ $$ = E_AlterOperator; }
+		   | ALTER OPERATOR CLASS				{ $$ = E_AlterOperatorClass; }
+		   | ALTER OPERATOR FAMILY				{ $$ = E_AlterOperatorFamily; }
+		   | ALTER SEQUENCE						{ $$ = E_AlterSequence; }
+		   | ALTER SERVER						{ $$ = E_AlterServer; }
+           | ALTER SCHEMA						{ $$ = E_AlterSchema; }
+		   | ALTER TABLE						{ $$ = E_AlterTable; }
+		   | ALTER TEXT_P SEARCH CONFIGURATION	{ $$ = E_AlterTextSearchConfiguration; }
+		   | ALTER TEXT_P SEARCH DICTIONARY		{ $$ = E_AlterTextSearchDictionary; }
+		   | ALTER TEXT_P SEARCH PARSER			{ $$ = E_AlterTextSearchParser; }
+		   | ALTER TEXT_P SEARCH TEMPLATE		{ $$ = E_AlterTextSearchTemplate; }
+		   | ALTER TRIGGER						{ $$ = E_AlterTrigger; }
+		   | ALTER TYPE_P						{ $$ = E_AlterType; }
+		   | ALTER USER MAPPING					{ $$ = E_AlterUserMapping; }
+		   | ALTER VIEW							{ $$ = E_AlterView; }
+		   | CLUSTER							{ $$ = E_Cluster; }
+		   | CREATE AGGREGATE					{ $$ = E_CreateAggregate; }
+		   | CREATE CAST						{ $$ = E_CreateCast; }
+		   | CREATE COLLATION					{ $$ = E_CreateCollation; }
+		   | CREATE CONVERSION_P				{ $$ = E_CreateConversion; }
+		   | CREATE DOMAIN_P					{ $$ = E_CreateDomain; }
+		   | CREATE EXTENSION					{ $$ = E_CreateExtension; }
+		   | CREATE FOREIGN DATA_P WRAPPER		{ $$ = E_CreateForeignDataWrapper; }
+		   | CREATE FOREIGN TABLE				{ $$ = E_CreateForeignTable; }
+		   | CREATE FUNCTION					{ $$ = E_CreateFunction; }
+		   | CREATE INDEX						{ $$ = E_CreateIndex; }
+		   | CREATE LANGUAGE					{ $$ = E_CreateLanguage; }
+		   | CREATE OPERATOR					{ $$ = E_CreateOperator; }
+		   | CREATE OPERATOR CLASS				{ $$ = E_CreateOperatorClass; }
+		   | CREATE OPERATOR FAMILY				{ $$ = E_CreateOperatorFamily; }
+		   | CREATE RULE						{ $$ = E_CreateRule; }
+		   | CREATE SEQUENCE					{ $$ = E_CreateSequence; }
+		   | CREATE SERVER						{ $$ = E_CreateServer; }
+           | CREATE SCHEMA						{ $$ = E_CreateSchema; }
+		   | CREATE TABLE						{ $$ = E_CreateTable; }
+		   | CREATE TABLE AS					{ $$ = E_CreateTableAs; }
+		   | CREATE TEXT_P SEARCH CONFIGURATION	{ $$ = E_CreateTextSearchConfiguration; }
+		   | CREATE TEXT_P SEARCH DICTIONARY	{ $$ = E_CreateTextSearchDictionary; }
+		   | CREATE TEXT_P SEARCH PARSER		{ $$ = E_CreateTextSearchParser; }
+		   | CREATE TEXT_P SEARCH TEMPLATE		{ $$ = E_CreateTextSearchTemplate; }
+		   | CREATE TRIGGER						{ $$ = E_CreateTrigger; }
+		   | CREATE TYPE_P						{ $$ = E_CreateType; }
+		   | CREATE USER MAPPING				{ $$ = E_CreateUserMapping; }
+		   | CREATE VIEW						{ $$ = E_CreateView; }
+		   | DROP AGGREGATE						{ $$ = E_DropAggregate; }
+		   | DROP CAST							{ $$ = E_DropCast; }
+		   | DROP COLLATION						{ $$ = E_DropCollation; }
+		   | DROP CONVERSION_P					{ $$ = E_DropConversion; }
+		   | DROP DOMAIN_P						{ $$ = E_DropDomain; }
+		   | DROP EXTENSION						{ $$ = E_DropExtension; }
+		   | DROP FOREIGN DATA_P WRAPPER		{ $$ = E_DropForeignDataWrapper; }
+		   | DROP FOREIGN TABLE					{ $$ = E_DropForeignTable; }
+		   | DROP FUNCTION						{ $$ = E_DropFunction; }
+		   | DROP INDEX							{ $$ = E_DropIndex; }
+		   | DROP LANGUAGE						{ $$ = E_DropLanguage; }
+		   | DROP OPERATOR						{ $$ = E_DropOperator; }
+		   | DROP OPERATOR CLASS				{ $$ = E_DropOperatorClass; }
+		   | DROP OPERATOR FAMILY				{ $$ = E_DropOperatorFamily; }
+		   | DROP RULE							{ $$ = E_DropRule; }
+		   | DROP SCHEMA						{ $$ = E_DropSchema; }
+		   | DROP SEQUENCE						{ $$ = E_DropSequence; }
+		   | DROP SERVER						{ $$ = E_DropServer; }
+		   | DROP TABLE							{ $$ = E_DropTable; }
+		   | DROP TEXT_P SEARCH CONFIGURATION	{ $$ = E_DropTextSearchConfiguration; }
+		   | DROP TEXT_P SEARCH DICTIONARY		{ $$ = E_DropTextSearchDictionary; }
+		   | DROP TEXT_P SEARCH PARSER			{ $$ = E_DropTextSearchParser; }
+		   | DROP TEXT_P SEARCH TEMPLATE		{ $$ = E_DropTextSearchTemplate; }
+		   | DROP TRIGGER						{ $$ = E_DropTrigger; }
+		   | DROP TYPE_P						{ $$ = E_DropType; }
+		   | DROP USER MAPPING					{ $$ = E_DropUserMapping; }
+		   | DROP VIEW							{ $$ = E_DropView; }
+		   | LOAD								{ $$ = E_Load; }
+		   | REINDEX							{ $$ = E_Reindex; }
+		   | SELECT INTO						{ $$ = E_SelectInto; }
+		   | VACUUM								{ $$ = E_Vacuum; }
 		;
 
 DropEventTrigStmt:

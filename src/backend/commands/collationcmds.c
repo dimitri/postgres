@@ -22,10 +22,10 @@
 #include "catalog/pg_collation.h"
 #include "catalog/pg_collation_fn.h"
 #include "commands/alter.h"
-#include "commands/cmdtrigger.h"
 #include "commands/collationcmds.h"
 #include "commands/dbcommands.h"
 #include "commands/defrem.h"
+#include "commands/event_trigger.h"
 #include "mb/pg_wchar.h"
 #include "miscadmin.h"
 #include "utils/builtins.h"
@@ -35,13 +35,13 @@
 #include "utils/syscache.h"
 
 static void AlterCollationOwner_internal(Relation rel, Oid collationOid,
-										 Oid newOwnerId, CommandContext cmd);
+										 Oid newOwnerId, EventContext evt);
 
 /*
  * CREATE COLLATION
  */
 void
-DefineCollation(List *names, List *parameters, CommandContext cmd)
+DefineCollation(List *names, List *parameters, EventContext evt)
 {
 	char	   *collName;
 	Oid			collNamespace;
@@ -139,7 +139,7 @@ DefineCollation(List *names, List *parameters, CommandContext cmd)
 							 GetDatabaseEncoding(),
 							 collcollate,
 							 collctype,
-							 cmd);
+							 evt);
 
 	/* before or instead of command trigger might have cancelled the command */
 	if (OidIsValid(newoid))
@@ -236,7 +236,7 @@ RenameCollation(List *name, const char *newname, CommandContext cmd)
  * Change collation owner, by name
  */
 void
-AlterCollationOwner(List *name, Oid newOwnerId, CommandContext cmd)
+AlterCollationOwner(List *name, Oid newOwnerId, EventContext evt)
 {
 	Oid			collationOid;
 	Relation	rel;
@@ -245,7 +245,7 @@ AlterCollationOwner(List *name, Oid newOwnerId, CommandContext cmd)
 
 	collationOid = get_collation_oid(name, false);
 
-	AlterCollationOwner_internal(rel, collationOid, newOwnerId, cmd);
+	AlterCollationOwner_internal(rel, collationOid, newOwnerId, evt);
 
 	heap_close(rel, RowExclusiveLock);
 }
@@ -254,13 +254,13 @@ AlterCollationOwner(List *name, Oid newOwnerId, CommandContext cmd)
  * Change collation owner, by oid
  */
 void
-AlterCollationOwner_oid(Oid collationOid, Oid newOwnerId, CommandContext cmd)
+AlterCollationOwner_oid(Oid collationOid, Oid newOwnerId, EventContext evt)
 {
 	Relation	rel;
 
 	rel = heap_open(CollationRelationId, RowExclusiveLock);
 
-	AlterCollationOwner_internal(rel, collationOid, newOwnerId, cmd);
+	AlterCollationOwner_internal(rel, collationOid, newOwnerId, evt);
 
 	heap_close(rel, RowExclusiveLock);
 }
@@ -273,7 +273,7 @@ AlterCollationOwner_oid(Oid collationOid, Oid newOwnerId, CommandContext cmd)
  */
 static void
 AlterCollationOwner_internal(Relation rel, Oid collationOid, Oid newOwnerId,
-							 CommandContext cmd)
+							 EventContext evt)
 {
 	Form_pg_collation collForm;
 	HeapTuple	tup;
@@ -315,13 +315,13 @@ AlterCollationOwner_internal(Relation rel, Oid collationOid, Oid newOwnerId,
 		}
 
 		/* Call BEFORE ALTER COLLATION triggers */
-		if (CommandFiresTriggers(cmd))
+		if (CommandFiresTriggers(evt))
 		{
-			cmd->objectId = HeapTupleGetOid(tup);
-			cmd->objectname = pstrdup(NameStr(collForm->collname));
-			cmd->schemaname = get_namespace_name(collForm->collnamespace);
+			evt->objectId = HeapTupleGetOid(tup);
+			evt->objectname = pstrdup(NameStr(collForm->collname));
+			evt->schemaname = get_namespace_name(collForm->collnamespace);
 
-			ExecBeforeCommandTriggers(cmd);
+			ExecBeforeCommandTriggers(evt);
 		}
 
 		/*
@@ -338,8 +338,8 @@ AlterCollationOwner_internal(Relation rel, Oid collationOid, Oid newOwnerId,
 								newOwnerId);
 
 		/* Call AFTER ALTER COLLATION triggers */
-		if (CommandFiresAfterTriggers(cmd))
-			ExecAfterCommandTriggers(cmd);
+		if (CommandFiresAfterTriggers(evt))
+			ExecAfterCommandTriggers(evt);
 	}
 	heap_freetuple(tup);
 }
@@ -348,7 +348,7 @@ AlterCollationOwner_internal(Relation rel, Oid collationOid, Oid newOwnerId,
  * Execute ALTER COLLATION SET SCHEMA
  */
 void
-AlterCollationNamespace(List *name, const char *newschema, CommandContext cmd)
+AlterCollationNamespace(List *name, const char *newschema, EventContext evt)
 {
 	Oid			collOid,
 				nspOid;
@@ -357,14 +357,14 @@ AlterCollationNamespace(List *name, const char *newschema, CommandContext cmd)
 
 	nspOid = LookupCreationNamespace(newschema);
 
-	AlterCollationNamespace_oid(collOid, nspOid, cmd);
+	AlterCollationNamespace_oid(collOid, nspOid, evt);
 }
 
 /*
  * Change collation schema, by oid
  */
 Oid
-AlterCollationNamespace_oid(Oid collOid, Oid newNspOid, CommandContext cmd)
+AlterCollationNamespace_oid(Oid collOid, Oid newNspOid, EventContext evt)
 {
 	Oid			oldNspOid;
 	Relation	rel;
@@ -410,7 +410,7 @@ AlterCollationNamespace_oid(Oid collOid, Oid newNspOid, CommandContext cmd)
 									 Anum_pg_collation_collname,
 									 Anum_pg_collation_collnamespace,
 									 Anum_pg_collation_collowner,
-									 ACL_KIND_COLLATION, cmd);
+									 ACL_KIND_COLLATION, evt);
 
 	heap_close(rel, RowExclusiveLock);
 

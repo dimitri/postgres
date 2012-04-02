@@ -20,11 +20,11 @@
 #include "catalog/pg_largeobject.h"
 #include "catalog/pg_namespace.h"
 #include "commands/alter.h"
-#include "commands/cmdtrigger.h"
 #include "commands/collationcmds.h"
 #include "commands/conversioncmds.h"
 #include "commands/dbcommands.h"
 #include "commands/defrem.h"
+#include "commands/event_trigger.h"
 #include "commands/extension.h"
 #include "commands/proclang.h"
 #include "commands/schemacmds.h"
@@ -48,25 +48,25 @@
 void
 ExecRenameStmt(RenameStmt *stmt)
 {
-	CommandContextData cmd;
-	InitCommandContext(&cmd, (Node *)stmt);
+	EventContextData evt;
+	InitCommandContext(&evt, (Node *)stmt);
 
 	switch (stmt->renameType)
 	{
 		case OBJECT_AGGREGATE:
-			RenameAggregate(stmt->object, stmt->objarg, stmt->newname, &cmd);
+			RenameAggregate(stmt->object, stmt->objarg, stmt->newname, &evt);
 			break;
 
 		case OBJECT_COLLATION:
-			RenameCollation(stmt->object, stmt->newname, &cmd);
+			RenameCollation(stmt->object, stmt->newname, &evt);
 			break;
 
 		case OBJECT_CONSTRAINT:
-			RenameConstraint(stmt, &cmd);
+			RenameConstraint(stmt, &evt);
 			break;
 
 		case OBJECT_CONVERSION:
-			RenameConversion(stmt->object, stmt->newname, &cmd);
+			RenameConversion(stmt->object, stmt->newname, &evt);
 			break;
 
 		case OBJECT_EVENT_TRIGGER:
@@ -78,27 +78,27 @@ ExecRenameStmt(RenameStmt *stmt)
 			break;
 
 		case OBJECT_FDW:
-			RenameForeignDataWrapper(stmt->subname, stmt->newname, &cmd);
+			RenameForeignDataWrapper(stmt->subname, stmt->newname, &evt);
 			break;
 
 		case OBJECT_FOREIGN_SERVER:
-			RenameForeignServer(stmt->subname, stmt->newname, &cmd);
+			RenameForeignServer(stmt->subname, stmt->newname, &evt);
 			break;
 
 		case OBJECT_FUNCTION:
-			RenameFunction(stmt->object, stmt->objarg, stmt->newname, &cmd);
+			RenameFunction(stmt->object, stmt->objarg, stmt->newname, &evt);
 			break;
 
 		case OBJECT_LANGUAGE:
-			RenameLanguage(stmt->subname, stmt->newname, &cmd);
+			RenameLanguage(stmt->subname, stmt->newname, &evt);
 			break;
 
 		case OBJECT_OPCLASS:
-			RenameOpClass(stmt->object, stmt->subname, stmt->newname, &cmd);
+			RenameOpClass(stmt->object, stmt->subname, stmt->newname, &evt);
 			break;
 
 		case OBJECT_OPFAMILY:
-			RenameOpFamily(stmt->object, stmt->subname, stmt->newname, &cmd);
+			RenameOpFamily(stmt->object, stmt->subname, stmt->newname, &evt);
 			break;
 
 		case OBJECT_ROLE:
@@ -106,7 +106,7 @@ ExecRenameStmt(RenameStmt *stmt)
 			break;
 
 		case OBJECT_SCHEMA:
-			RenameSchema(stmt->subname, stmt->newname, &cmd);
+			RenameSchema(stmt->subname, stmt->newname, &evt);
 			break;
 
 		case OBJECT_TABLESPACE:
@@ -118,37 +118,37 @@ ExecRenameStmt(RenameStmt *stmt)
 		case OBJECT_VIEW:
 		case OBJECT_INDEX:
 		case OBJECT_FOREIGN_TABLE:
-			RenameRelation(stmt, &cmd);
+			RenameRelation(stmt, &evt);
 			break;
 
 		case OBJECT_COLUMN:
 		case OBJECT_ATTRIBUTE:
-			renameatt(stmt, &cmd);
+			renameatt(stmt, &evt);
 			break;
 
 		case OBJECT_TRIGGER:
-			renametrig(stmt, &cmd);
+			renametrig(stmt, &evt);
 			break;
 
 		case OBJECT_TSPARSER:
-			RenameTSParser(stmt->object, stmt->newname, &cmd);
+			RenameTSParser(stmt->object, stmt->newname, &evt);
 			break;
 
 		case OBJECT_TSDICTIONARY:
-			RenameTSDictionary(stmt->object, stmt->newname, &cmd);
+			RenameTSDictionary(stmt->object, stmt->newname, &evt);
 			break;
 
 		case OBJECT_TSTEMPLATE:
-			RenameTSTemplate(stmt->object, stmt->newname, &cmd);
+			RenameTSTemplate(stmt->object, stmt->newname, &evt);
 			break;
 
 		case OBJECT_TSCONFIGURATION:
-			RenameTSConfiguration(stmt->object, stmt->newname, &cmd);
+			RenameTSConfiguration(stmt->object, stmt->newname, &evt);
 			break;
 
 		case OBJECT_DOMAIN:
 		case OBJECT_TYPE:
-			RenameType(stmt, &cmd);
+			RenameType(stmt, &evt);
 			break;
 
 		default:
@@ -164,43 +164,43 @@ ExecRenameStmt(RenameStmt *stmt)
 void
 ExecAlterObjectSchemaStmt(AlterObjectSchemaStmt *stmt)
 {
-	CommandContextData cmd;
-	InitCommandContext(&cmd, (Node *)stmt);
+	EventContextData evt;
+	InitCommandContext(&evt, (Node *)stmt);
 
 	switch (stmt->objectType)
 	{
 		case OBJECT_AGGREGATE:
 			AlterFunctionNamespace(stmt->object, stmt->objarg, true,
-								   stmt->newschema, &cmd);
+								   stmt->newschema, &evt);
 			break;
 
 		case OBJECT_COLLATION:
-			AlterCollationNamespace(stmt->object, stmt->newschema, &cmd);
+			AlterCollationNamespace(stmt->object, stmt->newschema, &evt);
 			break;
 
 		case OBJECT_CONVERSION:
-			AlterConversionNamespace(stmt->object, stmt->newschema, &cmd);
+			AlterConversionNamespace(stmt->object, stmt->newschema, &evt);
 			break;
 
 		case OBJECT_EXTENSION:
-			AlterExtensionNamespace(stmt->object, stmt->newschema, &cmd);
+			AlterExtensionNamespace(stmt->object, stmt->newschema, &evt);
 			break;
 
 		case OBJECT_FUNCTION:
 			AlterFunctionNamespace(stmt->object, stmt->objarg, false,
-								   stmt->newschema, &cmd);
+								   stmt->newschema, &evt);
 			break;
 
 		case OBJECT_OPERATOR:
-			AlterOperatorNamespace(stmt->object, stmt->objarg, stmt->newschema, &cmd);
+			AlterOperatorNamespace(stmt->object, stmt->objarg, stmt->newschema, &evt);
 			break;
 
 		case OBJECT_OPCLASS:
-			AlterOpClassNamespace(stmt->object, stmt->addname, stmt->newschema, &cmd);
+			AlterOpClassNamespace(stmt->object, stmt->addname, stmt->newschema, &evt);
 			break;
 
 		case OBJECT_OPFAMILY:
-			AlterOpFamilyNamespace(stmt->object, stmt->addname, stmt->newschema, &cmd);
+			AlterOpFamilyNamespace(stmt->object, stmt->addname, stmt->newschema, &evt);
 			break;
 
 		case OBJECT_SEQUENCE:
@@ -211,24 +211,24 @@ ExecAlterObjectSchemaStmt(AlterObjectSchemaStmt *stmt)
 			break;
 
 		case OBJECT_TSPARSER:
-			AlterTSParserNamespace(stmt->object, stmt->newschema, &cmd);
+			AlterTSParserNamespace(stmt->object, stmt->newschema, &evt);
 			break;
 
 		case OBJECT_TSDICTIONARY:
-			AlterTSDictionaryNamespace(stmt->object, stmt->newschema, &cmd);
+			AlterTSDictionaryNamespace(stmt->object, stmt->newschema, &evt);
 			break;
 
 		case OBJECT_TSTEMPLATE:
-			AlterTSTemplateNamespace(stmt->object, stmt->newschema, &cmd);
+			AlterTSTemplateNamespace(stmt->object, stmt->newschema, &evt);
 			break;
 
 		case OBJECT_TSCONFIGURATION:
-			AlterTSConfigurationNamespace(stmt->object, stmt->newschema, &cmd);
+			AlterTSConfigurationNamespace(stmt->object, stmt->newschema, &evt);
 			break;
 
 		case OBJECT_TYPE:
 		case OBJECT_DOMAIN:
-			AlterTypeNamespace(stmt->object, stmt->newschema, stmt->objectType, &cmd);
+			AlterTypeNamespace(stmt->object, stmt->newschema, stmt->objectType, &evt);
 			break;
 
 		default:
@@ -252,7 +252,7 @@ ExecAlterObjectSchemaStmt(AlterObjectSchemaStmt *stmt)
  * object doesn't have a schema.
  *
  * Doesn't run any command trigger for those sub-commands, so just pass a NULL
- * CommandContext to functions implementing the ALTER.
+ * EventContext to functions implementing the ALTER.
  */
 Oid
 AlterObjectNamespace_oid(Oid classId, Oid objid, Oid nspOid)
@@ -367,7 +367,7 @@ Oid
 AlterObjectNamespace(Relation rel, int oidCacheId, int nameCacheId,
 					 Oid objid, Oid nspOid,
 					 int Anum_name, int Anum_namespace, int Anum_owner,
-					 AclObjectKind acl_kind, CommandContext cmd)
+					 AclObjectKind acl_kind, EventContext evt)
 {
 	Oid			classId = RelationGetRelid(rel);
 	Oid			oldNspOid;
@@ -438,13 +438,13 @@ AlterObjectNamespace(Relation rel, int oidCacheId, int nameCacheId,
 						get_namespace_name(nspOid))));
 
 	/* Call BEFORE ALTER OBJECT triggers */
-	if (CommandFiresTriggers(cmd))
+	if (CommandFiresTriggers(evt))
 	{
-		cmd->objectId = objid;
-		cmd->objectname = pstrdup(NameStr(*(DatumGetName(name))));
-		cmd->schemaname = get_namespace_name(oldNspOid);
+		evt->objectId = objid;
+		evt->objectname = pstrdup(NameStr(*(DatumGetName(name))));
+		evt->schemaname = get_namespace_name(oldNspOid);
 
-		ExecBeforeCommandTriggers(cmd);
+		ExecBeforeCommandTriggers(evt);
 	}
 
 	/* Build modified tuple */
@@ -470,10 +470,10 @@ AlterObjectNamespace(Relation rel, int oidCacheId, int nameCacheId,
 						NamespaceRelationId, oldNspOid, nspOid);
 
 	/* Call AFTER ALTER OBJECT triggers */
-	if (CommandFiresAfterTriggers(cmd))
+	if (CommandFiresAfterTriggers(evt))
 	{
-		cmd->schemaname = get_namespace_name(nspOid);
-		ExecAfterCommandTriggers(cmd);
+		evt->schemaname = get_namespace_name(nspOid);
+		ExecAfterCommandTriggers(evt);
 	}
 	return oldNspOid;
 }
@@ -487,22 +487,22 @@ void
 ExecAlterOwnerStmt(AlterOwnerStmt *stmt)
 {
 	Oid			newowner = get_role_oid(stmt->newowner, false);
-	CommandContextData cmd;
+	EventContextData evt;
 
-	InitCommandContext(&cmd, (Node *)stmt);
+	InitCommandContext(&evt, (Node *)stmt);
 
 	switch (stmt->objectType)
 	{
 		case OBJECT_AGGREGATE:
-			AlterAggregateOwner(stmt->object, stmt->objarg, newowner, &cmd);
+			AlterAggregateOwner(stmt->object, stmt->objarg, newowner, &evt);
 			break;
 
 		case OBJECT_COLLATION:
-			AlterCollationOwner(stmt->object, newowner, &cmd);
+			AlterCollationOwner(stmt->object, newowner, &evt);
 			break;
 
 		case OBJECT_CONVERSION:
-			AlterConversionOwner(stmt->object, newowner, &cmd);
+			AlterConversionOwner(stmt->object, newowner, &evt);
 			break;
 
 		case OBJECT_DATABASE:
@@ -510,11 +510,11 @@ ExecAlterOwnerStmt(AlterOwnerStmt *stmt)
 			break;
 
 		case OBJECT_FUNCTION:
-			AlterFunctionOwner(stmt->object, stmt->objarg, newowner, &cmd);
+			AlterFunctionOwner(stmt->object, stmt->objarg, newowner, &evt);
 			break;
 
 		case OBJECT_LANGUAGE:
-			AlterLanguageOwner(strVal(linitial(stmt->object)), newowner, &cmd);
+			AlterLanguageOwner(strVal(linitial(stmt->object)), newowner, &evt);
 			break;
 
 		case OBJECT_LARGEOBJECT:
@@ -526,19 +526,19 @@ ExecAlterOwnerStmt(AlterOwnerStmt *stmt)
 			AlterOperatorOwner(stmt->object,
 							   (TypeName *) linitial(stmt->objarg),
 							   (TypeName *) lsecond(stmt->objarg),
-							   newowner, &cmd);
+							   newowner, &evt);
 			break;
 
 		case OBJECT_OPCLASS:
-			AlterOpClassOwner(stmt->object, stmt->addname, newowner, &cmd);
+			AlterOpClassOwner(stmt->object, stmt->addname, newowner, &evt);
 			break;
 
 		case OBJECT_OPFAMILY:
-			AlterOpFamilyOwner(stmt->object, stmt->addname, newowner, &cmd);
+			AlterOpFamilyOwner(stmt->object, stmt->addname, newowner, &evt);
 			break;
 
 		case OBJECT_SCHEMA:
-			AlterSchemaOwner(strVal(linitial(stmt->object)), newowner, &cmd);
+			AlterSchemaOwner(strVal(linitial(stmt->object)), newowner, &evt);
 			break;
 
 		case OBJECT_TABLESPACE:
@@ -547,24 +547,24 @@ ExecAlterOwnerStmt(AlterOwnerStmt *stmt)
 
 		case OBJECT_TYPE:
 		case OBJECT_DOMAIN:		/* same as TYPE */
-			AlterTypeOwner(stmt->object, newowner, stmt->objectType, &cmd);
+			AlterTypeOwner(stmt->object, newowner, stmt->objectType, &evt);
 			break;
 
 		case OBJECT_TSDICTIONARY:
-			AlterTSDictionaryOwner(stmt->object, newowner, &cmd);
+			AlterTSDictionaryOwner(stmt->object, newowner, &evt);
 			break;
 
 		case OBJECT_TSCONFIGURATION:
-			AlterTSConfigurationOwner(stmt->object, newowner, &cmd);
+			AlterTSConfigurationOwner(stmt->object, newowner, &evt);
 			break;
 
 		case OBJECT_FDW:
 			AlterForeignDataWrapperOwner(strVal(linitial(stmt->object)),
-										 newowner, &cmd);
+										 newowner, &evt);
 			break;
 
 		case OBJECT_FOREIGN_SERVER:
-			AlterForeignServerOwner(strVal(linitial(stmt->object)), newowner, &cmd);
+			AlterForeignServerOwner(strVal(linitial(stmt->object)), newowner, &evt);
 			break;
 
 		default:
