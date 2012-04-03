@@ -31,7 +31,7 @@
 CATALOG(pg_event_trigger,3466)
 {
 	NameData	evtname;		/* trigger's name */
-	NameData    evtevent;		/* trigger's event */
+	int2	    evtevent;		/* trigger's event */
 	Oid			evtfoid;		/* OID of function to be called */
 	char		evttype;		/* BEFORE/INSTEAD OF */
 	char		evtenabled;		/* trigger's firing configuration WRT
@@ -59,6 +59,132 @@ typedef FormData_pg_event_trigger *Form_pg_event_trigger;
 #define Anum_pg_event_trigger_evttype			4
 #define Anum_pg_event_trigger_evtenabled		5
 #define Anum_pg_event_trigger_evttags			6
+
+/*
+ * Times at which an event trigger can be fired. These are the
+ * possible values for pg_event_trigger.evtevent.
+ *
+ * We don't use 0 here because of how we manage the backend local caching of
+ * event triggers. That cache is an array of commands that contains an array of
+ * events that contains a list of function OIDs.
+ *
+ * To iterate over each function oid to call at a specific event timing for a
+ * given command, it's then as easy as:
+ *
+ *  foreach(cell, EventCommandTriggerCache[TrigEventCommand][TrigEvent])
+ *
+ * The ordering here is important, in order to be able to refuse some cases
+ * (late trigger are not possible in commands implementing their own
+ * transaction control behavior, such as CLUSTER or CREATE INDEX CONCURRENTLY.
+ */
+typedef enum TrigEvent
+{
+	E_CommandStart       = 1,
+	E_SecurityCheck      = 10,
+	E_ConsistencyCheck   = 20,
+	E_NameLookup         = 30,
+	E_CommandEnd         = 50,
+} TrigEvent;
+
+#define EVTG_MAX_TRIG_EVENT 50
+
+/*
+ * Supported commands
+ */
+typedef enum TrigEventCommand
+{
+	E_ANY = 1,
+
+	E_AlterAggregate   = 100,
+	E_AlterCollation,
+	E_AlterConversion,
+	E_AlterDomain,
+	E_AlterExtension,
+	E_AlterForeignDataWrapper,
+	E_AlterForeignTable,
+	E_AlterFunction,
+	E_AlterLanguage,
+	E_AlterOperator,
+	E_AlterOperatorClass,
+	E_AlterOperatorFamily,
+	E_AlterSchema,
+	E_AlterSequence,
+	E_AlterServer,
+	E_AlterTable,
+	E_AlterTextSearcharser,
+	E_AlterTextSearchConfiguration,
+	E_AlterTextSearchDictionary,
+	E_AlterTextSearchTemplate,
+	E_AlterTrigger,
+	E_AlterType,
+	E_AlterUserMapping,
+	E_AlterView,
+
+	E_Cluster = 300,
+	E_Load,
+	E_Reindex,
+	E_SelectInto,
+	E_Vacuum,
+
+	E_CreateAggregate = 400,
+	E_CreateCast,
+	E_CreateCollation,
+	E_CreateConversion,
+	E_CreateDomain,
+	E_CreateExtension,
+	E_CreateForeignDataWrapper,
+	E_CreateForeignTable,
+	E_CreateFunction,
+	E_CreateIndex,
+	E_CreateLanguage,
+	E_CreateOperator,
+	E_CreateOperatorClass,
+	E_CreateOperatorFamily,
+	E_CreateRule,
+	E_CreateSchema,
+	E_CreateSequence,
+	E_CreateServer,
+	E_CreateTable,
+	E_CreateTableAs,
+	E_CreateTextSearcharser,
+	E_CreateTextSearchConfiguration,
+	E_CreateTextSearchDictionary,
+	E_CreateTextSearchTemplate,
+	E_CreateTrigger,
+	E_CreateType,
+	E_CreateUserMapping,
+	E_CreateView,
+
+	E_DropAggregate = 600,
+	E_DropCast,
+	E_DropCollation,
+	E_DropConversion,
+	E_DropDomain,
+	E_DropExtension,
+	E_DropForeignDataWrapper,
+	E_DropForeignTable,
+	E_DropFunction,
+	E_DropIndex,
+	E_DropLanguage,
+	E_DropOperator,
+	E_DropOperatorClass,
+	E_DropOperatorFamily,
+	E_DropRule,
+	E_DropSchema,
+	E_DropSequence,
+	E_DropServer,
+	E_DropTable,
+	E_DropTextSearcharser,
+	E_DropTextSearchConfiguration,
+	E_DropTextSearchDictionary,
+	E_DropTextSearchTemplate,
+	E_DropTrigger,
+	E_DropType,
+	E_DropUserMapping,
+	E_DropView
+} TrigEventCommand;
+
+#define EVTG_MAX_TRIG_EVENT_COMMAND 650
 
 /*
  * Times at which an event trigger can be fired. These are the

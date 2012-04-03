@@ -236,7 +236,7 @@ DECLARE_UNIQUE_INDEX(pg_trigger_oid_index, 2702, on pg_trigger using btree(oid o
 
 DECLARE_UNIQUE_INDEX(pg_event_trigger_evtname_index, 3467, on pg_event_trigger using btree(evtname name_ops));
 #define EventTriggerNameIndexId  3467
-DECLARE_INDEX(pg_event_trigger_evtcommand_index, 3468, on pg_event_trigger using btree(ctgevent name_ops));
+DECLARE_INDEX(pg_event_trigger_evtcommand_index, 3468, on pg_event_trigger using btree(ctgevent int2_ops));
 #define EventTriggerEventNameIndexId 3468
 DECLARE_UNIQUE_INDEX(pg_event_trigger_oid_index, 3469, on pg_event_trigger using btree(oid oid_ops));
 #define EventTriggerOidIndexId  3469

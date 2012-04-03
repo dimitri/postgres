@@ -40,9 +40,19 @@
 #include "tcop/utility.h"
 
 /*
- * Event Trigger cache.
+ * Cache the event triggers in a format that's suitable to finding which
+ * function to call at "hook" points in the code. The catalogs are not helpful
+ * at search time, because we can't both edit a single catalog entry per each
+ * command, have a user friendly syntax and find what we need in a single index
+ * scan.
+ *
+ * This cache is indexed by Event Command id (see pg_event_trigger.h) then
+ * Event Id. It's containing a list of function oid.
  */
-List *EventCommandTriggerCache[][] = NULL;
+List *
+EventCommandTriggerCache[EVTG_MAX_TRIG_EVENT_COMMAND][EVTG_MAX_TRIG_EVENT];
+
+bool event_trigger_cache_is_stalled = true;
 
 static void check_event_trigger_name(const char *trigname, Relation tgrel);
 
@@ -456,9 +466,81 @@ check_event_trigger_name(const char *trigname, Relation tgrel)
  *  foreach(cell, EventCommandTriggerCache[TrigEventCommand][TrigEvent])
  */
 void
-BuildEventTriggerCache()
+BuildEventTriggerCache(bool force_rebuild)
 {
+	Relation	rel, irel;
 
+	if (event_trigger_cache_is_stalled || force_rebuild)
+	{
+		int i, j;
+		for(i=1; i < EVTG_MAX_TRIG_EVENT_COMMAND; i++)
+			for(j=1; j < EVTG_MAX_TRIG_EVENT; j++)
+				EventCommandTriggerCache[i][j] = NIL;
+	}
+
+	rel = heap_open(EventTriggerRelationId, AccessShareLock);
+	irel = index_open(EventTriggerNameIndexId, AccessShareLock);
+
+	indexScan = index_beginscan(rel, irel, SnapshotNow, 0, 0);
+
+	/* we use a full indexscan to guarantee that we see event triggers ordered
+	 * by name, this way we only even have to append the trigger's function Oid
+	 * to the target cache Oid list.
+	 */
+	while (HeapTupleIsValid(tuple = index_getnext(indexScan, ForwardScanDirection)))
+	{
+		Form_pg_event_trigger form = (Form_pg_event_trigger) GETSTRUCT(tuple);
+		Datum		adatum;
+		bool		isNull;
+		TrigEvent event;
+		TrigEventCommand command;
+
+		event = form->evtevent;
+
+		adatum = heap_getattr(tuple, Anum_pg_event_trigger_evttags,
+							  RelationGetDescr(rel), &isNull);
+
+		if (isNull)
+		{
+			/* we store triggers for all commands with command=0
+			 *
+			 * event triggers created without WHEN clause are targetting all
+			 * columns
+			 */
+			command = 0;
+			EventCommandTriggerCache[command][event] =
+				lappend_oid(EventCommandTriggerCache[command][event],
+							form->evtfoid);
+		}
+		else
+		{
+			ArrayType  *arr;
+			int16	   *tags;
+
+			arr = DatumGetArrayTypeP(adatum);		/* ensure not toasted */
+			numkeys = ARR_DIMS(arr)[0];
+
+			if (ARR_NDIM(arr) != 1 ||
+				numkeys < 0 ||
+				ARR_HASNULL(arr) ||
+				ARR_ELEMTYPE(arr) != INT2OID)
+				elog(ERROR, "evttags is not a 1-D smallint array");
+
+			tags = (int16 *) ARR_DATA_PTR(arr);
+
+			for (i = 0; i < numkeys; i++)
+			{
+				 command = tags[i];
+
+				 EventCommandTriggerCache[command][event] =
+					 lappend_oid(EventCommandTriggerCache[command][event],
+								 form->evtfoid);
+			}
+		}
+	}
+	index_endscan(indexScan);
+	index_close(irel, AccessShareLock);
+	heap_close(rel, AccessShareLock);
 }
 
 /*
