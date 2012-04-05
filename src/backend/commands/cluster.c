@@ -102,7 +102,7 @@ cluster(ClusterStmt *stmt, bool isTopLevel)
 {
 	EventContextData evt;
 
-	InitEventContext(&evt, (Node *)stmt);
+	InitEventContextForCommand(&evt, (Node *)stmt, E_Cluster);
 
 	if (stmt->relation != NULL)
 	{

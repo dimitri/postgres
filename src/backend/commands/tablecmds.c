@@ -753,6 +753,7 @@ RemoveRelations(DropStmt *drop)
 	ListCell   *cell;
 	int i = 0, n = list_length(drop->objects);
 	EventContext *evts = (EventContext *) palloc(n * sizeof(EventContext));
+	TrigEventCommand command;
 
 	/*
 	 * First we identify all the relations, then we delete them in a single
@@ -765,22 +766,27 @@ RemoveRelations(DropStmt *drop)
 	{
 		case OBJECT_TABLE:
 			relkind = RELKIND_RELATION;
+			command = E_DropTable;
 			break;
 
 		case OBJECT_INDEX:
 			relkind = RELKIND_INDEX;
+			command = E_DropIndex;
 			break;
 
 		case OBJECT_SEQUENCE:
 			relkind = RELKIND_SEQUENCE;
+			command = E_DropSequence;
 			break;
 
 		case OBJECT_VIEW:
 			relkind = RELKIND_VIEW;
+			command = E_DropView;
 			break;
 
 		case OBJECT_FOREIGN_TABLE:
 			relkind = RELKIND_FOREIGN_TABLE;
+			command = E_DropForeignTable;
 			break;
 
 		default:
@@ -832,7 +838,7 @@ RemoveRelations(DropStmt *drop)
 		/*
 		 * Call BEFORE DROP command triggers
 		 */
-		InitEventContext(&evt, (Node *)drop);
+		InitEventContextForCommand(&evt, (Node *)drop, command);
 
 		if (CommandFiresTriggers(&evt))
 		{
@@ -2745,7 +2751,7 @@ AlterTable(Oid relid, LOCKMODE lockmode, AlterTableStmt *stmt)
 	CheckTableNotInUse(rel, "ALTER TABLE");
 
 	/* Call BEFORE ALTER TABLE triggers */
-	InitEventContext(&evt, (Node *)stmt);
+	InitEventContextForCommand(&evt, (Node *)stmt, E_AlterTable);
 
 	if (CommandFiresTriggers(&evt))
 	{
@@ -9904,7 +9910,7 @@ AlterTableNamespace(AlterObjectSchemaStmt *stmt)
 	CheckSetNamespace(oldNspOid, nspOid, RelationRelationId, relid);
 
 	/* Call BEFORE ALTER TABLE triggers */
-	InitEventContext(&evt, (Node *)stmt);
+	InitEventContextForCommand(&evt, (Node *)stmt, E_AlterTable);
 
 	if (CommandFiresTriggers(&evt))
 	{

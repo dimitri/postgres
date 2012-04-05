@@ -975,7 +975,7 @@ CreateFunction(CreateFunctionStmt *stmt, const char *queryString)
 	/*
 	 * Call BEFORE CREATE FUNCTION triggers
 	 */
-	InitEventContext(&evt, (Node *)stmt);
+	InitEventContextForCommand(&evt, (Node *)stmt, E_CreateFunction);
 
 	if (CommandFiresTriggers(&evt))
 	{
@@ -1401,7 +1401,7 @@ AlterFunction(AlterFunctionStmt *stmt)
 	}
 
 	/* Call BEFORE ALTER FUNCTION command triggers */
-	InitEventContext(&evt, (Node *)stmt);
+	InitEventContextForCommand(&evt, (Node *)stmt, E_AlterFunction);
 
 	if (CommandFiresTriggers(&evt))
 	{
@@ -1773,7 +1773,7 @@ CreateCast(CreateCastStmt *stmt)
 	}
 
 	/* Call BEFORE CREATE CAST command triggers */
-	InitEventContext(&evt, (Node *)stmt);
+	InitEventContextForCommand(&evt, (Node *)stmt, E_CreateCast);
 
 	if (CommandFiresTriggers(&evt))
 	{

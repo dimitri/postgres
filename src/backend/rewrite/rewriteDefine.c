@@ -195,13 +195,13 @@ DefineRule(RuleStmt *stmt, const char *queryString)
 	List	   *actions;
 	Node	   *whereClause;
 	Oid			relId;
-	EventContextData cmd;
+	EventContextData evt;
 
 	/* Parse analysis. */
 	transformRuleStmt(stmt, queryString, &actions, &whereClause);
 
 	/* Prepare command context */
-	InitEventContext(&cmd, (Node *)stmt);
+	InitEventContextForCommand(&evt, (Node *)stmt, E_CreateRule);
 
 	/*
 	 * Find and lock the relation.  Lock level should match
@@ -217,7 +217,7 @@ DefineRule(RuleStmt *stmt, const char *queryString)
 					   stmt->instead,
 					   stmt->replace,
 					   actions,
-					   &cmd);
+					   &evt);
 }
 
 

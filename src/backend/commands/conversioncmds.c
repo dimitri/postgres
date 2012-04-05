@@ -111,7 +111,7 @@ CreateConversionCommand(CreateConversionStmt *stmt)
 					 Int32GetDatum(0));
 
 	/* Call BEFORE CREATE CONVERSION command triggers */
-	InitEventContext(&evt, (Node *)stmt);
+	InitEventContextForCommand(&evt, (Node *)stmt, E_CreateConversion);
 
 	if (CommandFiresTriggers(&evt))
 	{

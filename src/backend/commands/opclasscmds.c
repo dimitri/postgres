@@ -592,7 +592,7 @@ DefineOpClass(CreateOpClassStmt *stmt)
 	}
 
 	/* Call BEFORE CREATE OPERATOR CLASS command triggers */
-	InitEventContext(&evt, (Node *)stmt);
+	InitEventContextForCommand(&evt, (Node *)stmt, E_CreateOperatorClass);
 
 	if (CommandFiresTriggers(&evt))
 	{
@@ -782,7 +782,7 @@ DefineOpFamily(CreateOpFamilyStmt *stmt)
 				 errmsg("must be superuser to create an operator family")));
 
 	/* Call BEFORE CREATE OPERATOR FAMILY command triggers */
-	InitEventContext(&evt, (Node *)stmt);
+	InitEventContextForCommand(&evt, (Node *)stmt, E_CreateOperatorFamily);
 
 	if (CommandFiresTriggers(&evt))
 	{
@@ -858,7 +858,7 @@ AlterOpFamily(AlterOpFamilyStmt *stmt)
 				 errmsg("must be superuser to alter an operator family")));
 
 	/* Call BEFORE ALTER OPERATOR FAMILY command triggers */
-	InitEventContext(&evt, (Node *)stmt);
+	InitEventContextForCommand(&evt, (Node *)stmt, E_AlterOperatorFamily);
 
 	if (CommandFiresTriggers(&evt))
 	{

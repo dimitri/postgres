@@ -107,7 +107,7 @@ InsertEventTriggerTuple(Relation tgrel, char *trigname, TrigEvent event,
 	values[Anum_pg_event_trigger_evtenabled - 1] = CharGetDatum(TRIGGER_FIRES_ON_ORIGIN);
 
 	if (cmdlist == NIL)
-		tagArray = NULL;
+		nulls[Anum_pg_event_trigger_evttags - 1] = true;
 	else
 	{
 		ListCell   *lc;
@@ -121,8 +121,9 @@ InsertEventTriggerTuple(Relation tgrel, char *trigname, TrigEvent event,
 			tags[i++] = Int16GetDatum(lfirst_int(lc));
 		}
 		tagArray = construct_array(tags, l, INT2OID, 2, true, 's');
+
+		values[Anum_pg_event_trigger_evttags - 1] = PointerGetDatum(tagArray);
 	}
-	values[Anum_pg_event_trigger_evttags - 1] = PointerGetDatum(tagArray);
 
 	tuple = heap_form_tuple(tgrel->rd_att, values, nulls);
 
@@ -565,9 +566,13 @@ BuildEventTriggerCache(bool force_rebuild)
 			 * columns
 			 */
 			command = 0;
-			EventCommandTriggerCache[command][event] =
-				lappend_oid(EventCommandTriggerCache[command][event],
-							form->evtfoid);
+			if (EventCommandTriggerCache[command][event] == NIL)
+				EventCommandTriggerCache[command][event] =
+					list_make1_oid(form->evtfoid);
+			else
+				EventCommandTriggerCache[command][event] =
+					lappend_oid(EventCommandTriggerCache[command][event],
+								form->evtfoid);
 		}
 		else
 		{
@@ -590,9 +595,13 @@ BuildEventTriggerCache(bool force_rebuild)
 			{
 				 command = tags[i];
 
-				 EventCommandTriggerCache[command][event] =
-					 lappend_oid(EventCommandTriggerCache[command][event],
-								 form->evtfoid);
+				 if (EventCommandTriggerCache[command][event] == NIL)
+					 EventCommandTriggerCache[command][event] =
+						 list_make1_oid(form->evtfoid);
+				 else
+					 EventCommandTriggerCache[command][event] =
+						 lappend_oid(EventCommandTriggerCache[command][event],
+									 form->evtfoid);
 			}
 		}
 	}
@@ -709,9 +718,22 @@ call_event_trigger_procedure(EventContext ev_ctx, TrigEvent tev,
 void
 InitEventContext(EventContext evt, const Node *stmt)
 {
-	evt->command = -1;
-	evt->toplevel = NULL;
-	evt->tag = (char *) CreateCommandTag((Node *)stmt);
+	evt->command	= -1;
+	evt->toplevel	= NULL;
+	evt->tag		= (char *) CreateCommandTag((Node *)stmt);
+	evt->parsetree  = (Node *)stmt;
+	evt->objectId   = InvalidOid;
+	evt->objectname = NULL;
+	evt->schemaname = NULL;
+}
+
+void
+InitEventContextForCommand(EventContext evt, const Node *stmt,
+						   TrigEventCommand command)
+{
+	evt->command	= command;
+	evt->toplevel	= NULL;
+	evt->tag		= (char *) CreateCommandTag((Node *)stmt);
 	evt->parsetree  = (Node *)stmt;
 	evt->objectId   = InvalidOid;
 	evt->objectname = NULL;
@@ -730,6 +752,9 @@ bool
 CommandFiresTriggers(EventContext ev_ctx)
 {
 	int j;
+
+	if (ev_ctx == NULL)
+		return false;
 
 	Assert(ev_ctx->command != -1);
 
@@ -751,6 +776,11 @@ CommandFiresTriggers(EventContext ev_ctx)
 bool
 CommandFiresTriggersForEvent(EventContext ev_ctx, TrigEvent tev)
 {
+	if (ev_ctx == NULL)
+		return false;
+
+	Assert(ev_ctx->command != -1);
+
 	BuildEventTriggerCache(false);
 	return EventCommandTriggerCache[ev_ctx->command][tev] != NIL;
 }
@@ -759,6 +789,11 @@ void
 ExecEventTriggers(EventContext ev_ctx, TrigEvent tev)
 {
 	ListCell *lc;
+
+	if (ev_ctx == NULL)
+		return false;
+
+	Assert(ev_ctx->command != -1);
 
 	BuildEventTriggerCache(false);
 
@@ -775,17 +810,24 @@ ExecEventTriggers(EventContext ev_ctx, TrigEvent tev)
 bool
 CommandFiresAfterTriggers(EventContext ev_ctx)
 {
+	if (ev_ctx == NULL)
+		return false;
+
 	return CommandFiresTriggersForEvent(ev_ctx, E_CommandEnd);
 }
 
 void
 ExecBeforeCommandTriggers(EventContext ev_ctx)
 {
+	if (ev_ctx == NULL)
+		return false;
 	ExecEventTriggers(ev_ctx, E_CommandStart);
 }
 
 void
 ExecAfterCommandTriggers(EventContext ev_ctx)
 {
+	if (ev_ctx == NULL)
+		return false;
 	ExecEventTriggers(ev_ctx, E_CommandEnd);
 }

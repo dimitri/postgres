@@ -71,6 +71,8 @@ extern void AlterEventTrigger(AlterEventTrigStmt *stmt);
 extern void RenameEventTrigger(List *name, const char *newname);
 
 extern void InitEventContext(EventContext evt, const Node *stmt);
+extern void InitEventContextForCommand(EventContext evt, const Node *stmt,
+									   TrigEventCommand command);
 
 extern bool CommandFiresTriggers(EventContext ev_ctx);
 extern bool CommandFiresTriggersForEvent(EventContext ev_ctx, TrigEvent tev);

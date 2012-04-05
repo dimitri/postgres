@@ -994,7 +994,7 @@ DefineDomain(CreateDomainStmt *stmt)
 	/*
 	 * Call BEFORE CREATE DOMAIN triggers
 	 */
-	InitEventContext(&evt, (Node *)stmt);
+	InitEventContextForCommand(&evt, (Node *)stmt, E_CreateDomain);
 
 	if (CommandFiresTriggers(&evt))
 	{
@@ -1126,7 +1126,7 @@ DefineEnum(CreateEnumStmt *stmt)
 	/*
 	 * Call BEFORE CREATE (enum) TYPE triggers
 	 */
-	InitEventContext(&evt, (Node *)stmt);
+	InitEventContextForCommand(&evt, (Node *)stmt, E_CreateType);
 
 	if (CommandFiresTriggers(&evt))
 	{
@@ -1456,7 +1456,7 @@ DefineRange(CreateRangeStmt *stmt)
 	/*
 	 * Call BEFORE CREATE EXTENSION triggers
 	 */
-	InitEventContext(&evt, (Node *)stmt);
+	InitEventContextForCommand(&evt, (Node *)stmt, E_CreateExtension);
 
 	if (CommandFiresTriggers(&evt))
 	{

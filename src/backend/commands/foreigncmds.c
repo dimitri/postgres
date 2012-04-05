@@ -669,7 +669,7 @@ CreateForeignDataWrapper(CreateFdwStmt *stmt)
 						stmt->fdwname)));
 
 	/* Call BEFORE CREATE FOREIGN DATA WRAPPER triggers */
-	InitEventContext(&evt, (Node *)stmt);
+	InitEventContextForCommand(&evt, (Node *)stmt, E_CreateForeignDataWrapper);
 
 	if (CommandFiresTriggers(&evt))
 	{
@@ -801,7 +801,7 @@ AlterForeignDataWrapper(AlterFdwStmt *stmt)
 	fdwId = HeapTupleGetOid(tp);
 
 	/* Call BEFORE ALTER FOREIGN DATA WRAPPER triggers */
-	InitEventContext(&evt, (Node *)stmt);
+	InitEventContextForCommand(&evt, (Node *)stmt, E_AlterForeignDataWrapper);
 
 	if (CommandFiresTriggers(&evt))
 	{
@@ -1004,7 +1004,7 @@ CreateForeignServer(CreateForeignServerStmt *stmt)
 		aclcheck_error(aclresult, ACL_KIND_FDW, fdw->fdwname);
 
 	/* Call BEFORE CREATE SERVER triggers */
-	InitEventContext(&evt, (Node *)stmt);
+	InitEventContextForCommand(&evt, (Node *)stmt, E_CreateForeignDataWrapper);
 
 	if (CommandFiresTriggers(&evt))
 	{
@@ -1128,7 +1128,7 @@ AlterForeignServer(AlterForeignServerStmt *stmt)
 					   stmt->servername);
 
 	/* Call BEFORE ALTER SERVER triggers */
-	InitEventContext(&evt, (Node *)stmt);
+	InitEventContextForCommand(&evt, (Node *)stmt, E_AlterServer);
 
 	if (CommandFiresTriggers(&evt))
 	{
@@ -1297,7 +1297,7 @@ CreateUserMapping(CreateUserMappingStmt *stmt)
 	fdw = GetForeignDataWrapper(srv->fdwid);
 
 	/* Call BEFORE CREATE USER MAPPING triggers */
-	InitEventContext(&evt, (Node *)stmt);
+	InitEventContextForCommand(&evt, (Node *)stmt, E_CreateUserMapping);
 
 	if (CommandFiresTriggers(&evt))
 	{
@@ -1408,7 +1408,7 @@ AlterUserMapping(AlterUserMappingStmt *stmt)
 		elog(ERROR, "cache lookup failed for user mapping %u", umId);
 
 	/* Call BEFORE ALTER USER MAPPING triggers */
-	InitEventContext(&evt, (Node *)stmt);
+	InitEventContextForCommand(&evt, (Node *)stmt, E_AlterUserMapping);
 
 	if (CommandFiresTriggers(&evt))
 	{
@@ -1532,7 +1532,7 @@ RemoveUserMapping(DropUserMappingStmt *stmt)
 	user_mapping_ddl_aclcheck(useId, srv->serverid, srv->servername);
 
 	/* Call BEFORE DROP USER MAPPING triggers */
-	InitEventContext(&evt, (Node *)stmt);
+	InitEventContextForCommand(&evt, (Node *)stmt, E_DropUserMapping);
 
 	if (CommandFiresTriggers(&evt))
 	{

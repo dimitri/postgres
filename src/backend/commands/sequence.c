@@ -214,7 +214,7 @@ DefineSequence(CreateSeqStmt *seq)
 	stmt->if_not_exists = false;
 
 	/* Prepare BEFORE CREATE SEQUENCE triggers */
-	InitEventContext(&evt, (Node *)seq);
+	InitEventContextForCommand(&evt, (Node *)seq, E_CreateSequence);
 
 	seqoid = DefineRelation(stmt, RELKIND_SEQUENCE, seq->ownerId, &evt);
 	Assert(seqoid != InvalidOid);
@@ -474,7 +474,7 @@ AlterSequence(AlterSeqStmt *stmt)
 	/*
 	 * Call BEFORE ALTER SEQUENCE triggers
 	 */
-	InitEventContext(&evt, (Node *)stmt);
+	InitEventContextForCommand(&evt, (Node *)stmt, E_AlterSequence);
 
 	if (CommandFiresTriggers(&evt))
 	{

@@ -1199,7 +1199,7 @@ CreateExtension(CreateExtensionStmt *stmt)
 	/*
 	 * Call BEFORE CREATE EXTENSION triggers
 	 */
-	InitEventContext(&evt, (Node *)stmt);
+	InitEventContextForCommand(&evt, (Node *)stmt, E_CreateExtension);
 
 	if (CommandFiresTriggers(&evt))
 	{
@@ -2462,7 +2462,7 @@ ExecAlterExtensionStmt(AlterExtensionStmt *stmt)
 	/*
 	 * Call BEFORE ALTER EXTENSION triggers
 	 */
-	InitEventContext(&evt, (Node *)stmt);
+	InitEventContextForCommand(&evt, (Node *)stmt, E_AlterExtension);
 
 	if (CommandFiresTriggers(&evt))
 	{
@@ -2741,7 +2741,7 @@ ExecAlterExtensionContentsStmt(AlterExtensionContentsStmt *stmt)
 	 */
 	oldExtension = getExtensionOfObject(object.classId, object.objectId);
 
-	InitEventContext(&evt, (Node *)stmt);
+	InitEventContextForCommand(&evt, (Node *)stmt, E_AlterExtension);
 
 	/* Init the command context no matter what, that's cheap here */
 	evt.objectId = extension.objectId;

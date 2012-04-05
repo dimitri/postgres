@@ -75,7 +75,7 @@ ExecCreateTableAs(CreateTableAsStmt *stmt, const char *queryString,
 	/*
 	 * Create the tuple receiver object and insert info it will need
 	 */
-	InitEventContext(&evt, (Node *)stmt);
+	InitEventContextForCommand(&evt, (Node *)stmt, E_CreateTableAs);
 
 	dest = CreateIntoRelDestReceiver(into, &evt);
 

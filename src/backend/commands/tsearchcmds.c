@@ -851,7 +851,7 @@ AlterTSDictionary(AlterTSDictionaryStmt *stmt)
 					   dictoptions);
 
 	/* Call BEFORE ALTER TEXT SEARCH DICTIONARY command triggers */
-	InitEventContext(&evt, (Node *)stmt);
+	InitEventContextForCommand(&evt, (Node *)stmt, E_AlterTextSearchDictionary);
 
 	if (CommandFiresTriggers(&evt))
 	{
@@ -1851,7 +1851,7 @@ AlterTSConfiguration(AlterTSConfigurationStmt *stmt)
 					   NameListToString(stmt->cfgname));
 
 	/* Call BEFORE ALTER TEXT SEARCH CONFIGURATION command triggers */
-	InitEventContext(&evt, (Node *)stmt);
+	InitEventContextForCommand(&evt, (Node *)stmt, E_AlterTextSearchConfiguration);
 
 	if (CommandFiresTriggers(&evt))
 	{

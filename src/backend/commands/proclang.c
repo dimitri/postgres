@@ -73,7 +73,7 @@ CreateProceduralLanguage(CreatePLangStmt *stmt)
 	Oid			funcargtypes[1];
 	EventContextData evt;
 
-	InitEventContext(&evt, (Node *)stmt);
+	InitEventContextForCommand(&evt, (Node *)stmt, E_CreateLanguage);
 
 	/*
 	 * If we have template information for the language, ignore the supplied

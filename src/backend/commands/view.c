@@ -530,7 +530,7 @@ DefineView(ViewStmt *stmt, const char *queryString)
 	/*
 	 * Prepare BEFORE CREATE VIEW triggers
 	 */
-	InitEventContext(&evt, (Node *)stmt);
+	InitEventContextForCommand(&evt, (Node *)stmt, E_CreateView);
 
 	/*
 	 * Create the view relation

@@ -431,7 +431,7 @@ CreateTrigger(CreateTrigStmt *stmt, const char *queryString,
 	 */
 	if (!isInternal)
 	{
-		InitEventContext(&evt, (Node *)stmt);
+		InitEventContextForCommand(&evt, (Node *)stmt, E_CreateTrigger);
 
 		if (CommandFiresTriggers(&evt))
 		{

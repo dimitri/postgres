@@ -517,7 +517,7 @@ standard_ProcessUtility(Node *parsetree,
 				EventContextData evt;
 
 				/* Prepare BEFORE CREATE TABLE triggers */
-				InitEventContext(&evt, parsetree);
+				InitEventContextForCommand(&evt, parsetree, E_CreateTable);
 
 				/* Run parse analysis ... */
 				stmts = transformCreateStmt(stmt, queryString);
@@ -775,7 +775,7 @@ standard_ProcessUtility(Node *parsetree,
 				EventContextData evt;
 
 				/* Prepare BEFORE ALTER DOMAIN triggers */
-				InitEventContext(&evt, parsetree);
+				InitEventContextForCommand(&evt, parsetree, E_AlterDomain);
 
 				/*
 				 * Some or all of these functions are recursive to cover
@@ -843,40 +843,46 @@ standard_ProcessUtility(Node *parsetree,
 				DefineStmt *stmt = (DefineStmt *) parsetree;
 				EventContextData evt;
 
-				InitEventContext(&evt, parsetree);
-
 				switch (stmt->kind)
 				{
 					case OBJECT_AGGREGATE:
+						InitEventContextForCommand(&evt, parsetree, E_CreateAggregate);
 						DefineAggregate(stmt->defnames, stmt->args,
 										stmt->oldstyle, stmt->definition, &evt);
 						break;
 					case OBJECT_OPERATOR:
 						Assert(stmt->args == NIL);
+						InitEventContextForCommand(&evt, parsetree, E_CreateOperator);
 						DefineOperator(stmt->defnames, stmt->definition, &evt);
 						break;
 					case OBJECT_TYPE:
 						Assert(stmt->args == NIL);
+						InitEventContextForCommand(&evt, parsetree, E_CreateType);
 						DefineType(stmt->defnames, stmt->definition, &evt);
 						break;
 					case OBJECT_TSPARSER:
 						Assert(stmt->args == NIL);
+						InitEventContextForCommand(&evt, parsetree, E_CreateTextSearchParser);
 						DefineTSParser(stmt->defnames, stmt->definition, &evt);
 						break;
 					case OBJECT_TSDICTIONARY:
 						Assert(stmt->args == NIL);
+						InitEventContextForCommand(&evt, parsetree, E_CreateTextSearchDictionary);
 						DefineTSDictionary(stmt->defnames, stmt->definition, &evt);
 						break;
 					case OBJECT_TSTEMPLATE:
 						Assert(stmt->args == NIL);
+						InitEventContextForCommand(&evt, parsetree, E_CreateTextSearchTemplate);
 						DefineTSTemplate(stmt->defnames, stmt->definition, &evt);
 						break;
 					case OBJECT_TSCONFIGURATION:
 						Assert(stmt->args == NIL);
+						InitEventContextForCommand(&evt, parsetree, E_CreateTextSearchConfiguration);
 						DefineTSConfiguration(stmt->defnames, stmt->definition, &evt);
 						break;
 					case OBJECT_COLLATION:
 						Assert(stmt->args == NIL);
+						InitEventContextForCommand(&evt, parsetree, E_CreateCollation);
 						DefineCollation(stmt->defnames, stmt->definition, &evt);
 						break;
 					default:
@@ -892,7 +898,7 @@ standard_ProcessUtility(Node *parsetree,
 				CompositeTypeStmt *stmt = (CompositeTypeStmt *) parsetree;
 				EventContextData evt;
 
-				InitEventContext(&evt, parsetree);
+				InitEventContextForCommand(&evt, parsetree, E_CreateType);
 				DefineCompositeType(stmt->typevar, stmt->coldeflist, &evt);
 			}
 			break;
@@ -933,7 +939,7 @@ standard_ProcessUtility(Node *parsetree,
 				IndexStmt  *stmt = (IndexStmt *) parsetree;
 				EventContextData evt;
 
-				InitEventContext(&evt, parsetree);
+				InitEventContextForCommand(&evt, parsetree, E_CreateIndex);
 
 				if (stmt->concurrent)
 					PreventTransactionChain(isTopLevel,
@@ -1045,7 +1051,7 @@ standard_ProcessUtility(Node *parsetree,
 				LoadStmt   *stmt = (LoadStmt *) parsetree;
 				EventContextData evt;
 
-				InitEventContext(&evt, parsetree);
+				InitEventContextForCommand(&evt, parsetree, E_Load);
 
 				if (CommandFiresTriggers(&evt))
 				{
@@ -1191,7 +1197,7 @@ standard_ProcessUtility(Node *parsetree,
 				ReindexStmt *stmt = (ReindexStmt *) parsetree;
 				EventContextData evt;
 
-				InitEventContext(&evt, parsetree);
+				InitEventContextForCommand(&evt, parsetree, E_Reindex);
 
 				/* we choose to allow this during "read only" transactions */
 				PreventCommandDuringRecovery("REINDEX");
