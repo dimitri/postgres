@@ -1139,7 +1139,7 @@ pltcl_command_trigger_handler(PG_FUNCTION_ARGS, bool pltrusted)
 {
 	pltcl_proc_desc *prodesc;
 	Tcl_Interp *volatile interp;
-	CommandTriggerData *tdata = (CommandTriggerData *) fcinfo->context;
+	EventTriggerData *tdata = (EventTriggerData *) fcinfo->context;
 	char	   *stroid;
 	Tcl_DString tcl_cmd;
 	int			tcl_rc;
