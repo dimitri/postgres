@@ -2201,8 +2201,7 @@ plperl_call_perl_event_trigger_func(plperl_proc_desc *desc,
 									SV *td)
 {
 	dSP;
-	SV	*retval,
-			   *TDsv;
+	SV	*retval, *TDsv;
 	int	 count;
 
 	ENTER;

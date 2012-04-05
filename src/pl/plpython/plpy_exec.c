@@ -348,7 +348,7 @@ PLy_exec_event_trigger(FunctionCallInfo fcinfo, PLyProcedure *proc)
 
 	PG_TRY();
 	{
-		/* build command trigger args */
+		/* build event trigger args */
 		PyObject   *pltevent, *plttag;
 
 		pltdata = PyDict_New();
