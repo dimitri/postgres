@@ -48,7 +48,12 @@
  *
  * This cache is indexed by Event Command id (see pg_event_trigger.h) then
  * Event Id. It's containing a list of function oid.
+ *
+ * We're wasting some memory here, but that's local and in the kB range... so
+ * the easier code makes up fot it big time.
  */
+static void BuildEventTriggerCache(bool force_rebuild);
+
 List *
 EventCommandTriggerCache[EVTG_MAX_TRIG_EVENT_COMMAND][EVTG_MAX_TRIG_EVENT];
 
@@ -80,7 +85,7 @@ CheckEventTriggerPrivileges()
  * row.
  */
 static Oid
-InsertEventTriggerTuple(Relation tgrel, char *trigname, char *event,
+InsertEventTriggerTuple(Relation tgrel, char *trigname, TrigEvent event,
 						Oid funcoid, char evttype, List *cmdlist)
 {
 	Oid         trigoid;
@@ -105,15 +110,15 @@ InsertEventTriggerTuple(Relation tgrel, char *trigname, char *event,
 		tagArray = NULL;
 	else
 	{
-		ListCell	lc;
+		ListCell   *lc;
 		Datum	   *tags;
 		int			i = 0, l = list_length(cmdlist);
 
 		tags = (Datum *) palloc(l * sizeof(Datum));
 
-		foreach(cell, cmdlist)
+		foreach(lc, cmdlist)
 		{
-			tags[i++] = Int16GetDatum(lfirst_int(cell));
+			tags[i++] = Int16GetDatum(lfirst_int(lc));
 		}
 		tagArray = construct_array(tags, l, INT2OID, 2, true, 's');
 	}
@@ -134,7 +139,7 @@ InsertEventTriggerTuple(Relation tgrel, char *trigname, char *event,
 	 * Record dependencies for trigger.  Always place a normal dependency on
 	 * the function.
 	 */
-	myself.classId = CmdTriggerRelationId;
+	myself.classId = EventTriggerRelationId;
 	myself.objectId = trigoid;
 	myself.objectSubId = 0;
 
@@ -177,10 +182,9 @@ CreateEventTrigger(CreateEventTrigStmt *stmt, const char *queryString)
 	tgrel = heap_open(EventTriggerRelationId, RowExclusiveLock);
 
 	/*
-	 * Scan pg_cmdtrigger for existing triggers on command. We do this only
-	 * to give a nice error message if there's already a trigger of the
-	 * same name. (The unique index on ctgcommand/ctgname would complain
-	 * anyway.)
+	 * Scan pg_event_trigger for existing triggers on command. We do this only
+	 * to give a nice error message if there's already a trigger of the same
+	 * name. (The unique index on evtname would complain anyway.)
 	 *
 	 * NOTE that this is cool only because we have AccessExclusiveLock on
 	 * the relation, so the trigger set won't be changing underneath us.
@@ -222,18 +226,41 @@ CreateEventTrigger(CreateEventTrigStmt *stmt, const char *queryString)
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 				 errmsg("REINDEX DATABASE triggers are not supported"),
 				 errdetail("The command trigger will not fire on REINDEX DATABASE.")));
+	*/
 
 	if (funcrettype != CMDTRIGGEROID)
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_OBJECT_DEFINITION),
 				 errmsg("function \"%s\" must return type \"command_trigger\"",
 						NameListToString(stmt->funcname))));
-	*/
+
+	/* Specifically drop support for event triggers on event triggers */
+/*
+	switch (nodeTag(stmt))
+	{
+		case T_RenameStmt:
+			if (((RenameStmt *) stmt)->renameType == OBJECT_EVENT_TRIGGER)
+				return;
+
+		case T_DropStmt:
+			if (((DropStmt *) stmt)->removeType == OBJECT_EVENT_TRIGGER)
+				return;
+
+		case T_IndexStmt:
+			if (((IndexStmt *)stmt)->concurrent)
+				return;
+
+		default:
+			break;
+	}
+*/
 
 	trigoid = InsertEventTriggerTuple(tgrel, stmt->trigname, stmt->event,
 									  funcoid, stmt->timing, stmt->cmdlist);
 
 	heap_close(tgrel, RowExclusiveLock);
+
+	BuildEventTriggerCache(true);
 
 	return trigoid;
 }
@@ -273,6 +300,8 @@ RemoveEventTriggerById(Oid trigOid)
 
 	systable_endscan(tgscan);
 	heap_close(tgrel, RowExclusiveLock);
+
+	BuildEventTriggerCache(true);
 }
 
 /*
@@ -285,12 +314,12 @@ AlterEventTrigger(AlterEventTrigStmt *stmt)
 	SysScanDesc tgscan;
 	ScanKeyData skey[1];
 	HeapTuple	tup;
-	Form_pg_cmdtrigger evtForm;
+	Form_pg_event_trigger evtForm;
 	char        tgenabled = pstrdup(stmt->tgenabled)[0]; /* works with gram.y */
 
 	CheckEventTriggerPrivileges();
 
-	tgrel = heap_open(CmdTriggerRelationId, RowExclusiveLock);
+	tgrel = heap_open(EventTriggerRelationId, RowExclusiveLock);
 	ScanKeyInit(&skey[0],
 				Anum_pg_event_trigger_evtname,
 				BTEqualStrategyNumber, F_NAMEEQ,
@@ -320,6 +349,8 @@ AlterEventTrigger(AlterEventTrigStmt *stmt)
 
 	heap_close(tgrel, RowExclusiveLock);
 	heap_freetuple(tup);
+
+	BuildEventTriggerCache(true);
 }
 
 
@@ -339,20 +370,20 @@ RenameEventTrigger(List *name, const char *newname)
 	Assert(list_length(name) == 1);
 	trigname = strVal((Value *)linitial(name));
 
-	CheckCmdTriggerPrivileges();
+	CheckEventTriggerPrivileges();
 
-	rel = heap_open(CmdTriggerRelationId, RowExclusiveLock);
+	rel = heap_open(EventTriggerRelationId, RowExclusiveLock);
 
 	/* newname must be available */
-	check_cmdtrigger_name(newname, rel);
+	check_event_trigger_name(newname, rel);
 
 	/* get existing tuple */
 	ScanKeyInit(&skey[0],
-				Anum_pg_cmdtrigger_ctgname,
+				Anum_pg_event_trigger_evtname,
 				BTEqualStrategyNumber, F_NAMEEQ,
 				CStringGetDatum(trigname));
 
-	tgscan = systable_beginscan(rel, CmdTriggerNameIndexId, true,
+	tgscan = systable_beginscan(rel, EventTriggerNameIndexId, true,
 								SnapshotNow, 1, skey);
 
 	tup = systable_getnext(tgscan);
@@ -370,12 +401,15 @@ RenameEventTrigger(List *name, const char *newname)
 	systable_endscan(tgscan);
 
 	/* rename */
-	namestrcpy(&(cmdForm->ctgname), newname);
+	namestrcpy(&(evtForm->evtname), newname);
 	simple_heap_update(rel, &tup->t_self, tup);
 	CatalogUpdateIndexes(rel, tup);
 
 	heap_freetuple(tup);
 	heap_close(rel, NoLock);
+
+	/* Renaming impacts trigger calls orderding */
+	BuildEventTriggerCache(true);
 }
 
 /*
@@ -469,6 +503,8 @@ void
 BuildEventTriggerCache(bool force_rebuild)
 {
 	Relation	rel, irel;
+	IndexScanDesc indexScan;
+	HeapTuple	tuple;
 
 	if (event_trigger_cache_is_stalled || force_rebuild)
 	{
@@ -482,6 +518,7 @@ BuildEventTriggerCache(bool force_rebuild)
 	irel = index_open(EventTriggerNameIndexId, AccessShareLock);
 
 	indexScan = index_beginscan(rel, irel, SnapshotNow, 0, 0);
+	index_rescan(indexScan, NULL, 0, NULL, 0);
 
 	/* we use a full indexscan to guarantee that we see event triggers ordered
 	 * by name, this way we only even have to append the trigger's function Oid
@@ -492,8 +529,28 @@ BuildEventTriggerCache(bool force_rebuild)
 		Form_pg_event_trigger form = (Form_pg_event_trigger) GETSTRUCT(tuple);
 		Datum		adatum;
 		bool		isNull;
+		int			numkeys;
 		TrigEvent event;
 		TrigEventCommand command;
+
+		/*
+		 * First check if this trigger is enabled, taking into consideration
+		 * session_replication_role.
+		 */
+		if (form->evtenabled == TRIGGER_DISABLED)
+		{
+			continue;
+		}
+		else if (SessionReplicationRole == SESSION_REPLICATION_ROLE_REPLICA)
+		{
+			if (form->evtenabled == TRIGGER_FIRES_ON_ORIGIN)
+				continue;
+		}
+		else	/* ORIGIN or LOCAL role */
+		{
+			if (form->evtenabled == TRIGGER_FIRES_ON_REPLICA)
+				continue;
+		}
 
 		event = form->evtevent;
 
@@ -514,8 +571,9 @@ BuildEventTriggerCache(bool force_rebuild)
 		}
 		else
 		{
-			ArrayType  *arr;
-			int16	   *tags;
+			ArrayType	*arr;
+			int16		*tags;
+			int			 i;
 
 			arr = DatumGetArrayTypeP(adatum);		/* ensure not toasted */
 			numkeys = ARR_DIMS(arr)[0];
@@ -541,6 +599,8 @@ BuildEventTriggerCache(bool force_rebuild)
 	index_endscan(indexScan);
 	index_close(irel, AccessShareLock);
 	heap_close(rel, AccessShareLock);
+
+	event_trigger_cache_is_stalled = false;
 }
 
 /*
@@ -559,91 +619,9 @@ BuildEventTriggerCache(bool force_rebuild)
  * support in each PL that wants to support command triggers. All core PL do.
  */
 
-/*
- * Scan the catalogs and fill in the EventContext procedures that we will
- * have to call before and after the command.
- */
-static bool
-ListCommandTriggers(CommandContext cmd, bool list_any_triggers)
-{
-	int         count = 0;
-	Relation	rel, irel;
-	SysScanDesc scandesc;
-	HeapTuple	tuple;
-	ScanKeyData entry[1];
-	char *tag;
-
-	if (list_any_triggers)
-	{
-		tag = "ANY";
-		cmd->before_any = cmd->after_any = NIL;
-	}
-	else
-	{
-		tag = cmd->tag;
-		cmd->before = cmd->after = NIL;
-	}
-
-	rel = heap_open(CmdTriggerRelationId, AccessShareLock);
-	irel = index_open(CmdTriggerCommandNameIndexId, AccessShareLock);
-
-	ScanKeyInit(&entry[0],
-				Anum_pg_cmdtrigger_ctgcommand,
-				BTEqualStrategyNumber, F_NAMEEQ,
-				CStringGetDatum(tag));
-
-	scandesc = systable_beginscan_ordered(rel, irel, SnapshotNow, 1, entry);
-
-	while (HeapTupleIsValid(tuple = systable_getnext_ordered(scandesc, ForwardScanDirection)))
-	{
-		Form_pg_cmdtrigger form = (Form_pg_cmdtrigger) GETSTRUCT(tuple);
-
-		if (form->ctgenabled == TRIGGER_DISABLED)
-		{
-			continue;
-		}
-		else if (SessionReplicationRole == SESSION_REPLICATION_ROLE_REPLICA)
-		{
-			if (form->ctgenabled == TRIGGER_FIRES_ON_ORIGIN)
-				continue;
-		}
-		else	/* ORIGIN or LOCAL role */
-		{
-			if (form->ctgenabled == TRIGGER_FIRES_ON_REPLICA)
-				continue;
-		}
-
-		switch (form->ctgtype)
-		{
-			case CMD_TRIGGER_FIRED_BEFORE:
-			{
-				if (list_any_triggers)
-					cmd->before_any = lappend_oid(cmd->before_any, form->ctgfoid);
-				else
-					cmd->before = lappend_oid(cmd->before, form->ctgfoid);
-				break;
-			}
-			case CMD_TRIGGER_FIRED_AFTER:
-			{
-				if (list_any_triggers)
-					cmd->after_any = lappend_oid(cmd->after_any, form->ctgfoid);
-				else
-					cmd->after = lappend_oid(cmd->after, form->ctgfoid);
-				break;
-			}
-		}
-		count++;
-	}
-	systable_endscan_ordered(scandesc);
-
-	index_close(irel, AccessShareLock);
-	heap_close(rel, AccessShareLock);
-
-	return count > 0;
-}
-
 static void
-call_cmdtrigger_procedure(CommandContext cmd, RegProcedure proc, const char *when)
+call_event_trigger_procedure(EventContext ev_ctx, TrigEvent tev,
+							 RegProcedure proc)
 {
 	FmgrInfo	flinfo;
 	FunctionCallInfoData fcinfo;
@@ -657,12 +635,60 @@ call_cmdtrigger_procedure(CommandContext cmd, RegProcedure proc, const char *whe
 	 * We prepare a dedicated Node here so as not to publish internal data.
 	 */
 	trigdata.type		= T_EventTriggerData;
-	trigdata.when		= (char *)when;
-	trigdata.tag		= cmd->tag;
-	trigdata.objectId	= cmd->objectId;
-	trigdata.schemaname = cmd->schemaname;
-	trigdata.objectname = cmd->objectname;
-	trigdata.parsetree	= cmd->parsetree;
+	trigdata.toplevel	= ev_ctx->toplevel;
+	trigdata.tag		= ev_ctx->tag;
+	trigdata.objectId	= ev_ctx->objectId;
+	trigdata.schemaname = ev_ctx->schemaname;
+	trigdata.objectname = ev_ctx->objectname;
+	trigdata.parsetree	= ev_ctx->parsetree;
+
+	/* rebuild the gram.y string from the TrigEvent enum value */
+	switch (tev)
+	{
+		case E_CommandStart:
+			trigdata.when = pstrdup("command_start");
+			break;
+
+		case E_CommandEnd:
+			trigdata.when = pstrdup("command_end");
+			break;
+
+		case E_SecurityCheck:
+			trigdata.when = pstrdup("security_check");
+			break;
+
+		case E_ConsistencyCheck:
+			trigdata.when = pstrdup("consistency_check");
+			break;
+
+		case E_NameLookup:
+			trigdata.when = pstrdup("name_lookup");
+			break;
+
+		case E_CreateCommand:
+			trigdata.when = pstrdup("create");
+			break;
+
+		case E_AlterCommand:
+			trigdata.when = pstrdup("alter");
+			break;
+
+		case E_RenameCommand:
+			trigdata.when = pstrdup("rename");
+			break;
+
+		case E_AlterOwnerCommand:
+			trigdata.when = pstrdup("alter_owner");
+			break;
+
+		case E_AlterSchemaCommand:
+			trigdata.when = pstrdup("alter_schema");
+			break;
+
+		case E_DropCommand:
+			trigdata.when = pstrdup("drop");
+			break;
+	}
 
 	/*
 	 * Call the function, passing no arguments but setting a context.
@@ -678,133 +704,43 @@ call_cmdtrigger_procedure(CommandContext cmd, RegProcedure proc, const char *whe
 }
 
 /*
- * Execute the procedures attached to the command. We pass the list of
- * procedures to use (either cmd->before or cmd->after) explicitely.
- *
- * The when argument allows to fill the trigger special variables.
- */
-static void
-exec_command_triggers_internal(CommandContext cmd, char when)
-{
-	List		*procs[2];
-	char		*whenstr;
-	ListCell	*cell;
-	int i;
-
-	switch (when)
-	{
-		case CMD_TRIGGER_FIRED_BEFORE:
-			whenstr = "BEFORE";
-			procs[0] = cmd->before_any;
-			procs[1] = cmd->before;
-			break;
-
-		case CMD_TRIGGER_FIRED_AFTER:
-			whenstr = "AFTER";
-			procs[0] = cmd->after;
-			procs[1] = cmd->after_any;
-			break;
-
-		default:
-			elog(ERROR, "unrecognized command trigger condition: %c", when);
-			break;
-	}
-
-	for(i=0; i<2; i++)
-	{
-		foreach(cell, procs[i])
-		{
-			Oid proc = lfirst_oid(cell);
-
-			call_cmdtrigger_procedure(cmd, (RegProcedure)proc, whenstr);
-		}
-	}
-}
-
-/*
  * Routine to call to setup a EventContextData evt.
- *
- * This ensures that cmd->before and cmd->after are set to meaningful values.
  */
-!void
-InitCommandContext(CommandContext cmd, const Node *stmt)
+void
+InitEventContext(EventContext evt, const Node *stmt)
 {
-	cmd->tag = (char *) CreateCommandTag((Node *)stmt);
-	cmd->parsetree  = (Node *)stmt;
-	cmd->objectId   = InvalidOid;
-	cmd->objectname = NULL;
-	cmd->schemaname = NULL;
-	cmd->before     = NIL;
-	cmd->after      = NIL;
-	cmd->before_any = NIL;
-	cmd->after_any  = NIL;
-	cmd->oldmctx    = NULL;
-	cmd->cmdmctx    = NULL;
-
-	/* Specifically drop support for event triggers on event triggers */
-	switch (nodeTag(stmt))
-	{
-		case T_RenameStmt:
-			if (((RenameStmt *) stmt)->renameType == OBJECT_EVENT_TRIGGER)
-				return;
-
-		case T_DropStmt:
-			if (((DropStmt *) stmt)->removeType == OBJECT_EVENT_TRIGGER)
-				return;
-
-		case T_IndexStmt:
-			if (((IndexStmt *)stmt)->concurrent)
-				return;
-
-		default:
-			ListCommandTriggers(cmd, true);   /* list ANY command triggers */
-			ListCommandTriggers(cmd, false);  /* and triggers for this command tag */
-	}
+	evt->command = -1;
+	evt->toplevel = NULL;
+	evt->tag = (char *) CreateCommandTag((Node *)stmt);
+	evt->parsetree  = (Node *)stmt;
+	evt->objectId   = InvalidOid;
+	evt->objectname = NULL;
+	evt->schemaname = NULL;
 }
 
 /*
- * InitCommandContext() must have been called when CommandFiresTriggers() is
- * called. When CommandFiresTriggers() returns false, cmd structure needs not
- * be initialized further.
+ * InitEventContext() must have been called when CommandFiresTriggers() is
+ * called. When CommandFiresTriggers() returns false, the EventContext
+ * structure needs not be initialized further.
  *
- * There's no place where we can skip BEFORE command trigger initialization
- * when we have an AFTER command triggers to run, because objectname and
- * schemaname are needed in both places, so we check both here.
- *
- * Integration is always on the form:
- *
- * if (CommandFiresTriggers(cmd)
- * {
- *      cmd->objectname = pstrdup(...);
- *      ...
- *
- *      ExecBeforeCommandTriggers(cmd);
- * }
- *
- * The same applies to after command triggers, so that we are able to switch
- * Memory contexts all from here.
+ * When calling CommandFiresTriggers() the command field must already have been
+ * set.
  */
 bool
-CommandFiresTriggers(CommandContext cmd)
+CommandFiresTriggers(EventContext ev_ctx)
 {
-	if (cmd == NULL)
-		return false;
+	int j;
 
-	if (cmd->before != NIL || cmd->before_any != NIL
-		 || cmd->after != NIL || cmd->after_any != NIL)
-	{
-		cmd->oldmctx = CurrentMemoryContext;
-		cmd->cmdmctx =
-			AllocSetContextCreate(CurrentMemoryContext,
-								  "CommandTriggerContext",
-								  ALLOCSET_DEFAULT_MINSIZE,
-								  ALLOCSET_DEFAULT_INITSIZE,
-								  ALLOCSET_DEFAULT_MAXSIZE);
+	Assert(ev_ctx->command != -1);
 
-		MemoryContextSwitchTo(cmd->cmdmctx);
+	/* Make sure we have initialized at least once the cache */
+	BuildEventTriggerCache(false);
 
-		return true;
-	}
+	for(j=1; j < EVTG_MAX_TRIG_EVENT; j++)
+		if (EventCommandTriggerCache[ev_ctx->command][j] != NIL)
+			/* this command fires at least a trigger */
+			return true;
+
 	return false;
 }
 
@@ -813,47 +749,43 @@ CommandFiresTriggers(CommandContext cmd)
  * command triggers when we have none to Execute, so we provide this API too.
  */
 bool
-CommandFiresAfterTriggers(CommandContext cmd)
+CommandFiresTriggersForEvent(EventContext ev_ctx, TrigEvent tev)
 {
-	if (cmd == NULL)
-		return false;
+	BuildEventTriggerCache(false);
+	return EventCommandTriggerCache[ev_ctx->command][tev] != NIL;
+}
 
-	if (cmd->before != NIL || cmd->before_any != NIL
-		|| cmd->after != NIL || cmd->after_any != NIL)
+void
+ExecEventTriggers(EventContext ev_ctx, TrigEvent tev)
+{
+	ListCell *lc;
+
+	BuildEventTriggerCache(false);
+
+	foreach(lc, EventCommandTriggerCache[ev_ctx->command][tev])
 	{
-		MemoryContextSwitchTo(cmd->cmdmctx);
-		return true;
+		RegProcedure proc = (RegProcedure) lfirst_oid(lc);
+
+		call_event_trigger_procedure(ev_ctx, tev, proc);
 	}
-	return false;
+	return;
 }
 
-/*
- * In the various Exec...CommandTriggers functions, we still protect against
- * and empty procedure list so as not to create a MemoryContext then switch to
- * it unnecessarily.
- */
-void
-ExecBeforeCommandTriggers(CommandContext cmd)
+/* COMPAT, TO REMOVE */
+bool
+CommandFiresAfterTriggers(EventContext ev_ctx)
 {
-	if (cmd == NULL)
-		return;
-
-	/* that will execute under command trigger memory context */
-	exec_command_triggers_internal(cmd, CMD_TRIGGER_FIRED_BEFORE);
-
-	/* switch back to the command Memory Context now */
-	MemoryContextSwitchTo(cmd->oldmctx);
+	return CommandFiresTriggersForEvent(ev_ctx, E_CommandEnd);
 }
 
 void
-ExecAfterCommandTriggers(CommandContext cmd)
+ExecBeforeCommandTriggers(EventContext ev_ctx)
 {
-	if (cmd == NULL)
-		return;
+	ExecEventTriggers(ev_ctx, E_CommandStart);
+}
 
-	/* that will execute under command trigger memory context */
-	exec_command_triggers_internal(cmd, CMD_TRIGGER_FIRED_AFTER);
-
-	/* switch back to the command Memory Context now */
-	MemoryContextSwitchTo(cmd->oldmctx);
+void
+ExecAfterCommandTriggers(EventContext ev_ctx)
+{
+	ExecEventTriggers(ev_ctx, E_CommandEnd);
 }

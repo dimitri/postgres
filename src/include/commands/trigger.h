@@ -13,7 +13,7 @@
 #ifndef TRIGGER_H
 #define TRIGGER_H
 
-#include "commands/cmdtrigger.h"
+#include "commands/event_trigger.h"
 #include "nodes/execnodes.h"
 #include "nodes/parsenodes.h"
 
@@ -116,7 +116,7 @@ extern Oid CreateTrigger(CreateTrigStmt *stmt, const char *queryString,
 extern void RemoveTriggerById(Oid trigOid);
 extern Oid	get_trigger_oid(Oid relid, const char *name, bool missing_ok);
 
-extern void renametrig(RenameStmt *stmt, CommandContext cmd);
+extern void renametrig(RenameStmt *stmt, EventContext evt);
 
 extern void EnableDisableTrigger(Relation rel, const char *tgname,
 					 char fires_when, bool skip_system);

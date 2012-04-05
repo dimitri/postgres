@@ -14,43 +14,43 @@
 #ifndef TYPECMDS_H
 #define TYPECMDS_H
 
-#include "commands/cmdtrigger.h"
+#include "commands/event_trigger.h"
 #include "utils/lsyscache.h"
 #include "nodes/parsenodes.h"
 
 
 #define DEFAULT_TYPDELIM		','
 
-extern void DefineType(List *names, List *parameters, CommandContext cmd);
+extern void DefineType(List *names, List *parameters, EventContext evt);
 extern void RemoveTypeById(Oid typeOid);
 extern void DefineDomain(CreateDomainStmt *stmt);
 extern void DefineEnum(CreateEnumStmt *stmt);
 extern void DefineRange(CreateRangeStmt *stmt);
 extern void AlterEnum(AlterEnumStmt *stmt);
-extern Oid	DefineCompositeType(RangeVar *typevar, List *coldeflist, CommandContext cmd);
+extern Oid	DefineCompositeType(RangeVar *typevar, List *coldeflist, EventContext evt);
 extern Oid	AssignTypeArrayOid(void);
 
-extern void AlterDomainDefault(List *names, Node *defaultRaw, CommandContext cmd);
-extern void AlterDomainNotNull(List *names, bool notNull, CommandContext cmd);
-extern void AlterDomainAddConstraint(List *names, Node *constr, CommandContext cmd);
-extern void AlterDomainValidateConstraint(List *names, char *constrName, CommandContext cmd);
+extern void AlterDomainDefault(List *names, Node *defaultRaw, EventContext evt);
+extern void AlterDomainNotNull(List *names, bool notNull, EventContext evt);
+extern void AlterDomainAddConstraint(List *names, Node *constr, EventContext evt);
+extern void AlterDomainValidateConstraint(List *names, char *constrName, EventContext evt);
 extern void AlterDomainDropConstraint(List *names, const char *constrName,
 									  DropBehavior behavior, bool missing_ok,
-										  CommandContext cmd);
+										  EventContext evt);
 
 extern List *GetDomainConstraints(Oid typeOid);
 
-extern void RenameType(RenameStmt *stmt, CommandContext cmd);
+extern void RenameType(RenameStmt *stmt, EventContext evt);
 extern void AlterTypeOwner(List *names, Oid newOwnerId, ObjectType objecttype,
-							   CommandContext cmd);
+							   EventContext evt);
 extern void AlterTypeOwnerInternal(Oid typeOid, Oid newOwnerId,
 					   bool hasDependEntry);
 extern void AlterTypeNamespace(List *names, const char *newschema,
-								   ObjectType objecttype, CommandContext cmd);
-extern Oid	AlterTypeNamespace_oid(Oid typeOid, Oid nspOid, CommandContext cmd);
+								   ObjectType objecttype, EventContext evt);
+extern Oid	AlterTypeNamespace_oid(Oid typeOid, Oid nspOid, EventContext evt);
 extern Oid AlterTypeNamespaceInternal(Oid typeOid, Oid nspOid,
 						   bool isImplicitArray,
 						   bool errorOnTableType,
-						   CommandContext cmd);
+						   EventContext evt);
 
 #endif   /* TYPECMDS_H */

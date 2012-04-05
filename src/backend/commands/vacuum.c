@@ -127,16 +127,16 @@ vacuum(VacuumStmt *vacstmt, Oid relid, bool do_toast,
 	if (!IsAutoVacuumWorkerProcess())
 	{
 		EventContextData evt;
-		InitCommandContext(&evt, (Node *)vacstmt);
+		InitEventContext(&evt, (Node *)vacstmt);
 
 		if (CommandFiresTriggers(&evt))
 		{
-			cmd.objectId = relid;
+			evt.objectId = relid;
 
 			if (vacstmt->relation != NULL)
 			{
-				cmd.objectname = vacstmt->relation->relname;
-				cmd.schemaname = vacstmt->relation->schemaname;
+				evt.objectname = vacstmt->relation->relname;
+				evt.schemaname = vacstmt->relation->schemaname;
 			}
 			ExecBeforeCommandTriggers(&evt);
 		}

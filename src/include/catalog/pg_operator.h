@@ -23,7 +23,7 @@
 #define PG_OPERATOR_H
 
 #include "catalog/genbki.h"
-#include "commands/cmdtrigger.h"
+#include "commands/event_trigger.h"
 #include "nodes/pg_list.h"
 
 /* ----------------
@@ -1727,6 +1727,6 @@ extern void OperatorCreate(const char *operatorName,
 			   Oid joinId,
 			   bool canMerge,
 			   bool canHash,
-			   CommandContext cmd);
+			   EventContext evt);
 
 #endif   /* PG_OPERATOR_H */

@@ -19,8 +19,8 @@
 #include "postgres.h"
 
 #include "access/xact.h"
+#include "commands/event_trigger.h"
 #include "commands/trigger.h"
-#include "commands/cmdtrigger.h"
 #include "executor/spi.h"
 
 /**********************************************************************
@@ -933,7 +933,7 @@ extern Datum plpgsql_exec_function(PLpgSQL_function *func,
 extern HeapTuple plpgsql_exec_trigger(PLpgSQL_function *func,
 					 TriggerData *trigdata);
 extern void plpgsql_exec_command_trigger(PLpgSQL_function *func,
-					 CommandTriggerData *trigdata);
+					 EventTriggerData *trigdata);
 extern void plpgsql_xact_cb(XactEvent event, void *arg);
 extern void plpgsql_subxact_cb(SubXactEvent event, SubTransactionId mySubid,
 				   SubTransactionId parentSubid, void *arg);

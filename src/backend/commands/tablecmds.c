@@ -752,7 +752,7 @@ RemoveRelations(DropStmt *drop)
 	char		relkind;
 	ListCell   *cell;
 	int i = 0, n = list_length(drop->objects);
-	EventContext evt = (CommandContext *) palloc(n * sizeof(CommandContext));
+	EventContext *evts = (EventContext *) palloc(n * sizeof(EventContext));
 
 	/*
 	 * First we identify all the relations, then we delete them in a single
@@ -832,7 +832,7 @@ RemoveRelations(DropStmt *drop)
 		/*
 		 * Call BEFORE DROP command triggers
 		 */
-		InitCommandContext(&evt, (Node *)drop);
+		InitEventContext(&evt, (Node *)drop);
 
 		if (CommandFiresTriggers(&evt))
 		{
@@ -2745,13 +2745,13 @@ AlterTable(Oid relid, LOCKMODE lockmode, AlterTableStmt *stmt)
 	CheckTableNotInUse(rel, "ALTER TABLE");
 
 	/* Call BEFORE ALTER TABLE triggers */
-	InitCommandContext(&evt, (Node *)stmt);
+	InitEventContext(&evt, (Node *)stmt);
 
 	if (CommandFiresTriggers(&evt))
 	{
-		cmd.objectId = relid;
-		cmd.objectname = stmt->relation->relname;
-		cmd.schemaname = get_namespace_name(
+		evt.objectId = relid;
+		evt.objectname = stmt->relation->relname;
+		evt.schemaname = get_namespace_name(
 			RangeVarGetCreationNamespace(stmt->relation));
 
 		ExecBeforeCommandTriggers(&evt);
@@ -9904,13 +9904,13 @@ AlterTableNamespace(AlterObjectSchemaStmt *stmt)
 	CheckSetNamespace(oldNspOid, nspOid, RelationRelationId, relid);
 
 	/* Call BEFORE ALTER TABLE triggers */
-	InitCommandContext(&evt, (Node *)stmt);
+	InitEventContext(&evt, (Node *)stmt);
 
 	if (CommandFiresTriggers(&evt))
 	{
-		cmd.objectId = relid;
-		cmd.objectname = stmt->relation->relname;
-		cmd.schemaname = get_namespace_name(oldNspOid);
+		evt.objectId = relid;
+		evt.objectname = stmt->relation->relname;
+		evt.schemaname = get_namespace_name(oldNspOid);
 
 		ExecBeforeCommandTriggers(&evt);
 	}
@@ -9940,7 +9940,7 @@ AlterTableNamespace(AlterObjectSchemaStmt *stmt)
 	/* Call AFTER ALTER TABLE triggers */
 	if (CommandFiresAfterTriggers(&evt))
 	{
-		cmd.schemaname = get_namespace_name(nspOid);
+		evt.schemaname = get_namespace_name(nspOid);
 		ExecAfterCommandTriggers(&evt);
 	}
 }

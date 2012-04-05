@@ -14,7 +14,7 @@
 #ifndef DEFREM_H
 #define DEFREM_H
 
-#include "commands/cmdtrigger.h"
+#include "commands/event_trigger.h"
 #include "nodes/parsenodes.h"
 
 /* commands/dropcmds.c */
@@ -41,9 +41,9 @@ extern Oid DefineIndex(RangeVar *heapRelation,
 			bool skip_build,
 			bool quiet,
 			bool concurrent,
-			CommandContext cmd);
-extern void ReindexIndex(RangeVar *indexRelation, CommandContext cmd);
-extern void ReindexTable(RangeVar *relation, CommandContext cmd);
+			EventContext evt);
+extern void ReindexIndex(RangeVar *indexRelation, EventContext evt);
+extern void ReindexTable(RangeVar *relation, EventContext evt);
 extern void ReindexDatabase(const char *databaseName,
 				bool do_system, bool do_user);
 extern char *makeObjectName(const char *name1, const char *name2,
@@ -66,34 +66,34 @@ extern void CreateFunction(CreateFunctionStmt *stmt, const char *queryString);
 extern void RemoveFunctionById(Oid funcOid);
 extern void SetFunctionReturnType(Oid funcOid, Oid newRetType);
 extern void SetFunctionArgType(Oid funcOid, int argIndex, Oid newArgType);
-extern void RenameFunction(List *name, List *argtypes, const char *newname, CommandContext cmd);
-extern void AlterFunctionOwner(List *name, List *argtypes, Oid newOwnerId, CommandContext cmd);
-extern void AlterFunctionOwner_oid(Oid procOid, Oid newOwnerId, CommandContext cmd);
+extern void RenameFunction(List *name, List *argtypes, const char *newname, EventContext evt);
+extern void AlterFunctionOwner(List *name, List *argtypes, Oid newOwnerId, EventContext evt);
+extern void AlterFunctionOwner_oid(Oid procOid, Oid newOwnerId, EventContext evt);
 extern void AlterFunction(AlterFunctionStmt *stmt);
 extern void CreateCast(CreateCastStmt *stmt);
 extern void DropCastById(Oid castOid);
 extern void AlterFunctionNamespace(List *name, List *argtypes, bool isagg,
-								   const char *newschema, CommandContext cmd);
+								   const char *newschema, EventContext evt);
 extern Oid	AlterFunctionNamespace_oid(Oid procOid, Oid nspOid,
-									   CommandContext cmd);
+									   EventContext evt);
 extern void ExecuteDoStmt(DoStmt *stmt);
 extern Oid	get_cast_oid(Oid sourcetypeid, Oid targettypeid, bool missing_ok);
 
 /* commands/operatorcmds.c */
-extern void DefineOperator(List *names, List *parameters, CommandContext cmd);
+extern void DefineOperator(List *names, List *parameters, EventContext evt);
 extern void RemoveOperatorById(Oid operOid);
 extern void AlterOperatorOwner(List *name, TypeName *typeName1,
-				   TypeName *typename2, Oid newOwnerId, CommandContext cmd);
+				   TypeName *typename2, Oid newOwnerId, EventContext evt);
 extern void AlterOperatorOwner_oid(Oid operOid, Oid newOwnerId);
 extern void AlterOperatorNamespace(List *names, List *argtypes,
-								   const char *newschema, CommandContext cmd);
+								   const char *newschema, EventContext evt);
 extern Oid	AlterOperatorNamespace_oid(Oid operOid, Oid newNspOid);
 
 /* commands/aggregatecmds.c */
 extern void DefineAggregate(List *name, List *args, bool oldstyle,
-							List *parameters, CommandContext cmd);
-extern void RenameAggregate(List *name, List *args, const char *newname, CommandContext cmd);
-extern void AlterAggregateOwner(List *name, List *args, Oid newOwnerId, CommandContext cmd);
+							List *parameters, EventContext evt);
+extern void RenameAggregate(List *name, List *args, const char *newname, EventContext evt);
+extern void AlterAggregateOwner(List *name, List *args, Oid newOwnerId, EventContext evt);
 
 /* commands/opclasscmds.c */
 extern void DefineOpClass(CreateOpClassStmt *stmt);
@@ -104,63 +104,63 @@ extern void RemoveOpFamilyById(Oid opfamilyOid);
 extern void RemoveAmOpEntryById(Oid entryOid);
 extern void RemoveAmProcEntryById(Oid entryOid);
 extern void RenameOpClass(List *name, const char *access_method,
-						  const char *newname, CommandContext cmd);
+						  const char *newname, EventContext evt);
 extern void RenameOpFamily(List *name, const char *access_method,
-						  const char *newname, CommandContext cmd);
+						  const char *newname, EventContext evt);
 extern void AlterOpClassOwner(List *name, const char *access_method,
-							  Oid newOwnerId, CommandContext cmd);
+							  Oid newOwnerId, EventContext evt);
 extern void AlterOpClassOwner_oid(Oid opclassOid, Oid newOwnerId);
 extern void AlterOpClassNamespace(List *name, char *access_method,
-								  const char *newschema, CommandContext cmd);
+								  const char *newschema, EventContext evt);
 extern Oid	AlterOpClassNamespace_oid(Oid opclassOid, Oid newNspOid);
 extern void AlterOpFamilyOwner(List *name, const char *access_method,
-							   Oid newOwnerId, CommandContext cmd);
+							   Oid newOwnerId, EventContext evt);
 extern void AlterOpFamilyOwner_oid(Oid opfamilyOid, Oid newOwnerId);
 extern void AlterOpFamilyNamespace(List *name, char *access_method,
-								   const char *newschema, CommandContext cmd);
+								   const char *newschema, EventContext evt);
 extern Oid	AlterOpFamilyNamespace_oid(Oid opfamilyOid, Oid newNspOid);
 extern Oid	get_am_oid(const char *amname, bool missing_ok);
 extern Oid	get_opclass_oid(Oid amID, List *opclassname, bool missing_ok);
 extern Oid	get_opfamily_oid(Oid amID, List *opfamilyname, bool missing_ok);
 
 /* commands/tsearchcmds.c */
-extern void DefineTSParser(List *names, List *parameters, CommandContext cmd);
-extern void RenameTSParser(List *oldname, const char *newname, CommandContext cmd);
-extern void AlterTSParserNamespace(List *name, const char *newschema, CommandContext cmd);
+extern void DefineTSParser(List *names, List *parameters, EventContext evt);
+extern void RenameTSParser(List *oldname, const char *newname, EventContext evt);
+extern void AlterTSParserNamespace(List *name, const char *newschema, EventContext evt);
 extern Oid	AlterTSParserNamespace_oid(Oid prsId, Oid newNspOid);
 extern void RemoveTSParserById(Oid prsId);
 
-extern void DefineTSDictionary(List *names, List *parameters, CommandContext cmd);
-extern void RenameTSDictionary(List *oldname, const char *newname, CommandContext cmd);
+extern void DefineTSDictionary(List *names, List *parameters, EventContext evt);
+extern void RenameTSDictionary(List *oldname, const char *newname, EventContext evt);
 extern void RemoveTSDictionaryById(Oid dictId);
 extern void AlterTSDictionary(AlterTSDictionaryStmt *stmt);
-extern void AlterTSDictionaryOwner(List *name, Oid newOwnerId, CommandContext cmd);
-extern void AlterTSDictionaryNamespace(List *name, const char *newschema, CommandContext cmd);
+extern void AlterTSDictionaryOwner(List *name, Oid newOwnerId, EventContext evt);
+extern void AlterTSDictionaryNamespace(List *name, const char *newschema, EventContext evt);
 extern Oid	AlterTSDictionaryNamespace_oid(Oid dictId, Oid newNspOid);
 
-extern void DefineTSTemplate(List *names, List *parameters, CommandContext cmd);
-extern void RenameTSTemplate(List *oldname, const char *newname, CommandContext cmd);
-extern void AlterTSTemplateNamespace(List *name, const char *newschema, CommandContext cmd);
+extern void DefineTSTemplate(List *names, List *parameters, EventContext evt);
+extern void RenameTSTemplate(List *oldname, const char *newname, EventContext evt);
+extern void AlterTSTemplateNamespace(List *name, const char *newschema, EventContext evt);
 extern Oid	AlterTSTemplateNamespace_oid(Oid tmplId, Oid newNspOid);
 extern void RemoveTSTemplateById(Oid tmplId);
 
-extern void DefineTSConfiguration(List *names, List *parameters, CommandContext cmd);
-extern void RenameTSConfiguration(List *oldname, const char *newname, CommandContext cmd);
+extern void DefineTSConfiguration(List *names, List *parameters, EventContext evt);
+extern void RenameTSConfiguration(List *oldname, const char *newname, EventContext evt);
 extern void RemoveTSConfigurationById(Oid cfgId);
 extern void AlterTSConfiguration(AlterTSConfigurationStmt *stmt);
-extern void AlterTSConfigurationOwner(List *name, Oid newOwnerId, CommandContext cmd);
-extern void AlterTSConfigurationNamespace(List *name, const char *newschema, CommandContext cmd);
+extern void AlterTSConfigurationOwner(List *name, Oid newOwnerId, EventContext evt);
+extern void AlterTSConfigurationNamespace(List *name, const char *newschema, EventContext evt);
 extern Oid	AlterTSConfigurationNamespace_oid(Oid cfgId, Oid newNspOid);
 
 extern text *serialize_deflist(List *deflist);
 extern List *deserialize_deflist(Datum txt);
 
 /* commands/foreigncmds.c */
-extern void RenameForeignServer(const char *oldname, const char *newname, CommandContext cmd);
-extern void RenameForeignDataWrapper(const char *oldname, const char *newname, CommandContext cmd);
-extern void AlterForeignServerOwner(const char *name, Oid newOwnerId, CommandContext cmd);
+extern void RenameForeignServer(const char *oldname, const char *newname, EventContext evt);
+extern void RenameForeignDataWrapper(const char *oldname, const char *newname, EventContext evt);
+extern void AlterForeignServerOwner(const char *name, Oid newOwnerId, EventContext evt);
 extern void AlterForeignServerOwner_oid(Oid , Oid newOwnerId);
-extern void AlterForeignDataWrapperOwner(const char *name, Oid newOwnerId, CommandContext cmd);
+extern void AlterForeignDataWrapperOwner(const char *name, Oid newOwnerId, EventContext evt);
 extern void AlterForeignDataWrapperOwner_oid(Oid fwdId, Oid newOwnerId);
 extern void CreateForeignDataWrapper(CreateFdwStmt *stmt);
 extern void AlterForeignDataWrapper(AlterFdwStmt *stmt);

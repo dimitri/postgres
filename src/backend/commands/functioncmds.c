@@ -975,13 +975,13 @@ CreateFunction(CreateFunctionStmt *stmt, const char *queryString)
 	/*
 	 * Call BEFORE CREATE FUNCTION triggers
 	 */
-	InitCommandContext(&evt, (Node *)stmt);
+	InitEventContext(&evt, (Node *)stmt);
 
 	if (CommandFiresTriggers(&evt))
 	{
-		cmd.objectId = InvalidOid;
-		cmd.objectname = (char *)funcname;
-		cmd.schemaname = get_namespace_name(namespaceId);
+		evt.objectId = InvalidOid;
+		evt.objectname = (char *)funcname;
+		evt.schemaname = get_namespace_name(namespaceId);
 
 		ExecBeforeCommandTriggers(&evt);
 	}
@@ -1017,7 +1017,7 @@ CreateFunction(CreateFunctionStmt *stmt, const char *queryString)
 	/* Call AFTER CREATE FUNCTION triggers */
 	if (CommandFiresAfterTriggers(&evt))
 	{
-		cmd.objectId = procOid;
+		evt.objectId = procOid;
 		ExecAfterCommandTriggers(&evt);
 	}
 }
@@ -1401,13 +1401,13 @@ AlterFunction(AlterFunctionStmt *stmt)
 	}
 
 	/* Call BEFORE ALTER FUNCTION command triggers */
-	InitCommandContext(&evt, (Node *)stmt);
+	InitEventContext(&evt, (Node *)stmt);
 
 	if (CommandFiresTriggers(&evt))
 	{
-		cmd.objectId = HeapTupleGetOid(tup);
-		cmd.objectname = pstrdup(NameStr(procForm->proname));
-		cmd.schemaname = get_namespace_name(procForm->pronamespace);
+		evt.objectId = HeapTupleGetOid(tup);
+		evt.objectname = pstrdup(NameStr(procForm->proname));
+		evt.schemaname = get_namespace_name(procForm->pronamespace);
 
 		ExecBeforeCommandTriggers(&evt);
 	}
@@ -1773,13 +1773,13 @@ CreateCast(CreateCastStmt *stmt)
 	}
 
 	/* Call BEFORE CREATE CAST command triggers */
-	InitCommandContext(&evt, (Node *)stmt);
+	InitEventContext(&evt, (Node *)stmt);
 
 	if (CommandFiresTriggers(&evt))
 	{
-		cmd.objectId = InvalidOid;
-		cmd.objectname = NULL;	/* composite name, not supported */
-		cmd.schemaname = NULL;	/* casts don't live in a namespace */
+		evt.objectId = InvalidOid;
+		evt.objectname = NULL;	/* composite name, not supported */
+		evt.schemaname = NULL;	/* casts don't live in a namespace */
 
 		ExecBeforeCommandTriggers(&evt);
 	}
@@ -1855,7 +1855,7 @@ CreateCast(CreateCastStmt *stmt)
 
 	if (CommandFiresAfterTriggers(&evt))
 	{
-		cmd.objectId = castid;
+		evt.objectId = castid;
 		ExecAfterCommandTriggers(&evt);
 	}
 }

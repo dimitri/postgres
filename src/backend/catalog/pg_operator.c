@@ -337,7 +337,7 @@ OperatorCreate(const char *operatorName,
 			   Oid joinId,
 			   bool canMerge,
 			   bool canHash,
-			   CommandContext cmd)
+			   EventContext evt)
 {
 	Relation	pg_operator_desc;
 	HeapTuple	tup;
@@ -436,13 +436,13 @@ OperatorCreate(const char *operatorName,
 	/*
 	 * Call BEFORE CREATE AGGREGARE triggers
 	 */
-	if (CommandFiresTriggers(cmd))
+	if (CommandFiresTriggers(evt))
 	{
-		cmd->objectId = InvalidOid;
-		cmd->objectname = (char *)operatorName;
-		cmd->schemaname = get_namespace_name(operatorNamespace);
+		evt->objectId = InvalidOid;
+		evt->objectname = (char *)operatorName;
+		evt->schemaname = get_namespace_name(operatorNamespace);
 
-		ExecBeforeCommandTriggers(cmd);
+		ExecBeforeCommandTriggers(evt);
 	}
 
 	/*
@@ -579,10 +579,10 @@ OperatorCreate(const char *operatorName,
 		OperatorUpd(operatorObjectId, commutatorId, negatorId);
 
 	/* Call AFTER CREATE OPERATOR triggers */
-	if (CommandFiresAfterTriggers(cmd))
+	if (CommandFiresAfterTriggers(evt))
 	{
-		cmd->objectId = operatorObjectId;
-		ExecAfterCommandTriggers(cmd);
+		evt->objectId = operatorObjectId;
+		ExecAfterCommandTriggers(evt);
 	}
 }
 

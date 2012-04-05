@@ -994,13 +994,13 @@ DefineDomain(CreateDomainStmt *stmt)
 	/*
 	 * Call BEFORE CREATE DOMAIN triggers
 	 */
-	InitCommandContext(&evt, (Node *)stmt);
+	InitEventContext(&evt, (Node *)stmt);
 
 	if (CommandFiresTriggers(&evt))
 	{
-		cmd.objectId = InvalidOid;
-		cmd.objectname = (char *)domainName;
-		cmd.schemaname = get_namespace_name(domainNamespace);
+		evt.objectId = InvalidOid;
+		evt.objectname = (char *)domainName;
+		evt.schemaname = get_namespace_name(domainNamespace);
 
 		ExecBeforeCommandTriggers(&evt);
 	}
@@ -1076,7 +1076,7 @@ DefineDomain(CreateDomainStmt *stmt)
 	/* Call AFTER CREATE DOMAIN triggers */
 	if (CommandFiresAfterTriggers(&evt))
 	{
-		cmd.objectId = domainoid;
+		evt.objectId = domainoid;
 		ExecAfterCommandTriggers(&evt);
 	}
 }
@@ -1126,13 +1126,13 @@ DefineEnum(CreateEnumStmt *stmt)
 	/*
 	 * Call BEFORE CREATE (enum) TYPE triggers
 	 */
-	InitCommandContext(&evt, (Node *)stmt);
+	InitEventContext(&evt, (Node *)stmt);
 
 	if (CommandFiresTriggers(&evt))
 	{
-		cmd.objectId = InvalidOid;
-		cmd.objectname = enumName;
-		cmd.schemaname = get_namespace_name(enumNamespace);
+		evt.objectId = InvalidOid;
+		evt.objectname = enumName;
+		evt.schemaname = get_namespace_name(enumNamespace);
 
 		ExecBeforeCommandTriggers(&evt);
 	}
@@ -1218,7 +1218,7 @@ DefineEnum(CreateEnumStmt *stmt)
 	/* Call AFTER CREATE (enum) TYPE triggers */
 	if (CommandFiresAfterTriggers(&evt))
 	{
-		cmd.objectId = enumTypeOid;
+		evt.objectId = enumTypeOid;
 		ExecAfterCommandTriggers(&evt);
 	}
 }
@@ -1456,13 +1456,13 @@ DefineRange(CreateRangeStmt *stmt)
 	/*
 	 * Call BEFORE CREATE EXTENSION triggers
 	 */
-	InitCommandContext(&evt, (Node *)stmt);
+	InitEventContext(&evt, (Node *)stmt);
 
 	if (CommandFiresTriggers(&evt))
 	{
-		cmd.objectId = InvalidOid;
-		cmd.objectname = typeName;
-		cmd.schemaname = get_namespace_name(typeNamespace);
+		evt.objectId = InvalidOid;
+		evt.objectname = typeName;
+		evt.schemaname = get_namespace_name(typeNamespace);
 
 		ExecBeforeCommandTriggers(&evt);
 	}
@@ -1553,7 +1553,7 @@ DefineRange(CreateRangeStmt *stmt)
 	/* Call AFTER CREATE (range) TYPE triggers */
 	if (CommandFiresAfterTriggers(&evt))
 	{
-		cmd.objectId = typoid;
+		evt.objectId = typoid;
 		ExecAfterCommandTriggers(&evt);
 	}
 }

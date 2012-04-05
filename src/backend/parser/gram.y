@@ -271,7 +271,7 @@ static void processCASbits(int cas_bits, int location, const char *constrType,
 %type <value>	TriggerFuncArg
 %type <node>	TriggerWhen
 %type <str>		enable_trigger event_trigger_variable
-%tupe <ival>    event_name trigger_command
+%type <ival>    event_name trigger_command
 
 %type <str>		copy_file_name
 				database_name access_method_clause access_method attr_name
@@ -4471,7 +4471,7 @@ DropEventTrigStmt:
 AlterEventTrigStmt:
 			ALTER EVENT TRIGGER name enable_trigger
 				{
-					AlterCmdTrigStmt *n = makeNode(AlterEventTrigStmt);
+					AlterEventTrigStmt *n = makeNode(AlterEventTrigStmt);
 					n->trigname   = $4;
 					n->tgenabled  = $5;
 					$$ = (Node *) n;
@@ -7001,10 +7001,10 @@ RenameStmt: ALTER AGGREGATE func_name aggr_args RENAME TO name
 					n->missing_ok = false;
 					$$ = (Node *)n;
 				}
-			| ALTER COMMAND TRIGGER name RENAME TO name
+			| ALTER EVENT TRIGGER name RENAME TO name
 				{
 					RenameStmt *n = makeNode(RenameStmt);
-					n->renameType = OBJECT_CMDTRIGGER;
+					n->renameType = OBJECT_EVENT_TRIGGER;
 					n->object  = list_make1(makeString($4));
 					n->newname = $7;
 					$$ = (Node *)n;

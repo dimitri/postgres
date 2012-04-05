@@ -254,22 +254,6 @@ _readDeclareCursorStmt(void)
 }
 
 /*
- * _readCreateCmdTrigStmt
- */
-static CreateCmdTrigStmt *
-_readCreateCmdTrigStmt(void)
-{
-	READ_LOCALS(CreateCmdTrigStmt);
-
-	READ_NODE_FIELD(command);
-	READ_STRING_FIELD(trigname);
-	READ_CHAR_FIELD(timing);
-	READ_NODE_FIELD(funcname);
-
-	READ_DONE();
-}
-
-/*
  * _readSortGroupClause
  */
 static SortGroupClause *
@@ -1270,8 +1254,6 @@ parseNodeString(void)
 
 	if (MATCH("QUERY", 5))
 		return_value = _readQuery();
-	else if (MATCH("CREATECMDTRIGSTMT", 17))
-		return_value = _readCreateCmdTrigStmt();
 	else if (MATCH("SORTGROUPCLAUSE", 15))
 		return_value = _readSortGroupClause();
 	else if (MATCH("WINDOWCLAUSE", 12))

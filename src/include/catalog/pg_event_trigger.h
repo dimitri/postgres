@@ -73,20 +73,34 @@ typedef FormData_pg_event_trigger *Form_pg_event_trigger;
  *
  *  foreach(cell, EventCommandTriggerCache[TrigEventCommand][TrigEvent])
  *
- * The ordering here is important, in order to be able to refuse some cases
- * (late trigger are not possible in commands implementing their own
- * transaction control behavior, such as CLUSTER or CREATE INDEX CONCURRENTLY.
+ * The ordering here is not so important apart from E_CommandStart being first,
+ * in order to be able to refuse some cases (later triggers are not possible in
+ * commands implementing their own transaction control behavior, such as
+ * CLUSTER or CREATE INDEX CONCURRENTLY).
+ *
+ * The ordering of events here also depends on whether we're doing a CREATE,
+ * ALTER or DROP command, or something else entirely (not yet supported in the
+ * code, though).
  */
 typedef enum TrigEvent
 {
 	E_CommandStart       = 1,
 	E_SecurityCheck      = 10,
-	E_ConsistencyCheck   = 20,
-	E_NameLookup         = 30,
-	E_CommandEnd         = 50,
+	E_ConsistencyCheck   = 15,
+	E_NameLookup         = 20,
+
+	E_CreateCommand      = 30,
+
+	E_AlterCommand       = 40,
+	E_RenameCommand,
+	E_AlterOwnerCommand,
+	E_AlterSchemaCommand,
+
+	E_DropCommand        = 50,
+	E_CommandEnd         = 51,
 } TrigEvent;
 
-#define EVTG_MAX_TRIG_EVENT 50
+#define EVTG_MAX_TRIG_EVENT 52
 
 /*
  * Supported commands
@@ -111,7 +125,7 @@ typedef enum TrigEventCommand
 	E_AlterSequence,
 	E_AlterServer,
 	E_AlterTable,
-	E_AlterTextSearcharser,
+	E_AlterTextSearchParser,
 	E_AlterTextSearchConfiguration,
 	E_AlterTextSearchDictionary,
 	E_AlterTextSearchTemplate,
@@ -146,7 +160,7 @@ typedef enum TrigEventCommand
 	E_CreateServer,
 	E_CreateTable,
 	E_CreateTableAs,
-	E_CreateTextSearcharser,
+	E_CreateTextSearchParser,
 	E_CreateTextSearchConfiguration,
 	E_CreateTextSearchDictionary,
 	E_CreateTextSearchTemplate,
@@ -174,7 +188,7 @@ typedef enum TrigEventCommand
 	E_DropSequence,
 	E_DropServer,
 	E_DropTable,
-	E_DropTextSearcharser,
+	E_DropTextSearchParser,
 	E_DropTextSearchConfiguration,
 	E_DropTextSearchDictionary,
 	E_DropTextSearchTemplate,

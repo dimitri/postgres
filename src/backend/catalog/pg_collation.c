@@ -23,7 +23,7 @@
 #include "catalog/pg_collation.h"
 #include "catalog/pg_collation_fn.h"
 #include "catalog/pg_namespace.h"
-#include "commands/cmdtrigger.h"
+#include "commands/event_trigger.h"
 #include "mb/pg_wchar.h"
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
@@ -43,7 +43,7 @@ CollationCreate(const char *collname, Oid collnamespace,
 				Oid collowner,
 				int32 collencoding,
 				const char *collcollate, const char *collctype,
-				CommandContext cmd)
+				EventContext evt)
 {
 	Relation	rel;
 	TupleDesc	tupDesc;
@@ -96,13 +96,13 @@ CollationCreate(const char *collname, Oid collnamespace,
 	/*
 	 * Call BEFORE CREATE COLLATION triggers
 	 */
-	if (CommandFiresTriggers(cmd))
+	if (CommandFiresTriggers(evt))
 	{
-		cmd->objectId = InvalidOid;
-		cmd->objectname = (char *)collname;
-		cmd->schemaname = get_namespace_name(collnamespace);
+		evt->objectId = InvalidOid;
+		evt->objectname = (char *)collname;
+		evt->schemaname = get_namespace_name(collnamespace);
 
-		ExecBeforeCommandTriggers(cmd);
+		ExecBeforeCommandTriggers(evt);
 	}
 
 	/* open pg_collation */
@@ -157,10 +157,10 @@ CollationCreate(const char *collname, Oid collnamespace,
 	heap_close(rel, RowExclusiveLock);
 
 	/* Call AFTER CREATE COLLATION triggers */
-	if (CommandFiresAfterTriggers(cmd))
+	if (CommandFiresAfterTriggers(evt))
 	{
-		cmd->objectId = oid;
-		ExecAfterCommandTriggers(cmd);
+		evt->objectId = oid;
+		ExecAfterCommandTriggers(evt);
 	}
 	return oid;
 }

@@ -224,6 +224,14 @@ RenameAggregate(List *name, List *args, const char *newname, EventContext evt)
 	Relation	rel;
 	AclResult	aclresult;
 
+	evt->command = E_AlterAggregate;
+
+	if (CommandFiresTriggersForEvent(evt, E_CommandStart))
+	{
+		ExecEventTriggers(evt, E_CommandStart);
+		ExecEventTriggers(evt, E_NameLookup);
+	}
+
 	rel = heap_open(ProcedureRelationId, RowExclusiveLock);
 
 	/* Look up function and make sure it's an aggregate */
@@ -250,6 +258,15 @@ RenameAggregate(List *name, List *args, const char *newname, EventContext evt)
 											   procForm->proargtypes.values),
 						get_namespace_name(namespaceOid))));
 
+	if (CommandFiresTriggersForEvent(evt, E_SecurityCheck))
+	{
+		evt->objectId = HeapTupleGetOid(tup);
+		evt->objectname = pstrdup(NameStr(procForm->proname));
+		evt->schemaname = get_namespace_name(namespaceOid);
+
+		ExecEventTriggers(evt, E_SecurityCheck);
+	}
+
 	/* must be owner */
 	if (!pg_proc_ownercheck(procOid, GetUserId()))
 		aclcheck_error(ACLCHECK_NOT_OWNER, ACL_KIND_PROC,
@@ -261,15 +278,11 @@ RenameAggregate(List *name, List *args, const char *newname, EventContext evt)
 		aclcheck_error(aclresult, ACL_KIND_NAMESPACE,
 					   get_namespace_name(namespaceOid));
 
-	/* Call BEFORE ALTER AGGREGATE triggers */
-	if (CommandFiresTriggers(evt))
-	{
-		evt->objectId = HeapTupleGetOid(tup);
-		evt->objectname = pstrdup(NameStr(procForm->proname));
-		evt->schemaname = get_namespace_name(namespaceOid);
+	if (CommandFiresTriggersForEvent(evt, E_AlterCommand))
+		ExecEventTriggers(evt, E_AlterCommand);
 
-		ExecBeforeCommandTriggers(evt);
-	}
+	if (CommandFiresTriggersForEvent(evt, E_RenameCommand))
+		ExecEventTriggers(evt, E_RenameCommand);
 
 	/* rename */
 	namestrcpy(&(((Form_pg_proc) GETSTRUCT(tup))->proname), newname);
@@ -279,12 +292,8 @@ RenameAggregate(List *name, List *args, const char *newname, EventContext evt)
 	heap_close(rel, NoLock);
 	heap_freetuple(tup);
 
-	/* Call AFTER ALTER AGGREGATE triggers */
-	if (CommandFiresAfterTriggers(evt))
-	{
-		evt->objectname = pstrdup(newname);
-		ExecAfterCommandTriggers(evt);
-	}
+	if (CommandFiresTriggersForEvent(evt, E_CommandEnd))
+		ExecEventTriggers(evt, E_CommandEnd);
 }
 
 /*

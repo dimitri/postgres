@@ -174,7 +174,7 @@ DefineVirtualRelation(RangeVar *relation, List *tlist, bool replace,
 		Relation	rel;
 		TupleDesc	descriptor;
 		List	   *atevts = NIL;
-		AlterTableEvt *atevt;
+		AlterTableCmd *atevt;
 
 		/* Relation is already locked, but we must build a relcache entry. */
 		rel = relation_open(viewOid, NoLock);
@@ -218,7 +218,7 @@ DefineVirtualRelation(RangeVar *relation, List *tlist, bool replace,
 		 * The new options list replaces the existing options list, even
 		 * if it's empty.
 		 */
-		atevt = makeNode(AlterTableEvt);
+		atevt = makeNode(AlterTableCmd);
 		atevt->subtype = AT_ReplaceRelOptions;
 		atevt->def = (Node *) options;
 		atevts = lappend(atevts, atevt);
@@ -240,7 +240,7 @@ DefineVirtualRelation(RangeVar *relation, List *tlist, bool replace,
 					skip--;
 					continue;
 				}
-				atevt = makeNode(AlterTableEvt);
+				atevt = makeNode(AlterTableCmd);
 				atevt->subtype = AT_AddColumnToView;
 				atevt->def = (Node *) lfirst(c);
 				atevts = lappend(atevts, atevt);
@@ -530,7 +530,7 @@ DefineView(ViewStmt *stmt, const char *queryString)
 	/*
 	 * Prepare BEFORE CREATE VIEW triggers
 	 */
-	InitCommandContext(&evt, (Node *)stmt);
+	InitEventContext(&evt, (Node *)stmt);
 
 	/*
 	 * Create the view relation
@@ -565,7 +565,7 @@ DefineView(ViewStmt *stmt, const char *queryString)
 	/* Call AFTER CREATE VIEW triggers */
 	if (CommandFiresAfterTriggers(&evt))
 	{
-		cmd.objectId = viewOid;
+		evt.objectId = viewOid;
 		ExecAfterCommandTriggers(&evt);
 	}
 }

@@ -669,13 +669,13 @@ CreateForeignDataWrapper(CreateFdwStmt *stmt)
 						stmt->fdwname)));
 
 	/* Call BEFORE CREATE FOREIGN DATA WRAPPER triggers */
-	InitCommandContext(&evt, (Node *)stmt);
+	InitEventContext(&evt, (Node *)stmt);
 
 	if (CommandFiresTriggers(&evt))
 	{
-		cmd.objectId = InvalidOid;
-		cmd.objectname = stmt->fdwname;
-		cmd.schemaname = NULL;
+		evt.objectId = InvalidOid;
+		evt.objectname = stmt->fdwname;
+		evt.schemaname = NULL;
 
 		ExecBeforeCommandTriggers(&evt);
 	}
@@ -752,7 +752,7 @@ CreateForeignDataWrapper(CreateFdwStmt *stmt)
 	/* Call AFTER CREATE FOREIGN DATA WRAPPER triggers */
 	if (CommandFiresAfterTriggers(&evt))
 	{
-		cmd.objectId = fdwId;
+		evt.objectId = fdwId;
 		ExecAfterCommandTriggers(&evt);
 	}
 }
@@ -801,13 +801,13 @@ AlterForeignDataWrapper(AlterFdwStmt *stmt)
 	fdwId = HeapTupleGetOid(tp);
 
 	/* Call BEFORE ALTER FOREIGN DATA WRAPPER triggers */
-	InitCommandContext(&evt, (Node *)stmt);
+	InitEventContext(&evt, (Node *)stmt);
 
 	if (CommandFiresTriggers(&evt))
 	{
-		cmd.objectId = fdwId;
-		cmd.objectname = stmt->fdwname;
-		cmd.schemaname = NULL;
+		evt.objectId = fdwId;
+		evt.objectname = stmt->fdwname;
+		evt.schemaname = NULL;
 
 		ExecBeforeCommandTriggers(&evt);
 	}
@@ -1004,13 +1004,13 @@ CreateForeignServer(CreateForeignServerStmt *stmt)
 		aclcheck_error(aclresult, ACL_KIND_FDW, fdw->fdwname);
 
 	/* Call BEFORE CREATE SERVER triggers */
-	InitCommandContext(&evt, (Node *)stmt);
+	InitEventContext(&evt, (Node *)stmt);
 
 	if (CommandFiresTriggers(&evt))
 	{
-		cmd.objectId = InvalidOid;
-		cmd.objectname = stmt->servername;
-		cmd.schemaname = NULL;
+		evt.objectId = InvalidOid;
+		evt.objectname = stmt->servername;
+		evt.schemaname = NULL;
 
 		ExecBeforeCommandTriggers(&evt);
 	}
@@ -1086,7 +1086,7 @@ CreateForeignServer(CreateForeignServerStmt *stmt)
 	/* Call AFTER CREATE SERVER triggers */
 	if (CommandFiresAfterTriggers(&evt))
 	{
-		cmd.objectId = srvId;
+		evt.objectId = srvId;
 		ExecAfterCommandTriggers(&evt);
 	}
 }
@@ -1128,13 +1128,13 @@ AlterForeignServer(AlterForeignServerStmt *stmt)
 					   stmt->servername);
 
 	/* Call BEFORE ALTER SERVER triggers */
-	InitCommandContext(&evt, (Node *)stmt);
+	InitEventContext(&evt, (Node *)stmt);
 
 	if (CommandFiresTriggers(&evt))
 	{
-		cmd.objectId = srvId;
-		cmd.objectname = stmt->servername;
-		cmd.schemaname = NULL;
+		evt.objectId = srvId;
+		evt.objectname = stmt->servername;
+		evt.schemaname = NULL;
 
 		ExecBeforeCommandTriggers(&evt);
 	}
@@ -1297,13 +1297,13 @@ CreateUserMapping(CreateUserMappingStmt *stmt)
 	fdw = GetForeignDataWrapper(srv->fdwid);
 
 	/* Call BEFORE CREATE USER MAPPING triggers */
-	InitCommandContext(&evt, (Node *)stmt);
+	InitEventContext(&evt, (Node *)stmt);
 
 	if (CommandFiresTriggers(&evt))
 	{
-		cmd.objectId = InvalidOid;
-		cmd.objectname = NULL;	/* composite object name */
-		cmd.schemaname = NULL;
+		evt.objectId = InvalidOid;
+		evt.objectname = NULL;	/* composite object name */
+		evt.schemaname = NULL;
 
 		ExecBeforeCommandTriggers(&evt);
 	}
@@ -1364,7 +1364,7 @@ CreateUserMapping(CreateUserMappingStmt *stmt)
 	/* Call AFTER CREATE USER MAPPING triggers */
 	if (CommandFiresAfterTriggers(&evt))
 	{
-		cmd.objectId = umId;
+		evt.objectId = umId;
 		ExecAfterCommandTriggers(&evt);
 	}
 }
@@ -1408,13 +1408,13 @@ AlterUserMapping(AlterUserMappingStmt *stmt)
 		elog(ERROR, "cache lookup failed for user mapping %u", umId);
 
 	/* Call BEFORE ALTER USER MAPPING triggers */
-	InitCommandContext(&evt, (Node *)stmt);
+	InitEventContext(&evt, (Node *)stmt);
 
 	if (CommandFiresTriggers(&evt))
 	{
-		cmd.objectId = umId;
-		cmd.objectname = NULL;	/* composite object name */
-		cmd.schemaname = NULL;
+		evt.objectId = umId;
+		evt.objectname = NULL;	/* composite object name */
+		evt.schemaname = NULL;
 
 		ExecBeforeCommandTriggers(&evt);
 	}
@@ -1532,13 +1532,13 @@ RemoveUserMapping(DropUserMappingStmt *stmt)
 	user_mapping_ddl_aclcheck(useId, srv->serverid, srv->servername);
 
 	/* Call BEFORE DROP USER MAPPING triggers */
-	InitCommandContext(&evt, (Node *)stmt);
+	InitEventContext(&evt, (Node *)stmt);
 
 	if (CommandFiresTriggers(&evt))
 	{
-		cmd.objectId = umId;
-		cmd.objectname = NULL;	/* composite object name */
-		cmd.schemaname = NULL;
+		evt.objectId = umId;
+		evt.objectname = NULL;	/* composite object name */
+		evt.schemaname = NULL;
 
 		ExecBeforeCommandTriggers(&evt);
 	}
@@ -1554,7 +1554,7 @@ RemoveUserMapping(DropUserMappingStmt *stmt)
 
 	if (CommandFiresTriggers(&evt))
 	{
-		cmd.objectId = InvalidOid;
+		evt.objectId = InvalidOid;
 		ExecAfterCommandTriggers(&evt);
 	}
 }

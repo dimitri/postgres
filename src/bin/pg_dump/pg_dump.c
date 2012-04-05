@@ -48,8 +48,8 @@
 #include "access/transam.h"
 #include "catalog/pg_cast.h"
 #include "catalog/pg_class.h"
-#include "catalog/pg_cmdtrigger.h"
 #include "catalog/pg_default_acl.h"
+#include "catalog/pg_event_trigger.h"
 #include "catalog/pg_largeobject.h"
 #include "catalog/pg_largeobject_metadata.h"
 #include "catalog/pg_proc.h"
@@ -13747,10 +13747,10 @@ dumpCmdTrigger(Archive *fout, CmdTriggerInfo *ctginfo)
 	appendPQExpBufferStr(query, fmtId(ctginfo->dobj.name));
 
 	/* Trigger type */
-	if (ctginfo->ctgtype == CMD_TRIGGER_FIRED_BEFORE)
+	if (ctginfo->ctgtype == EVTG_FIRED_BEFORE)
 		appendPQExpBuffer(query, " BEFORE ");
-	else if (ctginfo->ctgtype == CMD_TRIGGER_FIRED_AFTER)
-		appendPQExpBuffer(query, " AFTER ");
+	else if (ctginfo->ctgtype == EVTG_FIRED_INSTEAD_OF)
+		appendPQExpBuffer(query, " INSTEAD OF ");
 	else
 	{
 		write_msg(NULL, "unexpected ctgtype value: %d\n", ctginfo->ctgtype);

@@ -1,12 +1,12 @@
 /*-------------------------------------------------------------------------
  *
- * cmdtrigger.h
+ * event_trigger.h
  *	  Declarations for command trigger handling.
  *
  * Portions Copyright (c) 1996-2011, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
- * src/include/commands/cmdtrigger.h
+ * src/include/commands/event_trigger.h
  *
  *-------------------------------------------------------------------------
  */
@@ -27,6 +27,8 @@
  */
 typedef struct EventContextData
 {
+	TrigEventCommand command;	/* For command triggers */
+	char		*toplevel;		/* TopLevel Command Tag */
 	char		*tag;			/* Command Tag */
 	Oid			 objectId;		/* oid of the existing object, if any */
 	char		*schemaname;	/* schemaname or NULL if not relevant */
@@ -59,24 +61,25 @@ typedef struct EventTriggerData
 	char		*schemaname;	/* schemaname or NULL if not relevant */
 	char		*objectname;	/* objectname */
 	Node		*parsetree;		/* command parsetree, given as an internal */
-} CommandTriggerData;
+} EventTriggerData;
 
 extern Oid CreateEventTrigger(CreateEventTrigStmt *stmt, const char *queryString);
 extern void RemoveEventTriggerById(Oid ctrigOid);
 extern Oid	get_event_trigger_oid(const char *trigname, bool missing_ok);
+
 extern void AlterEventTrigger(AlterEventTrigStmt *stmt);
 extern void RenameEventTrigger(List *name, const char *newname);
 
-extern void InitCommandContext(CommandContext cmd, const Node *stmt);
-extern bool CommandFiresTriggers(CommandContext cmd);
-extern bool CommandFiresAfterTriggers(CommandContext cmd);
-extern void ExecBeforeCommandTriggers(CommandContext cmd);
-extern void ExecBeforeAnyCommandTriggers(CommandContext cmd);
-extern void ExecAfterCommandTriggers(CommandContext cmd);
-extern void ExecAfterAnyCommandTriggers(CommandContext cmd);
+extern void InitEventContext(EventContext evt, const Node *stmt);
 
-extern void InitEventContext(EventContext ev_ctx, const Node *stmt);
-extern bool CommandFiresTriggers(EventContext ev_ctx, TrigEvent tev);
+extern bool CommandFiresTriggers(EventContext ev_ctx);
+extern bool CommandFiresTriggersForEvent(EventContext ev_ctx, TrigEvent tev);
 extern void ExecEventTriggers(EventContext ev_ctx, TrigEvent tev);
+extern void ExecEventTriggers(EventContext ev_ctx, TrigEvent tev);
+
+/* COMPAT, meant to be removed */
+extern bool CommandFiresAfterTriggers(EventContext ev_ctx);
+extern void	ExecAfterCommandTriggers(EventContext ev_ctx);
+extern void ExecBeforeCommandTriggers(EventContext ev_ctx);
 
 #endif   /* EVENT_TRIGGER_H */

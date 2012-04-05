@@ -26,7 +26,6 @@
 #include "catalog/pg_attrdef.h"
 #include "catalog/pg_authid.h"
 #include "catalog/pg_cast.h"
-#include "catalog/pg_cmdtrigger.h"
 #include "catalog/pg_collation.h"
 #include "catalog/pg_collation_fn.h"
 #include "catalog/pg_constraint.h"
@@ -35,6 +34,7 @@
 #include "catalog/pg_database.h"
 #include "catalog/pg_default_acl.h"
 #include "catalog/pg_depend.h"
+#include "catalog/pg_event_trigger.h"
 #include "catalog/pg_extension.h"
 #include "catalog/pg_foreign_data_wrapper.h"
 #include "catalog/pg_foreign_server.h"
@@ -54,10 +54,10 @@
 #include "catalog/pg_ts_template.h"
 #include "catalog/pg_type.h"
 #include "catalog/pg_user_mapping.h"
-#include "commands/cmdtrigger.h"
 #include "commands/comment.h"
 #include "commands/dbcommands.h"
 #include "commands/defrem.h"
+#include "commands/event_trigger.h"
 #include "commands/extension.h"
 #include "commands/proclang.h"
 #include "commands/schemacmds.h"
@@ -161,7 +161,7 @@ static const Oid object_classes[MAX_OCLASS] = {
 	UserMappingRelationId,		/* OCLASS_USER_MAPPING */
 	DefaultAclRelationId,		/* OCLASS_DEFACL */
 	ExtensionRelationId,		/* OCLASS_EXTENSION */
-	CmdTriggerRelationId		/* OCLASS_CMDTRIGGER */
+	EventTriggerRelationId		/* OCLASS_CMDTRIGGER */
 };
 
 
@@ -1100,7 +1100,7 @@ doDeletion(const ObjectAddress *object)
 			}
 
 		case OCLASS_CMDTRIGGER:
-			RemoveCmdTriggerById(object->objectId);
+			RemoveEventTriggerById(object->objectId);
 			break;
 
 		case OCLASS_PROC:
@@ -2256,7 +2256,7 @@ getObjectClass(const ObjectAddress *object)
 		case ExtensionRelationId:
 			return OCLASS_EXTENSION;
 
-		case CmdTriggerRelationId:
+		case EventTriggerRelationId:
 			return OCLASS_CMDTRIGGER;
 	}
 
@@ -2898,16 +2898,16 @@ getObjectDescription(const ObjectAddress *object)
 				ScanKeyData skey[1];
 				SysScanDesc tgscan;
 				HeapTuple	tup;
-				Form_pg_cmdtrigger trig;
+				Form_pg_event_trigger trig;
 
-				trigDesc = heap_open(CmdTriggerRelationId, AccessShareLock);
+				trigDesc = heap_open(EventTriggerRelationId, AccessShareLock);
 
 				ScanKeyInit(&skey[0],
 							ObjectIdAttributeNumber,
 							BTEqualStrategyNumber, F_OIDEQ,
 							ObjectIdGetDatum(object->objectId));
 
-				tgscan = systable_beginscan(trigDesc, CmdTriggerOidIndexId, true,
+				tgscan = systable_beginscan(trigDesc, EventTriggerOidIndexId, true,
 											SnapshotNow, 1, skey);
 
 				tup = systable_getnext(tgscan);
@@ -2916,15 +2916,10 @@ getObjectDescription(const ObjectAddress *object)
 					elog(ERROR, "could not find tuple for command trigger %u",
 						 object->objectId);
 
-				trig = (Form_pg_cmdtrigger) GETSTRUCT(tup);
+				trig = (Form_pg_event_trigger) GETSTRUCT(tup);
 
-				if (strcmp(NameStr(trig->ctgcommand), "ANY") == 0)
-					appendStringInfo(&buffer, _("trigger %s on any command"),
-									 NameStr(trig->ctgname));
-				else
-					appendStringInfo(&buffer, _("trigger %s on command %s"),
-									 NameStr(trig->ctgname),
-									 NameStr(trig->ctgcommand));
+				appendStringInfo(&buffer, _("event trigger %s"),
+								 NameStr(trig->evtname));
 
 				systable_endscan(tgscan);
 				heap_close(trigDesc, AccessShareLock);

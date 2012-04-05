@@ -91,7 +91,7 @@ plpgsql_call_handler(PG_FUNCTION_ARGS)
 {
 	PLpgSQL_function *func;
 	PLpgSQL_execstate *save_cur_estate;
-	Datum		retval;
+	Datum		retval = 0;		/* make compiler happy */
 	int			rc;
 
 	/*
@@ -120,7 +120,7 @@ plpgsql_call_handler(PG_FUNCTION_ARGS)
 										   (TriggerData *) fcinfo->context));
 		else if (CALLED_AS_EVENT_TRIGGER(fcinfo))
 			plpgsql_exec_command_trigger(func,
-										 (CommandTriggerData *) fcinfo->context);
+										 (EventTriggerData *) fcinfo->context);
 		else
 			retval = plpgsql_exec_function(func, fcinfo);
 	}
@@ -305,9 +305,9 @@ plpgsql_validator(PG_FUNCTION_ARGS)
 		}
 		else if (is_cmd_trigger)
 		{
-			CommandTriggerData trigdata;
+			EventTriggerData trigdata;
 			MemSet(&trigdata, 0, sizeof(trigdata));
-			trigdata.type = T_CommandTriggerData;
+			trigdata.type = T_EventTriggerData;
 			fake_fcinfo.context = (Node *) &trigdata;
 		}
 

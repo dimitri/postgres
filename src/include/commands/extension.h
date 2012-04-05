@@ -45,6 +45,6 @@ extern Oid	get_extension_oid(const char *extname, bool missing_ok);
 extern char *get_extension_name(Oid ext_oid);
 
 extern void AlterExtensionNamespace(List *names, const char *newschema,
-									CommandContext cmd);
+									EventContext evt);
 
 #endif   /* EXTENSION_H */

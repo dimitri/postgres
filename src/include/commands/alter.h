@@ -14,7 +14,7 @@
 #ifndef ALTER_H
 #define ALTER_H
 
-#include "commands/cmdtrigger.h"
+#include "commands/event_trigger.h"
 #include "utils/acl.h"
 #include "utils/relcache.h"
 
@@ -24,7 +24,7 @@ extern Oid	AlterObjectNamespace_oid(Oid classId, Oid objid, Oid nspOid);
 extern Oid AlterObjectNamespace(Relation rel, int oidCacheId, int nameCacheId,
 					 Oid objid, Oid nspOid,
 					 int Anum_name, int Anum_namespace, int Anum_owner,
-					 AclObjectKind acl_kind, CommandContext cmd);
+					 AclObjectKind acl_kind, EventContext evt);
 extern void ExecAlterOwnerStmt(AlterOwnerStmt *stmt);
 
 #endif   /* ALTER_H */

@@ -214,7 +214,7 @@ DefineSequence(CreateSeqStmt *seq)
 	stmt->if_not_exists = false;
 
 	/* Prepare BEFORE CREATE SEQUENCE triggers */
-	InitCommandContext(&evt, (Node *)seq);
+	InitEventContext(&evt, (Node *)seq);
 
 	seqoid = DefineRelation(stmt, RELKIND_SEQUENCE, seq->ownerId, &evt);
 	Assert(seqoid != InvalidOid);
@@ -235,7 +235,7 @@ DefineSequence(CreateSeqStmt *seq)
 	/* Call AFTER CREATE SEQUENCE triggers */
 	if (CommandFiresAfterTriggers(&evt))
 	{
-		cmd.objectId = seqoid;
+		evt.objectId = seqoid;
 		ExecAfterCommandTriggers(&evt);
 	}
 }
@@ -474,13 +474,13 @@ AlterSequence(AlterSeqStmt *stmt)
 	/*
 	 * Call BEFORE ALTER SEQUENCE triggers
 	 */
-	InitCommandContext(&evt, (Node *)stmt);
+	InitEventContext(&evt, (Node *)stmt);
 
 	if (CommandFiresTriggers(&evt))
 	{
-		cmd.objectId = relid;
-		cmd.objectname = pstrdup(stmt->sequence->relname);
-		cmd.schemaname = pstrdup(stmt->sequence->schemaname);
+		evt.objectId = relid;
+		evt.objectname = pstrdup(stmt->sequence->relname);
+		evt.schemaname = pstrdup(stmt->sequence->schemaname);
 
 		ExecBeforeCommandTriggers(&evt);
 	}

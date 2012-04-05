@@ -774,7 +774,7 @@ plpgsql_exec_trigger(PLpgSQL_function *func,
 }
 
 void plpgsql_exec_command_trigger(PLpgSQL_function *func,
-								  CommandTriggerData *trigdata)
+								  EventTriggerData *trigdata)
 {
 	PLpgSQL_execstate estate;
 	ErrorContextCallback plerrcontext;

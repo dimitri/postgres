@@ -154,7 +154,7 @@ DefineCollation(List *names, List *parameters, EventContext evt)
  * Rename collation
  */
 void
-RenameCollation(List *name, const char *newname, CommandContext cmd)
+RenameCollation(List *name, const char *newname, EventContext evt)
 {
 	Oid			collationOid;
 	Oid			namespaceOid;
@@ -207,13 +207,13 @@ RenameCollation(List *name, const char *newname, CommandContext cmd)
 					   get_namespace_name(namespaceOid));
 
 	/* Call BEFORE ALTER COLLATION triggers */
-	if (CommandFiresTriggers(cmd))
+	if (CommandFiresTriggers(evt))
 	{
-		cmd->objectId = HeapTupleGetOid(tup);
-		cmd->objectname = pstrdup(NameStr((((Form_pg_collation) GETSTRUCT(tup))->collname)));
-		cmd->schemaname = get_namespace_name(namespaceOid);
+		evt->objectId = HeapTupleGetOid(tup);
+		evt->objectname = pstrdup(NameStr((((Form_pg_collation) GETSTRUCT(tup))->collname)));
+		evt->schemaname = get_namespace_name(namespaceOid);
 
-		ExecBeforeCommandTriggers(cmd);
+		ExecBeforeCommandTriggers(evt);
 	}
 
 	/* rename */
@@ -225,10 +225,10 @@ RenameCollation(List *name, const char *newname, CommandContext cmd)
 	heap_close(rel, RowExclusiveLock);
 
 	/* Call AFTER ALTER COLLATION triggers */
-	if (CommandFiresAfterTriggers(cmd))
+	if (CommandFiresAfterTriggers(evt))
 	{
-		cmd->objectname = pstrdup(newname);
-		ExecAfterCommandTriggers(cmd);
+		evt->objectname = pstrdup(newname);
+		ExecAfterCommandTriggers(evt);
 	}
 }
 

@@ -111,13 +111,13 @@ CreateConversionCommand(CreateConversionStmt *stmt)
 					 Int32GetDatum(0));
 
 	/* Call BEFORE CREATE CONVERSION command triggers */
-	InitCommandContext(&evt, (Node *)stmt);
+	InitEventContext(&evt, (Node *)stmt);
 
 	if (CommandFiresTriggers(&evt))
 	{
-		cmd.objectId = InvalidOid;
-		cmd.objectname = conversion_name;
-		cmd.schemaname = get_namespace_name(namespaceId);
+		evt.objectId = InvalidOid;
+		evt.objectname = conversion_name;
+		evt.schemaname = get_namespace_name(namespaceId);
 
 		ExecBeforeCommandTriggers(&evt);
 	}
@@ -132,7 +132,7 @@ CreateConversionCommand(CreateConversionStmt *stmt)
 	/* Call AFTER CREATE CONVERSION command triggers */
 	if (CommandFiresAfterTriggers(&evt))
 	{
-		cmd.objectId = convOid;
+		evt.objectId = convOid;
 		ExecAfterCommandTriggers(&evt);
 	}
 }

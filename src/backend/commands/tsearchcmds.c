@@ -851,14 +851,14 @@ AlterTSDictionary(AlterTSDictionaryStmt *stmt)
 					   dictoptions);
 
 	/* Call BEFORE ALTER TEXT SEARCH DICTIONARY command triggers */
-	InitCommandContext(&evt, (Node *)stmt);
+	InitEventContext(&evt, (Node *)stmt);
 
 	if (CommandFiresTriggers(&evt))
 	{
 		Form_pg_ts_dict form = (Form_pg_ts_dict) GETSTRUCT(tup);
-		cmd.objectId = dictId;
-		cmd.objectname = pstrdup(NameStr(form->dictname));
-		cmd.schemaname = get_namespace_name(form->dictnamespace);
+		evt.objectId = dictId;
+		evt.objectname = pstrdup(NameStr(form->dictname));
+		evt.schemaname = get_namespace_name(form->dictnamespace);
 
 		ExecBeforeCommandTriggers(&evt);
 	}
@@ -1851,15 +1851,15 @@ AlterTSConfiguration(AlterTSConfigurationStmt *stmt)
 					   NameListToString(stmt->cfgname));
 
 	/* Call BEFORE ALTER TEXT SEARCH CONFIGURATION command triggers */
-	InitCommandContext(&evt, (Node *)stmt);
+	InitEventContext(&evt, (Node *)stmt);
 
 	if (CommandFiresTriggers(&evt))
 	{
 		Form_pg_ts_config form = (Form_pg_ts_config) GETSTRUCT(tup);
 
-		cmd.objectId = HeapTupleGetOid(tup);
-		cmd.objectname = pstrdup(NameStr(form->cfgname));
-		cmd.schemaname = get_namespace_name(form->cfgnamespace);
+		evt.objectId = HeapTupleGetOid(tup);
+		evt.objectname = pstrdup(NameStr(form->cfgname));
+		evt.schemaname = get_namespace_name(form->cfgnamespace);
 
 		ExecBeforeCommandTriggers(&evt);
 	}

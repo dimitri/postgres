@@ -1741,7 +1741,7 @@ typedef struct CreateEventTrigStmt
 	List	   *funcname;		/* qual. name of function to call */
 	char	   *variable;		/* variable used in the where clause */
 	List       *cmdlist;		/* list of commands to fire for */
-} CreateCmdTrigStmt;
+} CreateEventTrigStmt;
 
 /* ----------------------
  *		Alter COMMAND TRIGGER Statement

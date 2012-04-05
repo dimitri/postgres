@@ -348,18 +348,17 @@ void
 PLy_exec_command_trigger(FunctionCallInfo fcinfo, PLyProcedure *proc)
 {
 	PyObject   *volatile pltdata = NULL;
-	CommandTriggerData *tdata;
+	EventTriggerData *tdata;
 
 	Assert(CALLED_AS_EVENT_TRIGGER(fcinfo));
 
-	tdata = (CommandTriggerData *) fcinfo->context;
+	tdata = (EventTriggerData *) fcinfo->context;
 
 	PG_TRY();
 	{
 		/* build command trigger args */
 		PyObject   *pltwhen,
 			*plttag,
-			*pltobjectid,
 			*pltschemaname,
 			*pltobjectname;
 		char	   *stroid;
@@ -380,13 +379,15 @@ PLy_exec_command_trigger(FunctionCallInfo fcinfo, PLyProcedure *proc)
 			PyDict_SetItemString(pltdata, "objectId", Py_None);
 		else
 		{
+			PyObject *pltobjectid;
+
 			stroid = DatumGetCString(
 				DirectFunctionCall1(oidout, ObjectIdGetDatum(tdata->objectId)));
 			pltobjectid = PyString_FromString(stroid);
 			PyDict_SetItemString(pltdata, "objectId", pltobjectid);
 			pfree(stroid);
+			Py_DECREF(pltobjectid);
 		}
-		Py_DECREF(pltobjectid);
 
 		if (tdata->objectname == NULL)
 			PyDict_SetItemString(pltdata, "objectname", Py_None);

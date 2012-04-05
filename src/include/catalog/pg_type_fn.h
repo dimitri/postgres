@@ -14,7 +14,7 @@
 #ifndef PG_TYPE_FN_H
 #define PG_TYPE_FN_H
 
-#include "commands/cmdtrigger.h"
+#include "commands/event_trigger.h"
 #include "nodes/nodes.h"
 
 
@@ -74,7 +74,7 @@ extern void GenerateTypeDependencies(Oid typeNamespace,
 						 bool rebuild);
 
 extern void RenameTypeInternal(Oid typeOid, const char *newTypeName,
-							   Oid typeNamespace, CommandContext cmd);
+							   Oid typeNamespace, EventContext evt);
 
 extern char *makeArrayTypeName(const char *typeName, Oid typeNamespace);
 

@@ -13,7 +13,7 @@
 #ifndef CLUSTER_H
 #define CLUSTER_H
 
-#include "commands/cmdtrigger.h"
+#include "commands/event_trigger.h"
 #include "nodes/parsenodes.h"
 #include "storage/lock.h"
 #include "utils/relcache.h"
@@ -22,7 +22,7 @@
 extern void cluster(ClusterStmt *stmt, bool isTopLevel);
 extern void cluster_rel(Oid tableOid, Oid indexOid, bool recheck,
 						bool verbose, int freeze_min_age, int freeze_table_age,
-						CommandContext cmd);
+						EventContext evt);
 extern void check_index_is_clusterable(Relation OldHeap, Oid indexOid,
 						   bool recheck, LOCKMODE lockmode);
 extern void mark_index_clustered(Relation rel, Oid indexOid);

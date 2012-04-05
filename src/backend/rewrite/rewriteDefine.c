@@ -195,13 +195,13 @@ DefineRule(RuleStmt *stmt, const char *queryString)
 	List	   *actions;
 	Node	   *whereClause;
 	Oid			relId;
-	CommandContextData cmd;
+	EventContextData cmd;
 
 	/* Parse analysis. */
 	transformRuleStmt(stmt, queryString, &actions, &whereClause);
 
 	/* Prepare command context */
-	InitCommandContext(&cmd, (Node *)stmt);
+	InitEventContext(&cmd, (Node *)stmt);
 
 	/*
 	 * Find and lock the relation.  Lock level should match
@@ -236,7 +236,7 @@ DefineQueryRewrite(char *rulename,
 				   bool is_instead,
 				   bool replace,
 				   List *action,
-				   CommandContext cmd)
+				   EventContext evt)
 {
 	Oid         ruleOid;
 	Relation	event_relation;
@@ -487,13 +487,13 @@ DefineQueryRewrite(char *rulename,
 	}
 
 	/* Call BEFORE CREATE RULE triggers */
-	if (CommandFiresTriggers(cmd))
+	if (CommandFiresTriggers(evt))
 	{
-		cmd->objectId = InvalidOid;
-		cmd->objectname = rulename;
-		cmd->schemaname = NULL;	/* rules are not schema qualified */
+		evt->objectId = InvalidOid;
+		evt->objectname = rulename;
+		evt->schemaname = NULL;	/* rules are not schema qualified */
 
-		ExecBeforeCommandTriggers(cmd);
+		ExecBeforeCommandTriggers(evt);
 	}
 
 	/*
@@ -538,10 +538,10 @@ DefineQueryRewrite(char *rulename,
 	heap_close(event_relation, NoLock);
 
 	/* Call AFTER CREATE RULE triggers */
-	if (CommandFiresAfterTriggers(cmd))
+	if (CommandFiresAfterTriggers(evt))
 	{
-		cmd->objectId = ruleOid;
-		ExecAfterCommandTriggers(cmd);
+		evt->objectId = ruleOid;
+		ExecAfterCommandTriggers(evt);
 	}
 }
 

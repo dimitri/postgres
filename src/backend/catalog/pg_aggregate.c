@@ -23,7 +23,7 @@
 #include "catalog/pg_proc.h"
 #include "catalog/pg_proc_fn.h"
 #include "catalog/pg_type.h"
-#include "commands/cmdtrigger.h"
+#include "commands/event_trigger.h"
 #include "miscadmin.h"
 #include "parser/parse_coerce.h"
 #include "parser/parse_func.h"
@@ -52,7 +52,7 @@ AggregateCreate(const char *aggName,
 				List *aggsortopName,
 				Oid aggTransType,
 				const char *agginitval,
-				CommandContext cmd)
+				EventContext evt)
 {
 	Relation	aggdesc;
 	HeapTuple	tup;
@@ -227,13 +227,13 @@ AggregateCreate(const char *aggName,
 	/*
 	 * Call BEFORE CREATE AGGREGATE triggers
 	 */
-	if (CommandFiresTriggers(cmd))
+	if (CommandFiresTriggers(evt))
 	{
-		cmd->objectId = InvalidOid;
-		cmd->objectname = (char *)aggName;
-		cmd->schemaname = get_namespace_name(aggNamespace);
+		evt->objectId = InvalidOid;
+		evt->objectname = (char *)aggName;
+		evt->schemaname = get_namespace_name(aggNamespace);
 
-		ExecBeforeCommandTriggers(cmd);
+		ExecBeforeCommandTriggers(evt);
 	}
 
 	/*
@@ -332,10 +332,10 @@ AggregateCreate(const char *aggName,
 	}
 
 	/* Call AFTER CREATE AGGREGATE triggers */
-	if (CommandFiresAfterTriggers(cmd))
+	if (CommandFiresAfterTriggers(evt))
 	{
-		cmd->objectId = procOid;
-		ExecAfterCommandTriggers(cmd);
+		evt->objectId = procOid;
+		ExecAfterCommandTriggers(evt);
 	}
 }
 

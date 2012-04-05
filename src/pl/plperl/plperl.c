@@ -1574,14 +1574,14 @@ plperl_trigger_build_args(FunctionCallInfo fcinfo)
 static SV  *
 plperl_command_trigger_build_args(FunctionCallInfo fcinfo)
 {
-	CommandTriggerData *tdata;
+	EventTriggerData *tdata;
 	char	   *objectid;
 	HV		   *hv;
 
 	hv = newHV();
 	hv_ksplit(hv, 12);			/* pre-grow the hash */
 
-	tdata = (CommandTriggerData *) fcinfo->context;
+	tdata = (EventTriggerData *) fcinfo->context;
 
 	hv_store_string(hv, "when", cstr2sv(tdata->when));
 	hv_store_string(hv, "tag", cstr2sv(tdata->tag));
@@ -2152,8 +2152,7 @@ plperl_call_perl_command_trigger_func(plperl_proc_desc *desc,
 									  SV *td)
 {
 	dSP;
-	SV	*retval,
-			   *TDsv;
+	SV	*retval, *TDsv;
 	int	 count;
 
 	ENTER;

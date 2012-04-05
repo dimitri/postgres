@@ -1199,13 +1199,13 @@ CreateExtension(CreateExtensionStmt *stmt)
 	/*
 	 * Call BEFORE CREATE EXTENSION triggers
 	 */
-	InitCommandContext(&evt, (Node *)stmt);
+	InitEventContext(&evt, (Node *)stmt);
 
 	if (CommandFiresTriggers(&evt))
 	{
-		cmd.objectId = InvalidOid;
-		cmd.objectname = stmt->extname;
-		cmd.schemaname = NULL;
+		evt.objectId = InvalidOid;
+		evt.objectname = stmt->extname;
+		evt.schemaname = NULL;
 
 		ExecBeforeCommandTriggers(&evt);
 	}
@@ -1228,7 +1228,7 @@ CreateExtension(CreateExtensionStmt *stmt)
 			/* Call AFTER CREATE EXTENSION triggers */
 			if (CommandFiresAfterTriggers(&evt))
 			{
-				cmd.objectId = extensionOid;
+				evt.objectId = extensionOid;
 				ExecAfterCommandTriggers(&evt);
 			}
 			return;
@@ -1494,7 +1494,7 @@ CreateExtension(CreateExtensionStmt *stmt)
 	/* Call AFTER CREATE EXTENSION triggers */
 	if (CommandFiresAfterTriggers(&evt))
 	{
-		cmd.objectId = extensionOid;
+		evt.objectId = extensionOid;
 		ExecAfterCommandTriggers(&evt);
 	}
 }
@@ -2462,13 +2462,13 @@ ExecAlterExtensionStmt(AlterExtensionStmt *stmt)
 	/*
 	 * Call BEFORE ALTER EXTENSION triggers
 	 */
-	InitCommandContext(&evt, (Node *)stmt);
+	InitEventContext(&evt, (Node *)stmt);
 
 	if (CommandFiresTriggers(&evt))
 	{
-		cmd.objectId = extensionOid;
-		cmd.objectname = stmt->extname;
-		cmd.schemaname = NULL;
+		evt.objectId = extensionOid;
+		evt.objectname = stmt->extname;
+		evt.schemaname = NULL;
 
 		ExecBeforeCommandTriggers(&evt);
 	}
@@ -2741,12 +2741,12 @@ ExecAlterExtensionContentsStmt(AlterExtensionContentsStmt *stmt)
 	 */
 	oldExtension = getExtensionOfObject(object.classId, object.objectId);
 
-	InitCommandContext(&evt, (Node *)stmt);
+	InitEventContext(&evt, (Node *)stmt);
 
 	/* Init the command context no matter what, that's cheap here */
-	cmd.objectId = extension.objectId;
-	cmd.objectname = stmt->extname;
-	cmd.schemaname = NULL;
+	evt.objectId = extension.objectId;
+	evt.objectname = stmt->extname;
+	evt.schemaname = NULL;
 
 	if (stmt->action > 0)
 	{

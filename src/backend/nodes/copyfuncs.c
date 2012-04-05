@@ -3461,8 +3461,8 @@ _copyCreateEventTrigStmt(const CreateEventTrigStmt *from)
 	CreateEventTrigStmt *newnode = makeNode(CreateEventTrigStmt);
 
 	COPY_STRING_FIELD(trigname);
+	COPY_SCALAR_FIELD(event);
 	COPY_SCALAR_FIELD(timing);
-	COPY_NODE_FIELD(funcname);
 	COPY_NODE_FIELD(funcname);
 	COPY_STRING_FIELD(variable);
 	COPY_NODE_FIELD(cmdlist);

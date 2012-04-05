@@ -22,8 +22,8 @@ extern void CreateSchemaCommand(CreateSchemaStmt *parsetree,
 
 extern void RemoveSchemaById(Oid schemaOid);
 
-extern void RenameSchema(const char *oldname, const char *newname, CommandContext cmd);
-extern void AlterSchemaOwner(const char *name, Oid newOwnerId, CommandContext cmd);
+extern void RenameSchema(const char *oldname, const char *newname, EventContext evt);
+extern void AlterSchemaOwner(const char *name, Oid newOwnerId, EventContext evt);
 extern void AlterSchemaOwner_oid(Oid schemaOid, Oid newOwnerId);
 
 #endif   /* SCHEMACMDS_H */

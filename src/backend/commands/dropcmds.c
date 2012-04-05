@@ -21,8 +21,8 @@
 #include "catalog/objectaddress.h"
 #include "catalog/pg_class.h"
 #include "catalog/pg_proc.h"
-#include "commands/eventtrigger.h"
 #include "commands/defrem.h"
+#include "commands/event_trigger.h"
 #include "miscadmin.h"
 #include "nodes/makefuncs.h"
 #include "parser/parse_type.h"
@@ -57,7 +57,7 @@ RemoveObjects(DropStmt *stmt)
 	ListCell   *cell1;
 	ListCell   *cell2 = NULL;
 	int i = 0, n = list_length(stmt->objects);
-	EventContext evt = (CommandContext *) palloc(n * sizeof(CommandContext));
+	EventContext *evts = (EventContext *) palloc(n * sizeof(EventContext));
 
 	objects = new_object_addresses();
 
@@ -129,7 +129,7 @@ RemoveObjects(DropStmt *stmt)
 		/*
 		 * Call BEFORE DROP command triggers
 		 */
-		InitCommandContext(&evt, (Node *)stmt);
+		InitEventContext(&evt, (Node *)stmt);
 
 		if (CommandFiresTriggers(&evt))
 		{

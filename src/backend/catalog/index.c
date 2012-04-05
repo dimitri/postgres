@@ -2789,7 +2789,7 @@ IndexGetRelation(Oid indexId, bool missing_ok)
  * reindex_index - This routine is used to recreate a single index
  */
 void
-reindex_index(Oid indexId, bool skip_constraint_checks, CommandContext cmd)
+reindex_index(Oid indexId, bool skip_constraint_checks, EventContext evt)
 {
 	Relation	iRel,
 				heapRelation,
@@ -2829,13 +2829,13 @@ reindex_index(Oid indexId, bool skip_constraint_checks, CommandContext cmd)
 	CheckTableNotInUse(iRel, "REINDEX INDEX");
 
 	/* Call BEFORE REINDEX INDEX command triggers */
-	if (CommandFiresTriggers(cmd))
+	if (CommandFiresTriggers(evt))
 	{
-		cmd->objectId = indexId;
-		cmd->objectname = RelationGetRelationName(iRel);
-		cmd->schemaname = get_namespace_name(RelationGetNamespace(iRel));
+		evt->objectId = indexId;
+		evt->objectname = RelationGetRelationName(iRel);
+		evt->schemaname = get_namespace_name(RelationGetNamespace(iRel));
 
-		ExecBeforeCommandTriggers(cmd);
+		ExecBeforeCommandTriggers(evt);
 	}
 
 	/*
@@ -2935,8 +2935,8 @@ reindex_index(Oid indexId, bool skip_constraint_checks, CommandContext cmd)
 	heap_close(heapRelation, NoLock);
 
 	/* Call AFTER REINDEX INDEX command triggers */
-	if (CommandFiresAfterTriggers(cmd))
-		ExecAfterCommandTriggers(cmd);
+	if (CommandFiresAfterTriggers(evt))
+		ExecAfterCommandTriggers(evt);
 }
 
 /*
@@ -2969,7 +2969,7 @@ reindex_index(Oid indexId, bool skip_constraint_checks, CommandContext cmd)
  * index rebuild.
  */
 bool
-reindex_relation(Oid relid, int flags, CommandContext cmd)
+reindex_relation(Oid relid, int flags, EventContext evt)
 {
 	Relation	rel;
 	Oid			toast_relid;
@@ -2987,13 +2987,13 @@ reindex_relation(Oid relid, int flags, CommandContext cmd)
 	toast_relid = rel->rd_rel->reltoastrelid;
 
 	/* Call BEFORE REINDEX command triggers */
-	if (CommandFiresTriggers(cmd))
+	if (CommandFiresTriggers(evt))
 	{
-		cmd->objectId = relid;
-		cmd->objectname = RelationGetRelationName(rel);
-		cmd->schemaname = get_namespace_name(RelationGetNamespace(rel));
+		evt->objectId = relid;
+		evt->objectname = RelationGetRelationName(rel);
+		evt->schemaname = get_namespace_name(RelationGetNamespace(rel));
 
-		ExecBeforeCommandTriggers(cmd);
+		ExecBeforeCommandTriggers(evt);
 	}
 
 
@@ -3096,8 +3096,8 @@ reindex_relation(Oid relid, int flags, CommandContext cmd)
 		result |= reindex_relation(toast_relid, flags, NULL);
 
 	/* Call AFTER REINDEX command triggers */
-	if (CommandFiresAfterTriggers(cmd))
-		ExecAfterCommandTriggers(cmd);
+	if (CommandFiresAfterTriggers(evt))
+		ExecAfterCommandTriggers(evt);
 
 	return result;
 }

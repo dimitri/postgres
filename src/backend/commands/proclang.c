@@ -73,7 +73,7 @@ CreateProceduralLanguage(CreatePLangStmt *stmt)
 	Oid			funcargtypes[1];
 	EventContextData evt;
 
-	InitCommandContext(&evt, (Node *)stmt);
+	InitEventContext(&evt, (Node *)stmt);
 
 	/*
 	 * If we have template information for the language, ignore the supplied
@@ -229,9 +229,9 @@ CreateProceduralLanguage(CreatePLangStmt *stmt)
 		/* Call BEFORE CREATE LANGUAGE command triggers */
 		if (CommandFiresTriggers(&evt))
 		{
-			cmd.objectId = InvalidOid;
-			cmd.objectname = stmt->plname;
-			cmd.schemaname = NULL;
+			evt.objectId = InvalidOid;
+			evt.objectname = stmt->plname;
+			evt.schemaname = NULL;
 
 			ExecBeforeCommandTriggers(&evt);
 		}
@@ -244,7 +244,7 @@ CreateProceduralLanguage(CreatePLangStmt *stmt)
 		/* Call AFTER CREATE LANGUAGE command triggers */
 		if (CommandFiresAfterTriggers(&evt))
 		{
-			cmd.objectId = loid;
+			evt.objectId = loid;
 			ExecAfterCommandTriggers(&evt);
 		}
 	}
@@ -321,9 +321,9 @@ CreateProceduralLanguage(CreatePLangStmt *stmt)
 		/* Call BEFORE CREATE LANGUAGE command triggers */
 		if (CommandFiresTriggers(&evt))
 		{
-			cmd.objectId = InvalidOid;
-			cmd.objectname = stmt->plname;
-			cmd.schemaname = NULL;
+			evt.objectId = InvalidOid;
+			evt.objectname = stmt->plname;
+			evt.schemaname = NULL;
 
 			ExecBeforeCommandTriggers(&evt);
 		}
@@ -336,7 +336,7 @@ CreateProceduralLanguage(CreatePLangStmt *stmt)
 		/* Call AFTER CREATE LANGUAGE command triggers */
 		if (CommandFiresAfterTriggers(&evt))
 		{
-			cmd.objectId = loid;
+			evt.objectId = loid;
 			ExecAfterCommandTriggers(&evt);
 		}
 	}

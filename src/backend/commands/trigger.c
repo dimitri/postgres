@@ -431,13 +431,13 @@ CreateTrigger(CreateTrigStmt *stmt, const char *queryString,
 	 */
 	if (!isInternal)
 	{
-		InitCommandContext(&evt, (Node *)stmt);
+		InitEventContext(&evt, (Node *)stmt);
 
 		if (CommandFiresTriggers(&evt))
 		{
-			cmd.objectId = InvalidOid;
-			cmd.objectname = stmt->trigname;
-			cmd.schemaname = NULL; /* triggers are not schema qualified */
+			evt.objectId = InvalidOid;
+			evt.objectname = stmt->trigname;
+			evt.schemaname = NULL; /* triggers are not schema qualified */
 
 			ExecBeforeCommandTriggers(&evt);
 		}
@@ -782,7 +782,7 @@ CreateTrigger(CreateTrigStmt *stmt, const char *queryString,
 	/* Call AFTER CREATE TRIGGER triggers */
 	if (!isInternal && CommandFiresAfterTriggers(&evt))
 	{
-		cmd.objectId = trigoid;
+		evt.objectId = trigoid;
 		ExecAfterCommandTriggers(&evt);
 	}
 	return trigoid;

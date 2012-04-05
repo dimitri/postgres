@@ -87,13 +87,13 @@ CreateSchemaCommand(CreateSchemaStmt *stmt, const char *queryString)
 	/*
 	 * Call BEFORE CREATE SCHEMA triggers (before changing authorization)
 	 */
-	InitCommandContext(&evt, (Node *)stmt);
+	InitEventContext(&evt, (Node *)stmt);
 
 	if (CommandFiresTriggers(&evt))
 	{
-		cmd.objectId = InvalidOid;
-		cmd.objectname = (char *)schemaName;
-		cmd.schemaname = NULL;		/* a schema does not live in another schema */
+		evt.objectId = InvalidOid;
+		evt.objectname = (char *)schemaName;
+		evt.schemaname = NULL;		/* a schema does not live in another schema */
 
 		ExecBeforeCommandTriggers(&evt);
 	}
@@ -164,7 +164,7 @@ CreateSchemaCommand(CreateSchemaStmt *stmt, const char *queryString)
 	/* Call AFTER CREATE SCHEMA triggers */
 	if (CommandFiresAfterTriggers(&evt))
 	{
-		cmd.objectId = namespaceId;
+		evt.objectId = namespaceId;
 		ExecAfterCommandTriggers(&evt);
 	}
 }

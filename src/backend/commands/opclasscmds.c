@@ -592,13 +592,13 @@ DefineOpClass(CreateOpClassStmt *stmt)
 	}
 
 	/* Call BEFORE CREATE OPERATOR CLASS command triggers */
-	InitCommandContext(&evt, (Node *)stmt);
+	InitEventContext(&evt, (Node *)stmt);
 
 	if (CommandFiresTriggers(&evt))
 	{
-		cmd.objectId = InvalidOid;
-		cmd.objectname = pstrdup(opcname);
-		cmd.schemaname = get_namespace_name(namespaceoid);
+		evt.objectId = InvalidOid;
+		evt.objectname = pstrdup(opcname);
+		evt.schemaname = get_namespace_name(namespaceoid);
 
 		ExecBeforeCommandTriggers(&evt);
 	}
@@ -737,7 +737,7 @@ DefineOpClass(CreateOpClassStmt *stmt)
 	/* Call AFTER CREATE OPERATOR CLASS command triggers */
 	if (CommandFiresAfterTriggers(&evt))
 	{
-		cmd.objectId = opclassoid;
+		evt.objectId = opclassoid;
 		ExecAfterCommandTriggers(&evt);
 	}
 }
@@ -782,13 +782,13 @@ DefineOpFamily(CreateOpFamilyStmt *stmt)
 				 errmsg("must be superuser to create an operator family")));
 
 	/* Call BEFORE CREATE OPERATOR FAMILY command triggers */
-	InitCommandContext(&evt, (Node *)stmt);
+	InitEventContext(&evt, (Node *)stmt);
 
 	if (CommandFiresTriggers(&evt))
 	{
-		cmd.objectId = InvalidOid;
-		cmd.objectname = opfname;
-		cmd.schemaname = get_namespace_name(namespaceoid);
+		evt.objectId = InvalidOid;
+		evt.objectname = opfname;
+		evt.schemaname = get_namespace_name(namespaceoid);
 
 		ExecBeforeCommandTriggers(&evt);
 	}
@@ -799,7 +799,7 @@ DefineOpFamily(CreateOpFamilyStmt *stmt)
 	/* Call AFTER CREATE OPERATOR FAMILY command triggers */
 	if (CommandFiresAfterTriggers(&evt))
 	{
-		cmd.objectId = opfOid;
+		evt.objectId = opfOid;
 		ExecAfterCommandTriggers(&evt);
 	}
 }
@@ -858,7 +858,7 @@ AlterOpFamily(AlterOpFamilyStmt *stmt)
 				 errmsg("must be superuser to alter an operator family")));
 
 	/* Call BEFORE ALTER OPERATOR FAMILY command triggers */
-	InitCommandContext(&evt, (Node *)stmt);
+	InitEventContext(&evt, (Node *)stmt);
 
 	if (CommandFiresTriggers(&evt))
 	{
@@ -868,9 +868,9 @@ AlterOpFamily(AlterOpFamilyStmt *stmt)
 		htup = OpFamilyCacheLookup(amoid, stmt->opfamilyname, false);
 		opfForm = (Form_pg_opfamily) GETSTRUCT(htup);
 
-		cmd.objectId = opfamilyoid;
-		cmd.objectname = pstrdup(NameStr(opfForm->opfname));
-		cmd.schemaname = get_namespace_name(opfForm->opfnamespace);
+		evt.objectId = opfamilyoid;
+		evt.objectname = pstrdup(NameStr(opfForm->opfname));
+		evt.schemaname = get_namespace_name(opfForm->opfnamespace);
 
 		ReleaseSysCache(htup);
 

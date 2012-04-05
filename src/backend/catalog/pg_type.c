@@ -679,7 +679,7 @@ GenerateTypeDependencies(Oid typeNamespace,
  */
 void
 RenameTypeInternal(Oid typeOid, const char *newTypeName, Oid typeNamespace,
-				   CommandContext cmd)
+				   EventContext evt)
 {
 	Relation	pg_type_desc;
 	HeapTuple	tuple;
@@ -707,13 +707,13 @@ RenameTypeInternal(Oid typeOid, const char *newTypeName, Oid typeNamespace,
 				 errmsg("type \"%s\" already exists", newTypeName)));
 
 	/* Call BEFORE ALTER TYPE triggers */
-	if (CommandFiresTriggers(cmd))
+	if (CommandFiresTriggers(evt))
 	{
-		cmd->objectId = typeOid;
-		cmd->objectname = NameStr(typ->typname);
-		cmd->schemaname = get_namespace_name(typeNamespace);
+		evt->objectId = typeOid;
+		evt->objectname = NameStr(typ->typname);
+		evt->schemaname = get_namespace_name(typeNamespace);
 
-		ExecBeforeCommandTriggers(cmd);
+		ExecBeforeCommandTriggers(evt);
 	}
 
 	/* OK, do the rename --- tuple is a copy, so OK to scribble on it */
@@ -737,10 +737,10 @@ RenameTypeInternal(Oid typeOid, const char *newTypeName, Oid typeNamespace,
 	}
 
 	/* Call AFTER ALTER TYPE triggers */
-	if (CommandFiresAfterTriggers(cmd))
+	if (CommandFiresAfterTriggers(evt))
 	{
-		cmd->objectname = (char *)newTypeName;
-		ExecAfterCommandTriggers(cmd);
+		evt->objectname = (char *)newTypeName;
+		ExecAfterCommandTriggers(evt);
 	}
 }
 

@@ -75,7 +75,7 @@ ExecCreateTableAs(CreateTableAsStmt *stmt, const char *queryString,
 	/*
 	 * Create the tuple receiver object and insert info it will need
 	 */
-	InitCommandContext(&evt, (Node *)stmt);
+	InitEventContext(&evt, (Node *)stmt);
 
 	dest = CreateIntoRelDestReceiver(into, &evt);
 
@@ -415,10 +415,10 @@ intorel_shutdown(DestReceiver *self)
 		heap_sync(myState->rel);
 
 	/* Call AFTER CREATE TABLE AS command triggers */
-	if (CommandFiresAfterTriggers(myState->cmd))
+	if (CommandFiresAfterTriggers(myState->evt))
 	{
-		myState->cmd->objectId = RelationGetRelid(myState->rel);
-		ExecAfterCommandTriggers(myState->cmd);
+		myState->evt->objectId = RelationGetRelid(myState->rel);
+		ExecAfterCommandTriggers(myState->evt);
 	}
 
 	/* close rel, but keep lock until commit */

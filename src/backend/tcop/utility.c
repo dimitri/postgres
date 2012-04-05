@@ -517,7 +517,7 @@ standard_ProcessUtility(Node *parsetree,
 				EventContextData evt;
 
 				/* Prepare BEFORE CREATE TABLE triggers */
-				InitCommandContext(&evt, parsetree);
+				InitEventContext(&evt, parsetree);
 
 				/* Run parse analysis ... */
 				stmts = transformCreateStmt(stmt, queryString);
@@ -775,7 +775,7 @@ standard_ProcessUtility(Node *parsetree,
 				EventContextData evt;
 
 				/* Prepare BEFORE ALTER DOMAIN triggers */
-				InitCommandContext(&evt, parsetree);
+				InitEventContext(&evt, parsetree);
 
 				/*
 				 * Some or all of these functions are recursive to cover
@@ -843,7 +843,7 @@ standard_ProcessUtility(Node *parsetree,
 				DefineStmt *stmt = (DefineStmt *) parsetree;
 				EventContextData evt;
 
-				InitCommandContext(&evt, parsetree);
+				InitEventContext(&evt, parsetree);
 
 				switch (stmt->kind)
 				{
@@ -892,7 +892,7 @@ standard_ProcessUtility(Node *parsetree,
 				CompositeTypeStmt *stmt = (CompositeTypeStmt *) parsetree;
 				EventContextData evt;
 
-				InitCommandContext(&evt, parsetree);
+				InitEventContext(&evt, parsetree);
 				DefineCompositeType(stmt->typevar, stmt->coldeflist, &evt);
 			}
 			break;
@@ -933,7 +933,7 @@ standard_ProcessUtility(Node *parsetree,
 				IndexStmt  *stmt = (IndexStmt *) parsetree;
 				EventContextData evt;
 
-				InitCommandContext(&evt, parsetree);
+				InitEventContext(&evt, parsetree);
 
 				if (stmt->concurrent)
 					PreventTransactionChain(isTopLevel,
@@ -1045,7 +1045,7 @@ standard_ProcessUtility(Node *parsetree,
 				LoadStmt   *stmt = (LoadStmt *) parsetree;
 				EventContextData evt;
 
-				InitCommandContext(&evt, parsetree);
+				InitEventContext(&evt, parsetree);
 
 				if (CommandFiresTriggers(&evt))
 				{
@@ -1191,7 +1191,7 @@ standard_ProcessUtility(Node *parsetree,
 				ReindexStmt *stmt = (ReindexStmt *) parsetree;
 				EventContextData evt;
 
-				InitCommandContext(&evt, parsetree);
+				InitEventContext(&evt, parsetree);
 
 				/* we choose to allow this during "read only" transactions */
 				PreventCommandDuringRecovery("REINDEX");
