@@ -66,32 +66,32 @@ extern const char *select_default_timezone(const char *share_path);
 
 static const char *auth_methods_host[] = {"trust", "reject", "md5", "password", "ident", "radius",
 #ifdef ENABLE_GSS
-								   "gss",
+	"gss",
 #endif
 #ifdef ENABLE_SSPI
-								   "sspi",
+	"sspi",
 #endif
 #ifdef KRB5
-								   "krb5",
+	"krb5",
 #endif
 #ifdef USE_PAM
-								   "pam", "pam ",
+	"pam", "pam ",
 #endif
 #ifdef USE_LDAP
-								   "ldap",
+	"ldap",
 #endif
 #ifdef USE_SSL
-								   "cert",
+	"cert",
 #endif
-								   NULL};
+NULL};
 static const char *auth_methods_local[] = {"trust", "reject", "md5", "password", "peer", "radius",
 #ifdef USE_PAM
-								   "pam", "pam ",
+	"pam", "pam ",
 #endif
 #ifdef USE_LDAP
-								   "ldap",
+	"ldap",
 #endif
-									NULL};
+NULL};
 
 /*
  * these values are passed in by makefile defines
@@ -213,7 +213,8 @@ static void trapsig(int signum);
 static void check_ok(void);
 static char *escape_quotes(const char *src);
 static int	locale_date_order(const char *locale);
-static bool check_locale_name(const char *locale);
+static bool check_locale_name(int category, const char *locale,
+				  char **canonname);
 static bool check_locale_encoding(const char *locale, int encoding);
 static void setlocales(void);
 static void usage(const char *progname);
@@ -1650,7 +1651,7 @@ setup_collation(void)
 		if (len == 0 || localebuf[len - 1] != '\n')
 		{
 			if (debug)
-				fprintf(stderr, _("%s: locale name too long, skipped: %s\n"),
+				fprintf(stderr, _("%s: locale name too long, skipped: \"%s\"\n"),
 						progname, localebuf);
 			continue;
 		}
@@ -1675,7 +1676,7 @@ setup_collation(void)
 		if (skip)
 		{
 			if (debug)
-				fprintf(stderr, _("%s: locale name has non-ASCII characters, skipped: %s\n"),
+				fprintf(stderr, _("%s: locale name has non-ASCII characters, skipped: \"%s\"\n"),
 						progname, localebuf);
 			continue;
 		}
@@ -2240,33 +2241,52 @@ locale_date_order(const char *locale)
 }
 
 /*
- * check if given string is a valid locale specifier
+ * Is the locale name valid for the locale category?
  *
- * this should match the backend check_locale() function
+ * If successful, and canonname isn't NULL, a malloc'd copy of the locale's
+ * canonical name is stored there.	This is especially useful for figuring out
+ * what locale name "" means (ie, the environment value).  (Actually,
+ * it seems that on most implementations that's the only thing it's good for;
+ * we could wish that setlocale gave back a canonically spelled version of
+ * the locale name, but typically it doesn't.)
+ *
+ * this should match the backend's check_locale() function
  */
 static bool
-check_locale_name(const char *locale)
+check_locale_name(int category, const char *locale, char **canonname)
 {
-	bool		ret;
-	int			category = LC_CTYPE;
 	char	   *save;
+	char	   *res;
+
+	if (canonname)
+		*canonname = NULL;		/* in case of failure */
 
 	save = setlocale(category, NULL);
 	if (!save)
-		return false;			/* should not happen; */
+		return false;			/* won't happen, we hope */
 
+	/* save may be pointing at a modifiable scratch variable, so copy it. */
 	save = xstrdup(save);
 
-	ret = (setlocale(category, locale) != NULL);
+	/* set the locale with setlocale, to see if it accepts it. */
+	res = setlocale(category, locale);
 
-	setlocale(category, save);
+	/* save canonical name if requested. */
+	if (res && canonname)
+		*canonname = xstrdup(res);
+
+	/* restore old value. */
+	if (!setlocale(category, save))
+		fprintf(stderr, _("%s: failed to restore old locale \"%s\"\n"),
+				progname, save);
 	free(save);
 
 	/* should we exit here? */
-	if (!ret)
-		fprintf(stderr, _("%s: invalid locale name \"%s\"\n"), progname, locale);
+	if (res == NULL)
+		fprintf(stderr, _("%s: invalid locale name \"%s\"\n"),
+				progname, locale);
 
-	return ret;
+	return (res != NULL);
 }
 
 /*
@@ -2308,11 +2328,13 @@ check_locale_encoding(const char *locale, int user_enc)
 /*
  * set up the locale variables
  *
- * assumes we have called setlocale(LC_ALL,"")
+ * assumes we have called setlocale(LC_ALL, "") -- see set_pglocale_pgservice
  */
 static void
 setlocales(void)
 {
+	char	   *canonname;
+
 	/* set empty lc_* values to locale config if set */
 
 	if (strlen(locale) > 0)
@@ -2332,32 +2354,42 @@ setlocales(void)
 	}
 
 	/*
-	 * override absent/invalid config settings from initdb's locale settings
+	 * canonicalize locale names, and override any missing/invalid values from
+	 * our current environment
 	 */
 
-	if (strlen(lc_ctype) == 0 || !check_locale_name(lc_ctype))
+	if (check_locale_name(LC_CTYPE, lc_ctype, &canonname))
+		lc_ctype = canonname;
+	else
 		lc_ctype = xstrdup(setlocale(LC_CTYPE, NULL));
-	if (strlen(lc_collate) == 0 || !check_locale_name(lc_collate))
+	if (check_locale_name(LC_COLLATE, lc_collate, &canonname))
+		lc_collate = canonname;
+	else
 		lc_collate = xstrdup(setlocale(LC_COLLATE, NULL));
-	if (strlen(lc_numeric) == 0 || !check_locale_name(lc_numeric))
+	if (check_locale_name(LC_NUMERIC, lc_numeric, &canonname))
+		lc_numeric = canonname;
+	else
 		lc_numeric = xstrdup(setlocale(LC_NUMERIC, NULL));
-	if (strlen(lc_time) == 0 || !check_locale_name(lc_time))
+	if (check_locale_name(LC_TIME, lc_time, &canonname))
+		lc_time = canonname;
+	else
 		lc_time = xstrdup(setlocale(LC_TIME, NULL));
-	if (strlen(lc_monetary) == 0 || !check_locale_name(lc_monetary))
+	if (check_locale_name(LC_MONETARY, lc_monetary, &canonname))
+		lc_monetary = canonname;
+	else
 		lc_monetary = xstrdup(setlocale(LC_MONETARY, NULL));
-	if (strlen(lc_messages) == 0 || !check_locale_name(lc_messages))
 #if defined(LC_MESSAGES) && !defined(WIN32)
-	{
-		/* when available get the current locale setting */
+	if (check_locale_name(LC_MESSAGES, lc_messages, &canonname))
+		lc_messages = canonname;
+	else
 		lc_messages = xstrdup(setlocale(LC_MESSAGES, NULL));
-	}
 #else
-	{
-		/* when not available, get the CTYPE setting */
+	/* when LC_MESSAGES is not available, use the LC_CTYPE setting */
+	if (check_locale_name(LC_CTYPE, lc_messages, &canonname))
+		lc_messages = canonname;
+	else
 		lc_messages = xstrdup(setlocale(LC_CTYPE, NULL));
-	}
 #endif
-
 }
 
 #ifdef WIN32
@@ -2399,7 +2431,7 @@ CreateRestrictedProcess(char *cmd, PROCESS_INFORMATION *processInfo)
 
 	if (_CreateRestrictedToken == NULL)
 	{
-		fprintf(stderr, "WARNING: cannot create restricted tokens on this platform\n");
+		fprintf(stderr, _("%s: WARNING: cannot create restricted tokens on this platform\n"), progname);
 		if (Advapi32Handle != NULL)
 			FreeLibrary(Advapi32Handle);
 		return 0;
@@ -2408,7 +2440,7 @@ CreateRestrictedProcess(char *cmd, PROCESS_INFORMATION *processInfo)
 	/* Open the current token to use as a base for the restricted one */
 	if (!OpenProcessToken(GetCurrentProcess(), TOKEN_ALL_ACCESS, &origToken))
 	{
-		fprintf(stderr, "Failed to open process token: error code %lu\n", GetLastError());
+		fprintf(stderr, _("%s: could not open process token: error code %lu\n"), progname, GetLastError());
 		return 0;
 	}
 
@@ -2421,7 +2453,7 @@ CreateRestrictedProcess(char *cmd, PROCESS_INFORMATION *processInfo)
 	SECURITY_BUILTIN_DOMAIN_RID, DOMAIN_ALIAS_RID_POWER_USERS, 0, 0, 0, 0, 0,
 								  0, &dropSids[1].Sid))
 	{
-		fprintf(stderr, "Failed to allocate SIDs: error code %lu\n", GetLastError());
+		fprintf(stderr, _("%s: could not to allocate SIDs: error code %lu\n"), progname, GetLastError());
 		return 0;
 	}
 
@@ -2440,7 +2472,7 @@ CreateRestrictedProcess(char *cmd, PROCESS_INFORMATION *processInfo)
 
 	if (!b)
 	{
-		fprintf(stderr, "Failed to create restricted token: error code %lu\n", GetLastError());
+		fprintf(stderr, _("%s: could not create restricted token: error code %lu\n"), progname, GetLastError());
 		return 0;
 	}
 
@@ -2461,7 +2493,7 @@ CreateRestrictedProcess(char *cmd, PROCESS_INFORMATION *processInfo)
 							 processInfo))
 
 	{
-		fprintf(stderr, "CreateProcessAsUser failed: error code %lu\n", GetLastError());
+		fprintf(stderr, _("%s: could not start process for command \"%s\": error code %lu\n"), progname, cmd, GetLastError());
 		return 0;
 	}
 
@@ -2516,7 +2548,7 @@ check_authmethod_unspecified(const char **authmethod)
 	{
 		authwarning = _("\nWARNING: enabling \"trust\" authentication for local connections\n"
 						"You can change this by editing pg_hba.conf or using the option -A, or\n"
-						"--auth-local and --auth-host, the next time you run initdb.\n");
+			"--auth-local and --auth-host, the next time you run initdb.\n");
 		*authmethod = "trust";
 	}
 }
@@ -2644,6 +2676,7 @@ main(int argc, char *argv[])
 		{
 			case 'A':
 				authmethodlocal = authmethodhost = xstrdup(optarg);
+
 				/*
 				 * When ident is specified, use peer for local connections.
 				 * Mirrored, when peer is specified, use ident for TCP/IP
@@ -2728,8 +2761,11 @@ main(int argc, char *argv[])
 	}
 
 
-	/* Non-option argument specifies data directory */
-	if (optind < argc)
+	/*
+	 * Non-option argument specifies data directory as long as it wasn't
+	 * already specified with -D / --pgdata
+	 */
+	if (optind < argc && strlen(pg_data) == 0)
 	{
 		pg_data = xstrdup(argv[optind]);
 		optind++;
@@ -2803,7 +2839,7 @@ main(int argc, char *argv[])
 
 		if (!CreateRestrictedProcess(cmdline, &pi))
 		{
-			fprintf(stderr, "Failed to re-exec with restricted token: error code %lu\n", GetLastError());
+			fprintf(stderr, _("%s: could not re-execute with restricted token: error code %lu\n"), progname, GetLastError());
 		}
 		else
 		{
@@ -2818,7 +2854,7 @@ main(int argc, char *argv[])
 
 			if (!GetExitCodeProcess(pi.hProcess, &x))
 			{
-				fprintf(stderr, "Failed to get exit code from subprocess: error code %lu\n", GetLastError());
+				fprintf(stderr, _("%s: could not get exit code from subprocess: error code %lu\n"), progname, GetLastError());
 				exit(1);
 			}
 			exit(x);
@@ -2939,7 +2975,7 @@ main(int argc, char *argv[])
 		strcmp(lc_ctype, lc_numeric) == 0 &&
 		strcmp(lc_ctype, lc_monetary) == 0 &&
 		strcmp(lc_ctype, lc_messages) == 0)
-		printf(_("The database cluster will be initialized with locale %s.\n"), lc_ctype);
+		printf(_("The database cluster will be initialized with locale \"%s\".\n"), lc_ctype);
 	else
 	{
 		printf(_("The database cluster will be initialized with locales\n"
@@ -2966,7 +3002,7 @@ main(int argc, char *argv[])
 		if (ctype_enc == -1)
 		{
 			/* Couldn't recognize the locale's codeset */
-			fprintf(stderr, _("%s: could not find suitable encoding for locale %s\n"),
+			fprintf(stderr, _("%s: could not find suitable encoding for locale \"%s\"\n"),
 					progname, lc_ctype);
 			fprintf(stderr, _("Rerun %s with the -E option.\n"), progname);
 			fprintf(stderr, _("Try \"%s --help\" for more information.\n"),
@@ -2981,19 +3017,19 @@ main(int argc, char *argv[])
 			 * UTF-8.
 			 */
 #ifdef WIN32
-			printf(_("Encoding %s implied by locale is not allowed as a server-side encoding.\n"
-			   "The default database encoding will be set to %s instead.\n"),
+			printf(_("Encoding \"%s\" implied by locale is not allowed as a server-side encoding.\n"
+			"The default database encoding will be set to \"%s\" instead.\n"),
 				   pg_encoding_to_char(ctype_enc),
 				   pg_encoding_to_char(PG_UTF8));
 			ctype_enc = PG_UTF8;
 			encodingid = encodingid_to_string(ctype_enc);
 #else
 			fprintf(stderr,
-					_("%s: locale %s requires unsupported encoding %s\n"),
+			   _("%s: locale \"%s\" requires unsupported encoding \"%s\"\n"),
 					progname, lc_ctype, pg_encoding_to_char(ctype_enc));
 			fprintf(stderr,
-				  _("Encoding %s is not allowed as a server-side encoding.\n"
-					"Rerun %s with a different locale selection.\n"),
+			  _("Encoding \"%s\" is not allowed as a server-side encoding.\n"
+				"Rerun %s with a different locale selection.\n"),
 					pg_encoding_to_char(ctype_enc), progname);
 			exit(1);
 #endif
@@ -3001,7 +3037,7 @@ main(int argc, char *argv[])
 		else
 		{
 			encodingid = encodingid_to_string(ctype_enc);
-			printf(_("The default database encoding has accordingly been set to %s.\n"),
+			printf(_("The default database encoding has accordingly been set to \"%s\".\n"),
 				   pg_encoding_to_char(ctype_enc));
 		}
 	}
@@ -3018,7 +3054,7 @@ main(int argc, char *argv[])
 		default_text_search_config = find_matching_ts_config(lc_ctype);
 		if (default_text_search_config == NULL)
 		{
-			printf(_("%s: could not find suitable text search configuration for locale %s\n"),
+			printf(_("%s: could not find suitable text search configuration for locale \"%s\"\n"),
 				   progname, lc_ctype);
 			default_text_search_config = "simple";
 		}
@@ -3029,12 +3065,12 @@ main(int argc, char *argv[])
 
 		if (checkmatch == NULL)
 		{
-			printf(_("%s: warning: suitable text search configuration for locale %s is unknown\n"),
+			printf(_("%s: warning: suitable text search configuration for locale \"%s\" is unknown\n"),
 				   progname, lc_ctype);
 		}
 		else if (strcmp(checkmatch, default_text_search_config) != 0)
 		{
-			printf(_("%s: warning: specified text search configuration \"%s\" might not match locale %s\n"),
+			printf(_("%s: warning: specified text search configuration \"%s\" might not match locale \"%s\"\n"),
 				   progname, default_text_search_config, lc_ctype);
 		}
 	}

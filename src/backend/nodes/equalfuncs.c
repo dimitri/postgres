@@ -815,6 +815,7 @@ _equalRestrictInfo(const RestrictInfo *a, const RestrictInfo *b)
 	COMPARE_SCALAR_FIELD(is_pushed_down);
 	COMPARE_SCALAR_FIELD(outerjoin_delayed);
 	COMPARE_BITMAPSET_FIELD(required_relids);
+	COMPARE_BITMAPSET_FIELD(outer_relids);
 	COMPARE_BITMAPSET_FIELD(nullable_relids);
 
 	/*
@@ -897,6 +898,7 @@ _equalQuery(const Query *a, const Query *b)
 {
 	COMPARE_SCALAR_FIELD(commandType);
 	COMPARE_SCALAR_FIELD(querySource);
+	/* we intentionally ignore queryId, since it might not be set */
 	COMPARE_SCALAR_FIELD(canSetTag);
 	COMPARE_NODE_FIELD(utilityStmt);
 	COMPARE_SCALAR_FIELD(resultRelation);
@@ -1188,6 +1190,7 @@ _equalDropStmt(const DropStmt *a, const DropStmt *b)
 	COMPARE_SCALAR_FIELD(removeType);
 	COMPARE_SCALAR_FIELD(behavior);
 	COMPARE_SCALAR_FIELD(missing_ok);
+	COMPARE_SCALAR_FIELD(concurrent);
 
 	return true;
 }
@@ -1304,6 +1307,7 @@ static bool
 _equalRenameStmt(const RenameStmt *a, const RenameStmt *b)
 {
 	COMPARE_SCALAR_FIELD(renameType);
+	COMPARE_SCALAR_FIELD(relationType);
 	COMPARE_NODE_FIELD(relation);
 	COMPARE_NODE_FIELD(object);
 	COMPARE_NODE_FIELD(objarg);
@@ -1436,6 +1440,7 @@ _equalViewStmt(const ViewStmt *a, const ViewStmt *b)
 	COMPARE_NODE_FIELD(aliases);
 	COMPARE_NODE_FIELD(query);
 	COMPARE_SCALAR_FIELD(replace);
+	COMPARE_NODE_FIELD(options);
 
 	return true;
 }
@@ -1965,7 +1970,7 @@ static bool
 _equalReassignOwnedStmt(const ReassignOwnedStmt *a, const ReassignOwnedStmt *b)
 {
 	COMPARE_NODE_FIELD(roles);
-	COMPARE_NODE_FIELD(newrole);
+	COMPARE_STRING_FIELD(newrole);
 
 	return true;
 }
@@ -2202,6 +2207,7 @@ _equalColumnDef(const ColumnDef *a, const ColumnDef *b)
 	COMPARE_NODE_FIELD(collClause);
 	COMPARE_SCALAR_FIELD(collOid);
 	COMPARE_NODE_FIELD(constraints);
+	COMPARE_NODE_FIELD(fdwoptions);
 
 	return true;
 }
@@ -2214,6 +2220,7 @@ _equalConstraint(const Constraint *a, const Constraint *b)
 	COMPARE_SCALAR_FIELD(deferrable);
 	COMPARE_SCALAR_FIELD(initdeferred);
 	COMPARE_LOCATION_FIELD(location);
+	COMPARE_SCALAR_FIELD(is_no_inherit);
 	COMPARE_NODE_FIELD(raw_expr);
 	COMPARE_STRING_FIELD(cooked_expr);
 	COMPARE_NODE_FIELD(keys);
@@ -2375,8 +2382,8 @@ _equalXmlSerialize(const XmlSerialize *a, const XmlSerialize *b)
 static bool
 _equalList(const List *a, const List *b)
 {
-	const ListCell   *item_a;
-	const ListCell   *item_b;
+	const ListCell *item_a;
+	const ListCell *item_b;
 
 	/*
 	 * Try to reject by simple scalar checks before grovelling through all the

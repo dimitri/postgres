@@ -14,6 +14,7 @@
 #ifndef TYPECMDS_H
 #define TYPECMDS_H
 
+#include "access/htup.h"
 #include "commands/event_trigger.h"
 #include "utils/lsyscache.h"
 #include "nodes/parsenodes.h"
@@ -37,6 +38,8 @@ extern void AlterDomainValidateConstraint(List *names, char *constrName, EventCo
 extern void AlterDomainDropConstraint(List *names, const char *constrName,
 									  DropBehavior behavior, bool missing_ok,
 										  EventContext evt);
+
+extern void checkDomainOwner(HeapTuple tup);
 
 extern List *GetDomainConstraints(Oid typeOid);
 

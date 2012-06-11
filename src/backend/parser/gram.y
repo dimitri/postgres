@@ -425,7 +425,7 @@ static void processCASbits(int cas_bits, int location, const char *constrType,
 %type <str>		character
 %type <str>		extract_arg
 %type <str>		opt_charset
-%type <boolean> opt_varying opt_timezone
+%type <boolean> opt_varying opt_timezone opt_no_inherit
 
 %type <ival>	Iconst SignedIconst
 %type <str>		Sconst comment_text notify_payload
@@ -2693,12 +2693,13 @@ ColConstraintElem:
 					n->indexspace = $4;
 					$$ = (Node *)n;
 				}
-			| CHECK '(' a_expr ')'
+			| CHECK opt_no_inherit '(' a_expr ')'
 				{
 					Constraint *n = makeNode(Constraint);
 					n->contype = CONSTR_CHECK;
 					n->location = @1;
-					n->raw_expr = $3;
+					n->is_no_inherit = $2;
+					n->raw_expr = $4;
 					n->cooked_expr = NULL;
 					$$ = (Node *)n;
 				}
@@ -2818,14 +2819,15 @@ TableConstraint:
 		;
 
 ConstraintElem:
-			CHECK '(' a_expr ')' ConstraintAttributeSpec
+			CHECK opt_no_inherit '(' a_expr ')' ConstraintAttributeSpec
 				{
 					Constraint *n = makeNode(Constraint);
 					n->contype = CONSTR_CHECK;
 					n->location = @1;
-					n->raw_expr = $3;
+					n->is_no_inherit = $2;
+					n->raw_expr = $4;
 					n->cooked_expr = NULL;
-					processCASbits($5, @5, "CHECK",
+					processCASbits($6, @6, "CHECK",
 								   NULL, NULL, &n->skip_validation,
 								   yyscanner);
 					n->initially_valid = !n->skip_validation;
@@ -2926,6 +2928,10 @@ ConstraintElem:
 					n->initially_valid = !n->skip_validation;
 					$$ = (Node *)n;
 				}
+		;
+
+opt_no_inherit:	NO INHERIT							{  $$ = TRUE; }
+			| /* EMPTY */							{  $$ = FALSE; }
 		;
 
 opt_column_list:
@@ -3284,6 +3290,7 @@ DropPLangStmt:
 					n->arguments = NIL;
 					n->behavior = $5;
 					n->missing_ok = false;
+					n->concurrent = false;
 					$$ = (Node *)n;
 				}
 			| DROP opt_procedural LANGUAGE IF_P EXISTS ColId_or_Sconst opt_drop_behavior
@@ -3293,6 +3300,7 @@ DropPLangStmt:
 					n->objects = list_make1(list_make1(makeString($6)));
 					n->behavior = $7;
 					n->missing_ok = true;
+					n->concurrent = false;
 					$$ = (Node *)n;
 				}
 		;
@@ -3688,6 +3696,7 @@ DropFdwStmt: DROP FOREIGN DATA_P WRAPPER name opt_drop_behavior
 					n->arguments = NIL;
 					n->missing_ok = false;
 					n->behavior = $6;
+					n->concurrent = false;
 					$$ = (Node *) n;
 				}
 				|  DROP FOREIGN DATA_P WRAPPER IF_P EXISTS name opt_drop_behavior
@@ -3698,6 +3707,7 @@ DropFdwStmt: DROP FOREIGN DATA_P WRAPPER name opt_drop_behavior
 					n->arguments = NIL;
 					n->missing_ok = true;
 					n->behavior = $8;
+					n->concurrent = false;
 					$$ = (Node *) n;
 				}
 		;
@@ -3848,6 +3858,7 @@ DropForeignServerStmt: DROP SERVER name opt_drop_behavior
 					n->arguments = NIL;
 					n->missing_ok = false;
 					n->behavior = $4;
+					n->concurrent = false;
 					$$ = (Node *) n;
 				}
 				|  DROP SERVER IF_P EXISTS name opt_drop_behavior
@@ -3858,6 +3869,7 @@ DropForeignServerStmt: DROP SERVER name opt_drop_behavior
 					n->arguments = NIL;
 					n->missing_ok = true;
 					n->behavior = $6;
+					n->concurrent = false;
 					$$ = (Node *) n;
 				}
 		;
@@ -4245,6 +4257,7 @@ DropTrigStmt:
 					n->arguments = NIL;
 					n->behavior = $6;
 					n->missing_ok = false;
+					n->concurrent = false;
 					$$ = (Node *) n;
 				}
 			| DROP TRIGGER IF_P EXISTS name ON any_name opt_drop_behavior
@@ -4255,6 +4268,7 @@ DropTrigStmt:
 					n->arguments = NIL;
 					n->behavior = $8;
 					n->missing_ok = true;
+					n->concurrent = false;
 					$$ = (Node *) n;
 				}
 		;
@@ -4940,6 +4954,7 @@ DropOpClassStmt:
 					n->removeType = OBJECT_OPCLASS;
 					n->behavior = $7;
 					n->missing_ok = false;
+					n->concurrent = false;
 					$$ = (Node *) n;
 				}
 			| DROP OPERATOR CLASS IF_P EXISTS any_name USING access_method opt_drop_behavior
@@ -4950,6 +4965,7 @@ DropOpClassStmt:
 					n->removeType = OBJECT_OPCLASS;
 					n->behavior = $9;
 					n->missing_ok = true;
+					n->concurrent = false;
 					$$ = (Node *) n;
 				}
 		;
@@ -4963,6 +4979,7 @@ DropOpFamilyStmt:
 					n->removeType = OBJECT_OPFAMILY;
 					n->behavior = $7;
 					n->missing_ok = false;
+					n->concurrent = false;
 					$$ = (Node *) n;
 				}
 			| DROP OPERATOR FAMILY IF_P EXISTS any_name USING access_method opt_drop_behavior
@@ -4973,6 +4990,7 @@ DropOpFamilyStmt:
 					n->removeType = OBJECT_OPFAMILY;
 					n->behavior = $9;
 					n->missing_ok = true;
+					n->concurrent = false;
 					$$ = (Node *) n;
 				}
 		;
@@ -5023,6 +5041,7 @@ DropStmt:	DROP drop_type IF_P EXISTS any_name_list opt_drop_behavior
 					n->objects = $5;
 					n->arguments = NIL;
 					n->behavior = $6;
+					n->concurrent = false;
 					$$ = (Node *)n;
 				}
 			| DROP drop_type any_name_list opt_drop_behavior
@@ -5033,6 +5052,29 @@ DropStmt:	DROP drop_type IF_P EXISTS any_name_list opt_drop_behavior
 					n->objects = $3;
 					n->arguments = NIL;
 					n->behavior = $4;
+					n->concurrent = false;
+					$$ = (Node *)n;
+				}
+			| DROP INDEX CONCURRENTLY any_name_list opt_drop_behavior
+				{
+					DropStmt *n = makeNode(DropStmt);
+					n->removeType = OBJECT_INDEX;
+					n->missing_ok = FALSE;
+					n->objects = $4;
+					n->arguments = NIL;
+					n->behavior = $5;
+					n->concurrent = true;
+					$$ = (Node *)n;
+				}
+			| DROP INDEX CONCURRENTLY IF_P EXISTS any_name_list opt_drop_behavior
+				{
+					DropStmt *n = makeNode(DropStmt);
+					n->removeType = OBJECT_INDEX;
+					n->missing_ok = FALSE;
+					n->objects = $6;
+					n->arguments = NIL;
+					n->behavior = $7;
+					n->concurrent = true;
 					$$ = (Node *)n;
 				}
 		;
@@ -6479,6 +6521,7 @@ RemoveFuncStmt:
 					n->arguments = list_make1(extractArgTypes($4));
 					n->behavior = $5;
 					n->missing_ok = false;
+					n->concurrent = false;
 					$$ = (Node *)n;
 				}
 			| DROP FUNCTION IF_P EXISTS func_name func_args opt_drop_behavior
@@ -6489,6 +6532,7 @@ RemoveFuncStmt:
 					n->arguments = list_make1(extractArgTypes($6));
 					n->behavior = $7;
 					n->missing_ok = true;
+					n->concurrent = false;
 					$$ = (Node *)n;
 				}
 		;
@@ -6502,6 +6546,7 @@ RemoveAggrStmt:
 					n->arguments = list_make1($4);
 					n->behavior = $5;
 					n->missing_ok = false;
+					n->concurrent = false;
 					$$ = (Node *)n;
 				}
 			| DROP AGGREGATE IF_P EXISTS func_name aggr_args opt_drop_behavior
@@ -6512,6 +6557,7 @@ RemoveAggrStmt:
 					n->arguments = list_make1($6);
 					n->behavior = $7;
 					n->missing_ok = true;
+					n->concurrent = false;
 					$$ = (Node *)n;
 				}
 		;
@@ -6525,6 +6571,7 @@ RemoveOperStmt:
 					n->arguments = list_make1($4);
 					n->behavior = $5;
 					n->missing_ok = false;
+					n->concurrent = false;
 					$$ = (Node *)n;
 				}
 			| DROP OPERATOR IF_P EXISTS any_operator oper_argtypes opt_drop_behavior
@@ -6535,6 +6582,7 @@ RemoveOperStmt:
 					n->arguments = list_make1($6);
 					n->behavior = $7;
 					n->missing_ok = true;
+					n->concurrent = false;
 					$$ = (Node *)n;
 				}
 		;
@@ -6651,6 +6699,7 @@ DropCastStmt: DROP CAST opt_if_exists '(' Typename AS Typename ')' opt_drop_beha
 					n->arguments = list_make1(list_make1($7));
 					n->behavior = $9;
 					n->missing_ok = $3;
+					n->concurrent = false;
 					$$ = (Node *)n;
 				}
 		;
@@ -6760,6 +6809,16 @@ RenameStmt: ALTER AGGREGATE func_name aggr_args RENAME TO name
 					n->object = $3;
 					n->newname = $6;
 					n->missing_ok = false;
+					$$ = (Node *)n;
+				}
+			| ALTER DOMAIN_P any_name RENAME CONSTRAINT name TO name
+				{
+					RenameStmt *n = makeNode(RenameStmt);
+					n->renameType = OBJECT_CONSTRAINT;
+					n->relationType = OBJECT_DOMAIN;
+					n->object = $3;
+					n->subname = $6;
+					n->newname = $8;
 					$$ = (Node *)n;
 				}
 			| ALTER FOREIGN DATA_P WRAPPER name RENAME TO name
@@ -7570,6 +7629,7 @@ DropRuleStmt:
 					n->arguments = NIL;
 					n->behavior = $6;
 					n->missing_ok = false;
+					n->concurrent = false;
 					$$ = (Node *) n;
 				}
 			| DROP RULE IF_P EXISTS name ON any_name opt_drop_behavior
@@ -7580,6 +7640,7 @@ DropRuleStmt:
 					n->arguments = NIL;
 					n->behavior = $8;
 					n->missing_ok = true;
+					n->concurrent = false;
 					$$ = (Node *) n;
 				}
 		;
@@ -9811,7 +9872,7 @@ SimpleTypename:
  * makes no sense for constructs like CHAR 'hi' and BIT '0101',
  * where there is an obvious better choice to make.
  * Note that ConstInterval is not included here since it must
- * be pushed up higher in the rules to accomodate the postfix
+ * be pushed up higher in the rules to accommodate the postfix
  * options (e.g. INTERVAL '1' YEAR). Likewise, we have to handle
  * the generic-type-name case in AExprConst to avoid premature
  * reduce/reduce conflicts against function names.
@@ -12708,6 +12769,7 @@ col_name_keyword:
 type_func_name_keyword:
 			  AUTHORIZATION
 			| BINARY
+			| COLLATION
 			| CONCURRENTLY
 			| CROSS
 			| CURRENT_SCHEMA
@@ -12751,7 +12813,6 @@ reserved_keyword:
 			| CAST
 			| CHECK
 			| COLLATE
-			| COLLATION
 			| COLUMN
 			| CONSTRAINT
 			| CREATE

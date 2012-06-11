@@ -893,9 +893,9 @@ CreateFunction(CreateFunctionStmt *stmt, const char *queryString)
 	ReleaseSysCache(languageTuple);
 
 	/*
-	 * Only superuser is allowed to create leakproof functions because
-	 * it possibly allows unprivileged users to reference invisible tuples
-	 * to be filtered out using views for row-level security.
+	 * Only superuser is allowed to create leakproof functions because it
+	 * possibly allows unprivileged users to reference invisible tuples to be
+	 * filtered out using views for row-level security.
 	 */
 	if (isLeakProof && !superuser())
 		ereport(ERROR,
@@ -990,29 +990,30 @@ CreateFunction(CreateFunctionStmt *stmt, const char *queryString)
 	 * so, go ahead and create the function.
 	 */
 	procOid =
-		ProcedureCreate(funcname,
-						namespaceId,
-						stmt->replace,
-						returnsSet,
-						prorettype,
-						languageOid,
-						languageValidator,
-						prosrc_str, /* converted to text later */
-						probin_str, /* converted to text later */
-						false,		/* not an aggregate */
-						isWindowFunc,
-						security,
-						isLeakProof,
-						isStrict,
-						volatility,
-						parameterTypes,
-						PointerGetDatum(allParameterTypes),
-						PointerGetDatum(parameterModes),
-						PointerGetDatum(parameterNames),
-						parameterDefaults,
-						PointerGetDatum(proconfig),
-						procost,
-						prorows);
+			ProcedureCreate(funcname,
+							namespaceId,
+							stmt->replace,
+							returnsSet,
+							prorettype,
+							GetUserId(),
+							languageOid,
+							languageValidator,
+							prosrc_str, /* converted to text later */
+							probin_str, /* converted to text later */
+							false,		/* not an aggregate */
+							isWindowFunc,
+							security,
+							isLeakProof,
+							isStrict,
+							volatility,
+							parameterTypes,
+							PointerGetDatum(allParameterTypes),
+							PointerGetDatum(parameterModes),
+							PointerGetDatum(parameterNames),
+							parameterDefaults,
+							PointerGetDatum(proconfig),
+							procost,
+							prorows);
 
 	/* Call AFTER CREATE FUNCTION triggers */
 	if (CommandFiresAfterTriggers(&evt))
@@ -1376,7 +1377,7 @@ AlterFunction(AlterFunctionStmt *stmt)
 		if (intVal(leakproof_item->arg) && !superuser())
 			ereport(ERROR,
 					(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
-					 errmsg("only superuser can define a leakproof function")));
+				  errmsg("only superuser can define a leakproof function")));
 		procForm->proleakproof = intVal(leakproof_item->arg);
 	}
 	if (cost_item)
@@ -1591,6 +1592,17 @@ CreateCast(CreateCastStmt *stmt)
 	if (aclresult != ACLCHECK_OK)
 		aclcheck_error(aclresult, ACL_KIND_TYPE,
 					   format_type_be(targettypeid));
+
+	/* Domains are allowed for historical reasons, but we warn */
+	if (sourcetyptype == TYPTYPE_DOMAIN)
+		ereport(WARNING,
+				(errcode(ERRCODE_WRONG_OBJECT_TYPE),
+				 errmsg("cast will be ignored because the source data type is a domain")));
+
+	else if (targettyptype == TYPTYPE_DOMAIN)
+		ereport(WARNING,
+				(errcode(ERRCODE_WRONG_OBJECT_TYPE),
+				 errmsg("cast will be ignored because the target data type is a domain")));
 
 	/* Detemine the cast method */
 	if (stmt->func != NULL)

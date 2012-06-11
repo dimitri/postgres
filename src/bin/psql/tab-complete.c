@@ -132,7 +132,7 @@ static const char *const * completion_charpp;	/* to pass a list of strings */
 static const char *completion_info_charp;		/* to pass a second string */
 static const char *completion_info_charp2;		/* to pass a third string */
 static const SchemaQuery *completion_squery;	/* to pass a SchemaQuery */
-static bool completion_case_sensitive;			/* completion is case sensitive */
+static bool completion_case_sensitive;	/* completion is case sensitive */
 
 /*
  * A few macros to ease typing. You can use these to complete the given
@@ -399,6 +399,21 @@ static const SchemaQuery Query_for_list_of_tsvf = {
 	"pg_catalog.pg_class c",
 	/* selcondition */
 	"c.relkind IN ('r', 'S', 'v', 'f')",
+	/* viscondition */
+	"pg_catalog.pg_table_is_visible(c.oid)",
+	/* namespace */
+	"c.relnamespace",
+	/* result */
+	"pg_catalog.quote_ident(c.relname)",
+	/* qualresult */
+	NULL
+};
+
+static const SchemaQuery Query_for_list_of_tf = {
+	/* catname */
+	"pg_catalog.pg_class c",
+	/* selcondition */
+	"c.relkind IN ('r', 'f')",
 	/* viscondition */
 	"pg_catalog.pg_table_is_visible(c.oid)",
 	/* namespace */
@@ -682,7 +697,7 @@ static char **complete_from_variables(char *text,
 						const char *prefix, const char *suffix);
 static char *complete_from_files(const char *text, int state);
 
-static char *pg_strdup_same_case(const char *s, const char *ref);
+static char *pg_strdup_keyword_case(const char *s, const char *ref);
 static PGresult *exec_query(const char *query);
 
 static void get_previous_words(int point, char **previous_words, int nwords);
@@ -775,9 +790,9 @@ psql_completion(char *text, int start, int end)
 	completion_info_charp2 = NULL;
 
 	/*
-	 * Scan the input line before our current position for the last few
-	 * words. According to those we'll make some smart decisions on what the
-	 * user is probably intending to type.
+	 * Scan the input line before our current position for the last few words.
+	 * According to those we'll make some smart decisions on what the user is
+	 * probably intending to type.
 	 */
 	get_previous_words(start, previous_words, lengthof(previous_words));
 
@@ -1009,9 +1024,26 @@ psql_completion(char *text, int start, int end)
 			"ENCRYPTED", "INHERIT", "LOGIN", "NOCREATEDB", "NOCREATEROLE",
 			"NOCREATEUSER", "NOINHERIT", "NOLOGIN", "NOREPLICATION",
 			"NOSUPERUSER", "RENAME TO", "REPLICATION", "RESET", "SET",
-		"SUPERUSER", "UNENCRYPTED", "VALID UNTIL", NULL};
+		"SUPERUSER", "UNENCRYPTED", "VALID UNTIL", "WITH", NULL};
 
 		COMPLETE_WITH_LIST(list_ALTERUSER);
+	}
+
+	/* ALTER USER,ROLE <name> WITH */
+	else if ((pg_strcasecmp(prev4_wd, "ALTER") == 0 &&
+			  (pg_strcasecmp(prev3_wd, "USER") == 0 ||
+			   pg_strcasecmp(prev3_wd, "ROLE") == 0) &&
+			  pg_strcasecmp(prev_wd, "WITH") == 0))
+	{
+		/* Similar to the above, but don't complete "WITH" again. */
+		static const char *const list_ALTERUSER_WITH[] =
+		{"CONNECTION LIMIT", "CREATEDB", "CREATEROLE", "CREATEUSER",
+			"ENCRYPTED", "INHERIT", "LOGIN", "NOCREATEDB", "NOCREATEROLE",
+			"NOCREATEUSER", "NOINHERIT", "NOLOGIN", "NOREPLICATION",
+			"NOSUPERUSER", "RENAME TO", "REPLICATION", "RESET", "SET",
+		"SUPERUSER", "UNENCRYPTED", "VALID UNTIL", NULL};
+
+		COMPLETE_WITH_LIST(list_ALTERUSER_WITH);
 	}
 
 	/* complete ALTER USER,ROLE <name> ENCRYPTED,UNENCRYPTED with PASSWORD */
@@ -1058,7 +1090,7 @@ psql_completion(char *text, int start, int end)
 			 pg_strcasecmp(prev2_wd, "DOMAIN") == 0)
 	{
 		static const char *const list_ALTERDOMAIN[] =
-		{"ADD", "DROP", "OWNER TO", "SET", NULL};
+		{"ADD", "DROP", "OWNER TO", "RENAME", "SET", "VALIDATE CONSTRAINT", NULL};
 
 		COMPLETE_WITH_LIST(list_ALTERDOMAIN);
 	}
@@ -1072,6 +1104,22 @@ psql_completion(char *text, int start, int end)
 
 		COMPLETE_WITH_LIST(list_ALTERDOMAIN2);
 	}
+	/* ALTER DOMAIN <sth> RENAME */
+	else if (pg_strcasecmp(prev4_wd, "ALTER") == 0 &&
+			 pg_strcasecmp(prev3_wd, "DOMAIN") == 0 &&
+			 pg_strcasecmp(prev_wd, "RENAME") == 0)
+	{
+		static const char *const list_ALTERDOMAIN[] =
+		{"CONSTRAINT", "TO", NULL};
+
+		COMPLETE_WITH_LIST(list_ALTERDOMAIN);
+	}
+	/* ALTER DOMAIN <sth> RENAME CONSTRAINT <sth> */
+	else if (pg_strcasecmp(prev5_wd, "DOMAIN") == 0 &&
+			 pg_strcasecmp(prev3_wd, "RENAME") == 0 &&
+			 pg_strcasecmp(prev2_wd, "CONSTRAINT") == 0)
+		COMPLETE_WITH_CONST("TO");
+
 	/* ALTER DOMAIN <sth> SET */
 	else if (pg_strcasecmp(prev4_wd, "ALTER") == 0 &&
 			 pg_strcasecmp(prev3_wd, "DOMAIN") == 0 &&
@@ -1188,11 +1236,17 @@ psql_completion(char *text, int start, int end)
 		COMPLETE_WITH_LIST(list_ALTERDISABLE);
 	}
 
-	/* If we have TABLE <sth> ALTER|RENAME, provide list of columns */
-	else if (pg_strcasecmp(prev3_wd, "TABLE") == 0 &&
-			 (pg_strcasecmp(prev_wd, "ALTER") == 0 ||
-			  pg_strcasecmp(prev_wd, "RENAME") == 0))
+	/* ALTER TABLE xxx ALTER */
+	else if (pg_strcasecmp(prev4_wd, "ALTER") == 0 &&
+			 pg_strcasecmp(prev3_wd, "TABLE") == 0 &&
+			 pg_strcasecmp(prev_wd, "ALTER") == 0)
 		COMPLETE_WITH_ATTR(prev2_wd, " UNION SELECT 'COLUMN'");
+
+	/* ALTER TABLE xxx RENAME */
+	else if (pg_strcasecmp(prev4_wd, "ALTER") == 0 &&
+			 pg_strcasecmp(prev3_wd, "TABLE") == 0 &&
+			 pg_strcasecmp(prev_wd, "RENAME") == 0)
+		COMPLETE_WITH_ATTR(prev2_wd, " UNION SELECT 'COLUMN' UNION SELECT 'CONSTRAINT' UNION SELECT 'TO'");
 
 	/*
 	 * If we have TABLE <sth> ALTER COLUMN|RENAME COLUMN, provide list of
@@ -1207,13 +1261,15 @@ psql_completion(char *text, int start, int end)
 	/* ALTER TABLE xxx RENAME yyy */
 	else if (pg_strcasecmp(prev4_wd, "TABLE") == 0 &&
 			 pg_strcasecmp(prev2_wd, "RENAME") == 0 &&
+			 pg_strcasecmp(prev_wd, "CONSTRAINT") != 0 &&
 			 pg_strcasecmp(prev_wd, "TO") != 0)
 		COMPLETE_WITH_CONST("TO");
 
-	/* ALTER TABLE xxx RENAME COLUMN yyy */
+	/* ALTER TABLE xxx RENAME COLUMN/CONSTRAINT yyy */
 	else if (pg_strcasecmp(prev5_wd, "TABLE") == 0 &&
 			 pg_strcasecmp(prev3_wd, "RENAME") == 0 &&
-			 pg_strcasecmp(prev2_wd, "COLUMN") == 0 &&
+			 (pg_strcasecmp(prev2_wd, "COLUMN") == 0 ||
+			  pg_strcasecmp(prev2_wd, "CONSTRAINT") == 0) &&
 			 pg_strcasecmp(prev_wd, "TO") != 0)
 		COMPLETE_WITH_CONST("TO");
 
@@ -1932,7 +1988,7 @@ psql_completion(char *text, int start, int end)
 			 prev2_wd[0] != '\0')
 		COMPLETE_WITH_CONST("PROCEDURE");
 
-/* CREATE ROLE,USER,GROUP */
+/* CREATE ROLE,USER,GROUP <name> */
 	else if (pg_strcasecmp(prev3_wd, "CREATE") == 0 &&
 			 !(pg_strcasecmp(prev2_wd, "USER") == 0 && pg_strcasecmp(prev_wd, "MAPPING") == 0) &&
 			 (pg_strcasecmp(prev2_wd, "ROLE") == 0 ||
@@ -1943,9 +1999,27 @@ psql_completion(char *text, int start, int end)
 			"ENCRYPTED", "IN", "INHERIT", "LOGIN", "NOCREATEDB",
 			"NOCREATEROLE", "NOCREATEUSER", "NOINHERIT", "NOLOGIN",
 			"NOREPLICATION", "NOSUPERUSER", "REPLICATION", "ROLE",
-		"SUPERUSER", "SYSID", "UNENCRYPTED", "VALID UNTIL", NULL};
+		"SUPERUSER", "SYSID", "UNENCRYPTED", "VALID UNTIL", "WITH", NULL};
 
 		COMPLETE_WITH_LIST(list_CREATEROLE);
+	}
+
+/* CREATE ROLE,USER,GROUP <name> WITH */
+	else if ((pg_strcasecmp(prev4_wd, "CREATE") == 0 &&
+			  (pg_strcasecmp(prev3_wd, "ROLE") == 0 ||
+			   pg_strcasecmp(prev3_wd, "GROUP") == 0 ||
+			   pg_strcasecmp(prev3_wd, "USER") == 0) &&
+			  pg_strcasecmp(prev_wd, "WITH") == 0))
+	{
+		/* Similar to the above, but don't complete "WITH" again. */
+		static const char *const list_CREATEROLE_WITH[] =
+		{"ADMIN", "CONNECTION LIMIT", "CREATEDB", "CREATEROLE", "CREATEUSER",
+			"ENCRYPTED", "IN", "INHERIT", "LOGIN", "NOCREATEDB",
+			"NOCREATEROLE", "NOCREATEUSER", "NOINHERIT", "NOLOGIN",
+			"NOREPLICATION", "NOSUPERUSER", "REPLICATION", "ROLE",
+		"SUPERUSER", "SYSID", "UNENCRYPTED", "VALID UNTIL", NULL};
+
+		COMPLETE_WITH_LIST(list_CREATEROLE_WITH);
 	}
 
 	/*
@@ -2243,7 +2317,11 @@ psql_completion(char *text, int start, int end)
 							" UNION SELECT 'USAGE'"
 							" UNION SELECT 'ALL'");
 	}
-	/* Complete GRANT/REVOKE <privilege> with "ON", GRANT/REVOKE <role> with TO/FROM */
+
+	/*
+	 * Complete GRANT/REVOKE <privilege> with "ON", GRANT/REVOKE <role> with
+	 * TO/FROM
+	 */
 	else if (pg_strcasecmp(prev2_wd, "GRANT") == 0 ||
 			 pg_strcasecmp(prev2_wd, "REVOKE") == 0)
 	{
@@ -2827,13 +2905,19 @@ psql_completion(char *text, int start, int end)
 		COMPLETE_WITH_SCHEMA_QUERY(Query_for_list_of_tables, NULL);
 
 /* WITH [RECURSIVE] */
-	else if (pg_strcasecmp(prev_wd, "WITH") == 0)
+
+	/*
+	 * Only match when WITH is the first word, as WITH may appear in many
+	 * other contexts.
+	 */
+	else if (pg_strcasecmp(prev_wd, "WITH") == 0 &&
+			 prev2_wd[0] == '\0')
 		COMPLETE_WITH_CONST("RECURSIVE");
 
 /* ANALYZE */
 	/* If the previous word is ANALYZE, produce list of tables */
 	else if (pg_strcasecmp(prev_wd, "ANALYZE") == 0)
-		COMPLETE_WITH_SCHEMA_QUERY(Query_for_list_of_tables, NULL);
+		COMPLETE_WITH_SCHEMA_QUERY(Query_for_list_of_tf, NULL);
 
 /* WHERE */
 	/* Simple case of the word before the where being the table name */
@@ -2952,7 +3036,7 @@ psql_completion(char *text, int start, int end)
 			 strcmp(prev_wd, "\\e") == 0 || strcmp(prev_wd, "\\edit") == 0 ||
 			 strcmp(prev_wd, "\\g") == 0 ||
 		  strcmp(prev_wd, "\\i") == 0 || strcmp(prev_wd, "\\include") == 0 ||
-		  strcmp(prev_wd, "\\ir") == 0 || strcmp(prev_wd, "\\include_relative") == 0 ||
+			 strcmp(prev_wd, "\\ir") == 0 || strcmp(prev_wd, "\\include_relative") == 0 ||
 			 strcmp(prev_wd, "\\o") == 0 || strcmp(prev_wd, "\\out") == 0 ||
 			 strcmp(prev_wd, "\\s") == 0 ||
 			 strcmp(prev_wd, "\\w") == 0 || strcmp(prev_wd, "\\write") == 0
@@ -3048,7 +3132,7 @@ create_or_drop_command_generator(const char *text, int state, bits32 excluded)
 	{
 		if ((pg_strncasecmp(name, text, string_length) == 0) &&
 			!(words_after_create[list_index - 1].flags & excluded))
-			return pg_strdup_same_case(name, text);
+			return pg_strdup_keyword_case(name, text);
 	}
 	/* if nothing matches, return NULL */
 	return NULL;
@@ -3335,9 +3419,12 @@ complete_from_list(const char *text, int state)
 			if (completion_case_sensitive)
 				return pg_strdup(item);
 			else
-				/* If case insensitive matching was requested initially, return
-				 * it in the case of what was already entered. */
-				return pg_strdup_same_case(item, text);
+
+				/*
+				 * If case insensitive matching was requested initially,
+				 * adjust the case according to setting.
+				 */
+				return pg_strdup_keyword_case(item, text);
 		}
 	}
 
@@ -3374,9 +3461,12 @@ complete_from_const(const char *text, int state)
 		if (completion_case_sensitive)
 			return pg_strdup(completion_charp);
 		else
-			/* If case insensitive matching was requested initially, return it
-			 * in the case of what was already entered. */
-			return pg_strdup_same_case(completion_charp, text);
+
+			/*
+			 * If case insensitive matching was requested initially, adjust
+			 * the case according to setting.
+			 */
+			return pg_strdup_keyword_case(completion_charp, text);
 	}
 	else
 		return NULL;
@@ -3423,7 +3513,7 @@ complete_from_variables(char *text, const char *prefix, const char *suffix)
 	}
 
 	varnames[nvars] = NULL;
-	COMPLETE_WITH_LIST_CS((const char * const *) varnames);
+	COMPLETE_WITH_LIST_CS((const char *const *) varnames);
 
 	for (i = 0; i < nvars; i++)
 		free(varnames[i]);
@@ -3484,27 +3574,49 @@ complete_from_files(const char *text, int state)
 
 
 /*
- * Make a pg_strdup copy of s and convert it to the same case as ref.
+ * Make a pg_strdup copy of s and convert the case according to
+ * COMP_KEYWORD_CASE variable, using ref as the text that was already entered.
  */
 static char *
-pg_strdup_same_case(const char *s, const char *ref)
+pg_strdup_keyword_case(const char *s, const char *ref)
 {
-	char *ret, *p;
+	char	   *ret,
+			   *p;
 	unsigned char first = ref[0];
+	int			tocase;
+	const char *varval;
 
-	if (isalpha(first))
-	{
-		ret = pg_strdup(s);
-		if (islower(first))
-			for (p = ret; *p; p++)
-				*p = pg_tolower((unsigned char) *p);
-		else
-			for (p = ret; *p; p++)
-				*p = pg_toupper((unsigned char) *p);
-		return ret;
-	}
+	varval = GetVariable(pset.vars, "COMP_KEYWORD_CASE");
+	if (!varval)
+		tocase = 0;
+	else if (strcmp(varval, "lower") == 0)
+		tocase = -2;
+	else if (strcmp(varval, "preserve-lower") == 0)
+		tocase = -1;
+	else if (strcmp(varval, "preserve-upper") == 0)
+		tocase = +1;
+	else if (strcmp(varval, "upper") == 0)
+		tocase = +2;
 	else
-		return pg_strdup(s);
+		tocase = 0;
+
+	/* default */
+	if (tocase == 0)
+		tocase = +1;
+
+	ret = pg_strdup(s);
+
+	if (tocase == -2
+		|| ((tocase == -1 || tocase == +1) && islower(first))
+		|| (tocase == -1 && !isalpha(first))
+		)
+		for (p = ret; *p; p++)
+			*p = pg_tolower((unsigned char) *p);
+	else
+		for (p = ret; *p; p++)
+			*p = pg_toupper((unsigned char) *p);
+
+	return ret;
 }
 
 
@@ -3537,7 +3649,7 @@ exec_query(const char *query)
 
 
 /*
- * Return the nwords word(s) before point.  Words are returned right to left,
+ * Return the nwords word(s) before point.	Words are returned right to left,
  * that is, previous_words[0] gets the last word before point.
  * If we run out of words, remaining array elements are set to empty strings.
  * Each array element is filled with a malloc'd string.
@@ -3595,7 +3707,7 @@ get_previous_words(int point, char **previous_words, int nwords)
 			{
 				if (buf[start] == '"')
 					inquotes = !inquotes;
-				else if (!inquotes)
+				if (!inquotes)
 				{
 					if (buf[start] == ')')
 						parentheses++;

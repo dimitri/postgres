@@ -55,7 +55,8 @@ typedef enum
 {
 	SYNCHRONOUS_COMMIT_OFF,		/* asynchronous commit */
 	SYNCHRONOUS_COMMIT_LOCAL_FLUSH,		/* wait for local flush only */
-	SYNCHRONOUS_COMMIT_REMOTE_WRITE,		/* wait for local flush and remote write */
+	SYNCHRONOUS_COMMIT_REMOTE_WRITE,	/* wait for local flush and remote
+										 * write */
 	SYNCHRONOUS_COMMIT_REMOTE_FLUSH		/* wait for local and remote flush */
 }	SyncCommitLevel;
 
@@ -209,6 +210,7 @@ extern TransactionId GetTopTransactionId(void);
 extern TransactionId GetTopTransactionIdIfAny(void);
 extern TransactionId GetCurrentTransactionId(void);
 extern TransactionId GetCurrentTransactionIdIfAny(void);
+extern TransactionId GetStableLatestTransactionId(void);
 extern SubTransactionId GetCurrentSubTransactionId(void);
 extern CommandId GetCurrentCommandId(bool used);
 extern TimestampTz GetCurrentTransactionStartTimestamp(void);

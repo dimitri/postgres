@@ -17,6 +17,7 @@
 #include "catalog/pg_collation.h"
 #include "catalog/pg_type.h"
 #include "miscadmin.h"
+#include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
 #include "nodes/relation.h"
 #include "utils/builtins.h"
@@ -58,7 +59,7 @@ exprType(const Node *expr)
 			break;
 		case T_ArrayRef:
 			{
-				const ArrayRef   *arrayref = (const ArrayRef *) expr;
+				const ArrayRef *arrayref = (const ArrayRef *) expr;
 
 				/* slice and/or store operations yield the array type */
 				if (arrayref->reflowerindexpr || arrayref->refassgnexpr)
@@ -90,7 +91,7 @@ exprType(const Node *expr)
 			break;
 		case T_SubLink:
 			{
-				const SubLink    *sublink = (const SubLink *) expr;
+				const SubLink *sublink = (const SubLink *) expr;
 
 				if (sublink->subLinkType == EXPR_SUBLINK ||
 					sublink->subLinkType == ARRAY_SUBLINK)
@@ -124,7 +125,7 @@ exprType(const Node *expr)
 			break;
 		case T_SubPlan:
 			{
-				const SubPlan    *subplan = (const SubPlan *) expr;
+				const SubPlan *subplan = (const SubPlan *) expr;
 
 				if (subplan->subLinkType == EXPR_SUBLINK ||
 					subplan->subLinkType == ARRAY_SUBLINK)
@@ -281,7 +282,7 @@ exprTypmod(const Node *expr)
 			break;
 		case T_SubLink:
 			{
-				const SubLink    *sublink = (const SubLink *) expr;
+				const SubLink *sublink = (const SubLink *) expr;
 
 				if (sublink->subLinkType == EXPR_SUBLINK ||
 					sublink->subLinkType == ARRAY_SUBLINK)
@@ -302,7 +303,7 @@ exprTypmod(const Node *expr)
 			break;
 		case T_SubPlan:
 			{
-				const SubPlan    *subplan = (const SubPlan *) expr;
+				const SubPlan *subplan = (const SubPlan *) expr;
 
 				if (subplan->subLinkType == EXPR_SUBLINK ||
 					subplan->subLinkType == ARRAY_SUBLINK)
@@ -340,7 +341,7 @@ exprTypmod(const Node *expr)
 				 * If all the alternatives agree on type/typmod, return that
 				 * typmod, else use -1
 				 */
-				const CaseExpr   *cexpr = (const CaseExpr *) expr;
+				const CaseExpr *cexpr = (const CaseExpr *) expr;
 				Oid			casetype = cexpr->casetype;
 				int32		typmod;
 				ListCell   *arg;
@@ -373,7 +374,7 @@ exprTypmod(const Node *expr)
 				 * If all the elements agree on type/typmod, return that
 				 * typmod, else use -1
 				 */
-				const ArrayExpr  *arrayexpr = (const ArrayExpr *) expr;
+				const ArrayExpr *arrayexpr = (const ArrayExpr *) expr;
 				Oid			commontype;
 				int32		typmod;
 				ListCell   *elem;
@@ -492,7 +493,7 @@ exprIsLengthCoercion(const Node *expr, int32 *coercedTypmod)
 	 */
 	if (expr && IsA(expr, FuncExpr))
 	{
-		const FuncExpr   *func = (const FuncExpr *) expr;
+		const FuncExpr *func = (const FuncExpr *) expr;
 		int			nargs;
 		Const	   *second_arg;
 
@@ -545,6 +546,30 @@ exprIsLengthCoercion(const Node *expr, int32 *coercedTypmod)
 	}
 
 	return false;
+}
+
+/*
+ * relabel_to_typmod
+ *		Add a RelabelType node that changes just the typmod of the expression.
+ *
+ * This is primarily intended to be used during planning.  Therefore, it
+ * strips any existing RelabelType nodes to maintain the planner's invariant
+ * that there are not adjacent RelabelTypes, and it uses COERCE_DONTCARE
+ * which would typically be inappropriate earlier.
+ */
+Node *
+relabel_to_typmod(Node *expr, int32 typmod)
+{
+	Oid			type = exprType(expr);
+	Oid			coll = exprCollation(expr);
+
+	/* Strip any existing RelabelType node(s) */
+	while (expr && IsA(expr, RelabelType))
+		expr = (Node *) ((RelabelType *) expr)->arg;
+
+	/* Apply new typmod, preserving the previous exposed type and collation */
+	return (Node *) makeRelabelType((Expr *) expr, type, typmod, coll,
+									COERCE_DONTCARE);
 }
 
 /*
@@ -682,7 +707,7 @@ exprCollation(const Node *expr)
 			break;
 		case T_SubLink:
 			{
-				const SubLink    *sublink = (const SubLink *) expr;
+				const SubLink *sublink = (const SubLink *) expr;
 
 				if (sublink->subLinkType == EXPR_SUBLINK ||
 					sublink->subLinkType == ARRAY_SUBLINK)
@@ -708,7 +733,7 @@ exprCollation(const Node *expr)
 			break;
 		case T_SubPlan:
 			{
-				const SubPlan    *subplan = (const SubPlan *) expr;
+				const SubPlan *subplan = (const SubPlan *) expr;
 
 				if (subplan->subLinkType == EXPR_SUBLINK ||
 					subplan->subLinkType == ARRAY_SUBLINK)
@@ -1112,7 +1137,7 @@ exprLocation(const Node *expr)
 			break;
 		case T_FuncExpr:
 			{
-				const FuncExpr   *fexpr = (const FuncExpr *) expr;
+				const FuncExpr *fexpr = (const FuncExpr *) expr;
 
 				/* consider both function name and leftmost arg */
 				loc = leftmostLoc(fexpr->location,
@@ -1132,7 +1157,7 @@ exprLocation(const Node *expr)
 		case T_DistinctExpr:	/* struct-equivalent to OpExpr */
 		case T_NullIfExpr:		/* struct-equivalent to OpExpr */
 			{
-				const OpExpr	   *opexpr = (const OpExpr *) expr;
+				const OpExpr *opexpr = (const OpExpr *) expr;
 
 				/* consider both operator name and leftmost arg */
 				loc = leftmostLoc(opexpr->location,
@@ -1150,7 +1175,7 @@ exprLocation(const Node *expr)
 			break;
 		case T_BoolExpr:
 			{
-				const BoolExpr   *bexpr = (const BoolExpr *) expr;
+				const BoolExpr *bexpr = (const BoolExpr *) expr;
 
 				/*
 				 * Same as above, to handle either NOT or AND/OR.  We can't
@@ -1163,7 +1188,7 @@ exprLocation(const Node *expr)
 			break;
 		case T_SubLink:
 			{
-				const SubLink    *sublink = (const SubLink *) expr;
+				const SubLink *sublink = (const SubLink *) expr;
 
 				/* check the testexpr, if any, and the operator/keyword */
 				loc = leftmostLoc(exprLocation(sublink->testexpr),
@@ -1248,7 +1273,7 @@ exprLocation(const Node *expr)
 			break;
 		case T_XmlExpr:
 			{
-				const XmlExpr    *xexpr = (const XmlExpr *) expr;
+				const XmlExpr *xexpr = (const XmlExpr *) expr;
 
 				/* consider both function name and leftmost arg */
 				loc = leftmostLoc(xexpr->location,
@@ -1302,7 +1327,7 @@ exprLocation(const Node *expr)
 			break;
 		case T_A_Expr:
 			{
-				const A_Expr	   *aexpr = (const A_Expr *) expr;
+				const A_Expr *aexpr = (const A_Expr *) expr;
 
 				/* use leftmost of operator or left operand (if any) */
 				/* we assume right operand can't be to left of operator */
@@ -1321,7 +1346,7 @@ exprLocation(const Node *expr)
 			break;
 		case T_FuncCall:
 			{
-				const FuncCall   *fc = (const FuncCall *) expr;
+				const FuncCall *fc = (const FuncCall *) expr;
 
 				/* consider both function name and leftmost arg */
 				/* (we assume any ORDER BY nodes must be to right of name) */
@@ -1339,7 +1364,7 @@ exprLocation(const Node *expr)
 			break;
 		case T_TypeCast:
 			{
-				const TypeCast   *tc = (const TypeCast *) expr;
+				const TypeCast *tc = (const TypeCast *) expr;
 
 				/*
 				 * This could represent CAST(), ::, or TypeName 'literal', so
@@ -2694,7 +2719,9 @@ query_or_expression_tree_mutator(Node *node,
  * that could appear under it, but not other statement types.
  */
 bool
-			raw_expression_tree_walker(Node *node, bool (*walker) (), void *context)
+raw_expression_tree_walker(Node *node,
+						   bool (*walker) (),
+						   void *context)
 {
 	ListCell   *temp;
 

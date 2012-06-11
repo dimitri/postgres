@@ -18,6 +18,7 @@
 #include "catalog/dependency.h"
 #include "catalog/indexing.h"
 #include "catalog/objectaccess.h"
+#include "catalog/pg_authid.h"
 #include "catalog/pg_language.h"
 #include "catalog/pg_namespace.h"
 #include "catalog/pg_pltemplate.h"
@@ -128,6 +129,7 @@ CreateProceduralLanguage(CreatePLangStmt *stmt)
 										 false, /* replace */
 										 false, /* returnsSet */
 										 LANGUAGE_HANDLEROID,
+										 BOOTSTRAP_SUPERUSERID,
 										 ClanguageId,
 										 F_FMGR_C_VALIDATOR,
 										 pltemplate->tmplhandler,
@@ -135,7 +137,7 @@ CreateProceduralLanguage(CreatePLangStmt *stmt)
 										 false, /* isAgg */
 										 false, /* isWindowFunc */
 										 false, /* security_definer */
-										 false,	/* isLeakProof */
+										 false, /* isLeakProof */
 										 false, /* isStrict */
 										 PROVOLATILE_VOLATILE,
 										 buildoidvector(funcargtypes, 0),
@@ -164,6 +166,7 @@ CreateProceduralLanguage(CreatePLangStmt *stmt)
 											false,		/* replace */
 											false,		/* returnsSet */
 											VOIDOID,
+											BOOTSTRAP_SUPERUSERID,
 											ClanguageId,
 											F_FMGR_C_VALIDATOR,
 											pltemplate->tmplinline,
@@ -203,6 +206,7 @@ CreateProceduralLanguage(CreatePLangStmt *stmt)
 										 false, /* replace */
 										 false, /* returnsSet */
 										 VOIDOID,
+										 BOOTSTRAP_SUPERUSERID,
 										 ClanguageId,
 										 F_FMGR_C_VALIDATOR,
 										 pltemplate->tmplvalidator,
@@ -210,7 +214,7 @@ CreateProceduralLanguage(CreatePLangStmt *stmt)
 										 false, /* isAgg */
 										 false, /* isWindowFunc */
 										 false, /* security_definer */
-										 false,	/* isLeakProof */
+										 false, /* isLeakProof */
 										 true,	/* isStrict */
 										 PROVOLATILE_VOLATILE,
 										 buildoidvector(funcargtypes, 1),

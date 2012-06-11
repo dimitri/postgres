@@ -50,8 +50,8 @@ extern bool relation_has_unique_index_for(PlannerInfo *root, RelOptInfo *rel,
 							  List *restrictlist,
 							  List *exprlist, List *oprlist);
 extern bool eclass_member_matches_indexcol(EquivalenceClass *ec,
-										   EquivalenceMember *em,
-										   IndexOptInfo *index, int indexcol);
+							   EquivalenceMember *em,
+							   IndexOptInfo *index, int indexcol);
 extern bool match_index_to_operand(Node *operand, int indexcol,
 					   IndexOptInfo *index);
 extern void expand_indexqual_conditions(IndexOptInfo *index,
@@ -114,8 +114,8 @@ extern EquivalenceClass *get_eclass_for_sort_expr(PlannerInfo *root,
 						 bool create_it);
 extern void generate_base_implied_equalities(PlannerInfo *root);
 extern List *generate_join_implied_equalities(PlannerInfo *root,
-								 RelOptInfo *joinrel,
-								 RelOptInfo *outer_rel,
+								 Relids join_relids,
+								 Relids outer_relids,
 								 RelOptInfo *inner_rel);
 extern bool exprs_known_equal(PlannerInfo *root, Node *item1, Node *item2);
 extern void add_child_rel_equivalences(PlannerInfo *root,
@@ -134,6 +134,7 @@ extern bool has_relevant_eclass_joinclause(PlannerInfo *root,
 							   RelOptInfo *rel1);
 extern bool eclass_useful_for_merging(EquivalenceClass *eclass,
 						  RelOptInfo *rel);
+extern bool is_redundant_derived_clause(RestrictInfo *rinfo, List *clauselist);
 
 /*
  * pathkeys.c

@@ -44,6 +44,9 @@
 #include "utils/rel.h"
 
 
+/* Hook for plugins to get control at end of parse analysis */
+post_parse_analyze_hook_type post_parse_analyze_hook = NULL;
+
 static Query *transformDeleteStmt(ParseState *pstate, DeleteStmt *stmt);
 static Query *transformInsertStmt(ParseState *pstate, InsertStmt *stmt);
 static List *transformInsertRow(ParseState *pstate, List *exprlist,
@@ -95,6 +98,9 @@ parse_analyze(Node *parseTree, const char *sourceText,
 
 	query = transformTopLevelStmt(pstate, parseTree);
 
+	if (post_parse_analyze_hook)
+		(*post_parse_analyze_hook) (pstate, query);
+
 	free_parsestate(pstate);
 
 	return query;
@@ -124,6 +130,9 @@ parse_analyze_varparams(Node *parseTree, const char *sourceText,
 
 	/* make sure all is well with parameter types */
 	check_variable_parameters(pstate, query);
+
+	if (post_parse_analyze_hook)
+		(*post_parse_analyze_hook) (pstate, query);
 
 	free_parsestate(pstate);
 
@@ -172,7 +181,7 @@ transformTopLevelStmt(ParseState *pstate, Node *parseTree)
 		/* If it's a set-operation tree, drill down to leftmost SelectStmt */
 		while (stmt && stmt->op != SETOP_NONE)
 			stmt = stmt->larg;
-		Assert(stmt && IsA(stmt, SelectStmt) && stmt->larg == NULL);
+		Assert(stmt && IsA(stmt, SelectStmt) &&stmt->larg == NULL);
 
 		if (stmt->intoClause)
 		{
@@ -941,7 +950,7 @@ transformSelectStmt(ParseState *pstate, SelectStmt *stmt)
 				(errcode(ERRCODE_SYNTAX_ERROR),
 				 errmsg("SELECT ... INTO is not allowed here"),
 				 parser_errposition(pstate,
-									exprLocation((Node *) stmt->intoClause))));
+								  exprLocation((Node *) stmt->intoClause))));
 
 	/* make FOR UPDATE/FOR SHARE info available to addRangeTableEntry */
 	pstate->p_locking_clause = stmt->lockingClause;
@@ -1355,12 +1364,12 @@ transformSetOperationStmt(ParseState *pstate, SelectStmt *stmt)
 				(errcode(ERRCODE_SYNTAX_ERROR),
 				 errmsg("SELECT ... INTO is not allowed here"),
 				 parser_errposition(pstate,
-									exprLocation((Node *) leftmostSelect->intoClause))));
+						exprLocation((Node *) leftmostSelect->intoClause))));
 
 	/*
-	 * We need to extract ORDER BY and other top-level clauses here and
-	 * not let transformSetOperationTree() see them --- else it'll just
-	 * recurse right back here!
+	 * We need to extract ORDER BY and other top-level clauses here and not
+	 * let transformSetOperationTree() see them --- else it'll just recurse
+	 * right back here!
 	 */
 	sortClause = stmt->sortClause;
 	limitOffset = stmt->limitOffset;
@@ -1588,7 +1597,7 @@ transformSetOperationTree(ParseState *pstate, SelectStmt *stmt,
 		/* Process leaf SELECT */
 		Query	   *selectQuery;
 		char		selectName[32];
-		RangeTblEntry *rte;
+		RangeTblEntry *rte PG_USED_FOR_ASSERTS_ONLY;
 		RangeTblRef *rtr;
 		ListCell   *tl;
 

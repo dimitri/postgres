@@ -63,12 +63,12 @@ void
 ExecCreateTableAs(CreateTableAsStmt *stmt, const char *queryString,
 				  ParamListInfo params, char *completionTag)
 {
-	Query *query = (Query *) stmt->query;
+	Query	   *query = (Query *) stmt->query;
 	IntoClause *into = stmt->into;
 	DestReceiver *dest;
-	List *rewritten;
+	List	   *rewritten;
 	PlannedStmt *plan;
-	QueryDesc *queryDesc;
+	QueryDesc  *queryDesc;
 	ScanDirection dir;
 	EventContextData evt;
 
@@ -102,9 +102,9 @@ ExecCreateTableAs(CreateTableAsStmt *stmt, const char *queryString,
 	 * plancache.c.
 	 *
 	 * Because the rewriter and planner tend to scribble on the input, we make
-	 * a preliminary copy of the source querytree.  This prevents problems in
+	 * a preliminary copy of the source querytree.	This prevents problems in
 	 * the case that CTAS is in a portal or plpgsql function and is executed
-	 * repeatedly.  (See also the same hack in EXPLAIN and PREPARE.)
+	 * repeatedly.	(See also the same hack in EXPLAIN and PREPARE.)
 	 */
 	rewritten = QueryRewrite((Query *) copyObject(stmt->query));
 
@@ -119,10 +119,10 @@ ExecCreateTableAs(CreateTableAsStmt *stmt, const char *queryString,
 
 	/*
 	 * Use a snapshot with an updated command ID to ensure this query sees
-	 * results of any previously executed queries.  (This could only matter
-	 * if the planner executed an allegedly-stable function that changed
-	 * the database contents, but let's do it anyway to be parallel to the
-	 * EXPLAIN code path.)
+	 * results of any previously executed queries.	(This could only matter if
+	 * the planner executed an allegedly-stable function that changed the
+	 * database contents, but let's do it anyway to be parallel to the EXPLAIN
+	 * code path.)
 	 */
 	PushCopiedSnapshot(GetActiveSnapshot());
 	UpdateActiveSnapshotCommandId();
@@ -217,12 +217,12 @@ intorel_startup(DestReceiver *self, int operation, TupleDesc typeinfo)
 	IntoClause *into = myState->into;
 EventContext evt = myState->evt;
 	CreateStmt *create;
-	Oid intoRelationId;
-	Relation intoRelationDesc;
+	Oid			intoRelationId;
+	Relation	intoRelationDesc;
 	RangeTblEntry *rte;
 	Datum		toast_options;
-	ListCell *lc;
-	int attnum;
+	ListCell   *lc;
+	int			attnum;
 	static char *validnsps[] = HEAP_RELOPT_NAMESPACES;
 
 	Assert(into != NULL);		/* else somebody forgot to set it */
@@ -243,8 +243,8 @@ EventContext evt = myState->evt;
 	create->if_not_exists = false;
 
 	/*
-	 * Build column definitions using "pre-cooked" type and collation info.
-	 * If a column name list was specified in CREATE TABLE AS, override the
+	 * Build column definitions using "pre-cooked" type and collation info. If
+	 * a column name list was specified in CREATE TABLE AS, override the
 	 * column names derived from the query.  (Too few column names are OK, too
 	 * many are not.)
 	 */
@@ -252,8 +252,8 @@ EventContext evt = myState->evt;
 	for (attnum = 0; attnum < typeinfo->natts; attnum++)
 	{
 		Form_pg_attribute attribute = typeinfo->attrs[attnum];
-		ColumnDef *col = makeNode(ColumnDef);
-		TypeName *coltype = makeNode(TypeName);
+		ColumnDef  *col = makeNode(ColumnDef);
+		TypeName   *coltype = makeNode(TypeName);
 
 		if (lc)
 		{
@@ -286,9 +286,9 @@ EventContext evt = myState->evt;
 
 		/*
 		 * It's possible that the column is of a collatable type but the
-		 * collation could not be resolved, so double-check.  (We must
-		 * check this here because DefineRelation would adopt the type's
-		 * default collation rather than complaining.)
+		 * collation could not be resolved, so double-check.  (We must check
+		 * this here because DefineRelation would adopt the type's default
+		 * collation rather than complaining.)
 		 */
 		if (!OidIsValid(col->collOid) &&
 			type_is_collatable(coltype->typeOid))
@@ -303,8 +303,8 @@ EventContext evt = myState->evt;
 
 	if (lc != NULL)
 		ereport(ERROR,
-		        (errcode(ERRCODE_SYNTAX_ERROR),
-		         errmsg("CREATE TABLE AS specifies too many column names")));
+				(errcode(ERRCODE_SYNTAX_ERROR),
+				 errmsg("CREATE TABLE AS specifies too many column names")));
 
 	/*
 	 * Actually create the target table
@@ -348,7 +348,7 @@ EventContext evt = myState->evt;
 
 	for (attnum = 1; attnum <= intoRelationDesc->rd_att->natts; attnum++)
 		rte->modifiedCols = bms_add_member(rte->modifiedCols,
-										   attnum - FirstLowInvalidHeapAttributeNumber);
+								attnum - FirstLowInvalidHeapAttributeNumber);
 
 	ExecCheckRTPerms(list_make1(rte), true);
 

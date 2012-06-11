@@ -604,6 +604,8 @@ CREATE VIEW pg_stat_database AS
             pg_stat_get_db_temp_files(D.oid) AS temp_files,
             pg_stat_get_db_temp_bytes(D.oid) AS temp_bytes,
             pg_stat_get_db_deadlocks(D.oid) AS deadlocks,
+            pg_stat_get_db_blk_read_time(D.oid) AS blk_read_time,
+            pg_stat_get_db_blk_write_time(D.oid) AS blk_write_time,
             pg_stat_get_db_stat_reset_time(D.oid) AS stats_reset
     FROM pg_database D;
 
@@ -624,8 +626,8 @@ CREATE VIEW pg_stat_user_functions AS
             N.nspname AS schemaname,
             P.proname AS funcname,
             pg_stat_get_function_calls(P.oid) AS calls,
-            pg_stat_get_function_time(P.oid) / 1000 AS total_time,
-            pg_stat_get_function_self_time(P.oid) / 1000 AS self_time
+            pg_stat_get_function_total_time(P.oid) AS total_time,
+            pg_stat_get_function_self_time(P.oid) AS self_time
     FROM pg_proc P LEFT JOIN pg_namespace N ON (N.oid = P.pronamespace)
     WHERE P.prolang != 12  -- fast check to eliminate built-in functions
           AND pg_stat_get_function_calls(P.oid) IS NOT NULL;
@@ -636,8 +638,8 @@ CREATE VIEW pg_stat_xact_user_functions AS
             N.nspname AS schemaname,
             P.proname AS funcname,
             pg_stat_get_xact_function_calls(P.oid) AS calls,
-            pg_stat_get_xact_function_time(P.oid) / 1000 AS total_time,
-            pg_stat_get_xact_function_self_time(P.oid) / 1000 AS self_time
+            pg_stat_get_xact_function_total_time(P.oid) AS total_time,
+            pg_stat_get_xact_function_self_time(P.oid) AS self_time
     FROM pg_proc P LEFT JOIN pg_namespace N ON (N.oid = P.pronamespace)
     WHERE P.prolang != 12  -- fast check to eliminate built-in functions
           AND pg_stat_get_xact_function_calls(P.oid) IS NOT NULL;
@@ -646,6 +648,8 @@ CREATE VIEW pg_stat_bgwriter AS
     SELECT
         pg_stat_get_bgwriter_timed_checkpoints() AS checkpoints_timed,
         pg_stat_get_bgwriter_requested_checkpoints() AS checkpoints_req,
+        pg_stat_get_checkpoint_write_time() AS checkpoint_write_time,
+        pg_stat_get_checkpoint_sync_time() AS checkpoint_sync_time,
         pg_stat_get_bgwriter_buf_written_checkpoints() AS buffers_checkpoint,
         pg_stat_get_bgwriter_buf_written_clean() AS buffers_clean,
         pg_stat_get_bgwriter_maxwritten_clean() AS maxwritten_clean,

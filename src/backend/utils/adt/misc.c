@@ -329,22 +329,31 @@ pg_tablespace_databases(PG_FUNCTION_ARGS)
 Datum
 pg_tablespace_location(PG_FUNCTION_ARGS)
 {
-	Oid		tablespaceOid = PG_GETARG_OID(0);
-	char	sourcepath[MAXPGPATH];
-	char	targetpath[MAXPGPATH];
-	int		rllen;
+	Oid			tablespaceOid = PG_GETARG_OID(0);
+	char		sourcepath[MAXPGPATH];
+	char		targetpath[MAXPGPATH];
+	int			rllen;
 
 	/*
-	 * Return empty string for our default tablespaces
+	 * It's useful to apply this function to pg_class.reltablespace, wherein
+	 * zero means "the database's default tablespace".	So, rather than
+	 * throwing an error for zero, we choose to assume that's what is meant.
+	 */
+	if (tablespaceOid == InvalidOid)
+		tablespaceOid = MyDatabaseTableSpace;
+
+	/*
+	 * Return empty string for the cluster's default tablespaces
 	 */
 	if (tablespaceOid == DEFAULTTABLESPACE_OID ||
 		tablespaceOid == GLOBALTABLESPACE_OID)
 		PG_RETURN_TEXT_P(cstring_to_text(""));
 
 #if defined(HAVE_READLINK) || defined(WIN32)
+
 	/*
-	 * Find the location of the tablespace by reading the symbolic link that is
-	 * in pg_tblspc/<oid>.
+	 * Find the location of the tablespace by reading the symbolic link that
+	 * is in pg_tblspc/<oid>.
 	 */
 	snprintf(sourcepath, sizeof(sourcepath), "pg_tblspc/%u", tablespaceOid);
 
@@ -502,8 +511,8 @@ pg_typeof(PG_FUNCTION_ARGS)
 Datum
 pg_collation_for(PG_FUNCTION_ARGS)
 {
-	Oid typeid;
-	Oid collid;
+	Oid			typeid;
+	Oid			collid;
 
 	typeid = get_fn_expr_argtype(fcinfo->flinfo, 0);
 	if (!typeid)

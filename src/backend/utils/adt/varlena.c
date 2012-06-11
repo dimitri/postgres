@@ -397,7 +397,7 @@ byteasend(PG_FUNCTION_ARGS)
 }
 
 Datum
-bytea_agg_transfn(PG_FUNCTION_ARGS)
+bytea_string_agg_transfn(PG_FUNCTION_ARGS)
 {
 	StringInfo	state;
 
@@ -408,21 +408,28 @@ bytea_agg_transfn(PG_FUNCTION_ARGS)
 	{
 		bytea	   *value = PG_GETARG_BYTEA_PP(1);
 
+		/* On the first time through, we ignore the delimiter. */
 		if (state == NULL)
 			state = makeStringAggState(fcinfo);
+		else if (!PG_ARGISNULL(2))
+		{
+			bytea	   *delim = PG_GETARG_BYTEA_PP(2);
+
+			appendBinaryStringInfo(state, VARDATA_ANY(delim), VARSIZE_ANY_EXHDR(delim));
+		}
 
 		appendBinaryStringInfo(state, VARDATA_ANY(value), VARSIZE_ANY_EXHDR(value));
 	}
 
 	/*
-	 * The transition type for bytea_agg() is declared to be "internal",
+	 * The transition type for string_agg() is declared to be "internal",
 	 * which is a pass-by-value type the same size as a pointer.
 	 */
 	PG_RETURN_POINTER(state);
 }
 
 Datum
-bytea_agg_finalfn(PG_FUNCTION_ARGS)
+bytea_string_agg_finalfn(PG_FUNCTION_ARGS)
 {
 	StringInfo	state;
 
@@ -1346,6 +1353,7 @@ varstr_cmp(char *arg1, int len1, char *arg2, int len2, Oid collid)
 		char		a2buf[STACKBUFLEN];
 		char	   *a1p,
 				   *a2p;
+
 #ifdef HAVE_LOCALE_T
 		pg_locale_t mylocale = 0;
 #endif
@@ -1406,8 +1414,8 @@ varstr_cmp(char *arg1, int len1, char *arg2, int len2, Oid collid)
 										(LPWSTR) a1p, a1len / 2);
 				if (!r)
 					ereport(ERROR,
-					 (errmsg("could not convert string to UTF-16: error code %lu",
-							 GetLastError())));
+							(errmsg("could not convert string to UTF-16: error code %lu",
+									GetLastError())));
 			}
 			((LPWSTR) a1p)[r] = 0;
 
@@ -1419,8 +1427,8 @@ varstr_cmp(char *arg1, int len1, char *arg2, int len2, Oid collid)
 										(LPWSTR) a2p, a2len / 2);
 				if (!r)
 					ereport(ERROR,
-					 (errmsg("could not convert string to UTF-16: error code %lu",
-							 GetLastError())));
+							(errmsg("could not convert string to UTF-16: error code %lu",
+									GetLastError())));
 			}
 			((LPWSTR) a2p)[r] = 0;
 
@@ -2249,17 +2257,11 @@ text_name(PG_FUNCTION_ARGS)
 
 	/* Truncate oversize input */
 	if (len >= NAMEDATALEN)
-		len = NAMEDATALEN - 1;
+		len = pg_mbcliplen(VARDATA_ANY(s), len, NAMEDATALEN - 1);
 
-	result = (Name) palloc(NAMEDATALEN);
+	/* We use palloc0 here to ensure result is zero-padded */
+	result = (Name) palloc0(NAMEDATALEN);
 	memcpy(NameStr(*result), VARDATA_ANY(s), len);
-
-	/* now null pad to full length... */
-	while (len < NAMEDATALEN)
-	{
-		*(NameStr(*result) + len) = '\0';
-		len++;
-	}
 
 	PG_RETURN_NAME(result);
 }
@@ -4000,7 +4002,7 @@ text_format_string_conversion(StringInfo buf, char conversion,
 		else if (conversion == 'I')
 			ereport(ERROR,
 					(errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
-					 errmsg("null values cannot be formatted as an SQL identifier")));
+			errmsg("null values cannot be formatted as an SQL identifier")));
 		return;
 	}
 

@@ -3160,6 +3160,11 @@
    right within each byte; for example bit 0 is the least significant bit of
    the first byte, and bit 15 is the most significant bit of the second byte.
   </para>
+
+  <para>
+   See also the aggregate function <function>string_agg</function> in
+   <xref linkend="functions-aggregate">.
+  </para>
  </sect1>
 
 
@@ -6684,8 +6689,10 @@ SELECT EXTRACT(DOY FROM TIMESTAMP '2001-02-16 20:38:40');
       <term><literal>epoch</literal></term>
       <listitem>
        <para>
-        For <type>date</type> and <type>timestamp</type> values, the
+        For <type>timestamp with time zone</type> values, the
         number of seconds since 1970-01-01 00:00:00 UTC (can be negative);
+        for <type>date</type> and <type>timestamp</type> values, the
+        number of seconds since 1970-01-01 00:00:00 local time;
         for <type>interval</type> values, the total number
         of seconds in the interval
        </para>
@@ -9609,7 +9616,7 @@ table2-mapping
  </sect1>
 
  <sect1 id="functions-json">
-  <title>JSON functions</title>
+  <title>JSON Functions</title>
 
   <indexterm zone="datatype-json">
     <primary>JSON</primary>
@@ -9617,8 +9624,8 @@ table2-mapping
   </indexterm>
 
   <para>
-    This section descripbes the functions that are available for creating
-    JSON (see <xref linkend="datatype-json">) data.
+   <xref linkend="functions-json-table"> shows the functions that are available
+   for creating JSON (see <xref linkend="datatype-json">) data.
   </para>
 
   <table id="functions-json-table">
@@ -9641,9 +9648,9 @@ table2-mapping
          <literal>array_to_json(anyarray [, pretty_bool])</literal>
        </entry>
        <entry>
-         Returns the array as JSON. A Postgres multi-dimensional array 
-         becomes a JSON array of arrays. Line feeds will be added between 
-         dimension 1 elements if pretty_bool is true.
+         Returns the array as JSON. A PostgreSQL multidimensional array
+         becomes a JSON array of arrays. Line feeds will be added between
+         dimension 1 elements if <parameter>pretty_bool</parameter> is true.
        </entry>
        <entry><literal>array_to_json('{{1,5},{99,100}}'::int[])</literal></entry>
        <entry><literal>[[1,5],[99,100]]</literal></entry>
@@ -9656,8 +9663,8 @@ table2-mapping
          <literal>row_to_json(record [, pretty_bool])</literal>
        </entry>
        <entry>
-         Returns the row as JSON. Line feeds will be added between level 
-         1 elements if pretty_bool is true.
+         Returns the row as JSON. Line feeds will be added between level
+         1 elements if <parameter>pretty_bool</parameter> is true.
        </entry>
        <entry><literal>row_to_json(row(1,'foo'))</literal></entry>
        <entry><literal>{"f1":1,"f2":"foo"}</literal></entry>
@@ -10963,24 +10970,6 @@ SELECT NULLIF(value, '(none)') ...
      <row>
       <entry>
        <indexterm>
-        <primary>bytea_agg</primary>
-       </indexterm>
-       <function>
-         bytea_agg(<replaceable class="parameter">expression</replaceable>)
-       </function>
-      </entry>
-      <entry>
-       <type>bytea</type>
-      </entry>
-      <entry>
-       <type>bytea</type>
-      </entry>
-      <entry>input values concatenated into a bytea</entry>
-     </row>
-
-     <row>
-      <entry>
-       <indexterm>
         <primary>count</primary>
        </indexterm>
        <function>count(*)</function>
@@ -11059,10 +11048,10 @@ SELECT NULLIF(value, '(none)') ...
        </function>
       </entry>
       <entry>
-       <type>text</type>, <type>text</type>
+       (<type>text</type>, <type>text</type>) or (<type>bytea</type>, <type>bytea</type>)
       </entry>
       <entry>
-       <type>text</type>
+       same as argument types
       </entry>
       <entry>input values concatenated into a string, separated by delimiter</entry>
      </row>
@@ -13823,8 +13812,8 @@ SELECT pg_type_is_visible('myschema.widget'::regtype);
       <row>
        <entry><literal><function>pg_get_viewdef(<parameter>view_name</parameter>, <parameter>pretty_bool</>)</function></literal></entry>
        <entry><type>text</type></entry>
-       <entry>get underlying <command>SELECT</command> command for view, 
-              lines with fields are wrapped to 80 columns if pretty_bool is true (<emphasis>deprecated</emphasis>)</entry>
+       <entry>get underlying <command>SELECT</command> command for view,
+              lines with fields are wrapped to 80 columns if <parameter>pretty_bool</parameter> is true (<emphasis>deprecated</emphasis>)</entry>
       </row>
       <row>
        <entry><literal><function>pg_get_viewdef(<parameter>view_oid</parameter>)</function></literal></entry>
@@ -13834,13 +13823,13 @@ SELECT pg_type_is_visible('myschema.widget'::regtype);
       <row>
        <entry><literal><function>pg_get_viewdef(<parameter>view_oid</parameter>, <parameter>pretty_bool</>)</function></literal></entry>
        <entry><type>text</type></entry>
-       <entry>get underlying <command>SELECT</command> command for view, 
-              lines with fields are wrapped to 80 columns if pretty_bool is true</entry>
+       <entry>get underlying <command>SELECT</command> command for view,
+              lines with fields are wrapped to 80 columns if <parameter>pretty_bool</parameter> is true</entry>
       </row>
       <row>
        <entry><literal><function>pg_get_viewdef(<parameter>view_oid</parameter>, <parameter>wrap_int</>)</function></literal></entry>
        <entry><type>text</type></entry>
-       <entry>get underlying <command>SELECT</command> command for view, 
+       <entry>get underlying <command>SELECT</command> command for view,
               wrapping lines with fields as specified, pretty printing is implied</entry>
       </row>
       <row>
@@ -13856,7 +13845,7 @@ SELECT pg_type_is_visible('myschema.widget'::regtype);
       <row>
        <entry><literal><function>pg_tablespace_location(<parameter>tablespace_oid</parameter>)</function></literal></entry>
        <entry><type>text</type></entry>
-       <entry>get the path in the filesystem that this tablespace is located in</entry>
+       <entry>get the path in the file system that this tablespace is located in</entry>
       </row>
       <row>
        <entry><literal><function>pg_typeof(<parameter>any</parameter>)</function></literal></entry>
@@ -14992,7 +14981,20 @@ postgres=# SELECT * FROM pg_xlogfile_name_offset(pg_stop_backup());
         <literal><function>pg_size_pretty(<type>bigint</type>)</function></literal>
         </entry>
        <entry><type>text</type></entry>
-       <entry>Converts a size in bytes into a human-readable format with size units</entry>
+       <entry>
+         Converts a size in bytes expressed as a 64-bit integer into a
+         human-readable format with size units
+       </entry>
+      </row>
+      <row>
+       <entry>
+        <literal><function>pg_size_pretty(<type>numeric</type>)</function></literal>
+        </entry>
+       <entry><type>text</type></entry>
+       <entry>
+         Converts a size in bytes expressed as a numeric value into a
+         human-readable format with size units
+       </entry>
       </row>
       <row>
        <entry>
@@ -15380,7 +15382,7 @@ SELECT (pg_stat_file('filename')).modification;
         <literal><function>pg_advisory_xact_lock_shared(<parameter>key1</> <type>int</>, <parameter>key2</> <type>int</>)</function></literal>
        </entry>
        <entry><type>void</type></entry>
-       <entry>Obtain shared advisory lock for the current transaction</entry>
+       <entry>Obtain shared transaction level advisory lock</entry>
       </row>
       <row>
        <entry>
@@ -15449,11 +15451,10 @@ SELECT (pg_stat_file('filename')).modification;
     <function>pg_advisory_lock</> locks an application-defined resource,
     which can be identified either by a single 64-bit key value or two
     32-bit key values (note that these two key spaces do not overlap).
-    The key type is specified in <literal>pg_locks.objid</>.  If
-    another session already holds a lock on the same resource, the
-    function will wait until the resource becomes available.  The lock
+    If another session already holds a lock on the same resource identifier,
+    this function will wait until the resource becomes available.  The lock
     is exclusive.  Multiple lock requests stack, so that if the same resource
-    is locked three times it must be also unlocked three times to be
+    is locked three times it must then be unlocked three times to be
     released for other sessions' use.
    </para>
 
@@ -15485,6 +15486,35 @@ SELECT (pg_stat_file('filename')).modification;
     <function>pg_try_advisory_lock_shared</> works the same as
     <function>pg_try_advisory_lock</>, except it attempts to acquire
     a shared rather than an exclusive lock.
+   </para>
+
+   <indexterm>
+    <primary>pg_advisory_unlock</primary>
+   </indexterm>
+   <para>
+    <function>pg_advisory_unlock</> will release a previously-acquired
+    exclusive session level advisory lock.  It
+    returns <literal>true</> if the lock is successfully released.
+    If the lock was not held, it will return <literal>false</>,
+    and in addition, an SQL warning will be reported by the server.
+   </para>
+
+   <indexterm>
+    <primary>pg_advisory_unlock_shared</primary>
+   </indexterm>
+   <para>
+    <function>pg_advisory_unlock_shared</> works the same as
+    <function>pg_advisory_unlock</>,
+    except it releases a shared session level advisory lock.
+   </para>
+
+   <indexterm>
+    <primary>pg_advisory_unlock_all</primary>
+   </indexterm>
+   <para>
+    <function>pg_advisory_unlock_all</> will release all session level advisory
+    locks held by the current session.  (This function is implicitly invoked
+    at session end, even if the client disconnects ungracefully.)
    </para>
 
    <indexterm>
@@ -15523,35 +15553,6 @@ SELECT (pg_stat_file('filename')).modification;
     <function>pg_try_advisory_lock_shared</>, except the lock, if acquired,
     is automatically released at the end of the current transaction and
     cannot be released explicitly.
-   </para>
-
-   <indexterm>
-    <primary>pg_advisory_unlock</primary>
-   </indexterm>
-   <para>
-    <function>pg_advisory_unlock</> will release a previously-acquired
-    exclusive session level advisory lock.  It
-    returns <literal>true</> if the lock is successfully released.
-    If the lock was not held, it will return <literal>false</>,
-    and in addition, an SQL warning will be raised by the server.
-   </para>
-
-   <indexterm>
-    <primary>pg_advisory_unlock_shared</primary>
-   </indexterm>
-   <para>
-    <function>pg_advisory_unlock_shared</> works the same as
-    <function>pg_advisory_unlock</>,
-    except it releases a shared session level advisory lock.
-   </para>
-
-   <indexterm>
-    <primary>pg_advisory_unlock_all</primary>
-   </indexterm>
-   <para>
-    <function>pg_advisory_unlock_all</> will release all session level advisory
-    locks held by the current session.  (This function is implicitly invoked
-    at session end, even if the client disconnects ungracefully.)
    </para>
 
   </sect2>

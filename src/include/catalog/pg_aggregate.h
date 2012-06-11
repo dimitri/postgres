@@ -45,6 +45,7 @@ CATALOG(pg_aggregate,2600) BKI_WITHOUT_OIDS
 	regproc		aggfinalfn;
 	Oid			aggsortop;
 	Oid			aggtranstype;
+
 #ifdef CATALOG_VARLEN			/* variable-length fields start here */
 	text		agginitval;
 #endif
@@ -230,7 +231,7 @@ DATA(insert ( 2335	array_agg_transfn	array_agg_finalfn		0	2281	_null_ ));
 DATA(insert ( 3538	string_agg_transfn	string_agg_finalfn		0	2281	_null_ ));
 
 /* bytea */
-DATA(insert ( 3545	bytea_agg_transfn	bytea_agg_finalfn		0	2281	_null_ ));
+DATA(insert ( 3545	bytea_string_agg_transfn	bytea_string_agg_finalfn		0	2281	_null_ ));
 
 /*
  * prototypes for functions in pg_aggregate.c

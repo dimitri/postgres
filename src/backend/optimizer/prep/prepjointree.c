@@ -332,6 +332,7 @@ pull_up_sublinks_qual_recurse(PlannerInfo *root, Node *node,
 				j->rarg = pull_up_sublinks_jointree_recurse(root,
 															j->rarg,
 															&child_rels);
+
 				/*
 				 * Now recursively process the pulled-up quals.  Any inserted
 				 * joins can get stacked onto either j->larg or j->rarg,
@@ -357,6 +358,7 @@ pull_up_sublinks_qual_recurse(PlannerInfo *root, Node *node,
 				j->rarg = pull_up_sublinks_jointree_recurse(root,
 															j->rarg,
 															&child_rels);
+
 				/*
 				 * Now recursively process the pulled-up quals.  Any inserted
 				 * joins can get stacked onto either j->larg or j->rarg,
@@ -384,6 +386,7 @@ pull_up_sublinks_qual_recurse(PlannerInfo *root, Node *node,
 				j->rarg = pull_up_sublinks_jointree_recurse(root,
 															j->rarg,
 															&child_rels);
+
 				/*
 				 * Now recursively process the pulled-up quals.  Any inserted
 				 * joins can get stacked onto either j->larg or j->rarg,
@@ -409,6 +412,7 @@ pull_up_sublinks_qual_recurse(PlannerInfo *root, Node *node,
 				j->rarg = pull_up_sublinks_jointree_recurse(root,
 															j->rarg,
 															&child_rels);
+
 				/*
 				 * Now recursively process the pulled-up quals.  Any inserted
 				 * joins can get stacked onto either j->larg or j->rarg,
@@ -439,7 +443,7 @@ pull_up_sublinks_qual_recurse(PlannerInfo *root, Node *node,
 			if (sublink->subLinkType == EXISTS_SUBLINK)
 			{
 				if ((j = convert_EXISTS_sublink_to_join(root, sublink, true,
-														available_rels1)) != NULL)
+												   available_rels1)) != NULL)
 				{
 					/* Yes; insert the new join node into the join tree */
 					j->larg = *jtlink1;
@@ -448,11 +452,12 @@ pull_up_sublinks_qual_recurse(PlannerInfo *root, Node *node,
 					j->rarg = pull_up_sublinks_jointree_recurse(root,
 																j->rarg,
 																&child_rels);
+
 					/*
 					 * Now recursively process the pulled-up quals.  Because
-					 * we are underneath a NOT, we can't pull up sublinks
-					 * that reference the left-hand stuff, but it's still
-					 * okay to pull up sublinks referencing j->rarg.
+					 * we are underneath a NOT, we can't pull up sublinks that
+					 * reference the left-hand stuff, but it's still okay to
+					 * pull up sublinks referencing j->rarg.
 					 */
 					j->quals = pull_up_sublinks_qual_recurse(root,
 															 j->quals,
@@ -464,7 +469,7 @@ pull_up_sublinks_qual_recurse(PlannerInfo *root, Node *node,
 				}
 				if (available_rels2 != NULL &&
 					(j = convert_EXISTS_sublink_to_join(root, sublink, true,
-														available_rels2)) != NULL)
+												   available_rels2)) != NULL)
 				{
 					/* Yes; insert the new join node into the join tree */
 					j->larg = *jtlink2;
@@ -473,11 +478,12 @@ pull_up_sublinks_qual_recurse(PlannerInfo *root, Node *node,
 					j->rarg = pull_up_sublinks_jointree_recurse(root,
 																j->rarg,
 																&child_rels);
+
 					/*
 					 * Now recursively process the pulled-up quals.  Because
-					 * we are underneath a NOT, we can't pull up sublinks
-					 * that reference the left-hand stuff, but it's still
-					 * okay to pull up sublinks referencing j->rarg.
+					 * we are underneath a NOT, we can't pull up sublinks that
+					 * reference the left-hand stuff, but it's still okay to
+					 * pull up sublinks referencing j->rarg.
 					 */
 					j->quals = pull_up_sublinks_qual_recurse(root,
 															 j->quals,
@@ -2069,8 +2075,6 @@ reduce_outer_joins_pass2(Node *jtnode,
  *
  * Find any PlaceHolderVar nodes in the given tree that reference the
  * pulled-up relid, and change them to reference the replacement relid(s).
- * We do not need to recurse into subqueries, since no subquery of the current
- * top query could (yet) contain such a reference.
  *
  * NOTE: although this has the form of a walker, we cheat and modify the
  * nodes in-place.	This should be OK since the tree was copied by
@@ -2081,6 +2085,7 @@ reduce_outer_joins_pass2(Node *jtnode,
 typedef struct
 {
 	int			varno;
+	int			sublevels_up;
 	Relids		subrelids;
 } substitute_multiple_relids_context;
 
@@ -2094,7 +2099,8 @@ substitute_multiple_relids_walker(Node *node,
 	{
 		PlaceHolderVar *phv = (PlaceHolderVar *) node;
 
-		if (bms_is_member(context->varno, phv->phrels))
+		if (phv->phlevelsup == context->sublevels_up &&
+			bms_is_member(context->varno, phv->phrels))
 		{
 			phv->phrels = bms_union(phv->phrels,
 									context->subrelids);
@@ -2102,6 +2108,18 @@ substitute_multiple_relids_walker(Node *node,
 										 context->varno);
 		}
 		/* fall through to examine children */
+	}
+	if (IsA(node, Query))
+	{
+		/* Recurse into subselects */
+		bool		result;
+
+		context->sublevels_up++;
+		result = query_tree_walker((Query *) node,
+								   substitute_multiple_relids_walker,
+								   (void *) context, 0);
+		context->sublevels_up--;
+		return result;
 	}
 	/* Shouldn't need to handle planner auxiliary nodes here */
 	Assert(!IsA(node, SpecialJoinInfo));
@@ -2119,6 +2137,7 @@ substitute_multiple_relids(Node *node, int varno, Relids subrelids)
 	substitute_multiple_relids_context context;
 
 	context.varno = varno;
+	context.sublevels_up = 0;
 	context.subrelids = subrelids;
 
 	/*

@@ -28,6 +28,8 @@ typedef struct BufferUsage
 	long		local_blks_written;		/* # of local disk blocks written */
 	long		temp_blks_read; /* # of temp blocks read */
 	long		temp_blks_written;		/* # of temp blocks written */
+	instr_time	blk_read_time;	/* time spent reading */
+	instr_time	blk_write_time; /* time spent writing */
 } BufferUsage;
 
 /* Flag bits included in InstrAlloc's instrument_options bitmask */
@@ -42,7 +44,7 @@ typedef enum InstrumentOption
 typedef struct Instrumentation
 {
 	/* Parameters set at node creation: */
-	bool		need_timer;	    /* TRUE if we need timer data */
+	bool		need_timer;		/* TRUE if we need timer data */
 	bool		need_bufusage;	/* TRUE if we need buffer usage data */
 	/* Info about current plan cycle: */
 	bool		running;		/* TRUE if we've completed first tuple */

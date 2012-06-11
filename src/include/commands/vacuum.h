@@ -62,9 +62,9 @@ typedef Datum (*AnalyzeAttrFetchFunc) (VacAttrStatsP stats, int rownum,
 												   bool *isNull);
 
 typedef void (*AnalyzeAttrComputeStatsFunc) (VacAttrStatsP stats,
-											 AnalyzeAttrFetchFunc fetchfunc,
-											 int samplerows,
-											 double totalrows);
+											  AnalyzeAttrFetchFunc fetchfunc,
+														 int samplerows,
+														 double totalrows);
 
 typedef struct VacAttrStats
 {
@@ -170,5 +170,8 @@ extern void lazy_vacuum_rel(Relation onerel, VacuumStmt *vacstmt,
 extern void analyze_rel(Oid relid, VacuumStmt *vacstmt,
 			BufferAccessStrategy bstrategy);
 extern bool std_typanalyze(VacAttrStats *stats);
+extern double anl_random_fract(void);
+extern double anl_init_selection_state(int n);
+extern double anl_get_next_S(double t, int n, double *stateptr);
 
 #endif   /* VACUUM_H */

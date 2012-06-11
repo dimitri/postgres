@@ -81,9 +81,6 @@
 #if defined(WIN32) || defined(__CYGWIN__)
 #include <fcntl.h>				/* ensure O_BINARY is available */
 #endif
-#ifdef HAVE_SUPPORTDEFS_H
-#include <SupportDefs.h>
-#endif
 
 #if defined(WIN32) || defined(__CYGWIN__)
 /* We have to redefine some system functions after they are included above. */
@@ -708,6 +705,18 @@ typedef NameData *Name;
 #define STATUS_EOF				(-2)
 #define STATUS_FOUND			(1)
 #define STATUS_WAITING			(2)
+
+
+/*
+ * Append PG_USED_FOR_ASSERTS_ONLY to definitions of variables that are only
+ * used in assert-enabled builds, to avoid compiler warnings about unused
+ * variables in assert-disabled builds.
+ */
+#ifdef USE_ASSERT_CHECKING
+#define PG_USED_FOR_ASSERTS_ONLY
+#else
+#define PG_USED_FOR_ASSERTS_ONLY __attribute__((unused))
+#endif
 
 
 /* gettext domain name mangling */

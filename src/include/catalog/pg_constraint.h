@@ -89,9 +89,10 @@ CATALOG(pg_constraint,2606)
 	int4		coninhcount;
 
 	/* Has a local definition and cannot be inherited */
-	bool		conisonly;
+	bool		connoinherit;
 
 #ifdef CATALOG_VARLEN			/* variable-length fields start here */
+
 	/*
 	 * Columns of conrelid that the constraint applies to, if known (this is
 	 * NULL for trigger constraints)
@@ -166,7 +167,7 @@ typedef FormData_pg_constraint *Form_pg_constraint;
 #define Anum_pg_constraint_confmatchtype	13
 #define Anum_pg_constraint_conislocal		14
 #define Anum_pg_constraint_coninhcount		15
-#define Anum_pg_constraint_conisonly		16
+#define Anum_pg_constraint_connoinherit		16
 #define Anum_pg_constraint_conkey			17
 #define Anum_pg_constraint_confkey			18
 #define Anum_pg_constraint_conpfeqop		19
@@ -244,7 +245,8 @@ extern char *ChooseConstraintName(const char *name1, const char *name2,
 
 extern void AlterConstraintNamespaces(Oid ownerId, Oid oldNspId,
 						  Oid newNspId, bool isType);
-extern Oid	get_constraint_oid(Oid relid, const char *conname, bool missing_ok);
+extern Oid	get_relation_constraint_oid(Oid relid, const char *conname, bool missing_ok);
+extern Oid	get_domain_constraint_oid(Oid typid, const char *conname, bool missing_ok);
 
 extern bool check_functional_grouping(Oid relid,
 						  Index varno, Index varlevelsup,

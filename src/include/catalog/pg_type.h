@@ -61,9 +61,8 @@ CATALOG(pg_type,1247) BKI_BOOTSTRAP BKI_ROWTYPE_OID(71) BKI_SCHEMA_MACRO
 
 	/*
 	 * typtype is 'b' for a base type, 'c' for a composite type (e.g., a
-	 * table's rowtype), 'd' for a domain, 'e' for an enum type,
-	 * 'p' for a pseudo-type, or 'r' for a range type.
-	 * (Use the TYPTYPE macros below.)
+	 * table's rowtype), 'd' for a domain, 'e' for an enum type, 'p' for a
+	 * pseudo-type, or 'r' for a range type. (Use the TYPTYPE macros below.)
 	 *
 	 * If typtype is 'c', typrelid is the OID of the class' entry in pg_class.
 	 */
@@ -201,6 +200,7 @@ CATALOG(pg_type,1247) BKI_BOOTSTRAP BKI_ROWTYPE_OID(71) BKI_SCHEMA_MACRO
 	Oid			typcollation;
 
 #ifdef CATALOG_VARLEN			/* variable-length fields start here */
+
 	/*
 	 * If typdefaultbin is not NULL, it is the nodeToString representation of
 	 * a default expression for the type.  Currently this is only used for
@@ -296,7 +296,7 @@ DESCR("single character");
 #define CHAROID			18
 
 DATA(insert OID = 19 (	name	   PGNSP PGUID NAMEDATALEN f b S f t \054 0 18 1003 namein nameout namerecv namesend - - - c p f 0 -1 0 0 _null_ _null_ _null_ ));
-DESCR("63-character type for storing system identifiers");
+DESCR("63-byte type for storing system identifiers");
 #define NAMEOID			19
 
 DATA(insert OID = 20 (	int8	   PGNSP PGUID	8 FLOAT8PASSBYVAL b N f t \054 0	 0 1016 int8in int8out int8recv int8send - - - d p f 0 -1 0 0 _null_ _null_ _null_ ));

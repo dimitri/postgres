@@ -17,10 +17,13 @@
 #include <ctype.h>
 
 #include "dumputils.h"
-#include "pg_backup.h"
 
 #include "parser/keywords.h"
 
+
+/* Globals from keywords.c */
+extern const ScanKeyword FEScanKeywords[];
+extern const int NumFEScanKeywords;
 
 /* Globals exported by this file */
 int			quote_all_identifiers = 0;
@@ -30,11 +33,11 @@ const char *progname = NULL;
 
 static struct
 {
-	on_exit_nicely_callback	function;
+	on_exit_nicely_callback function;
 	void	   *arg;
-} on_exit_nicely_list[MAX_ON_EXIT_NICELY];
+}	on_exit_nicely_list[MAX_ON_EXIT_NICELY];
 
-static int on_exit_nicely_index;
+static int	on_exit_nicely_index;
 
 #define supports_grant_options(version) ((version) >= 70400)
 
@@ -49,6 +52,7 @@ static void AddAcl(PQExpBuffer aclbuf, const char *keyword,
 #ifdef WIN32
 static bool parallel_init_done = false;
 static DWORD tls_index;
+static DWORD mainThreadId;
 #endif
 
 void
@@ -59,6 +63,7 @@ init_parallel_dump_utils(void)
 	{
 		tls_index = TlsAlloc();
 		parallel_init_done = true;
+		mainThreadId = GetCurrentThreadId();
 	}
 #endif
 }
@@ -148,8 +153,8 @@ fmtId(const char *rawid)
 		 * that's fine, since we already know we have all-lower-case.
 		 */
 		const ScanKeyword *keyword = ScanKeywordLookup(rawid,
-													   ScanKeywords,
-													   NumScanKeywords);
+													   FEScanKeywords,
+													   NumFEScanKeywords);
 
 		if (keyword != NULL && keyword->category != UNRESERVED_KEYWORD)
 			need_quotes = true;
@@ -595,7 +600,10 @@ buildACLCommands(const char *name, const char *subname,
 	{
 		if (!parseAclItem(aclitems[i], type, name, subname, remoteVersion,
 						  grantee, grantor, privs, privswgo))
+		{
+			free(aclitems);
 			return false;
+		}
 
 		if (grantor->len == 0 && owner)
 			printfPQExpBuffer(grantor, "%s", owner);
@@ -784,7 +792,10 @@ parseAclItem(const char *item, const char *type,
 	/* user or group name is string up to = */
 	eqpos = copyAclUserName(grantee, buf);
 	if (*eqpos != '=')
+	{
+		free(buf);
 		return false;
+	}
 
 	/* grantor may be listed after / */
 	slpos = strchr(eqpos + 1, '/');
@@ -793,7 +804,10 @@ parseAclItem(const char *item, const char *type,
 		*slpos++ = '\0';
 		slpos = copyAclUserName(grantor, slpos);
 		if (*slpos != '\0')
+		{
+			free(buf);
 			return false;
+		}
 	}
 	else
 		resetPQExpBuffer(grantor);
@@ -1207,9 +1221,9 @@ emitShSecLabels(PGconn *conn, PGresult *res, PQExpBuffer buffer,
 	int			i;
 
 	for (i = 0; i < PQntuples(res); i++)
-    {
-		char   *provider = PQgetvalue(res, i, 0);
-		char   *label = PQgetvalue(res, i, 1);
+	{
+		char	   *provider = PQgetvalue(res, i, 0);
+		char	   *label = PQgetvalue(res, i, 1);
 
 		/* must use fmtId result before calling it again */
 		appendPQExpBuffer(buffer,
@@ -1219,7 +1233,38 @@ emitShSecLabels(PGconn *conn, PGresult *res, PQExpBuffer buffer,
 						  " %s IS ",
 						  fmtId(objname));
 		appendStringLiteralConn(buffer, label, conn);
-        appendPQExpBuffer(buffer, ";\n");
+		appendPQExpBuffer(buffer, ";\n");
+	}
+}
+
+
+/*
+ * Parse a --section=foo command line argument.
+ *
+ * Set or update the bitmask in *dumpSections according to arg.
+ * dumpSections is initialised as DUMP_UNSECTIONED by pg_dump and
+ * pg_restore so they can know if this has even been called.
+ */
+void
+set_dump_section(const char *arg, int *dumpSections)
+{
+	/* if this is the first call, clear all the bits */
+	if (*dumpSections == DUMP_UNSECTIONED)
+		*dumpSections = 0;
+
+	if (strcmp(arg, "pre-data") == 0)
+		*dumpSections |= DUMP_PRE_DATA;
+	else if (strcmp(arg, "data") == 0)
+		*dumpSections |= DUMP_DATA;
+	else if (strcmp(arg, "post-data") == 0)
+		*dumpSections |= DUMP_POST_DATA;
+	else
+	{
+		fprintf(stderr, _("%s: unrecognized section name: \"%s\"\n"),
+				progname, arg);
+		fprintf(stderr, _("Try \"%s --help\" for more information.\n"),
+				progname);
+		exit_nicely(1);
 	}
 }
 
@@ -1259,7 +1304,7 @@ vwrite_msg(const char *modulename, const char *fmt, va_list ap)
 
 
 /*
- * Fail and die, with a message to stderr.  Parameters as for write_msg.
+ * Fail and die, with a message to stderr.	Parameters as for write_msg.
  */
 void
 exit_horribly(const char *modulename, const char *fmt,...)
@@ -1273,35 +1318,6 @@ exit_horribly(const char *modulename, const char *fmt,...)
 	exit_nicely(1);
 }
 
-/*
- * Set the bitmask in dumpSections according to the first argument.
- * dumpSections is initialised as DUMP_UNSECTIONED by pg_dump and
- * pg_restore so they can know if this has even been called.
- */
-
-void
-set_section (const char *arg, int *dumpSections)
-{
-	/* if this is the first, clear all the bits */
-	if (*dumpSections == DUMP_UNSECTIONED)
-		*dumpSections = 0;
-
-	if (strcmp(arg,"pre-data") == 0)
-		*dumpSections |= DUMP_PRE_DATA;
-	else if (strcmp(arg,"data") == 0)
-		*dumpSections |= DUMP_DATA;
-	else if (strcmp(arg,"post-data") == 0)
-		*dumpSections |= DUMP_POST_DATA;
-	else
-	{
-		fprintf(stderr, _("%s: unknown section name \"%s\")\n"),
-				progname, arg);
-		fprintf(stderr, _("Try \"%s --help\" for more information.\n"),
-				progname);
-		exit_nicely(1);
-	}
-}
-
 /* Register a callback to be run when exit_nicely is invoked. */
 void
 on_exit_nicely(on_exit_nicely_callback function, void *arg)
@@ -1313,12 +1329,23 @@ on_exit_nicely(on_exit_nicely_callback function, void *arg)
 	on_exit_nicely_index++;
 }
 
-/* Run accumulated on_exit_nicely callbacks and then exit quietly. */
+/*
+ * Run accumulated on_exit_nicely callbacks in reverse order and then exit
+ * quietly.  This needs to be thread-safe.
+ */
 void
 exit_nicely(int code)
 {
-	while (--on_exit_nicely_index >= 0)
-		(*on_exit_nicely_list[on_exit_nicely_index].function)(code,
-			on_exit_nicely_list[on_exit_nicely_index].arg);
+	int			i;
+
+	for (i = on_exit_nicely_index - 1; i >= 0; i--)
+		(*on_exit_nicely_list[i].function) (code,
+											on_exit_nicely_list[i].arg);
+
+#ifdef WIN32
+	if (parallel_init_done && GetCurrentThreadId() != mainThreadId)
+		ExitThread(code);
+#endif
+
 	exit(code);
 }

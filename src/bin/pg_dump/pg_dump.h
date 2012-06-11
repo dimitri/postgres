@@ -381,7 +381,6 @@ typedef struct _constraintInfo
 	bool		condeferrable;	/* TRUE if constraint is DEFERRABLE */
 	bool		condeferred;	/* TRUE if constraint is INITIALLY DEFERRED */
 	bool		conislocal;		/* TRUE if constraint has local definition */
-	bool		conisonly;		/* TRUE if constraint is non-inheritable */
 	bool		separate;		/* TRUE if must dump as separate item */
 } ConstraintInfo;
 
@@ -523,6 +522,7 @@ extern TypeInfo *findTypeByOid(Oid oid);
 extern FuncInfo *findFuncByOid(Oid oid);
 extern OprInfo *findOprByOid(Oid oid);
 extern CollInfo *findCollationByOid(Oid oid);
+extern NamespaceInfo *findNamespaceByOid(Oid oid);
 
 extern void simple_oid_list_append(SimpleOidList *list, Oid val);
 extern void simple_string_list_append(SimpleStringList *list, const char *val);
@@ -549,6 +549,7 @@ extern OpfamilyInfo *getOpfamilies(Archive *fout, int *numOpfamilies);
 extern CollInfo *getCollations(Archive *fout, int *numCollations);
 extern ConvInfo *getConversions(Archive *fout, int *numConversions);
 extern TableInfo *getTables(Archive *fout, int *numTables);
+extern void getOwnedSeqs(Archive *fout, TableInfo tblinfo[], int numTables);
 extern InhInfo *getInherits(Archive *fout, int *numInherits);
 extern void getIndexes(Archive *fout, TableInfo tblinfo[], int numTables);
 extern void getConstraints(Archive *fout, TableInfo tblinfo[], int numTables);

@@ -204,7 +204,7 @@ DefineRule(RuleStmt *stmt, const char *queryString)
 	InitEventContextForCommand(&evt, (Node *)stmt, E_CreateRule);
 
 	/*
-	 * Find and lock the relation.  Lock level should match
+	 * Find and lock the relation.	Lock level should match
 	 * DefineQueryRewrite.
 	 */
 	relId = RangeVarGetRelid(stmt->relation, AccessExclusiveLock, false);

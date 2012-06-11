@@ -150,7 +150,7 @@ typedef struct CopyStateData
 	Oid		   *typioparams;	/* array of element types for in_functions */
 	int		   *defmap;			/* array of default att numbers */
 	ExprState **defexprs;		/* array of default att expressions */
-	bool		volatile_defexprs; /* is any of defexprs volatile? */
+	bool		volatile_defexprs;		/* is any of defexprs volatile? */
 
 	/*
 	 * These variables are used to reduce overhead in textual COPY FROM.
@@ -547,7 +547,7 @@ CopyGetData(CopyState cstate, void *databuf, int minread, int maxread)
 				/* Only a \. terminator is legal EOF in old protocol */
 				ereport(ERROR,
 						(errcode(ERRCODE_CONNECTION_FAILURE),
-						 errmsg("unexpected EOF on client connection")));
+						 errmsg("unexpected EOF on client connection with an open transaction")));
 			}
 			bytesread = minread;
 			break;
@@ -566,11 +566,11 @@ CopyGetData(CopyState cstate, void *databuf, int minread, int maxread)
 					if (mtype == EOF)
 						ereport(ERROR,
 								(errcode(ERRCODE_CONNECTION_FAILURE),
-							 errmsg("unexpected EOF on client connection")));
+								 errmsg("unexpected EOF on client connection with an open transaction")));
 					if (pq_getmessage(cstate->fe_msgbuf, 0))
 						ereport(ERROR,
 								(errcode(ERRCODE_CONNECTION_FAILURE),
-							 errmsg("unexpected EOF on client connection")));
+								 errmsg("unexpected EOF on client connection with an open transaction")));
 					switch (mtype)
 					{
 						case 'd':		/* CopyData */
@@ -1861,6 +1861,7 @@ CopyFrom(CopyState cstate)
 	uint64		processed = 0;
 	bool		useHeapMultiInsert;
 	int			nBufferedTuples = 0;
+
 #define MAX_BUFFERED_TUPLES 1000
 	HeapTuple  *bufferedTuples = NULL;	/* initialize to silence warning */
 	Size		bufferedTuplesSize = 0;
@@ -1968,8 +1969,8 @@ CopyFrom(CopyState cstate)
 	 * processed and prepared for insertion are not there.
 	 */
 	if ((resultRelInfo->ri_TrigDesc != NULL &&
-		(resultRelInfo->ri_TrigDesc->trig_insert_before_row ||
-		 resultRelInfo->ri_TrigDesc->trig_insert_instead_row)) ||
+		 (resultRelInfo->ri_TrigDesc->trig_insert_before_row ||
+		  resultRelInfo->ri_TrigDesc->trig_insert_instead_row)) ||
 		cstate->volatile_defexprs)
 	{
 		useHeapMultiInsert = false;
@@ -1984,7 +1985,7 @@ CopyFrom(CopyState cstate)
 	AfterTriggerBeginQuery();
 
 	/*
-	 * Check BEFORE STATEMENT insertion triggers. It's debateable whether we
+	 * Check BEFORE STATEMENT insertion triggers. It's debatable whether we
 	 * should do this for COPY, since it's not really an "INSERT" statement as
 	 * such. However, executing these triggers maintains consistency with the
 	 * EACH ROW triggers that we already fire on COPY.
@@ -2162,8 +2163,8 @@ CopyFromInsertBatch(CopyState cstate, EState *estate, CommandId mycid,
 	int			i;
 
 	/*
-	 * heap_multi_insert leaks memory, so switch to short-lived memory
-	 * context before calling it.
+	 * heap_multi_insert leaks memory, so switch to short-lived memory context
+	 * before calling it.
 	 */
 	oldcontext = MemoryContextSwitchTo(GetPerTupleMemoryContext(estate));
 	heap_multi_insert(cstate->rel,
@@ -2175,14 +2176,14 @@ CopyFromInsertBatch(CopyState cstate, EState *estate, CommandId mycid,
 	MemoryContextSwitchTo(oldcontext);
 
 	/*
-	 * If there are any indexes, update them for all the inserted tuples,
-	 * and run AFTER ROW INSERT triggers.
+	 * If there are any indexes, update them for all the inserted tuples, and
+	 * run AFTER ROW INSERT triggers.
 	 */
 	if (resultRelInfo->ri_NumIndices > 0)
 	{
 		for (i = 0; i < nBufferedTuples; i++)
 		{
-			List *recheckIndexes;
+			List	   *recheckIndexes;
 
 			ExecStoreTuple(bufferedTuples[i], myslot, InvalidBuffer, false);
 			recheckIndexes =
@@ -2194,6 +2195,7 @@ CopyFromInsertBatch(CopyState cstate, EState *estate, CommandId mycid,
 			list_free(recheckIndexes);
 		}
 	}
+
 	/*
 	 * There's no indexes, but see if we need to run AFTER ROW INSERT triggers
 	 * anyway.
@@ -3243,7 +3245,17 @@ CopyReadAttributesText(CopyState cstate)
 		start_ptr = cur_ptr;
 		cstate->raw_fields[fieldno] = output_ptr;
 
-		/* Scan data for field */
+		/*
+		 * Scan data for field.
+		 *
+		 * Note that in this loop, we are scanning to locate the end of field
+		 * and also speculatively performing de-escaping.  Once we find the
+		 * end-of-field, we can match the raw field contents against the null
+		 * marker string.  Only after that comparison fails do we know that
+		 * de-escaping is actually the right thing to do; therefore we *must
+		 * not* throw any syntax errors before we've done the null-marker
+		 * check.
+		 */
 		for (;;)
 		{
 			char		c;
@@ -3356,26 +3368,29 @@ CopyReadAttributesText(CopyState cstate)
 			*output_ptr++ = c;
 		}
 
-		/* Terminate attribute value in output area */
-		*output_ptr++ = '\0';
-
-		/*
-		 * If we de-escaped a non-7-bit-ASCII char, make sure we still have
-		 * valid data for the db encoding. Avoid calling strlen here for the
-		 * sake of efficiency.
-		 */
-		if (saw_non_ascii)
-		{
-			char	   *fld = cstate->raw_fields[fieldno];
-
-			pg_verifymbstr(fld, output_ptr - (fld + 1), false);
-		}
-
 		/* Check whether raw input matched null marker */
 		input_len = end_ptr - start_ptr;
 		if (input_len == cstate->null_print_len &&
 			strncmp(start_ptr, cstate->null_print, input_len) == 0)
 			cstate->raw_fields[fieldno] = NULL;
+		else
+		{
+			/*
+			 * At this point we know the field is supposed to contain data.
+			 *
+			 * If we de-escaped any non-7-bit-ASCII chars, make sure the
+			 * resulting string is valid data for the db encoding.
+			 */
+			if (saw_non_ascii)
+			{
+				char	   *fld = cstate->raw_fields[fieldno];
+
+				pg_verifymbstr(fld, output_ptr - fld, false);
+			}
+		}
+
+		/* Terminate attribute value in output area */
+		*output_ptr++ = '\0';
 
 		fieldno++;
 		/* Done if we hit EOL instead of a delim */

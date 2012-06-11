@@ -311,7 +311,7 @@ extern Datum btnamecmp(PG_FUNCTION_ARGS);
 extern Datum bttextcmp(PG_FUNCTION_ARGS);
 
 /*
- *		Per-opclass sort support functions for new btrees.  Like the
+ *		Per-opclass sort support functions for new btrees.	Like the
  *		functions above, these are stored in pg_amproc; most are defined in
  *		access/nbtree/nbtcompare.c
  */
@@ -453,6 +453,7 @@ extern Datum pg_database_size_name(PG_FUNCTION_ARGS);
 extern Datum pg_relation_size(PG_FUNCTION_ARGS);
 extern Datum pg_total_relation_size(PG_FUNCTION_ARGS);
 extern Datum pg_size_pretty(PG_FUNCTION_ARGS);
+extern Datum pg_size_pretty_numeric(PG_FUNCTION_ARGS);
 extern Datum pg_table_size(PG_FUNCTION_ARGS);
 extern Datum pg_indexes_size(PG_FUNCTION_ARGS);
 extern Datum pg_relation_filenode(PG_FUNCTION_ARGS);
@@ -771,8 +772,8 @@ extern Datum unknownsend(PG_FUNCTION_ARGS);
 
 extern Datum pg_column_size(PG_FUNCTION_ARGS);
 
-extern Datum bytea_agg_transfn(PG_FUNCTION_ARGS);
-extern Datum bytea_agg_finalfn(PG_FUNCTION_ARGS);
+extern Datum bytea_string_agg_transfn(PG_FUNCTION_ARGS);
+extern Datum bytea_string_agg_finalfn(PG_FUNCTION_ARGS);
 extern Datum string_agg_transfn(PG_FUNCTION_ARGS);
 extern Datum string_agg_finalfn(PG_FUNCTION_ARGS);
 

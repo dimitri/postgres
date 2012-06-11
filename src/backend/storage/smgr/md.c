@@ -325,7 +325,7 @@ mdcreate(SMgrRelation reln, ForkNumber forkNum, bool isRedo)
  *
  * All the above applies only to the relation's main fork; other forks can
  * just be removed immediately, since they are not needed to prevent the
- * relfilenode number from being recycled.  Also, we do not carefully
+ * relfilenode number from being recycled.	Also, we do not carefully
  * track whether other forks have been created or not, but just attempt to
  * unlink them unconditionally; so we should never complain about ENOENT.
  *
@@ -767,9 +767,10 @@ mdnblocks(SMgrRelation reln, ForkNumber forknum)
 	 * NOTE: this assumption could only be wrong if another backend has
 	 * truncated the relation.	We rely on higher code levels to handle that
 	 * scenario by closing and re-opening the md fd, which is handled via
-	 * relcache flush.	(Since the checkpointer doesn't participate in relcache
-	 * flush, it could have segment chain entries for inactive segments;
-	 * that's OK because the checkpointer never needs to compute relation size.)
+	 * relcache flush.	(Since the checkpointer doesn't participate in
+	 * relcache flush, it could have segment chain entries for inactive
+	 * segments; that's OK because the checkpointer never needs to compute
+	 * relation size.)
 	 */
 	while (v->mdfd_chain != NULL)
 	{
@@ -1072,12 +1073,13 @@ mdsync(void)
 				 * say "but an unreferenced SMgrRelation is still a leak!" Not
 				 * really, because the only case in which a checkpoint is done
 				 * by a process that isn't about to shut down is in the
-				 * checkpointer, and it will periodically do smgrcloseall(). This
-				 * fact justifies our not closing the reln in the success path
-				 * either, which is a good thing since in non-checkpointer cases
-				 * we couldn't safely do that.)  Furthermore, in many cases
-				 * the relation will have been dirtied through this same smgr
-				 * relation, and so we can save a file open/close cycle.
+				 * checkpointer, and it will periodically do smgrcloseall().
+				 * This fact justifies our not closing the reln in the success
+				 * path either, which is a good thing since in
+				 * non-checkpointer cases we couldn't safely do that.)
+				 * Furthermore, in many cases the relation will have been
+				 * dirtied through this same smgr relation, and so we can save
+				 * a file open/close cycle.
 				 */
 				reln = smgropen(entry->tag.rnode.node,
 								entry->tag.rnode.backend);
@@ -1094,27 +1096,22 @@ mdsync(void)
 							  entry->tag.segno * ((BlockNumber) RELSEG_SIZE),
 								   false, EXTENSION_RETURN_NULL);
 
-				if (log_checkpoints)
-					INSTR_TIME_SET_CURRENT(sync_start);
-				else
-					INSTR_TIME_SET_ZERO(sync_start);
+				INSTR_TIME_SET_CURRENT(sync_start);
 
 				if (seg != NULL &&
 					FileSync(seg->mdfd_vfd) >= 0)
 				{
-					if (log_checkpoints && (!INSTR_TIME_IS_ZERO(sync_start)))
-					{
-						INSTR_TIME_SET_CURRENT(sync_end);
-						sync_diff = sync_end;
-						INSTR_TIME_SUBTRACT(sync_diff, sync_start);
-						elapsed = INSTR_TIME_GET_MICROSEC(sync_diff);
-						if (elapsed > longest)
-							longest = elapsed;
-						total_elapsed += elapsed;
-						processed++;
+					INSTR_TIME_SET_CURRENT(sync_end);
+					sync_diff = sync_end;
+					INSTR_TIME_SUBTRACT(sync_diff, sync_start);
+					elapsed = INSTR_TIME_GET_MICROSEC(sync_diff);
+					if (elapsed > longest)
+						longest = elapsed;
+					total_elapsed += elapsed;
+					processed++;
+					if (log_checkpoints)
 						elog(DEBUG1, "checkpoint sync: number=%d file=%s time=%.3f msec",
 							 processed, FilePathName(seg->mdfd_vfd), (double) elapsed / 1000);
-					}
 
 					break;		/* success; break out of retry loop */
 				}
@@ -1475,8 +1472,8 @@ ForgetRelationFsyncRequests(RelFileNodeBackend rnode, ForkNumber forknum)
 			pg_usleep(10000L);	/* 10 msec seems a good number */
 
 		/*
-		 * Note we don't wait for the checkpointer to actually absorb the revoke
-		 * message; see mdsync() for the implications.
+		 * Note we don't wait for the checkpointer to actually absorb the
+		 * revoke message; see mdsync() for the implications.
 		 */
 	}
 }

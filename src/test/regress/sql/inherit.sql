@@ -140,12 +140,12 @@ select * from d;
 
 -- Test non-inheritable parent constraints
 create table p1(ff1 int);
-alter table only p1 add constraint p1chk check (ff1 > 0);
+alter table p1 add constraint p1chk check no inherit (ff1 > 0);
 alter table p1 add constraint p2chk check (ff1 > 10);
--- conisonly should be true for ONLY constraint
-select pc.relname, pgc.conname, pgc.contype, pgc.conislocal, pgc.coninhcount, pgc.conisonly from pg_class as pc inner join pg_constraint as pgc on (pgc.conrelid = pc.oid) where pc.relname = 'p1' order by 1,2;
+-- connoinherit should be true for NO INHERIT constraint
+select pc.relname, pgc.conname, pgc.contype, pgc.conislocal, pgc.coninhcount, pgc.connoinherit from pg_class as pc inner join pg_constraint as pgc on (pgc.conrelid = pc.oid) where pc.relname = 'p1' order by 1,2;
 
--- Test that child does not inherit ONLY constraints
+-- Test that child does not inherit NO INHERIT constraints
 create table c1 () inherits (p1);
 \d p1
 \d c1
@@ -290,6 +290,37 @@ SELECT a.attrelid::regclass, a.attname, a.attinhcount, e.expected
   ORDER BY a.attrelid::regclass::name, a.attnum;
 
 DROP TABLE inht1, inhs1 CASCADE;
+
+--
+-- Test parameterized append plans for inheritance trees
+--
+
+create temp table patest0 (id, x) as
+  select x, x from generate_series(0,1000) x;
+create temp table patest1() inherits (patest0);
+insert into patest1
+  select x, x from generate_series(0,1000) x;
+create temp table patest2() inherits (patest0);
+insert into patest2
+  select x, x from generate_series(0,1000) x;
+create index patest0i on patest0(id);
+create index patest1i on patest1(id);
+create index patest2i on patest2(id);
+analyze patest0;
+analyze patest1;
+analyze patest2;
+
+explain (costs off)
+select * from patest0 join (select f1 from int4_tbl limit 1) ss on id = f1;
+select * from patest0 join (select f1 from int4_tbl limit 1) ss on id = f1;
+
+drop index patest2i;
+
+explain (costs off)
+select * from patest0 join (select f1 from int4_tbl limit 1) ss on id = f1;
+select * from patest0 join (select f1 from int4_tbl limit 1) ss on id = f1;
+
+drop table patest0 cascade;
 
 --
 -- Test merge-append plans for inheritance trees

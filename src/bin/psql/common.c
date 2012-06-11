@@ -450,7 +450,6 @@ AcceptResult(const PGresult *result)
 			case PGRES_EMPTY_QUERY:
 			case PGRES_COPY_IN:
 			case PGRES_COPY_OUT:
-			case PGRES_COPY_BOTH:
 				/* Fine, do nothing */
 				OK = true;
 				break;
@@ -673,27 +672,15 @@ ProcessResult(PGresult **results)
 		result_status = PQresultStatus(*results);
 		switch (result_status)
 		{
-			case PGRES_COPY_BOTH:
-				/*
-				 * No now-existing SQL command can yield PGRES_COPY_BOTH, but
-				 * defend against the future.  PQexec() can't short-circuit
-				 * it's way out of a PGRES_COPY_BOTH, so the connection will
-				 * be useless at this point.  XXX is there a method for
-				 * clearing this status that's likely to work with every
-				 * future command that can initiate it?
-				 */
-				psql_error("unexpected PQresultStatus (%d)", result_status);
-				return false;
-
-			case PGRES_COPY_OUT:
-			case PGRES_COPY_IN:
-				is_copy = true;
-				break;
-
 			case PGRES_EMPTY_QUERY:
 			case PGRES_COMMAND_OK:
 			case PGRES_TUPLES_OK:
 				is_copy = false;
+				break;
+
+			case PGRES_COPY_OUT:
+			case PGRES_COPY_IN:
+				is_copy = true;
 				break;
 
 			default:
@@ -720,7 +707,7 @@ ProcessResult(PGresult **results)
 
 			/*
 			 * Call PQgetResult() once more.  In the typical case of a
-			 * single-command string, it will return NULL.  Otherwise, we'll
+			 * single-command string, it will return NULL.	Otherwise, we'll
 			 * have other results to process that may include other COPYs.
 			 */
 			PQclear(*results);
@@ -817,7 +804,6 @@ PrintQueryResults(PGresult *results)
 
 		case PGRES_COPY_OUT:
 		case PGRES_COPY_IN:
-		case PGRES_COPY_BOTH:
 			/* nothing to do here */
 			success = true;
 			break;
@@ -996,11 +982,12 @@ SendQuery(const char *query)
 				break;
 
 			case PQTRANS_INTRANS:
+
 				/*
 				 * Do nothing if they are messing with savepoints themselves:
-				 * If the user did RELEASE or ROLLBACK, our savepoint is
-				 * gone. If they issued a SAVEPOINT, releasing ours would
-				 * remove theirs.
+				 * If the user did RELEASE or ROLLBACK, our savepoint is gone.
+				 * If they issued a SAVEPOINT, releasing ours would remove
+				 * theirs.
 				 */
 				if (results &&
 					(strcmp(PQcmdStatus(results), "SAVEPOINT") == 0 ||

@@ -11,6 +11,7 @@
 #include "executor/spi_priv.h"
 #include "mb/pg_wchar.h"
 #include "parser/parse_type.h"
+#include "utils/memutils.h"
 #include "utils/syscache.h"
 
 #include "plpython.h"
@@ -349,7 +350,7 @@ PLy_spi_execute_query(char *query, long limit)
 
 	PG_TRY();
 	{
-		PLyExecutionContext	*exec_ctx = PLy_current_execution_context();
+		PLyExecutionContext *exec_ctx = PLy_current_execution_context();
 
 		pg_verifymbstr(query, strlen(query), false);
 		rv = SPI_execute(query, exec_ctx->curr_proc->fn_readonly, limit);
@@ -403,7 +404,17 @@ PLy_spi_execute_fetch_result(SPITupleTable *tuptable, int rows, int status)
 		oldcontext = CurrentMemoryContext;
 		PG_TRY();
 		{
+			MemoryContext oldcontext2;
+
+			/*
+			 * Save tuple descriptor for later use by result set metadata
+			 * functions.  Save it in TopMemoryContext so that it survives
+			 * outside of an SPI context.  We trust that PLy_result_dealloc()
+			 * will clean it up when the time is right.
+			 */
+			oldcontext2 = MemoryContextSwitchTo(TopMemoryContext);
 			result->tupdesc = CreateTupleDescCopy(tuptable->tupdesc);
+			MemoryContextSwitchTo(oldcontext2);
 
 			if (rows)
 			{
@@ -445,22 +456,22 @@ PLy_spi_execute_fetch_result(SPITupleTable *tuptable, int rows, int status)
  *
  * Usage:
  *
- *  MemoryContext oldcontext = CurrentMemoryContext;
- *  ResourceOwner oldowner = CurrentResourceOwner;
+ *	MemoryContext oldcontext = CurrentMemoryContext;
+ *	ResourceOwner oldowner = CurrentResourceOwner;
  *
- *  PLy_spi_subtransaction_begin(oldcontext, oldowner);
- *  PG_TRY();
- *  {
- *      <call SPI functions>
- *      PLy_spi_subtransaction_commit(oldcontext, oldowner);
- *  }
- *  PG_CATCH();
- *  {
- *      <do cleanup>
- *      PLy_spi_subtransaction_abort(oldcontext, oldowner);
- *      return NULL;
- *  }
- *  PG_END_TRY();
+ *	PLy_spi_subtransaction_begin(oldcontext, oldowner);
+ *	PG_TRY();
+ *	{
+ *		<call SPI functions>
+ *		PLy_spi_subtransaction_commit(oldcontext, oldowner);
+ *	}
+ *	PG_CATCH();
+ *	{
+ *		<do cleanup>
+ *		PLy_spi_subtransaction_abort(oldcontext, oldowner);
+ *		return NULL;
+ *	}
+ *	PG_END_TRY();
  *
  * These utilities take care of restoring connection to the SPI manager and
  * setting a Python exception in case of an abort.
@@ -482,8 +493,8 @@ PLy_spi_subtransaction_commit(MemoryContext oldcontext, ResourceOwner oldowner)
 	CurrentResourceOwner = oldowner;
 
 	/*
-	 * AtEOSubXact_SPI() should not have popped any SPI context, but just
-	 * in case it did, make sure we remain connected.
+	 * AtEOSubXact_SPI() should not have popped any SPI context, but just in
+	 * case it did, make sure we remain connected.
 	 */
 	SPI_restore_connection();
 }
@@ -506,8 +517,8 @@ PLy_spi_subtransaction_abort(MemoryContext oldcontext, ResourceOwner oldowner)
 	CurrentResourceOwner = oldowner;
 
 	/*
-	 * If AtEOSubXact_SPI() popped any SPI context of the subxact, it will have
-	 * left us in a disconnected state.  We need this hack to return to
+	 * If AtEOSubXact_SPI() popped any SPI context of the subxact, it will
+	 * have left us in a disconnected state.  We need this hack to return to
 	 * connected state.
 	 */
 	SPI_restore_connection();

@@ -48,6 +48,7 @@ extern PGDLLIMPORT int NBuffers;
 extern bool zero_damaged_pages;
 extern int	bgwriter_lru_maxpages;
 extern double bgwriter_lru_multiplier;
+extern bool track_io_timing;
 extern int	target_prefetch_pages;
 
 /* in buf_init.c */
@@ -187,6 +188,7 @@ extern void FlushRelationBuffers(Relation rel);
 extern void FlushDatabaseBuffers(Oid dbid);
 extern void DropRelFileNodeBuffers(RelFileNodeBackend rnode,
 					   ForkNumber forkNum, BlockNumber firstDelBlock);
+extern void DropRelFileNodeAllBuffers(RelFileNodeBackend rnode);
 extern void DropDatabaseBuffers(Oid dbid);
 
 #define RelationGetNumberOfBlocks(reln) \

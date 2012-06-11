@@ -5,7 +5,7 @@
 #endif
 
 /*
- * Make sure _WIN32_WINNT has the minumum required value.
+ * Make sure _WIN32_WINNT has the minimum required value.
  * Leave a higher value in place.
 */
 #if defined(_WIN32_WINNT) && _WIN32_WINNT < 0x0501
@@ -319,7 +319,7 @@ typedef int pid_t;
 #define ECONNREFUSED WSAECONNREFUSED
 #define EOPNOTSUPP WSAEOPNOTSUPP
 #pragma warning(default:4005)
-#endif 
+#endif
 
 /*
  * Extended locale functions with gratuitous underscore prefixes.

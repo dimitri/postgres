@@ -543,9 +543,9 @@ AutoVacLauncherMain(int argc, char *argv[])
 	SetConfigOption("statement_timeout", "0", PGC_SUSET, PGC_S_OVERRIDE);
 
 	/*
-	 * Force default_transaction_isolation to READ COMMITTED.  We don't
-	 * want to pay the overhead of serializable mode, nor add any risk
-	 * of causing deadlocks or delaying other transactions.
+	 * Force default_transaction_isolation to READ COMMITTED.  We don't want
+	 * to pay the overhead of serializable mode, nor add any risk of causing
+	 * deadlocks or delaying other transactions.
 	 */
 	SetConfigOption("default_transaction_isolation", "read committed",
 					PGC_SUSET, PGC_S_OVERRIDE);
@@ -574,6 +574,7 @@ AutoVacLauncherMain(int argc, char *argv[])
 		TimestampTz current_time = 0;
 		bool		can_launch;
 		Dlelem	   *elem;
+		int			rc;
 
 		/*
 		 * This loop is a bit different from the normal use of WaitLatch,
@@ -592,9 +593,9 @@ AutoVacLauncherMain(int argc, char *argv[])
 		 * Wait until naptime expires or we get some type of signal (all the
 		 * signal handlers will wake us by calling SetLatch).
 		 */
-		WaitLatch(&MyProc->procLatch,
-				  WL_LATCH_SET | WL_TIMEOUT | WL_POSTMASTER_DEATH,
-				  (nap.tv_sec * 1000L) + (nap.tv_usec / 1000L));
+		rc = WaitLatch(&MyProc->procLatch,
+					   WL_LATCH_SET | WL_TIMEOUT | WL_POSTMASTER_DEATH,
+					   (nap.tv_sec * 1000L) + (nap.tv_usec / 1000L));
 
 		ResetLatch(&MyProc->procLatch);
 
@@ -604,7 +605,7 @@ AutoVacLauncherMain(int argc, char *argv[])
 		 * Emergency bailout if postmaster has died.  This is to avoid the
 		 * necessity for manual cleanup of all postmaster children.
 		 */
-		if (!PostmasterIsAlive())
+		if (rc & WL_POSTMASTER_DEATH)
 			proc_exit(1);
 
 		/* the normal shutdown case */
@@ -1552,9 +1553,9 @@ AutoVacWorkerMain(int argc, char *argv[])
 	SetConfigOption("statement_timeout", "0", PGC_SUSET, PGC_S_OVERRIDE);
 
 	/*
-	 * Force default_transaction_isolation to READ COMMITTED.  We don't
-	 * want to pay the overhead of serializable mode, nor add any risk
-	 * of causing deadlocks or delaying other transactions.
+	 * Force default_transaction_isolation to READ COMMITTED.  We don't want
+	 * to pay the overhead of serializable mode, nor add any risk of causing
+	 * deadlocks or delaying other transactions.
 	 */
 	SetConfigOption("default_transaction_isolation", "read committed",
 					PGC_SUSET, PGC_S_OVERRIDE);
@@ -2326,7 +2327,7 @@ do_autovacuum(void)
 						   tab->at_datname, tab->at_nspname, tab->at_relname);
 			EmitErrorReport();
 
-			/* this resets the PGPROC flags too */
+			/* this resets the PGXACT flags too */
 			AbortOutOfAnyTransaction();
 			FlushErrorState();
 			MemoryContextResetAndDeleteChildren(PortalContext);
@@ -2337,7 +2338,7 @@ do_autovacuum(void)
 		}
 		PG_END_TRY();
 
-		/* the PGPROC flags are reset at the next end of transaction */
+		/* the PGXACT flags are reset at the next end of transaction */
 
 		/* be tidy */
 deleted:

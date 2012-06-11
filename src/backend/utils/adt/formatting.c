@@ -1987,8 +1987,8 @@ static int
 adjust_partial_year_to_2020(int year)
 {
 	/*
-	 * Adjust all dates toward 2020;  this is effectively what happens
-	 * when we assume '70' is 1970 and '69' is 2069.
+	 * Adjust all dates toward 2020;  this is effectively what happens when we
+	 * assume '70' is 1970 and '69' is 2069.
 	 */
 	/* Force 0-69 into the 2000's */
 	if (year < 70)
@@ -2186,7 +2186,7 @@ from_char_parse_int_len(int *dest, char **src, const int len, FormatNode *node)
  * Don't call this function if the field differs in length from the format
  * keyword (as with HH24; the keyword length is 4, but the field length is 2).
  * In such cases, call from_char_parse_int_len() instead to specify the
- * required length explictly.
+ * required length explicitly.
  */
 static int
 from_char_parse_int(int *dest, char **src, FormatNode *node)
@@ -4485,7 +4485,7 @@ NUM_processor(FormatNode *node, NUMDesc *Num, char *inout, char *number,
 			 */
 			if (Np->last_relevant && Np->Num->zero_end > Np->num_pre)
 			{
-				char   *last_zero;
+				char	   *last_zero;
 
 				last_zero = Np->number + (Np->Num->zero_end - Np->num_pre);
 				if (Np->last_relevant < last_zero)

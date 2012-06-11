@@ -225,6 +225,7 @@ standard_planner(Query *parse, int cursorOptions, ParamListInfo boundParams)
 	result = makeNode(PlannedStmt);
 
 	result->commandType = parse->commandType;
+	result->queryId = parse->queryId;
 	result->hasReturning = (parse->returningList != NIL);
 	result->hasModifyingCTE = parse->hasModifyingCTE;
 	result->canSetTag = parse->canSetTag;
@@ -528,22 +529,10 @@ subquery_planner(PlannerGlobal *glob, Query *parse,
 			List	   *rowMarks;
 
 			/*
-			 * Deal with the RETURNING clause if any.  It's convenient to pass
-			 * the returningList through setrefs.c now rather than at top
-			 * level (if we waited, handling inherited UPDATE/DELETE would be
-			 * much harder).
+			 * Set up the RETURNING list-of-lists, if needed.
 			 */
 			if (parse->returningList)
-			{
-				List	   *rlist;
-
-				Assert(parse->resultRelation);
-				rlist = set_returning_clause_references(root,
-														parse->returningList,
-														plan,
-													  parse->resultRelation);
-				returningLists = list_make1(rlist);
-			}
+				returningLists = list_make1(parse->returningList);
 			else
 				returningLists = NIL;
 
@@ -777,9 +766,9 @@ inheritance_planner(PlannerInfo *root)
 
 		/*
 		 * The rowMarks list might contain references to subquery RTEs, so
-		 * make a copy that we can apply ChangeVarNodes to.  (Fortunately,
-		 * the executor doesn't need to see the modified copies --- we can
-		 * just pass it the original rowMarks list.)
+		 * make a copy that we can apply ChangeVarNodes to.  (Fortunately, the
+		 * executor doesn't need to see the modified copies --- we can just
+		 * pass it the original rowMarks list.)
 		 */
 		subroot.rowMarks = (List *) copyObject(root->rowMarks);
 
@@ -795,10 +784,11 @@ inheritance_planner(PlannerInfo *root)
 
 		/*
 		 * If this isn't the first child Query, generate duplicates of all
-		 * subquery RTEs, and adjust Var numbering to reference the duplicates.
-		 * To simplify the loop logic, we scan the original rtable not the
-		 * copy just made by adjust_appendrel_attrs; that should be OK since
-		 * subquery RTEs couldn't contain any references to the target rel.
+		 * subquery RTEs, and adjust Var numbering to reference the
+		 * duplicates. To simplify the loop logic, we scan the original rtable
+		 * not the copy just made by adjust_appendrel_attrs; that should be OK
+		 * since subquery RTEs couldn't contain any references to the target
+		 * rel.
 		 */
 		if (final_rtable != NIL)
 		{
@@ -811,7 +801,7 @@ inheritance_planner(PlannerInfo *root)
 
 				if (rte->rtekind == RTE_SUBQUERY)
 				{
-					Index	newrti;
+					Index		newrti;
 
 					/*
 					 * The RTE can't contain any references to its own RT
@@ -860,7 +850,7 @@ inheritance_planner(PlannerInfo *root)
 		else
 			final_rtable = list_concat(final_rtable,
 									   list_copy_tail(subroot.parse->rtable,
-													  list_length(final_rtable)));
+												 list_length(final_rtable)));
 
 		/*
 		 * We need to collect all the RelOptInfos from all child plans into
@@ -888,15 +878,8 @@ inheritance_planner(PlannerInfo *root)
 
 		/* Build list of per-relation RETURNING targetlists */
 		if (parse->returningList)
-		{
-			List	   *rlist;
-
-			rlist = set_returning_clause_references(&subroot,
-												subroot.parse->returningList,
-													subplan,
-													appinfo->child_relid);
-			returningLists = lappend(returningLists, rlist);
-		}
+			returningLists = lappend(returningLists,
+									 subroot.parse->returningList);
 	}
 
 	/* Mark result as unordered (probably unnecessary) */
@@ -1335,18 +1318,17 @@ grouping_planner(PlannerInfo *root, double tuple_fraction)
 				need_sort_for_grouping = true;
 
 				/*
-				 * Always override create_plan's tlist, so that we don't
-				 * sort useless data from a "physical" tlist.
+				 * Always override create_plan's tlist, so that we don't sort
+				 * useless data from a "physical" tlist.
 				 */
 				need_tlist_eval = true;
 			}
 
 			/*
-			 * create_plan returns a plan with just a "flat" tlist of
-			 * required Vars.  Usually we need to insert the sub_tlist as the
-			 * tlist of the top plan node.	However, we can skip that if we
-			 * determined that whatever create_plan chose to return will be
-			 * good enough.
+			 * create_plan returns a plan with just a "flat" tlist of required
+			 * Vars.  Usually we need to insert the sub_tlist as the tlist of
+			 * the top plan node.  However, we can skip that if we determined
+			 * that whatever create_plan chose to return will be good enough.
 			 */
 			if (need_tlist_eval)
 			{
@@ -1564,7 +1546,7 @@ grouping_planner(PlannerInfo *root, double tuple_fraction)
 			 *
 			 * Note: it's essential here to use PVC_INCLUDE_AGGREGATES so that
 			 * Vars mentioned only in aggregate expressions aren't pulled out
-			 * as separate targetlist entries.  Otherwise we could be putting
+			 * as separate targetlist entries.	Otherwise we could be putting
 			 * ungrouped Vars directly into an Agg node's tlist, resulting in
 			 * undefined behavior.
 			 */
@@ -2671,8 +2653,8 @@ make_subplanTargetList(PlannerInfo *root,
 	}
 
 	/*
-	 * Otherwise, we must build a tlist containing all grouping columns,
-	 * plus any other Vars mentioned in the targetlist and HAVING qual.
+	 * Otherwise, we must build a tlist containing all grouping columns, plus
+	 * any other Vars mentioned in the targetlist and HAVING qual.
 	 */
 	sub_tlist = NIL;
 	non_group_cols = NIL;
@@ -2723,8 +2705,8 @@ make_subplanTargetList(PlannerInfo *root,
 			else
 			{
 				/*
-				 * Non-grouping column, so just remember the expression
-				 * for later call to pull_var_clause.  There's no need for
+				 * Non-grouping column, so just remember the expression for
+				 * later call to pull_var_clause.  There's no need for
 				 * pull_var_clause to examine the TargetEntry node itself.
 				 */
 				non_group_cols = lappend(non_group_cols, tle->expr);
@@ -2751,7 +2733,7 @@ make_subplanTargetList(PlannerInfo *root,
 	 * add them to the result tlist if not already present.  (A Var used
 	 * directly as a GROUP BY item will be present already.)  Note this
 	 * includes Vars used in resjunk items, so we are covering the needs of
-	 * ORDER BY and window specifications.  Vars used within Aggrefs will be
+	 * ORDER BY and window specifications.	Vars used within Aggrefs will be
 	 * pulled out here, too.
 	 */
 	non_group_vars = pull_var_clause((Node *) non_group_cols,
@@ -3287,7 +3269,7 @@ plan_cluster_use_sort(Oid tableOid, Oid indexOid)
 	comparisonCost = 2.0 * (indexExprCost.startup + indexExprCost.per_tuple);
 
 	/* Estimate the cost of seq scan + sort */
-	seqScanPath = create_seqscan_path(root, rel);
+	seqScanPath = create_seqscan_path(root, rel, NULL);
 	cost_sort(&seqScanAndSortPath, root, NIL,
 			  seqScanPath->total_cost, rel->tuples, rel->width,
 			  comparisonCost, maintenance_work_mem, -1.0);

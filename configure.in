@@ -17,7 +17,7 @@ dnl Read the Autoconf manual for details.
 dnl
 m4_pattern_forbid(^PGAC_)dnl to catch undefined macros
 
-AC_INIT([PostgreSQL], [9.2devel], [pgsql-bugs@postgresql.org])
+AC_INIT([PostgreSQL], [9.2beta2], [pgsql-bugs@postgresql.org])
 
 m4_if(m4_defn([m4_PACKAGE_VERSION]), [2.63], [], [m4_fatal([Autoconf version 2.63 is required.
 Untested combinations of 'autoconf' and PostgreSQL versions are not
@@ -55,11 +55,9 @@ PGAC_ARG_REQ(with, template, [NAME], [override operating system template],
 
 case $host_os in
      aix*) template=aix ;;
-    bsdi*) template=bsdi ;;
   cygwin*) template=cygwin ;;
   darwin*) template=darwin ;;
 dragonfly*) template=netbsd ;;
-    dgux*) template=dgux ;;
  freebsd*) template=freebsd ;;
     hpux*) template=hpux ;;
     irix*) template=irix ;;
@@ -67,19 +65,11 @@ dragonfly*) template=netbsd ;;
            template=linux ;;
    mingw*) template=win32 ;;
   netbsd*) template=netbsd ;;
-nextstep*) template=nextstep ;;
  openbsd*) template=openbsd ;;
      osf*) template=osf ;;
      sco*) template=sco ;;
  solaris*) template=solaris ;;
-   sunos*) template=sunos4 ;;
- sysv4.2*)
-        case $host_vendor in
-          univel) template=univel ;;
-        esac ;;
-   sysv4*) template=svr4 ;;
    sysv5*) template=unixware ;;
-  ultrix*) template=ultrix4 ;;
 esac
 
   if test x"$template" = x"" ; then
@@ -205,7 +195,6 @@ AC_SUBST(enable_debug)
 #
 PGAC_ARG_BOOL(enable, profiling, no,
               [build with profiling enabled ])
-AC_SUBST(enable_profiling)
 
 #
 # --enable-coverage enables generation of code coverage metrics with gcov
@@ -231,9 +220,7 @@ AC_SUBST(enable_coverage)
 #
 PGAC_ARG_BOOL(enable, dtrace, no,
               [build with DTrace support],
-[AC_DEFINE([ENABLE_DTRACE], 1,
-           [Define to 1 to enable DTrace support. (--enable-dtrace)])
-AC_CHECK_PROGS(DTRACE, dtrace)
+[AC_CHECK_PROGS(DTRACE, dtrace)
 if test -z "$DTRACE"; then
   AC_MSG_ERROR([dtrace not found])
 fi
@@ -615,7 +602,6 @@ PGAC_ARG_BOOL(with, gssapi, no, [build with GSSAPI support],
   krb_srvtab="FILE:\$(sysconfdir)/krb5.keytab"
 ])
 AC_MSG_RESULT([$with_gssapi])
-AC_SUBST(with_gssapi)
 
 #
 # Kerberos 5
@@ -627,7 +613,6 @@ PGAC_ARG_BOOL(with, krb5, no, [build with Kerberos 5 support],
   krb_srvtab="FILE:\$(sysconfdir)/krb5.keytab"
 ])
 AC_MSG_RESULT([$with_krb5])
-AC_SUBST(with_krb5)
 
 
 AC_SUBST(krb_srvtab)
@@ -652,7 +637,6 @@ PGAC_ARG_BOOL(with, pam, no,
               [build with PAM support],
               [AC_DEFINE([USE_PAM], 1, [Define to 1 to build with PAM support. (--with-pam)])])
 AC_MSG_RESULT([$with_pam])
-AC_SUBST(with_pam)
 
 
 #
@@ -663,7 +647,6 @@ PGAC_ARG_BOOL(with, ldap, no,
               [build with LDAP support],
               [AC_DEFINE([USE_LDAP], 1, [Define to 1 to build with LDAP support. (--with-ldap)])])
 AC_MSG_RESULT([$with_ldap])
-AC_SUBST(with_ldap)
 
 
 #
@@ -674,7 +657,6 @@ PGAC_ARG_BOOL(with, bonjour, no,
               [build with Bonjour support],
               [AC_DEFINE([USE_BONJOUR], 1, [Define to 1 to build with Bonjour support. (--with-bonjour)])])
 AC_MSG_RESULT([$with_bonjour])
-AC_SUBST(with_bonjour)
 
 
 #
@@ -987,7 +969,7 @@ AC_SUBST(OSSP_UUID_LIBS)
 ##
 
 dnl sys/socket.h is required by AC_FUNC_ACCEPT_ARGTYPES
-AC_CHECK_HEADERS([crypt.h dld.h fp_class.h getopt.h ieeefp.h ifaddrs.h langinfo.h poll.h pwd.h sys/ioctl.h sys/ipc.h sys/poll.h sys/pstat.h sys/resource.h sys/select.h sys/sem.h sys/shm.h sys/socket.h sys/sockio.h sys/tas.h sys/time.h sys/ucred.h sys/un.h termios.h ucred.h utime.h wchar.h wctype.h kernel/OS.h kernel/image.h SupportDefs.h])
+AC_CHECK_HEADERS([crypt.h dld.h fp_class.h getopt.h ieeefp.h ifaddrs.h langinfo.h poll.h pwd.h sys/ioctl.h sys/ipc.h sys/poll.h sys/pstat.h sys/resource.h sys/select.h sys/sem.h sys/shm.h sys/socket.h sys/sockio.h sys/tas.h sys/time.h sys/ucred.h sys/un.h termios.h ucred.h utime.h wchar.h wctype.h])
 
 # On BSD, cpp test for net/if.h will fail unless sys/socket.h
 # is included first.
@@ -1062,7 +1044,6 @@ fi
 if test "$with_openssl" = yes ; then
   AC_CHECK_HEADER(openssl/ssl.h, [], [AC_MSG_ERROR([header file <openssl/ssl.h> is required for OpenSSL])])
   AC_CHECK_HEADER(openssl/err.h, [], [AC_MSG_ERROR([header file <openssl/err.h> is required for OpenSSL])])
-  AC_CHECK_FUNCS([ERR_set_mark])
 fi
 
 if test "$with_pam" = yes ; then
@@ -1216,13 +1197,13 @@ PGAC_VAR_INT_TIMEZONE
 AC_FUNC_ACCEPT_ARGTYPES
 PGAC_FUNC_GETTIMEOFDAY_1ARG
 
-AC_CHECK_FUNCS([cbrt dlopen fcvt fdatasync getifaddrs getpeerucred getrlimit memmove poll pstat readlink setproctitle setsid sigprocmask symlink sysconf towlower utime utimes waitpid wcstombs wcstombs_l])
+AC_CHECK_FUNCS([cbrt dlopen fdatasync getifaddrs getpeerucred getrlimit memmove poll pstat readlink setproctitle setsid sigprocmask symlink towlower utime utimes waitpid wcstombs wcstombs_l])
 
 AC_REPLACE_FUNCS(fseeko)
 case $host_os in
-	# BSD/OS & NetBSD use a custom fseeko/ftello built on fsetpos/fgetpos
+	# NetBSD uses a custom fseeko/ftello built on fsetpos/fgetpos
 	# Mingw uses macros to access Win32 API calls
-	bsdi*|netbsd*|mingw*)
+	netbsd*|mingw*)
 		AC_DEFINE(HAVE_FSEEKO, 1, [Define to 1 because replacement version used.])
 		ac_cv_func_fseeko=yes;;
 	*)
@@ -1335,7 +1316,7 @@ fi
 pgac_save_LIBS="$LIBS"
 LIBS=`echo "$LIBS" | sed -e 's/-ledit//g' -e 's/-lreadline//g'`
 
-AC_REPLACE_FUNCS([crypt fls getopt getrusage inet_aton random rint srandom strdup strerror strlcat strlcpy strtol strtoul])
+AC_REPLACE_FUNCS([crypt fls getopt getrusage inet_aton random rint srandom strerror strlcat strlcpy])
 
 case $host_os in
 
@@ -1735,10 +1716,7 @@ AC_DEFINE_UNQUOTED(MAXIMUM_ALIGNOF, $MAX_ALIGNOF, [Define as the maximum alignme
 # Some platforms predefine the types int8, int16, etc.  Only check
 # a (hopefully) representative subset.
 AC_CHECK_TYPES([int8, uint8, int64, uint64], [], [],
-[#include <stdio.h>
-#ifdef HAVE_SUPPORTDEFS_H
-#include <SupportDefs.h>
-#endif])
+[#include <stdio.h>])
 
 # We also check for sig_atomic_t, which *should* be defined per ANSI
 # C, but is missing on some old platforms.

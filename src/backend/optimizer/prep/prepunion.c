@@ -150,9 +150,9 @@ plan_set_operations(PlannerInfo *root, double tuple_fraction,
 	Assert(parse->distinctClause == NIL);
 
 	/*
-	 * We'll need to build RelOptInfos for each of the leaf subqueries,
-	 * which are RTE_SUBQUERY rangetable entries in this Query.  Prepare the
-	 * index arrays for that.
+	 * We'll need to build RelOptInfos for each of the leaf subqueries, which
+	 * are RTE_SUBQUERY rangetable entries in this Query.  Prepare the index
+	 * arrays for that.
 	 */
 	setup_simple_rel_arrays(root);
 
@@ -1778,6 +1778,9 @@ adjust_appendrel_attrs_mutator(Node *node,
 		newinfo->required_relids = adjust_relid_set(oldinfo->required_relids,
 													appinfo->parent_relid,
 													appinfo->child_relid);
+		newinfo->outer_relids = adjust_relid_set(oldinfo->outer_relids,
+												 appinfo->parent_relid,
+												 appinfo->child_relid);
 		newinfo->nullable_relids = adjust_relid_set(oldinfo->nullable_relids,
 													appinfo->parent_relid,
 													appinfo->child_relid);

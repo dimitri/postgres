@@ -223,7 +223,7 @@ canonicalize_pathkeys(PlannerInfo *root, List *pathkeys)
  *
  * If rel is not NULL, it identifies a specific relation we're considering
  * a path for, and indicates that child EC members for that relation can be
- * considered.  Otherwise child members are ignored.  (See the comments for
+ * considered.	Otherwise child members are ignored.  (See the comments for
  * get_eclass_for_sort_expr.)
  *
  * create_it is TRUE if we should create any missing EquivalenceClass
@@ -439,7 +439,7 @@ get_cheapest_path_for_pathkeys(List *paths, List *pathkeys,
 			continue;
 
 		if (pathkeys_contained_in(pathkeys, path->pathkeys) &&
-			bms_is_subset(path->required_outer, required_outer))
+			bms_is_subset(PATH_REQ_OUTER(path), required_outer))
 			matched_path = path;
 	}
 	return matched_path;
@@ -481,7 +481,7 @@ get_cheapest_fractional_path_for_pathkeys(List *paths,
 			continue;
 
 		if (pathkeys_contained_in(pathkeys, path->pathkeys) &&
-			bms_is_subset(path->required_outer, required_outer))
+			bms_is_subset(PATH_REQ_OUTER(path), required_outer))
 			matched_path = path;
 	}
 	return matched_path;

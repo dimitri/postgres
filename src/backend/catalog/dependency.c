@@ -176,9 +176,9 @@ static void reportDependentObjects(const ObjectAddresses *targetObjects,
 					   int msglevel,
 					   const ObjectAddress *origObject);
 static void deleteOneObject(const ObjectAddress *object,
-							Relation depRel, int32 flags);
-static void doDeletion(const ObjectAddress *object);
-static void AcquireDeletionLock(const ObjectAddress *object);
+				Relation depRel, int32 flags);
+static void doDeletion(const ObjectAddress *object, int flags);
+static void AcquireDeletionLock(const ObjectAddress *object, int flags);
 static void ReleaseDeletionLock(const ObjectAddress *object);
 static bool find_expr_references_walker(Node *node,
 							find_expr_references_context *context);
@@ -236,7 +236,7 @@ performDeletion(const ObjectAddress *object,
 	 * Acquire deletion lock on the target object.	(Ideally the caller has
 	 * done this already, but many places are sloppy about it.)
 	 */
-	AcquireDeletionLock(object);
+	AcquireDeletionLock(object, 0);
 
 	/*
 	 * Construct a list of objects to delete (ie, the given object plus
@@ -320,7 +320,7 @@ performMultipleDeletions(const ObjectAddresses *objects,
 		 * Acquire deletion lock on each target object.  (Ideally the caller
 		 * has done this already, but many places are sloppy about it.)
 		 */
-		AcquireDeletionLock(thisobj);
+		AcquireDeletionLock(thisobj, flags);
 
 		findDependentObjects(thisobj,
 							 DEPFLAG_ORIGINAL,
@@ -354,7 +354,12 @@ performMultipleDeletions(const ObjectAddresses *objects,
 	/* And clean up */
 	free_object_addresses(targetObjects);
 
-	heap_close(depRel, RowExclusiveLock);
+	/*
+	 * We closed depRel earlier in deleteOneObject if doing a drop
+	 * concurrently
+	 */
+	if ((flags & PERFORM_DELETION_CONCURRENTLY) != PERFORM_DELETION_CONCURRENTLY)
+		heap_close(depRel, RowExclusiveLock);
 }
 
 /*
@@ -384,7 +389,7 @@ deleteWhatDependsOn(const ObjectAddress *object,
 	 * Acquire deletion lock on the target object.	(Ideally the caller has
 	 * done this already, but many places are sloppy about it.)
 	 */
-	AcquireDeletionLock(object);
+	AcquireDeletionLock(object, 0);
 
 	/*
 	 * Construct a list of objects to delete (ie, the given object plus
@@ -423,7 +428,7 @@ deleteWhatDependsOn(const ObjectAddress *object,
 		 * Since this function is currently only used to clean out temporary
 		 * schemas, we pass PERFORM_DELETION_INTERNAL here, indicating that
 		 * the operation is an automatic system operation rather than a user
-		 * action.  If, in the future, this function is used for other
+		 * action.	If, in the future, this function is used for other
 		 * purposes, we might need to revisit this.
 		 */
 		deleteOneObject(thisobj, depRel, PERFORM_DELETION_INTERNAL);
@@ -513,12 +518,12 @@ findDependentObjects(const ObjectAddress *object,
 	/*
 	 * The target object might be internally dependent on some other object
 	 * (its "owner"), and/or be a member of an extension (also considered its
-	 * owner).  If so, and if we aren't recursing from the owning object, we
+	 * owner).	If so, and if we aren't recursing from the owning object, we
 	 * have to transform this deletion request into a deletion request of the
 	 * owning object.  (We'll eventually recurse back to this object, but the
-	 * owning object has to be visited first so it will be deleted after.)
-	 * The way to find out about this is to scan the pg_depend entries that
-	 * show what this object depends on.
+	 * owning object has to be visited first so it will be deleted after.) The
+	 * way to find out about this is to scan the pg_depend entries that show
+	 * what this object depends on.
 	 */
 	ScanKeyInit(&key[0],
 				Anum_pg_depend_classid,
@@ -576,7 +581,7 @@ findDependentObjects(const ObjectAddress *object,
 					/*
 					 * Exception 1a: if the owning object is listed in
 					 * pendingObjects, just release the caller's lock and
-					 * return.  We'll eventually complete the DROP when we
+					 * return.	We'll eventually complete the DROP when we
 					 * reach that entry in the pending list.
 					 */
 					if (pendingObjects &&
@@ -592,8 +597,8 @@ findDependentObjects(const ObjectAddress *object,
 					 * Exception 1b: if the owning object is the extension
 					 * currently being created/altered, it's okay to continue
 					 * with the deletion.  This allows dropping of an
-					 * extension's objects within the extension's scripts,
-					 * as well as corner cases such as dropping a transient
+					 * extension's objects within the extension's scripts, as
+					 * well as corner cases such as dropping a transient
 					 * object created within such a script.
 					 */
 					if (creating_extension &&
@@ -617,8 +622,8 @@ findDependentObjects(const ObjectAddress *object,
 				 * it's okay to continue with the deletion.  This holds when
 				 * recursing from a whole object that includes the nominal
 				 * other end as a component, too.  Since there can be more
-				 * than one "owning" object, we have to allow matches that
-				 * are more than one level down in the stack.
+				 * than one "owning" object, we have to allow matches that are
+				 * more than one level down in the stack.
 				 */
 				if (stack_address_present_add_flags(&otherObject, 0, stack))
 					break;
@@ -629,12 +634,12 @@ findDependentObjects(const ObjectAddress *object,
 				 * owning object.
 				 *
 				 * First, release caller's lock on this object and get
-				 * deletion lock on the owning object.  (We must release
+				 * deletion lock on the owning object.	(We must release
 				 * caller's lock to avoid deadlock against a concurrent
 				 * deletion of the owning object.)
 				 */
 				ReleaseDeletionLock(object);
-				AcquireDeletionLock(&otherObject);
+				AcquireDeletionLock(&otherObject, 0);
 
 				/*
 				 * The owning object might have been deleted while we waited
@@ -729,7 +734,7 @@ findDependentObjects(const ObjectAddress *object,
 		/*
 		 * Must lock the dependent object before recursing to it.
 		 */
-		AcquireDeletionLock(&otherObject);
+		AcquireDeletionLock(&otherObject, 0);
 
 		/*
 		 * The dependent object might have been deleted while we waited to
@@ -998,7 +1003,8 @@ deleteOneObject(const ObjectAddress *object, Relation depRel, int flags)
 	/* DROP hook of the objects being removed */
 	if (object_access_hook)
 	{
-		ObjectAccessDrop	drop_arg;
+		ObjectAccessDrop drop_arg;
+
 		drop_arg.dropflags = flags;
 		InvokeObjectAccessHook(OAT_DROP, object->classId, object->objectId,
 							   object->objectSubId, &drop_arg);
@@ -1048,9 +1054,16 @@ deleteOneObject(const ObjectAddress *object, Relation depRel, int flags)
 									 object->objectSubId);
 
 	/*
+	 * Close depRel if we are doing a drop concurrently because it commits the
+	 * transaction, so we don't want dangling references.
+	 */
+	if ((flags & PERFORM_DELETION_CONCURRENTLY) == PERFORM_DELETION_CONCURRENTLY)
+		heap_close(depRel, RowExclusiveLock);
+
+	/*
 	 * Now delete the object itself, in an object-type-dependent way.
 	 */
-	doDeletion(object);
+	doDeletion(object, flags);
 
 	/*
 	 * Delete any comments or security labels associated with this object.
@@ -1075,7 +1088,7 @@ deleteOneObject(const ObjectAddress *object, Relation depRel, int flags)
  * doDeletion: actually delete a single object
  */
 static void
-doDeletion(const ObjectAddress *object)
+doDeletion(const ObjectAddress *object, int flags)
 {
 	switch (getObjectClass(object))
 	{
@@ -1085,8 +1098,11 @@ doDeletion(const ObjectAddress *object)
 
 				if (relKind == RELKIND_INDEX)
 				{
+					bool		concurrent = ((flags & PERFORM_DELETION_CONCURRENTLY)
+										   == PERFORM_DELETION_CONCURRENTLY);
+
 					Assert(object->objectSubId == 0);
-					index_drop(object->objectId);
+					index_drop(object->objectId, concurrent);
 				}
 				else
 				{
@@ -1226,10 +1242,15 @@ doDeletion(const ObjectAddress *object)
  * shared-across-databases object, so we have no need for LockSharedObject.
  */
 static void
-AcquireDeletionLock(const ObjectAddress *object)
+AcquireDeletionLock(const ObjectAddress *object, int flags)
 {
 	if (object->classId == RelationRelationId)
-		LockRelationOid(object->objectId, AccessExclusiveLock);
+	{
+		if ((flags & PERFORM_DELETION_CONCURRENTLY) == PERFORM_DELETION_CONCURRENTLY)
+			LockRelationOid(object->objectId, ShareUpdateExclusiveLock);
+		else
+			LockRelationOid(object->objectId, AccessExclusiveLock);
+	}
 	else
 		/* assume we should lock the whole object not a sub-object */
 		LockDatabaseObject(object->classId, object->objectId, 0,

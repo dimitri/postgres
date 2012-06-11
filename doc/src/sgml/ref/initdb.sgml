@@ -24,9 +24,11 @@ PostgreSQL documentation
    <command>initdb</command>
    <arg rep="repeat"><replaceable>option</replaceable></arg>
    <group choice="plain">
-    <arg>--pgdata</arg>
-    <arg>-D </arg>
-    <replaceable>directory</replaceable>
+    <group choice="opt">
+     <arg choice="plain"><option>--pgdata</option></arg>
+     <arg choice="plain"><option>-D</option></arg>
+    </group>
+    <replaceable> directory</replaceable>
    </group>
   </cmdsynopsis>
  </refsynopsisdiv>
@@ -228,6 +230,7 @@ PostgreSQL documentation
      </varlistentry>
 
      <varlistentry>
+      <term><option>-T <replaceable>CFG</></option></term>
       <term><option>--text-search-config=<replaceable>CFG</></option></term>
       <listitem>
        <para>
@@ -281,7 +284,7 @@ PostgreSQL documentation
    </para>
 
    <para>
-    Other, less commonly used, parameters are also available:
+    Other, less commonly used, options are also available:
 
     <variablelist>
      <varlistentry>

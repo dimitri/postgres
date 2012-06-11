@@ -2316,6 +2316,34 @@ Indexes:
     "concur_index5" btree (f2) WHERE f1 = 'x'::text
     "std_index" btree (f2)
 
+--
+-- Try some concurrent index drops
+--
+DROP INDEX CONCURRENTLY "concur_index2";				-- works
+DROP INDEX CONCURRENTLY IF EXISTS "concur_index2";		-- notice
+ERROR:  index "concur_index2" does not exist
+-- failures
+DROP INDEX CONCURRENTLY "concur_index2", "concur_index3";
+ERROR:  DROP INDEX CONCURRENTLY does not support dropping multiple objects
+BEGIN;
+DROP INDEX CONCURRENTLY "concur_index5";
+ERROR:  DROP INDEX CONCURRENTLY cannot run inside a transaction block
+ROLLBACK;
+-- successes
+DROP INDEX CONCURRENTLY IF EXISTS "concur_index3";
+DROP INDEX CONCURRENTLY "concur_index4";
+DROP INDEX CONCURRENTLY "concur_index5";
+DROP INDEX CONCURRENTLY "concur_index1";
+DROP INDEX CONCURRENTLY "concur_heap_expr_idx";
+\d concur_heap
+Table "public.concur_heap"
+ Column | Type | Modifiers 
+--------+------+-----------
+ f1     | text | 
+ f2     | text | 
+Indexes:
+    "std_index" btree (f2)
+
 DROP TABLE concur_heap;
 --
 -- Test ADD CONSTRAINT USING INDEX
@@ -2572,26 +2600,79 @@ RESET enable_indexscan;
 RESET enable_bitmapscan;
 DROP TABLE onek_with_null;
 --
+-- Check bitmap index path planning
+--
+EXPLAIN (COSTS OFF)
+SELECT * FROM tenk1
+  WHERE thousand = 42 AND (tenthous = 1 OR tenthous = 3 OR tenthous = 42);
+                                                               QUERY PLAN                                                                
+-----------------------------------------------------------------------------------------------------------------------------------------
+ Bitmap Heap Scan on tenk1
+   Recheck Cond: (((thousand = 42) AND (tenthous = 1)) OR ((thousand = 42) AND (tenthous = 3)) OR ((thousand = 42) AND (tenthous = 42)))
+   ->  BitmapOr
+         ->  Bitmap Index Scan on tenk1_thous_tenthous
+               Index Cond: ((thousand = 42) AND (tenthous = 1))
+         ->  Bitmap Index Scan on tenk1_thous_tenthous
+               Index Cond: ((thousand = 42) AND (tenthous = 3))
+         ->  Bitmap Index Scan on tenk1_thous_tenthous
+               Index Cond: ((thousand = 42) AND (tenthous = 42))
+(9 rows)
+
+SELECT * FROM tenk1
+  WHERE thousand = 42 AND (tenthous = 1 OR tenthous = 3 OR tenthous = 42);
+ unique1 | unique2 | two | four | ten | twenty | hundred | thousand | twothousand | fivethous | tenthous | odd | even | stringu1 | stringu2 | string4 
+---------+---------+-----+------+-----+--------+---------+----------+-------------+-----------+----------+-----+------+----------+----------+---------
+      42 |    5530 |   0 |    2 |   2 |      2 |      42 |       42 |          42 |        42 |       42 |  84 |   85 | QBAAAA   | SEIAAA   | OOOOxx
+(1 row)
+
+EXPLAIN (COSTS OFF)
+SELECT count(*) FROM tenk1
+  WHERE hundred = 42 AND (thousand = 42 OR thousand = 99);
+                                   QUERY PLAN                                    
+---------------------------------------------------------------------------------
+ Aggregate
+   ->  Bitmap Heap Scan on tenk1
+         Recheck Cond: ((hundred = 42) AND ((thousand = 42) OR (thousand = 99)))
+         ->  BitmapAnd
+               ->  Bitmap Index Scan on tenk1_hundred
+                     Index Cond: (hundred = 42)
+               ->  BitmapOr
+                     ->  Bitmap Index Scan on tenk1_thous_tenthous
+                           Index Cond: (thousand = 42)
+                     ->  Bitmap Index Scan on tenk1_thous_tenthous
+                           Index Cond: (thousand = 99)
+(11 rows)
+
+SELECT count(*) FROM tenk1
+  WHERE hundred = 42 AND (thousand = 42 OR thousand = 99);
+ count 
+-------
+    10
+(1 row)
+
+--
 -- Check behavior with duplicate index column contents
 --
 CREATE TABLE dupindexcols AS
   SELECT unique1 as id, stringu2::text as f1 FROM tenk1;
 CREATE INDEX dupindexcols_i ON dupindexcols (f1, id, f1 text_pattern_ops);
-VACUUM ANALYZE dupindexcols;
+ANALYZE dupindexcols;
 EXPLAIN (COSTS OFF)
   SELECT count(*) FROM dupindexcols
-    WHERE f1 > 'MA' and id < 1000 and f1 ~<~ 'YX';
-                                   QUERY PLAN                                    
----------------------------------------------------------------------------------
+    WHERE f1 > 'WA' and id < 1000 and f1 ~<~ 'YX';
+                                      QUERY PLAN                                       
+---------------------------------------------------------------------------------------
  Aggregate
-   ->  Index Only Scan using dupindexcols_i on dupindexcols
-         Index Cond: ((f1 > 'MA'::text) AND (id < 1000) AND (f1 ~<~ 'YX'::text))
-(3 rows)
+   ->  Bitmap Heap Scan on dupindexcols
+         Recheck Cond: ((f1 > 'WA'::text) AND (id < 1000) AND (f1 ~<~ 'YX'::text))
+         ->  Bitmap Index Scan on dupindexcols_i
+               Index Cond: ((f1 > 'WA'::text) AND (id < 1000) AND (f1 ~<~ 'YX'::text))
+(5 rows)
 
 SELECT count(*) FROM dupindexcols
-  WHERE f1 > 'MA' and id < 1000 and f1 ~<~ 'YX';
+  WHERE f1 > 'WA' and id < 1000 and f1 ~<~ 'YX';
  count 
 -------
-   497
+    97
 (1 row)
 

@@ -390,6 +390,32 @@ GetCurrentTransactionIdIfAny(void)
 	return CurrentTransactionState->transactionId;
 }
 
+/*
+ *	GetStableLatestTransactionId
+ *
+ * Get the transaction's XID if it has one, else read the next-to-be-assigned
+ * XID.  Once we have a value, return that same value for the remainder of the
+ * current transaction.  This is meant to provide the reference point for the
+ * age(xid) function, but might be useful for other maintenance tasks as well.
+ */
+TransactionId
+GetStableLatestTransactionId(void)
+{
+	static LocalTransactionId lxid = InvalidLocalTransactionId;
+	static TransactionId stablexid = InvalidTransactionId;
+
+	if (lxid != MyProc->lxid)
+	{
+		lxid = MyProc->lxid;
+		stablexid = GetTopTransactionIdIfAny();
+		if (!TransactionIdIsValid(stablexid))
+			stablexid = ReadNewTransactionId();
+	}
+
+	Assert(TransactionIdIsValid(stablexid));
+
+	return stablexid;
+}
 
 /*
  * AssignTransactionId
@@ -993,6 +1019,7 @@ RecordTransactionCommit(void)
 			XLogRecData rdata[4];
 			int			lastrdata = 0;
 			xl_xact_commit xlrec;
+
 			/*
 			 * Set flags required for recovery processing of commits.
 			 */
@@ -1047,7 +1074,8 @@ RecordTransactionCommit(void)
 		{
 			XLogRecData rdata[2];
 			int			lastrdata = 0;
-			xl_xact_commit_compact	xlrec;
+			xl_xact_commit_compact xlrec;
+
 			xlrec.xact_time = xactStopTimestamp;
 			xlrec.nsubxacts = nchildren;
 			rdata[0].data = (char *) (&xlrec);
@@ -1168,7 +1196,8 @@ RecordTransactionCommit(void)
 	 * Note that at this stage we have marked clog, but still show as running
 	 * in the procarray and continue to hold locks.
 	 */
-	SyncRepWaitForLSN(XactLastRecEnd);
+	if (wrote_xlog)
+		SyncRepWaitForLSN(XactLastRecEnd);
 
 	/* Reset XactLastRecEnd until the next transaction writes something */
 	XactLastRecEnd.xrecoff = 0;
@@ -2075,7 +2104,7 @@ PrepareTransaction(void)
 	if (XactHasExportedSnapshots())
 		ereport(ERROR,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				 errmsg("cannot PREPARE a transaction that has exported snapshots")));
+		errmsg("cannot PREPARE a transaction that has exported snapshots")));
 
 	/* Prevent cancel/die interrupt while cleaning up */
 	HOLD_INTERRUPTS();
@@ -2258,7 +2287,7 @@ AbortTransaction(void)
 	 * Also clean up any open wait for lock, since the lock manager will choke
 	 * if we try to wait for another lock before doing this.
 	 */
-	LockWaitCancel();
+	LockErrorCleanup();
 
 	/*
 	 * check the current transaction state
@@ -2575,10 +2604,10 @@ CommitTransactionCommand(void)
 			break;
 
 			/*
-			 * We were issued a RELEASE command, so we end the
-			 * current subtransaction and return to the parent transaction.
-			 * The parent might be ended too, so repeat till we find an
-			 * INPROGRESS transaction or subtransaction.
+			 * We were issued a RELEASE command, so we end the current
+			 * subtransaction and return to the parent transaction. The parent
+			 * might be ended too, so repeat till we find an INPROGRESS
+			 * transaction or subtransaction.
 			 */
 		case TBLOCK_SUBRELEASE:
 			do
@@ -2596,9 +2625,9 @@ CommitTransactionCommand(void)
 			 * hierarchy and perform final commit. We do this by rolling up
 			 * any subtransactions into their parent, which leads to O(N^2)
 			 * operations with respect to resource owners - this isn't that
-			 * bad until we approach a thousands of savepoints but is necessary
-			 * for correctness should after triggers create new resource
-			 * owners.
+			 * bad until we approach a thousands of savepoints but is
+			 * necessary for correctness should after triggers create new
+			 * resource owners.
 			 */
 		case TBLOCK_SUBCOMMIT:
 			do
@@ -3836,7 +3865,24 @@ AbortOutOfAnyTransaction(void)
 		switch (s->blockState)
 		{
 			case TBLOCK_DEFAULT:
-				/* Not in a transaction, do nothing */
+				if (s->state == TRANS_DEFAULT)
+				{
+					/* Not in a transaction, do nothing */
+				}
+				else
+				{
+					/*
+					 * We can get here after an error during transaction start
+					 * (state will be TRANS_START).  Need to clean up the
+					 * incompletely started transaction.  First, adjust the
+					 * low-level state to suppress warning message from
+					 * AbortTransaction.
+					 */
+					if (s->state == TRANS_START)
+						s->state = TRANS_INPROGRESS;
+					AbortTransaction();
+					CleanupTransaction();
+				}
 				break;
 			case TBLOCK_STARTED:
 			case TBLOCK_BEGIN:
@@ -4143,7 +4189,7 @@ AbortSubTransaction(void)
 	AbortBufferIO();
 	UnlockBuffers();
 
-	LockWaitCancel();
+	LockErrorCleanup();
 
 	/*
 	 * check the current transaction state
@@ -4507,11 +4553,11 @@ xactGetCommittedChildren(TransactionId **ptr)
  */
 static void
 xact_redo_commit_internal(TransactionId xid, XLogRecPtr lsn,
-					TransactionId *sub_xids, int nsubxacts,
-					SharedInvalidationMessage *inval_msgs, int nmsgs,
-					RelFileNode *xnodes, int nrels,
-					Oid dbId, Oid tsId,
-					uint32 xinfo)
+						  TransactionId *sub_xids, int nsubxacts,
+						  SharedInvalidationMessage *inval_msgs, int nmsgs,
+						  RelFileNode *xnodes, int nrels,
+						  Oid dbId, Oid tsId,
+						  uint32 xinfo)
 {
 	TransactionId max_xid;
 	int			i;
@@ -4594,10 +4640,8 @@ xact_redo_commit_internal(TransactionId xid, XLogRecPtr lsn,
 		ForkNumber	fork;
 
 		for (fork = 0; fork <= MAX_FORKNUM; fork++)
-		{
 			XLogDropRelation(xnodes[i], fork);
-			smgrdounlink(srel, fork, true);
-		}
+		smgrdounlink(srel, true);
 		smgrclose(srel);
 	}
 
@@ -4617,12 +4661,13 @@ xact_redo_commit_internal(TransactionId xid, XLogRecPtr lsn,
 		XLogFlush(lsn);
 
 }
+
 /*
  * Utility function to call xact_redo_commit_internal after breaking down xlrec
  */
 static void
 xact_redo_commit(xl_xact_commit *xlrec,
-							TransactionId xid, XLogRecPtr lsn)
+				 TransactionId xid, XLogRecPtr lsn)
 {
 	TransactionId *subxacts;
 	SharedInvalidationMessage *inval_msgs;
@@ -4633,11 +4678,11 @@ xact_redo_commit(xl_xact_commit *xlrec,
 	inval_msgs = (SharedInvalidationMessage *) &(subxacts[xlrec->nsubxacts]);
 
 	xact_redo_commit_internal(xid, lsn, subxacts, xlrec->nsubxacts,
-								inval_msgs, xlrec->nmsgs,
-								xlrec->xnodes, xlrec->nrels,
-								xlrec->dbId,
-								xlrec->tsId,
-								xlrec->xinfo);
+							  inval_msgs, xlrec->nmsgs,
+							  xlrec->xnodes, xlrec->nrels,
+							  xlrec->dbId,
+							  xlrec->tsId,
+							  xlrec->xinfo);
 }
 
 /*
@@ -4645,14 +4690,14 @@ xact_redo_commit(xl_xact_commit *xlrec,
  */
 static void
 xact_redo_commit_compact(xl_xact_commit_compact *xlrec,
-							TransactionId xid, XLogRecPtr lsn)
+						 TransactionId xid, XLogRecPtr lsn)
 {
 	xact_redo_commit_internal(xid, lsn, xlrec->subxacts, xlrec->nsubxacts,
-								NULL, 0,		/* inval msgs */
-								NULL, 0,		/* relfilenodes */
-								InvalidOid,		/* dbId */
-								InvalidOid,		/* tsId */
-								0);				/* xinfo */
+							  NULL, 0,	/* inval msgs */
+							  NULL, 0,	/* relfilenodes */
+							  InvalidOid,		/* dbId */
+							  InvalidOid,		/* tsId */
+							  0);		/* xinfo */
 }
 
 /*
@@ -4734,10 +4779,8 @@ xact_redo_abort(xl_xact_abort *xlrec, TransactionId xid)
 		ForkNumber	fork;
 
 		for (fork = 0; fork <= MAX_FORKNUM; fork++)
-		{
 			XLogDropRelation(xlrec->xnodes[i], fork);
-			smgrdounlink(srel, fork, true);
-		}
+		smgrdounlink(srel, true);
 		smgrclose(srel);
 	}
 }

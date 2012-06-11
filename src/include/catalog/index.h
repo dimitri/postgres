@@ -64,7 +64,7 @@ extern void index_constraint_create(Relation heapRelation,
 						bool update_pgindex,
 						bool allow_system_table_mods);
 
-extern void index_drop(Oid indexId);
+extern void index_drop(Oid indexId, bool concurrent);
 
 extern IndexInfo *BuildIndexInfo(Relation index);
 
@@ -101,6 +101,6 @@ extern bool reindex_relation(Oid relid, int flags, EventContext evt);
 
 extern bool ReindexIsProcessingHeap(Oid heapOid);
 extern bool ReindexIsProcessingIndex(Oid indexOid);
-extern Oid IndexGetRelation(Oid indexId, bool missing_ok);
+extern Oid	IndexGetRelation(Oid indexId, bool missing_ok);
 
 #endif   /* INDEX_H */

@@ -48,7 +48,6 @@ typedef enum _archiveFormat
 {
 	archUnknown = 0,
 	archCustom = 1,
-	archFiles = 2,
 	archTar = 3,
 	archNull = 4,
 	archDirectory = 5
@@ -68,14 +67,6 @@ typedef enum _teSection
 	SECTION_DATA,				/* TABLE DATA, BLOBS, BLOB COMMENTS */
 	SECTION_POST_DATA			/* stuff to be processed after data */
 } teSection;
-
-typedef enum
-{
-	DUMP_PRE_DATA = 0x01,
-	DUMP_DATA = 0x02,
-	DUMP_POST_DATA = 0x04,
-	DUMP_UNSECTIONED = 0xff
-} DumpSections;
 
 /*
  *	We may want to have some more user-readable data, but in the mean
@@ -115,11 +106,11 @@ typedef struct _restoreOptions
 	int			no_security_labels;		/* Skip security label entries */
 	char	   *superuser;		/* Username to use as superuser */
 	char	   *use_role;		/* Issue SET ROLE to this */
-	int			dataOnly;
 	int			dropSchema;
 	const char *filename;
+	int			dataOnly;
 	int			schemaOnly;
-	int         dumpSections;
+	int			dumpSections;
 	int			verbose;
 	int			aclsSkip;
 	int			tocSummary;
@@ -188,7 +179,9 @@ extern int	EndBlob(Archive *AH, Oid oid);
 
 extern void CloseArchive(Archive *AH);
 
-extern void RestoreArchive(Archive *AH, RestoreOptions *ropt);
+extern void SetArchiveRestoreOptions(Archive *AH, RestoreOptions *ropt);
+
+extern void RestoreArchive(Archive *AH);
 
 /* Open an existing archive */
 extern Archive *OpenArchive(const char *FileSpec, const ArchiveFormat fmt);
@@ -204,7 +197,6 @@ extern RestoreOptions *NewRestoreOptions(void);
 
 /* Rearrange and filter TOC entries */
 extern void SortTocFromFile(Archive *AHX, RestoreOptions *ropt);
-extern void InitDummyWantedList(Archive *AHX, RestoreOptions *ropt);
 
 /* Convenience functions used only when writing DATA */
 extern int	archputs(const char *s, Archive *AH);

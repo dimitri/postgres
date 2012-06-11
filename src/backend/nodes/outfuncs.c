@@ -141,7 +141,7 @@ _outToken(StringInfo str, const char *s)
 static void
 _outList(StringInfo str, const List *node)
 {
-	const ListCell   *lc;
+	const ListCell *lc;
 
 	appendStringInfoChar(str, '(');
 
@@ -242,6 +242,7 @@ _outPlannedStmt(StringInfo str, const PlannedStmt *node)
 	WRITE_NODE_TYPE("PLANNEDSTMT");
 
 	WRITE_ENUM_FIELD(commandType, CmdType);
+	WRITE_UINT_FIELD(queryId);
 	WRITE_BOOL_FIELD(hasReturning);
 	WRITE_BOOL_FIELD(hasModifyingCTE);
 	WRITE_BOOL_FIELD(canSetTag);
@@ -1460,6 +1461,9 @@ _outFromExpr(StringInfo str, const FromExpr *node)
  *
  * Note we do NOT print the parent, else we'd be in infinite recursion.
  * We can print the parent's relids for identification purposes, though.
+ * We also do not print the whole of param_info, since it's printed by
+ * _outRelOptInfo; it's sufficient and less cluttering to print just the
+ * required outer relids.
  */
 static void
 _outPathInfo(StringInfo str, const Path *node)
@@ -1467,12 +1471,15 @@ _outPathInfo(StringInfo str, const Path *node)
 	WRITE_ENUM_FIELD(pathtype, NodeTag);
 	appendStringInfo(str, " :parent_relids ");
 	_outBitmapset(str, node->parent->relids);
+	appendStringInfo(str, " :required_outer ");
+	if (node->param_info)
+		_outBitmapset(str, node->param_info->ppi_req_outer);
+	else
+		_outBitmapset(str, NULL);
 	WRITE_FLOAT_FIELD(rows, "%.0f");
 	WRITE_FLOAT_FIELD(startup_cost, "%.2f");
 	WRITE_FLOAT_FIELD(total_cost, "%.2f");
 	WRITE_NODE_FIELD(pathkeys);
-	WRITE_BITMAPSET_FIELD(required_outer);
-	WRITE_NODE_FIELD(param_clauses);
 }
 
 /*
@@ -1726,6 +1733,7 @@ _outRelOptInfo(StringInfo str, const RelOptInfo *node)
 	WRITE_INT_FIELD(width);
 	WRITE_NODE_FIELD(reltargetlist);
 	WRITE_NODE_FIELD(pathlist);
+	WRITE_NODE_FIELD(ppilist);
 	WRITE_NODE_FIELD(cheapest_startup_path);
 	WRITE_NODE_FIELD(cheapest_total_path);
 	WRITE_NODE_FIELD(cheapest_unique_path);
@@ -1817,6 +1825,16 @@ _outPathKey(StringInfo str, const PathKey *node)
 }
 
 static void
+_outParamPathInfo(StringInfo str, const ParamPathInfo *node)
+{
+	WRITE_NODE_TYPE("PARAMPATHINFO");
+
+	WRITE_BITMAPSET_FIELD(ppi_req_outer);
+	WRITE_FLOAT_FIELD(ppi_rows, "%.0f");
+	WRITE_NODE_FIELD(ppi_clauses);
+}
+
+static void
 _outRestrictInfo(StringInfo str, const RestrictInfo *node)
 {
 	WRITE_NODE_TYPE("RESTRICTINFO");
@@ -1829,6 +1847,7 @@ _outRestrictInfo(StringInfo str, const RestrictInfo *node)
 	WRITE_BOOL_FIELD(pseudoconstant);
 	WRITE_BITMAPSET_FIELD(clause_relids);
 	WRITE_BITMAPSET_FIELD(required_relids);
+	WRITE_BITMAPSET_FIELD(outer_relids);
 	WRITE_BITMAPSET_FIELD(nullable_relids);
 	WRITE_BITMAPSET_FIELD(left_relids);
 	WRITE_BITMAPSET_FIELD(right_relids);
@@ -1926,11 +1945,12 @@ _outPlannerParamItem(StringInfo str, const PlannerParamItem *node)
  *
  *****************************************************************************/
 
+/*
+ * print the basic stuff of all nodes that inherit from CreateStmt
+ */
 static void
-_outCreateStmt(StringInfo str, const CreateStmt *node)
+_outCreateStmtInfo(StringInfo str, const CreateStmt *node)
 {
-	WRITE_NODE_TYPE("CREATESTMT");
-
 	WRITE_NODE_FIELD(relation);
 	WRITE_NODE_FIELD(tableElts);
 	WRITE_NODE_FIELD(inhRelations);
@@ -1943,11 +1963,19 @@ _outCreateStmt(StringInfo str, const CreateStmt *node)
 }
 
 static void
+_outCreateStmt(StringInfo str, const CreateStmt *node)
+{
+	WRITE_NODE_TYPE("CREATESTMT");
+
+	_outCreateStmtInfo(str, (const CreateStmt *) node);
+}
+
+static void
 _outCreateForeignTableStmt(StringInfo str, const CreateForeignTableStmt *node)
 {
 	WRITE_NODE_TYPE("CREATEFOREIGNTABLESTMT");
 
-	_outCreateStmt(str, (const CreateStmt *) &node->base);
+	_outCreateStmtInfo(str, (const CreateStmt *) node);
 
 	WRITE_STRING_FIELD(servername);
 	WRITE_NODE_FIELD(options);
@@ -2087,7 +2115,7 @@ _outColumnDef(StringInfo str, const ColumnDef *node)
 	WRITE_BOOL_FIELD(is_local);
 	WRITE_BOOL_FIELD(is_not_null);
 	WRITE_BOOL_FIELD(is_from_type);
-	WRITE_INT_FIELD(storage);
+	WRITE_CHAR_FIELD(storage);
 	WRITE_NODE_FIELD(raw_default);
 	WRITE_NODE_FIELD(cooked_default);
 	WRITE_NODE_FIELD(collClause);
@@ -2152,6 +2180,7 @@ _outQuery(StringInfo str, const Query *node)
 
 	WRITE_ENUM_FIELD(commandType, CmdType);
 	WRITE_ENUM_FIELD(querySource, QuerySource);
+	/* we intentionally do not print the queryId field */
 	WRITE_BOOL_FIELD(canSetTag);
 
 	/*
@@ -2578,6 +2607,7 @@ _outConstraint(StringInfo str, const Constraint *node)
 
 		case CONSTR_CHECK:
 			appendStringInfo(str, "CHECK");
+			WRITE_BOOL_FIELD(is_no_inherit);
 			WRITE_NODE_FIELD(raw_expr);
 			WRITE_STRING_FIELD(cooked_expr);
 			break;
@@ -2989,6 +3019,9 @@ _outNode(StringInfo str, const void *obj)
 				break;
 			case T_PathKey:
 				_outPathKey(str, obj);
+				break;
+			case T_ParamPathInfo:
+				_outParamPathInfo(str, obj);
 				break;
 			case T_RestrictInfo:
 				_outRestrictInfo(str, obj);

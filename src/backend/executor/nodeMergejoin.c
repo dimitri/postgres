@@ -247,7 +247,7 @@ MJExamineQuals(List *mergeclauses,
 										 op_lefttype,
 										 op_righttype,
 										 BTORDER_PROC);
-			if (!OidIsValid(sortfunc))		/* should not happen */
+			if (!OidIsValid(sortfunc))	/* should not happen */
 				elog(ERROR, "missing support function %d(%u,%u) in opfamily %u",
 					 BTORDER_PROC, op_lefttype, op_righttype, opfamily);
 			/* We'll use a shim to call the old-style btree comparator */
@@ -405,7 +405,7 @@ MJCompare(MergeJoinState *mergestate)
 		 */
 		if (clause->lisnull && clause->risnull)
 		{
-			nulleqnull = true;		/* NULL "=" NULL */
+			nulleqnull = true;	/* NULL "=" NULL */
 			continue;
 		}
 
@@ -419,8 +419,8 @@ MJCompare(MergeJoinState *mergestate)
 
 	/*
 	 * If we had any NULL-vs-NULL inputs, we do not want to report that the
-	 * tuples are equal.  Instead, if result is still 0, change it to +1.
-	 * This will result in advancing the inner side of the join.
+	 * tuples are equal.  Instead, if result is still 0, change it to +1. This
+	 * will result in advancing the inner side of the join.
 	 *
 	 * Likewise, if there was a constant-false joinqual, do not report
 	 * equality.  We have to check this as part of the mergequals, else the
@@ -1361,7 +1361,7 @@ ExecMergeJoin(MergeJoinState *node)
 				/*
 				 * EXEC_MJ_ENDOUTER means we have run out of outer tuples, but
 				 * are doing a right/full join and therefore must null-fill
-				 * any remaing unmatched inner tuples.
+				 * any remaining unmatched inner tuples.
 				 */
 			case EXEC_MJ_ENDOUTER:
 				MJ_printf("ExecMergeJoin: EXEC_MJ_ENDOUTER\n");
@@ -1407,7 +1407,7 @@ ExecMergeJoin(MergeJoinState *node)
 				/*
 				 * EXEC_MJ_ENDINNER means we have run out of inner tuples, but
 				 * are doing a left/full join and therefore must null- fill
-				 * any remaing unmatched outer tuples.
+				 * any remaining unmatched outer tuples.
 				 */
 			case EXEC_MJ_ENDINNER:
 				MJ_printf("ExecMergeJoin: EXEC_MJ_ENDINNER\n");

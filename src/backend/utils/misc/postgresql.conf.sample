@@ -150,7 +150,7 @@
 
 # - Asynchronous Behavior -
 
-#effective_io_concurrency = 1		# 1-1000. 0 disables prefetching
+#effective_io_concurrency = 1		# 1-1000; 0 disables prefetching
 
 
 #------------------------------------------------------------------------------
@@ -162,7 +162,8 @@
 #wal_level = minimal			# minimal, archive, or hot_standby
 					# (change requires restart)
 #fsync = on				# turns forced synchronization on or off
-#synchronous_commit = on		# synchronization level; on, off, or local
+#synchronous_commit = on		# synchronization level;
+					# off, local, remote_write, or on
 #wal_sync_method = fsync		# the default is the first option
 					# supported by the operating system:
 					#   open_datasync
@@ -203,7 +204,7 @@
 
 # - Sending Server(s) -
 
-# Set these on the master and on any standby that will send replication data
+# Set these on the master and on any standby that will send replication data.
 
 #max_wal_senders = 0		# max number of walsender processes
 				# (change requires restart)
@@ -212,7 +213,7 @@
 
 # - Master Server -
 
-# These settings are ignored on a standby server
+# These settings are ignored on a standby server.
 
 #synchronous_standby_names = ''	# standby servers that provide sync rep
 				# comma-separated list of application_name
@@ -221,7 +222,7 @@
 
 # - Standby Servers -
 
-# These settings are ignored on a master server
+# These settings are ignored on a master server.
 
 #hot_standby = off			# "on" allows queries during recovery
 					# (change requires restart)
@@ -424,6 +425,7 @@
 
 #track_activities = on
 #track_counts = on
+#track_io_timing = off
 #track_functions = none			# none, pl, all
 #track_activity_query_size = 1024 	# (change requires restart)
 #update_process_title = on
@@ -533,6 +535,7 @@
 # lock table slots.
 #max_pred_locks_per_transaction = 64	# min 10
 					# (change requires restart)
+
 
 #------------------------------------------------------------------------------
 # VERSION/PLATFORM COMPATIBILITY

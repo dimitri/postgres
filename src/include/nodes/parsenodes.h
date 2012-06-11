@@ -103,6 +103,8 @@ typedef struct Query
 
 	QuerySource querySource;	/* where did I come from? */
 
+	uint32		queryId;		/* query identifier (can be set by plugins) */
+
 	bool		canSetTag;		/* do I set the command result tag? */
 
 	Node	   *utilityStmt;	/* non-null if this is DECLARE CURSOR or a
@@ -704,7 +706,7 @@ typedef struct RangeTblEntry
 	 * Fields valid for a subquery RTE (else NULL):
 	 */
 	Query	   *subquery;		/* the sub-query */
-	bool		security_barrier;	/* subquery from security_barrier view */
+	bool		security_barrier;		/* subquery from security_barrier view */
 
 	/*
 	 * Fields valid for a join RTE (else NULL/zero):
@@ -1170,7 +1172,7 @@ typedef struct AlterTableStmt
 	RangeVar   *relation;		/* table to work on */
 	List	   *cmds;			/* list of subcommands */
 	ObjectType	relkind;		/* type of object */
-	bool	   missing_ok;		/* skip error if table missing */
+	bool		missing_ok;		/* skip error if table missing */
 } AlterTableStmt;
 
 typedef enum AlterTableType
@@ -1192,14 +1194,14 @@ typedef enum AlterTableType
 	AT_AddConstraint,			/* add constraint */
 	AT_AddConstraintRecurse,	/* internal to commands/tablecmds.c */
 	AT_ValidateConstraint,		/* validate constraint */
-	AT_ValidateConstraintRecurse, /* internal to commands/tablecmds.c */
+	AT_ValidateConstraintRecurse,		/* internal to commands/tablecmds.c */
 	AT_ProcessedConstraint,		/* pre-processed add constraint (local in
 								 * parser/parse_utilcmd.c) */
 	AT_AddIndexConstraint,		/* add constraint using existing index */
 	AT_DropConstraint,			/* drop constraint */
 	AT_DropConstraintRecurse,	/* internal to commands/tablecmds.c */
 	AT_AlterColumnType,			/* alter column type */
-	AT_AlterColumnGenericOptions,	/* alter column OPTIONS (...) */
+	AT_AlterColumnGenericOptions,		/* alter column OPTIONS (...) */
 	AT_ChangeOwner,				/* change owner */
 	AT_ClusterOn,				/* CLUSTER ON */
 	AT_DropCluster,				/* SET WITHOUT CLUSTER */
@@ -1476,7 +1478,7 @@ typedef struct CreateStmt
  *
  * If skip_validation is true then we skip checking that the existing rows
  * in the table satisfy the constraint, and just install the catalog entries
- * for the constraint.  A new FK constraint is marked as valid iff
+ * for the constraint.	A new FK constraint is marked as valid iff
  * initially_valid is true.  (Usually skip_validation and initially_valid
  * are inverses, but we can set both true if the table is known empty.)
  *
@@ -1527,6 +1529,7 @@ typedef struct Constraint
 	int			location;		/* token location, or -1 if unknown */
 
 	/* Fields used for constraints with expressions (CHECK and DEFAULT): */
+	bool		is_no_inherit;	/* is constraint non-inheritable? */
 	Node	   *raw_expr;		/* expr, as untransformed parse tree */
 	char	   *cooked_expr;	/* expr, as nodeToString representation */
 
@@ -1936,6 +1939,7 @@ typedef struct DropStmt
 	ObjectType	removeType;		/* object type */
 	DropBehavior behavior;		/* RESTRICT or CASCADE behavior */
 	bool		missing_ok;		/* skip error if object is missing? */
+	bool		concurrent;		/* drop index concurrently? */
 } DropStmt;
 
 /* ----------------------
@@ -1992,7 +1996,7 @@ typedef struct SecLabelStmt
 #define CURSOR_OPT_HOLD			0x0010	/* WITH HOLD */
 /* these planner-control flags do not correspond to any SQL grammar: */
 #define CURSOR_OPT_FAST_PLAN	0x0020	/* prefer fast-start plan */
-#define CURSOR_OPT_GENERIC_PLAN	0x0040	/* force use of generic plan */
+#define CURSOR_OPT_GENERIC_PLAN 0x0040	/* force use of generic plan */
 #define CURSOR_OPT_CUSTOM_PLAN	0x0080	/* force use of custom plan */
 
 typedef struct DeclareCursorStmt
@@ -2147,7 +2151,7 @@ typedef struct RenameStmt
 								 * trigger, etc) */
 	char	   *newname;		/* the new name */
 	DropBehavior behavior;		/* RESTRICT or CASCADE behavior */
-	bool		missing_ok;	/* skip error if missing? */
+	bool		missing_ok;		/* skip error if missing? */
 } RenameStmt;
 
 /* ----------------------
@@ -2163,7 +2167,7 @@ typedef struct AlterObjectSchemaStmt
 	List	   *objarg;			/* argument types, if applicable */
 	char	   *addname;		/* additional name if needed */
 	char	   *newschema;		/* the new schema */
-	bool		missing_ok;	/* skip error if missing? */
+	bool		missing_ok;		/* skip error if missing? */
 } AlterObjectSchemaStmt;
 
 /* ----------------------
@@ -2438,7 +2442,7 @@ typedef struct CreateTableAsStmt
 	NodeTag		type;
 	Node	   *query;			/* the query (see comments above) */
 	IntoClause *into;			/* destination table */
-	bool		is_select_into;	/* it was written as SELECT INTO */
+	bool		is_select_into; /* it was written as SELECT INTO */
 } CreateTableAsStmt;
 
 /* ----------------------

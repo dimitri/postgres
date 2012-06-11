@@ -38,6 +38,7 @@
 #include "catalog/dependency.h"
 #include "catalog/heap.h"
 #include "catalog/indexing.h"
+#include "catalog/pg_authid.h"
 #include "catalog/pg_collation.h"
 #include "catalog/pg_constraint.h"
 #include "catalog/pg_depend.h"
@@ -100,7 +101,6 @@ static Oid	findRangeCanonicalFunction(List *procname, Oid typeOid);
 static Oid	findRangeSubtypeDiffFunction(List *procname, Oid subtype);
 static void validateDomainConstraint(Oid domainoid, char *ccbin);
 static List *get_rels_with_domain(Oid domainOid, LOCKMODE lockmode);
-static void checkDomainOwner(HeapTuple tup);
 static void checkEnumOwner(HeapTuple tup);
 static char *domainAddConstraint(Oid domainOid, Oid domainNamespace,
 					Oid baseTypeOid,
@@ -622,7 +622,7 @@ DefineType(List *names, List *parameters, EventContext evt)
 			   F_ARRAY_SEND,	/* send procedure */
 			   typmodinOid,		/* typmodin procedure */
 			   typmodoutOid,	/* typmodout procedure */
-			   F_ARRAY_TYPANALYZE,	/* analyze procedure */
+			   F_ARRAY_TYPANALYZE,		/* analyze procedure */
 			   typoid,			/* element type ID */
 			   true,			/* yes this is an array type */
 			   InvalidOid,		/* no further array type */
@@ -1198,7 +1198,7 @@ DefineEnum(CreateEnumStmt *stmt)
 			   F_ARRAY_SEND,	/* send procedure */
 			   InvalidOid,		/* typmodin procedure - none */
 			   InvalidOid,		/* typmodout procedure - none */
-			   F_ARRAY_TYPANALYZE,	/* analyze procedure */
+			   F_ARRAY_TYPANALYZE,		/* analyze procedure */
 			   enumTypeOid,		/* element type ID */
 			   true,			/* yes this is an array type */
 			   InvalidOid,		/* no further array type */
@@ -1530,7 +1530,7 @@ DefineRange(CreateRangeStmt *stmt)
 			   F_ARRAY_SEND,	/* send procedure */
 			   InvalidOid,		/* typmodin procedure - none */
 			   InvalidOid,		/* typmodout procedure - none */
-			   F_ARRAY_TYPANALYZE,	/* analyze procedure */
+			   F_ARRAY_TYPANALYZE,		/* analyze procedure */
 			   typoid,			/* element type ID */
 			   true,			/* yes this is an array type */
 			   InvalidOid,		/* no further array type */
@@ -1564,15 +1564,15 @@ DefineRange(CreateRangeStmt *stmt)
  * impossible to define a polymorphic constructor; we have to generate new
  * constructor functions explicitly for each range type.
  *
- * We actually define 4 functions, with 0 through 3 arguments.  This is just
+ * We actually define 4 functions, with 0 through 3 arguments.	This is just
  * to offer more convenience for the user.
  */
 static void
 makeRangeConstructors(const char *name, Oid namespace,
 					  Oid rangeOid, Oid subtype)
 {
-	static const char * const prosrc[2] = {"range_constructor2",
-										   "range_constructor3"};
+	static const char *const prosrc[2] = {"range_constructor2",
+	"range_constructor3"};
 	static const int pronargs[2] = {2, 3};
 
 	Oid			constructorArgTypes[3];
@@ -1596,15 +1596,16 @@ makeRangeConstructors(const char *name, Oid namespace,
 		constructorArgTypesVector = buildoidvector(constructorArgTypes,
 												   pronargs[i]);
 
-		procOid = ProcedureCreate(name,			/* name: same as range type */
+		procOid = ProcedureCreate(name, /* name: same as range type */
 								  namespace,	/* namespace */
 								  false,		/* replace */
 								  false,		/* returns set */
 								  rangeOid,		/* return type */
+								  BOOTSTRAP_SUPERUSERID,		/* proowner */
 								  INTERNALlanguageId,	/* language */
 								  F_FMGR_INTERNAL_VALIDATOR,	/* language validator */
 								  prosrc[i],	/* prosrc */
-								  NULL,			/* probin */
+								  NULL, /* probin */
 								  false,		/* isAgg */
 								  false,		/* isWindowFunc */
 								  false,		/* security_definer */
@@ -1920,9 +1921,9 @@ findRangeSubOpclass(List *opcname, Oid subtype)
 		if (!IsBinaryCoercible(subtype, opInputType))
 			ereport(ERROR,
 					(errcode(ERRCODE_DATATYPE_MISMATCH),
-					 errmsg("operator class \"%s\" does not accept data type %s",
-							NameListToString(opcname),
-							format_type_be(subtype))));
+				 errmsg("operator class \"%s\" does not accept data type %s",
+						NameListToString(opcname),
+						format_type_be(subtype))));
 	}
 	else
 	{
@@ -2469,8 +2470,8 @@ AlterDomainDropConstraint(List *names, const char *constrName,
 		if (!missing_ok)
 			ereport(ERROR,
 					(errcode(ERRCODE_UNDEFINED_OBJECT),
-					 errmsg("constraint \"%s\" of domain \"%s\" does not exist",
-					   constrName, TypeNameToString(typename))));
+				  errmsg("constraint \"%s\" of domain \"%s\" does not exist",
+						 constrName, TypeNameToString(typename))));
 		else
 			ereport(NOTICE,
 					(errmsg("constraint \"%s\" of domain \"%s\" does not exist, skipping",
@@ -2924,7 +2925,7 @@ get_rels_with_domain(Oid domainOid, LOCKMODE lockmode)
 
 		/*
 		 * Confirm column has not been dropped, and is of the expected type.
-		 * This defends against an ALTER DROP COLUMN occuring just before we
+		 * This defends against an ALTER DROP COLUMN occurring just before we
 		 * acquired lock ... but if the whole table were dropped, we'd still
 		 * have a problem.
 		 */
@@ -2963,7 +2964,7 @@ get_rels_with_domain(Oid domainOid, LOCKMODE lockmode)
  * Check that the type is actually a domain and that the current user
  * has permission to do ALTER DOMAIN on it.  Throw an error if not.
  */
-static void
+void
 checkDomainOwner(HeapTuple tup)
 {
 	Form_pg_type typTup = (Form_pg_type) GETSTRUCT(tup);
@@ -3126,7 +3127,7 @@ domainAddConstraint(Oid domainOid, Oid domainNamespace, Oid baseTypeOid,
 						  ccsrc,	/* Source form of check constraint */
 						  true, /* is local */
 						  0,	/* inhcount */
-						  false);	/* is only */
+						  false);		/* is only */
 
 	/*
 	 * Return the compiled constraint expression so the calling routine can

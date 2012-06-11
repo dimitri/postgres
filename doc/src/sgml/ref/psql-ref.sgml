@@ -25,8 +25,8 @@ PostgreSQL documentation
   <cmdsynopsis>
    <command>psql</command>
    <arg rep="repeat"><replaceable class="parameter">option</replaceable></arg>
-   <arg><replaceable class="parameter">dbname</replaceable>
-   <arg><replaceable class="parameter">username</replaceable></arg></arg>
+   <arg choice="opt"><replaceable class="parameter">dbname</replaceable>
+   <arg choice="opt"><replaceable class="parameter">username</replaceable></arg></arg>
   </cmdsynopsis>
  </refsynopsisdiv>
 
@@ -115,7 +115,10 @@ PostgreSQL documentation
        argument on the command line.
       </para>
       <para>
-       If this parameter contains an <symbol>=</symbol> sign, it is treated as a
+       If this parameter contains an <symbol>=</symbol> sign or starts
+       with a valid <acronym>URI</acronym> prefix
+       (<literal>postgresql://</literal>
+       or <literal>postgres://</literal>), it is treated as a
        <parameter>conninfo</parameter> string. See <xref linkend="libpq-connect"> for more information.
       </para>
       </listitem>
@@ -246,7 +249,7 @@ PostgreSQL documentation
       <term><option>--no-readline</></term>
       <listitem>
       <para>
-       Do not use readline for line editing and do not use the history.
+       Do not use <application>readline</application> for line editing and do not use the history.
        This can be useful to turn off tab expansion when cutting and pasting.
       </para>
       </listitem>
@@ -286,7 +289,7 @@ PostgreSQL documentation
       Specifies printing options, in the style of
       <command>\pset</command>. Note that here you
       have to separate name and value with an equal sign instead of a
-      space. For example, to set the output format to LaTeX, you could write
+      space. For example, to set the output format to <application>LaTeX</application>, you could write
       <literal>-P format=latex</literal>.
       </para>
       </listitem>
@@ -596,13 +599,15 @@ PostgreSQL documentation
 
     <para>
      An alternative way to specify connection parameters is in a
-     <parameter>conninfo</parameter> string, which is used instead of a
-     database name. This mechanism give you very wide control over the
+     <parameter>conninfo</parameter> string or
+     a <acronym>URI</acronym>, which is used instead of a database
+     name. This mechanism give you very wide control over the
      connection. For example:
 <programlisting>
 $ <userinput>psql "service=myservice sslmode=require"</userinput>
+$ <userinput>psql postgresql://dbmaster:5433/mydb?sslmode=require</userinput>
 </programlisting>
-     This way you can also use LDAP for connection parameter lookup as
+     This way you can also use <acronym>LDAP</acronym> for connection parameter lookup as
      described in <xref linkend="libpq-ldap">.
      See <xref linkend="libpq-connect"> for more information on all the
      available connection options.
@@ -1017,8 +1022,7 @@ testdb=&gt;
         those object types.
         </para>
 
-        <para>
-        <literal>\dd</literal> displays descriptions for objects matching the
+        <para><literal>\dd</literal> displays descriptions for objects matching the
         <replaceable class="parameter">pattern</replaceable>, or of visible
         objects of the appropriate type if no argument is given.  But in either
         case, only objects that have a description are listed.
@@ -1267,12 +1271,15 @@ testdb=&gt;
         <term><literal>\dg[+] [ <link linkend="APP-PSQL-patterns"><replaceable class="parameter">pattern</replaceable></link> ]</literal></term>
         <listitem>
         <para>
-        Lists database roles. If <replaceable
-        class="parameter">pattern</replaceable> is specified, only
-        those roles whose names match the pattern are listed.
-        (This command is now effectively the same as <literal>\du</literal>).
+        Lists database roles.
+        (Since the concepts of <quote>users</> and <quote>groups</> have been
+        unified into <quote>roles</>, this command is now equivalent to
+        <literal>\du</literal>.)
+        If <replaceable class="parameter">pattern</replaceable> is specified,
+        only those roles whose names match the pattern are listed.
         If the form <literal>\dg+</literal> is used, additional information
-        is shown about each role, including the comment for each role.
+        is shown about each role; currently this adds the comment for each
+        role.
         </para>
         </listitem>
       </varlistentry>
@@ -1421,11 +1428,15 @@ testdb=&gt;
         <term><literal>\du[+] [ <link linkend="APP-PSQL-patterns"><replaceable class="parameter">pattern</replaceable></link> ]</literal></term>
         <listitem>
         <para>
-        Lists database roles. If <replaceable
-        class="parameter">pattern</replaceable> is specified, only
-        those roles whose names match the pattern are listed.
+        Lists database roles.
+        (Since the concepts of <quote>users</> and <quote>groups</> have been
+        unified into <quote>roles</>, this command is now equivalent to
+        <literal>\dg</literal>.)
+        If <replaceable class="parameter">pattern</replaceable> is specified,
+        only those roles whose names match the pattern are listed.
         If the form <literal>\du+</literal> is used, additional information
-        is shown about each role, including the comment for each role.
+        is shown about each role; currently this adds the comment for each
+        role.
         </para>
         </listitem>
       </varlistentry>
@@ -1659,9 +1670,9 @@ Tue Oct 26 21:40:57 CEST 1999
         <listitem>
         <para>
         The <literal>\ir</> command is similar to <literal>\i</>, but resolves
-        relative pathnames differently.  When executing in interactive mode,
+        relative file names differently.  When executing in interactive mode,
         the two commands behave identically.  However, when invoked from a
-        script, <literal>\ir</literal> interprets pathnames relative to the
+        script, <literal>\ir</literal> interprets file names relative to the
         directory in which the script is located, rather than the current
         working directory.
         </para>
@@ -1990,7 +2001,7 @@ lo_import 152801
           formats put out tables that are intended to
           be included in documents using the respective mark-up
           language. They are not complete documents! (This might not be
-          so dramatic in <acronym>HTML</acronym>, but in LaTeX you must
+          so dramatic in <acronym>HTML</acronym>, but in <application>LaTeX</application> you must
           have a complete document wrapper.)
           </para>
           </listitem>
@@ -2253,8 +2264,7 @@ lo_import 152801
         unset a variable, use the <command>\unset</command> command.
         </para>
 
-        <para>
-        <command>\set</> without any arguments displays the names and values
+        <para><command>\set</> without any arguments displays the names and values
         of all currently-set <application>psql</> variables.
         </para>
 
@@ -2295,8 +2305,7 @@ lo_import 152801
 <programlisting>
 testdb=&gt; <userinput>\setenv PAGER less</userinput>
 testdb=&gt; <userinput>\setenv LESS -imx4F</userinput>
-</programlisting>
-        </para>
+</programlisting></para>
         </listitem>
       </varlistentry>
 
@@ -2643,6 +2652,22 @@ bar
          <filename>~/.psqlrc</filename> file.
         </para>
         </note>
+        </listitem>
+      </varlistentry>
+
+      <varlistentry>
+        <term><varname>COMP_KEYWORD_CASE</varname></term>
+        <listitem>
+        <para>
+        Determines which letter case to use when completing an SQL key word.
+        If set to <literal>lower</literal> or <literal>upper</literal>, the
+        completed word will be in lower or upper case, respectively.  If set
+        to <literal>preserve-lower</literal>
+        or <literal>preserve-upper</literal> (the default), the completed word
+        will be in the case of the word already entered, but words being
+        completed without anything entered will be in lower or upper case,
+        respectively.
+        </para>
         </listitem>
       </varlistentry>
 
@@ -3006,7 +3031,7 @@ testdb=&gt; <userinput>\set content `cat my_file.txt`</userinput>
 testdb=&gt; <userinput>INSERT INTO my_table VALUES (:'content');</userinput>
 </programlisting>
     (Note that this still won't work if <filename>my_file.txt</filename> contains NUL bytes.
-    psql does not support embedded NUL bytes in variable values.)
+    <application>psql</application> does not support embedded NUL bytes in variable values.)
     </para>
 
     <para>
@@ -3345,7 +3370,7 @@ PSQL_EDITOR_LINENUMBER_ARG='--line '
 
     <listitem>
      <para>
-      Alternative location for the command history file. Tilde ("~") expansion is performed.
+      Alternative location for the command history file. Tilde (<literal>~</literal>) expansion is performed.
      </para>
     </listitem>
    </varlistentry>
@@ -3355,7 +3380,7 @@ PSQL_EDITOR_LINENUMBER_ARG='--line '
 
     <listitem>
      <para>
-      Alternative location of the user's .psqlrc file. Tilde ("~") expansion is performed.
+      Alternative location of the user's <filename>.psqlrc</filename> file. Tilde (<literal>~</literal>) expansion is performed.
      </para>
     </listitem>
    </varlistentry>
@@ -3420,7 +3445,7 @@ PSQL_EDITOR_LINENUMBER_ARG='--line '
    <listitem>
     <para>
      Both the system-wide <filename>psqlrc</filename> file and the user's
-     <filename>~/.psqlrc</filename> file can be made version-specific
+     <filename>~/.psqlrc</filename> file can be made <application>psql</application>-version-specific
      by appending a dash and the <productname>PostgreSQL</productname>
      major or minor <application>psql</application> release number,
      for example <filename>~/.psqlrc-9.2</filename> or

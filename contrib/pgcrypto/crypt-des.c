@@ -670,7 +670,8 @@ px_crypt_des(const char *key, const char *setting)
 	q = (uint8 *) keybuf;
 	while (q - (uint8 *) keybuf - 8)
 	{
-		if ((*q++ = *key << 1))
+		*q++ = *key << 1;
+		if (*key != '\0')
 			key++;
 	}
 	if (des_setkey((char *) keybuf))
@@ -711,7 +712,7 @@ px_crypt_des(const char *key, const char *setting)
 
 		/*
 		 * Double check that we weren't given a short setting. If we were, the
-		 * above code will probably have created wierd values for count and
+		 * above code will probably have created weird values for count and
 		 * salt, but we don't really care. Just make sure the output string
 		 * doesn't have an extra NUL in it.
 		 */

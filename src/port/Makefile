@@ -53,8 +53,7 @@ libpgport.a: $(OBJS)
 	$(AR) $(AROPT) $@ $^
 
 # thread.o needs PTHREAD_CFLAGS (but thread_srv.o does not)
-thread.o: thread.c
-	$(CC) $(CFLAGS) $(CPPFLAGS) $(PTHREAD_CFLAGS) -c $<
+thread.o: CFLAGS+=$(PTHREAD_CFLAGS)
 
 #
 # Server versions of object files
@@ -63,7 +62,14 @@ thread.o: thread.c
 libpgport_srv.a: $(OBJS_SRV)
 	$(AR) $(AROPT) $@ $^
 
-%_srv.o: %.c
+# Because this uses its own compilation rule, it doesn't use the
+# dependency tracking logic from Makefile.global.  To make sure that
+# dependency tracking works anyway for the *_srv.o files, depend on
+# their *.o siblings as well, which do have proper dependencies.  It's
+# a hack that might fail someday if there is a *_srv.o without a
+# corresponding *.o, but it works for now (and those would probably go
+# into src/backend/port/ anyway).
+%_srv.o: %.c %.o
 	$(CC) $(CFLAGS) $(subst -DFRONTEND,, $(CPPFLAGS)) -c $< -o $@
 
 $(OBJS_SRV): | submake-errcodes

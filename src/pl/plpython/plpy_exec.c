@@ -30,9 +30,9 @@ static void PLy_function_delete_args(PLyProcedure *proc);
 static void plpython_return_error_callback(void *arg);
 
 static PyObject *PLy_trigger_build_args(FunctionCallInfo fcinfo, PLyProcedure *proc,
-										HeapTuple *rv);
+					   HeapTuple *rv);
 static HeapTuple PLy_modify_tuple(PLyProcedure *proc, PyObject *pltd,
-								  TriggerData *tdata, HeapTuple otup);
+				 TriggerData *tdata, HeapTuple otup);
 static void plpython_trigger_error_callback(void *arg);
 
 static PyObject *PLy_procedure_call(PLyProcedure *proc, char *kargs, PyObject *vargs);
@@ -181,7 +181,6 @@ PLy_exec_function(FunctionCallInfo fcinfo, PLyProcedure *proc)
 		else if (proc->result.is_rowtype >= 1)
 		{
 			TupleDesc	desc;
-			HeapTuple	tuple = NULL;
 
 			/* make sure it's not an unnamed record */
 			Assert((proc->result.out.d.typoid == RECORDOID &&
@@ -192,18 +191,8 @@ PLy_exec_function(FunctionCallInfo fcinfo, PLyProcedure *proc)
 			desc = lookup_rowtype_tupdesc(proc->result.out.d.typoid,
 										  proc->result.out.d.typmod);
 
-			tuple = PLyObject_ToTuple(&proc->result, desc, plrv);
-
-			if (tuple != NULL)
-			{
-				fcinfo->isnull = false;
-				rv = HeapTupleGetDatum(tuple);
-			}
-			else
-			{
-				fcinfo->isnull = true;
-				rv = (Datum) NULL;
-			}
+			rv = PLyObject_ToCompositeDatum(&proc->result, desc, plrv);
+			fcinfo->isnull = (rv == (Datum) NULL);
 		}
 		else
 		{

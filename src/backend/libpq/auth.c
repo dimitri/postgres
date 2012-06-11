@@ -145,7 +145,7 @@ static int	pg_krb5_recvauth(Port *port);
 #include <com_err.h>
 #endif
 /*
- * Various krb5 state which is not connection specfic, and a flag to
+ * Various krb5 state which is not connection specific, and a flag to
  * indicate whether we have initialised it yet.
  */
 static int	pg_krb5_initialised;
@@ -316,8 +316,8 @@ ClientAuthentication(Port *port)
 	/*
 	 * Get the authentication method to use for this frontend/database
 	 * combination.  Note: we do not parse the file at this point; this has
-	 * already been done elsewhere.  hba.c dropped an error message
-	 * into the server logfile if parsing the hba config file failed.
+	 * already been done elsewhere.  hba.c dropped an error message into the
+	 * server logfile if parsing the hba config file failed.
 	 */
 	hba_getauthmethod(port);
 
@@ -1365,10 +1365,10 @@ pg_SSPI_recvauth(Port *port)
 		}
 
 		/*
-		 * Overwrite the current context with the one we just received.
-		 * If sspictx is NULL it was the first loop and we need to allocate
-		 * a buffer for it. On subsequent runs, we can just overwrite the
-		 * buffer contents since the size does not change.
+		 * Overwrite the current context with the one we just received. If
+		 * sspictx is NULL it was the first loop and we need to allocate a
+		 * buffer for it. On subsequent runs, we can just overwrite the buffer
+		 * contents since the size does not change.
 		 */
 		if (sspictx == NULL)
 		{
@@ -1437,8 +1437,8 @@ pg_SSPI_recvauth(Port *port)
 
 	if (!GetTokenInformation(token, TokenUser, NULL, 0, &retlen) && GetLastError() != 122)
 		ereport(ERROR,
-			 (errmsg_internal("could not get token user size: error code %lu",
-							  GetLastError())));
+			(errmsg_internal("could not get token user size: error code %lu",
+							 GetLastError())));
 
 	tokenuser = malloc(retlen);
 	if (tokenuser == NULL)
@@ -1453,8 +1453,8 @@ pg_SSPI_recvauth(Port *port)
 	if (!LookupAccountSid(NULL, tokenuser->User.Sid, accountname, &accountnamesize,
 						  domainname, &domainnamesize, &accountnameuse))
 		ereport(ERROR,
-			  (errmsg_internal("could not look up account SID: error code %lu",
-							   GetLastError())));
+			(errmsg_internal("could not look up account SID: error code %lu",
+							 GetLastError())));
 
 	free(tokenuser);
 
@@ -1600,9 +1600,9 @@ ident_inet(hbaPort *port)
 	const SockAddr remote_addr = port->raddr;
 	const SockAddr local_addr = port->laddr;
 	char		ident_user[IDENT_USERNAME_MAX + 1];
-	pgsocket	sock_fd,		/* File descriptor for socket on which we talk
+	pgsocket	sock_fd;		/* File descriptor for socket on which we talk
 								 * to Ident */
-				rc;				/* Return code from a locally called function */
+	int			rc;				/* Return code from a locally called function */
 	bool		ident_return;
 	char		remote_addr_s[NI_MAXHOST];
 	char		remote_port[NI_MAXSERV];
