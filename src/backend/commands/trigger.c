@@ -144,7 +144,6 @@ CreateTrigger(CreateTrigStmt *stmt, const char *queryString,
 	Oid			constrrelid = InvalidOid;
 	ObjectAddress myself,
 				referenced;
-	EventContextData evt;
 
 	rel = heap_openrv(stmt->relation, AccessExclusiveLock);
 
@@ -424,23 +423,6 @@ CreateTrigger(CreateTrigStmt *stmt, const char *queryString,
 		ConvertTriggerToFK(stmt, funcoid);
 
 		return InvalidOid;
-	}
-
-	/*
-	 * Call BEFORE CREATE TRIGGER triggers
-	 */
-	if (!isInternal)
-	{
-		InitEventContextForCommand(&evt, (Node *)stmt, E_CreateTrigger);
-
-		if (CommandFiresTriggers(&evt))
-		{
-			evt.objectId = InvalidOid;
-			evt.objectname = stmt->trigname;
-			evt.schemaname = NULL; /* triggers are not schema qualified */
-
-			ExecBeforeCommandTriggers(&evt);
-		}
 	}
 
 	/*
@@ -779,12 +761,6 @@ CreateTrigger(CreateTrigStmt *stmt, const char *queryString,
 	/* Keep lock on target rel until end of xact */
 	heap_close(rel, NoLock);
 
-	/* Call AFTER CREATE TRIGGER triggers */
-	if (!isInternal && CommandFiresAfterTriggers(&evt))
-	{
-		evt.objectId = trigoid;
-		ExecAfterCommandTriggers(&evt);
-	}
 	return trigoid;
 }
 
@@ -1232,7 +1208,7 @@ RangeVarCallbackForRenameTrigger(const RangeVar *rv, Oid relid, Oid oldrelid,
  *		update row in catalog
  */
 void
-renametrig(RenameStmt *stmt, EventContext evt)
+renametrig(RenameStmt *stmt)
 {
 	Relation	targetrel;
 	Relation	tgrel;
@@ -1299,16 +1275,6 @@ renametrig(RenameStmt *stmt, EventContext evt)
 								SnapshotNow, 2, key);
 	if (HeapTupleIsValid(tuple = systable_getnext(tgscan)))
 	{
-		/* Call BEFORE ALTER TRIGGER triggers */
-		if (CommandFiresTriggers(evt))
-		{
-			evt->objectId = HeapTupleGetOid(tuple);
-			evt->objectname = stmt->subname;
-			evt->schemaname = get_namespace_name(RelationGetNamespace(targetrel));
-
-			ExecBeforeCommandTriggers(evt);
-		}
-
 		/*
 		 * Update pg_trigger tuple with new tgname.
 		 */
@@ -1345,13 +1311,6 @@ renametrig(RenameStmt *stmt, EventContext evt)
 	 * Close rel, but keep exclusive lock!
 	 */
 	relation_close(targetrel, NoLock);
-
-	/* Call AFTER ALTER TRIGGER triggers */
-	if (CommandFiresAfterTriggers(evt))
-	{
-		evt->objectname = stmt->newname;
-		ExecAfterCommandTriggers(evt);
-	}
 }
 
 

@@ -81,9 +81,9 @@ static void dropOperators(List *opfamilyname, Oid amoid, Oid opfamilyoid,
 static void dropProcedures(List *opfamilyname, Oid amoid, Oid opfamilyoid,
 			   List *procedures);
 static void AlterOpClassOwner_internal(Relation rel, HeapTuple tuple,
-									   Oid newOwnerId, EventContext evt);
+						   Oid newOwnerId);
 static void AlterOpFamilyOwner_internal(Relation rel, HeapTuple tuple,
-										Oid newOwnerId, EventContext evt);
+							Oid newOwnerId);
 
 
 /*
@@ -350,7 +350,6 @@ DefineOpClass(CreateOpClassStmt *stmt)
 	NameData	opcName;
 	ObjectAddress myself,
 				referenced;
-	EventContextData evt;
 
 	/* Convert list of names to a name and namespace */
 	namespaceoid = QualifiedNameGetCreationNamespace(stmt->opclassname,
@@ -591,18 +590,6 @@ DefineOpClass(CreateOpClassStmt *stmt)
 							stmt->amname)));
 	}
 
-	/* Call BEFORE CREATE OPERATOR CLASS command triggers */
-	InitEventContextForCommand(&evt, (Node *)stmt, E_CreateOperatorClass);
-
-	if (CommandFiresTriggers(&evt))
-	{
-		evt.objectId = InvalidOid;
-		evt.objectname = pstrdup(opcname);
-		evt.schemaname = get_namespace_name(namespaceoid);
-
-		ExecBeforeCommandTriggers(&evt);
-	}
-
 	rel = heap_open(OperatorClassRelationId, RowExclusiveLock);
 
 	/*
@@ -733,13 +720,6 @@ DefineOpClass(CreateOpClassStmt *stmt)
 						   OperatorClassRelationId, opclassoid, 0, NULL);
 
 	heap_close(rel, RowExclusiveLock);
-
-	/* Call AFTER CREATE OPERATOR CLASS command triggers */
-	if (CommandFiresAfterTriggers(&evt))
-	{
-		evt.objectId = opclassoid;
-		ExecAfterCommandTriggers(&evt);
-	}
 }
 
 
@@ -751,11 +731,9 @@ void
 DefineOpFamily(CreateOpFamilyStmt *stmt)
 {
 	char	   *opfname;		/* name of opfamily we're creating */
-	Oid			opfOid,
-				amoid,			/* our AM's oid */
+	Oid			amoid,			/* our AM's oid */
 				namespaceoid;	/* namespace to create opfamily in */
 	AclResult	aclresult;
-	EventContextData evt;
 
 	/* Convert list of names to a name and namespace */
 	namespaceoid = QualifiedNameGetCreationNamespace(stmt->opfamilyname,
@@ -781,27 +759,8 @@ DefineOpFamily(CreateOpFamilyStmt *stmt)
 				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
 				 errmsg("must be superuser to create an operator family")));
 
-	/* Call BEFORE CREATE OPERATOR FAMILY command triggers */
-	InitEventContextForCommand(&evt, (Node *)stmt, E_CreateOperatorFamily);
-
-	if (CommandFiresTriggers(&evt))
-	{
-		evt.objectId = InvalidOid;
-		evt.objectname = opfname;
-		evt.schemaname = get_namespace_name(namespaceoid);
-
-		ExecBeforeCommandTriggers(&evt);
-	}
-
 	/* Insert pg_opfamily catalog entry */
-	opfOid = CreateOpFamily(stmt->amname, opfname, namespaceoid, amoid);
-
-	/* Call AFTER CREATE OPERATOR FAMILY command triggers */
-	if (CommandFiresAfterTriggers(&evt))
-	{
-		evt.objectId = opfOid;
-		ExecAfterCommandTriggers(&evt);
-	}
+	(void) CreateOpFamily(stmt->amname, opfname, namespaceoid, amoid);
 }
 
 
@@ -822,7 +781,6 @@ AlterOpFamily(AlterOpFamilyStmt *stmt)
 				maxProcNumber;	/* amsupport value */
 	HeapTuple	tup;
 	Form_pg_am	pg_am;
-	EventContextData evt;
 
 	/* Get necessary info about access method */
 	tup = SearchSysCache1(AMNAME, CStringGetDatum(stmt->amname));
@@ -857,26 +815,6 @@ AlterOpFamily(AlterOpFamilyStmt *stmt)
 				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
 				 errmsg("must be superuser to alter an operator family")));
 
-	/* Call BEFORE ALTER OPERATOR FAMILY command triggers */
-	InitEventContextForCommand(&evt, (Node *)stmt, E_AlterOperatorFamily);
-
-	if (CommandFiresTriggers(&evt))
-	{
-		HeapTuple	htup;
-		Form_pg_opfamily opfForm;
-
-		htup = OpFamilyCacheLookup(amoid, stmt->opfamilyname, false);
-		opfForm = (Form_pg_opfamily) GETSTRUCT(htup);
-
-		evt.objectId = opfamilyoid;
-		evt.objectname = pstrdup(NameStr(opfForm->opfname));
-		evt.schemaname = get_namespace_name(opfForm->opfnamespace);
-
-		ReleaseSysCache(htup);
-
-		ExecBeforeCommandTriggers(&evt);
-	}
-
 	/*
 	 * ADD and DROP cases need separate code from here on down.
 	 */
@@ -888,10 +826,6 @@ AlterOpFamily(AlterOpFamilyStmt *stmt)
 		AlterOpFamilyAdd(stmt->opfamilyname, amoid, opfamilyoid,
 						 maxOpNumber, maxProcNumber,
 						 stmt->items);
-
-	/* Call AFTER ALTER OPERATOR FAMILY command triggers */
-	if (CommandFiresAfterTriggers(&evt))
-		ExecAfterCommandTriggers(&evt);
 }
 
 /*
@@ -1733,8 +1667,7 @@ RemoveAmProcEntryById(Oid entryOid)
  * Rename opclass
  */
 void
-RenameOpClass(List *name, const char *access_method, const char *newname,
-			  EventContext evt)
+RenameOpClass(List *name, const char *access_method, const char *newname)
 {
 	Oid			opcOid;
 	Oid			amOid;
@@ -1779,16 +1712,6 @@ RenameOpClass(List *name, const char *access_method, const char *newname,
 		aclcheck_error(aclresult, ACL_KIND_NAMESPACE,
 					   get_namespace_name(namespaceOid));
 
-	/* Call BEFORE ALTER OPERATOR CLASS triggers */
-	if (CommandFiresTriggers(evt))
-	{
-		evt->objectId = opcOid;
-		evt->objectname = NameListToString(name);
-		evt->schemaname = get_namespace_name(namespaceOid);
-
-		ExecBeforeCommandTriggers(evt);
-	}
-
 	/* rename */
 	namestrcpy(&(((Form_pg_opclass) GETSTRUCT(tup))->opcname), newname);
 	simple_heap_update(rel, &tup->t_self, tup);
@@ -1796,21 +1719,13 @@ RenameOpClass(List *name, const char *access_method, const char *newname,
 
 	heap_close(rel, NoLock);
 	heap_freetuple(tup);
-
-	/* Call AFTER ALTER OPERATOR CLASS triggers */
-	if (CommandFiresAfterTriggers(evt))
-	{
-		evt->objectname = pstrdup(newname);
-		ExecAfterCommandTriggers(evt);
-	}
 }
 
 /*
  * Rename opfamily
  */
 void
-RenameOpFamily(List *name, const char *access_method, const char *newname,
-			   EventContext evt)
+RenameOpFamily(List *name, const char *access_method, const char *newname)
 {
 	Oid			opfOid;
 	Oid			amOid;
@@ -1886,16 +1801,6 @@ RenameOpFamily(List *name, const char *access_method, const char *newname,
 		aclcheck_error(aclresult, ACL_KIND_NAMESPACE,
 					   get_namespace_name(namespaceOid));
 
-	/* Call BEFORE ALTER OPERATOR FAMILY triggers */
-	if (CommandFiresTriggers(evt))
-	{
-		evt->objectId = opfOid;
-		evt->objectname = pstrdup(opfname);
-		evt->schemaname = get_namespace_name(namespaceOid);
-
-		ExecBeforeCommandTriggers(evt);
-	}
-
 	/* rename */
 	namestrcpy(&(((Form_pg_opfamily) GETSTRUCT(tup))->opfname), newname);
 	simple_heap_update(rel, &tup->t_self, tup);
@@ -1903,21 +1808,13 @@ RenameOpFamily(List *name, const char *access_method, const char *newname,
 
 	heap_close(rel, NoLock);
 	heap_freetuple(tup);
-
-	/* Call AFTER ALTER OPERATOR FAMILY triggers */
-	if (CommandFiresAfterTriggers(evt))
-	{
-		evt->objectname = pstrdup(newname);
-		ExecAfterCommandTriggers(evt);
-	}
 }
 
 /*
  * Change opclass owner by name
  */
 void
-AlterOpClassOwner(List *name, const char *access_method, Oid newOwnerId,
-				  EventContext evt)
+AlterOpClassOwner(List *name, const char *access_method, Oid newOwnerId)
 {
 	Oid			amOid;
 	Relation	rel;
@@ -1933,7 +1830,7 @@ AlterOpClassOwner(List *name, const char *access_method, Oid newOwnerId,
 	tup = heap_copytuple(origtup);
 	ReleaseSysCache(origtup);
 
-	AlterOpClassOwner_internal(rel, tup, newOwnerId, evt);
+	AlterOpClassOwner_internal(rel, tup, newOwnerId);
 
 	heap_freetuple(tup);
 	heap_close(rel, NoLock);
@@ -1954,7 +1851,7 @@ AlterOpClassOwner_oid(Oid opclassOid, Oid newOwnerId)
 	if (!HeapTupleIsValid(tup))
 		elog(ERROR, "cache lookup failed for opclass %u", opclassOid);
 
-	AlterOpClassOwner_internal(rel, tup, newOwnerId, NULL);
+	AlterOpClassOwner_internal(rel, tup, newOwnerId);
 
 	heap_freetuple(tup);
 	heap_close(rel, NoLock);
@@ -1965,8 +1862,7 @@ AlterOpClassOwner_oid(Oid opclassOid, Oid newOwnerId)
  * parameter is a copy of the tuple from pg_opclass we want to modify.
  */
 static void
-AlterOpClassOwner_internal(Relation rel, HeapTuple tup, Oid newOwnerId,
-						   EventContext evt)
+AlterOpClassOwner_internal(Relation rel, HeapTuple tup, Oid newOwnerId)
 {
 	Oid			namespaceOid;
 	AclResult	aclresult;
@@ -2004,16 +1900,6 @@ AlterOpClassOwner_internal(Relation rel, HeapTuple tup, Oid newOwnerId,
 							   get_namespace_name(namespaceOid));
 		}
 
-		/* Call BEFORE ALTER OPERATOR CLASS triggers */
-		if (CommandFiresTriggers(evt))
-		{
-			evt->objectId = HeapTupleGetOid(tup);
-			evt->objectname = pstrdup(NameStr(opcForm->opcname));
-			evt->schemaname = get_namespace_name(opcForm->opcnamespace);
-
-			ExecBeforeCommandTriggers(evt);
-		}
-
 		/*
 		 * Modify the owner --- okay to scribble on tup because it's a copy
 		 */
@@ -2026,10 +1912,6 @@ AlterOpClassOwner_internal(Relation rel, HeapTuple tup, Oid newOwnerId,
 		/* Update owner dependency reference */
 		changeDependencyOnOwner(OperatorClassRelationId, HeapTupleGetOid(tup),
 								newOwnerId);
-
-		/* Call AFTER ALTER OPERATOR CLASS triggers */
-		if (CommandFiresAfterTriggers(evt))
-			ExecAfterCommandTriggers(evt);
 	}
 }
 
@@ -2037,8 +1919,7 @@ AlterOpClassOwner_internal(Relation rel, HeapTuple tup, Oid newOwnerId,
  * ALTER OPERATOR CLASS any_name USING access_method SET SCHEMA name
  */
 void
-AlterOpClassNamespace(List *name, char *access_method, const char *newschema,
-					  EventContext evt)
+AlterOpClassNamespace(List *name, char *access_method, const char *newschema)
 {
 	Oid			amOid;
 	Relation	rel;
@@ -2060,7 +1941,7 @@ AlterOpClassNamespace(List *name, char *access_method, const char *newschema,
 						 Anum_pg_opclass_opcname,
 						 Anum_pg_opclass_opcnamespace,
 						 Anum_pg_opclass_opcowner,
-						 ACL_KIND_OPCLASS, evt);
+						 ACL_KIND_OPCLASS);
 
 	heap_close(rel, RowExclusiveLock);
 }
@@ -2079,7 +1960,7 @@ AlterOpClassNamespace_oid(Oid opclassOid, Oid newNspOid)
 							 Anum_pg_opclass_opcname,
 							 Anum_pg_opclass_opcnamespace,
 							 Anum_pg_opclass_opcowner,
-							 ACL_KIND_OPCLASS, NULL);
+							 ACL_KIND_OPCLASS);
 
 	heap_close(rel, RowExclusiveLock);
 
@@ -2090,8 +1971,7 @@ AlterOpClassNamespace_oid(Oid opclassOid, Oid newNspOid)
  * Change opfamily owner by name
  */
 void
-AlterOpFamilyOwner(List *name, const char *access_method, Oid newOwnerId,
-				   EventContext evt)
+AlterOpFamilyOwner(List *name, const char *access_method, Oid newOwnerId)
 {
 	Oid			amOid;
 	Relation	rel;
@@ -2140,7 +2020,7 @@ AlterOpFamilyOwner(List *name, const char *access_method, Oid newOwnerId,
 			elog(ERROR, "cache lookup failed for opfamily %u", opfOid);
 	}
 
-	AlterOpFamilyOwner_internal(rel, tup, newOwnerId, evt);
+	AlterOpFamilyOwner_internal(rel, tup, newOwnerId);
 
 	heap_freetuple(tup);
 	heap_close(rel, NoLock);
@@ -2161,7 +2041,7 @@ AlterOpFamilyOwner_oid(Oid opfamilyOid, Oid newOwnerId)
 	if (!HeapTupleIsValid(tup))
 		elog(ERROR, "cache lookup failed for opfamily %u", opfamilyOid);
 
-	AlterOpFamilyOwner_internal(rel, tup, newOwnerId, NULL);
+	AlterOpFamilyOwner_internal(rel, tup, newOwnerId);
 
 	heap_freetuple(tup);
 	heap_close(rel, NoLock);
@@ -2172,8 +2052,7 @@ AlterOpFamilyOwner_oid(Oid opfamilyOid, Oid newOwnerId)
  * parameter is a copy of the tuple from pg_opfamily we want to modify.
  */
 static void
-AlterOpFamilyOwner_internal(Relation rel, HeapTuple tup, Oid newOwnerId,
-							EventContext evt)
+AlterOpFamilyOwner_internal(Relation rel, HeapTuple tup, Oid newOwnerId)
 {
 	Oid			namespaceOid;
 	AclResult	aclresult;
@@ -2211,16 +2090,6 @@ AlterOpFamilyOwner_internal(Relation rel, HeapTuple tup, Oid newOwnerId,
 							   get_namespace_name(namespaceOid));
 		}
 
-		/* Call BEFORE ALTER OPERATOR FAMILY triggers */
-		if (CommandFiresTriggers(evt))
-		{
-			evt->objectId = HeapTupleGetOid(tup);
-			evt->objectname = pstrdup(NameStr(opfForm->opfname));
-			evt->schemaname = get_namespace_name(opfForm->opfnamespace);
-
-			ExecBeforeCommandTriggers(evt);
-		}
-
 		/*
 		 * Modify the owner --- okay to scribble on tup because it's a copy
 		 */
@@ -2233,10 +2102,6 @@ AlterOpFamilyOwner_internal(Relation rel, HeapTuple tup, Oid newOwnerId,
 		/* Update owner dependency reference */
 		changeDependencyOnOwner(OperatorFamilyRelationId, HeapTupleGetOid(tup),
 								newOwnerId);
-
-		/* Call AFTER ALTER OPERATOR FAMILY triggers */
-		if (CommandFiresAfterTriggers(evt))
-			ExecAfterCommandTriggers(evt);
 	}
 }
 
@@ -2263,8 +2128,7 @@ get_am_oid(const char *amname, bool missing_ok)
  * ALTER OPERATOR FAMILY any_name USING access_method SET SCHEMA name
  */
 void
-AlterOpFamilyNamespace(List *name, char *access_method, const char *newschema,
-					   EventContext evt)
+AlterOpFamilyNamespace(List *name, char *access_method, const char *newschema)
 {
 	Oid			amOid;
 	Relation	rel;
@@ -2286,7 +2150,7 @@ AlterOpFamilyNamespace(List *name, char *access_method, const char *newschema,
 						 Anum_pg_opfamily_opfname,
 						 Anum_pg_opfamily_opfnamespace,
 						 Anum_pg_opfamily_opfowner,
-						 ACL_KIND_OPFAMILY, evt);
+						 ACL_KIND_OPFAMILY);
 
 	heap_close(rel, RowExclusiveLock);
 }
@@ -2305,7 +2169,7 @@ AlterOpFamilyNamespace_oid(Oid opfamilyOid, Oid newNspOid)
 							 Anum_pg_opfamily_opfname,
 							 Anum_pg_opfamily_opfnamespace,
 							 Anum_pg_opfamily_opfowner,
-							 ACL_KIND_OPFAMILY, NULL);
+							 ACL_KIND_OPFAMILY);
 
 	heap_close(rel, RowExclusiveLock);
 

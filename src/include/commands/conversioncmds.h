@@ -18,11 +18,10 @@
 #include "nodes/parsenodes.h"
 
 extern void CreateConversionCommand(CreateConversionStmt *parsetree);
-extern void RenameConversion(List *name, const char *newname, EventContext evt);
-extern void AlterConversionOwner(List *name, Oid newOwnerId, EventContext evt);
-extern void AlterConversionOwner_oid(Oid conversionOid, Oid newOwnerId, EventContext evt);
-extern void AlterConversionNamespace(List *name, const char *newschema,
-									 EventContext evt);
+extern void RenameConversion(List *name, const char *newname);
+extern void AlterConversionOwner(List *name, Oid newOwnerId);
+extern void AlterConversionOwner_oid(Oid conversionOid, Oid newOwnerId);
+extern void AlterConversionNamespace(List *name, const char *newschema);
 extern Oid	AlterConversionNamespace_oid(Oid convOid, Oid newNspOid);
 
 #endif   /* CONVERSIONCMDS_H */

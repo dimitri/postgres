@@ -14,7 +14,6 @@
 #ifndef CREATEAS_H
 #define CREATEAS_H
 
-#include "commands/event_trigger.h"
 #include "nodes/params.h"
 #include "nodes/parsenodes.h"
 #include "tcop/dest.h"
@@ -25,7 +24,6 @@ extern void ExecCreateTableAs(CreateTableAsStmt *stmt, const char *queryString,
 
 extern int	GetIntoRelEFlags(IntoClause *intoClause);
 
-extern DestReceiver *CreateIntoRelDestReceiver(IntoClause *intoClause,
-											   EventContext evt);
+extern DestReceiver *CreateIntoRelDestReceiver(IntoClause *intoClause);
 
 #endif   /* CREATEAS_H */

@@ -33,7 +33,6 @@
 #include "catalog/pg_type.h"
 #include "commands/alter.h"
 #include "commands/defrem.h"
-#include "commands/event_trigger.h"
 #include "miscadmin.h"
 #include "nodes/makefuncs.h"
 #include "parser/parse_func.h"
@@ -168,7 +167,7 @@ makeParserDependencies(HeapTuple tuple)
  * CREATE TEXT SEARCH PARSER
  */
 void
-DefineTSParser(List *names, List *parameters, EventContext evt)
+DefineTSParser(List *names, List *parameters)
 {
 	char	   *prsname;
 	ListCell   *pl;
@@ -259,18 +258,6 @@ DefineTSParser(List *names, List *parameters, EventContext evt)
 				 errmsg("text search parser lextypes method is required")));
 
 	/*
-	 * Call BEFORE CREATE TEXT SEARCH PARSER triggers
-	 */
-	if (CommandFiresTriggers(evt))
-	{
-		evt->objectId = InvalidOid;
-		evt->objectname = pstrdup(NameStr(pname));
-		evt->schemaname = get_namespace_name(namespaceoid);
-
-		ExecBeforeCommandTriggers(evt);
-	}
-
-	/*
 	 * Looks good, insert
 	 */
 	prsRel = heap_open(TSParserRelationId, RowExclusiveLock);
@@ -290,13 +277,6 @@ DefineTSParser(List *names, List *parameters, EventContext evt)
 	heap_freetuple(tup);
 
 	heap_close(prsRel, RowExclusiveLock);
-
-	/* Call AFTER CREATE TEXT SEARCH PARSER triggers */
-	if (CommandFiresAfterTriggers(evt))
-	{
-		evt->objectId = prsOid;
-		ExecAfterCommandTriggers(evt);
-	}
 }
 
 /*
@@ -326,7 +306,7 @@ RemoveTSParserById(Oid prsId)
  * ALTER TEXT SEARCH PARSER RENAME
  */
 void
-RenameTSParser(List *oldname, const char *newname, EventContext evt)
+RenameTSParser(List *oldname, const char *newname)
 {
 	HeapTuple	tup;
 	Relation	rel;
@@ -357,36 +337,19 @@ RenameTSParser(List *oldname, const char *newname, EventContext evt)
 				 errmsg("text search parser \"%s\" already exists",
 						newname)));
 
-	/* Call BEFORE ALTER TEXT SEARCH PARSER triggers */
-	if (CommandFiresTriggers(evt))
-	{
-		evt->objectId = prsId;
-		evt->objectname = pstrdup(NameStr(((Form_pg_ts_parser) GETSTRUCT(tup))->prsname));
-		evt->schemaname = get_namespace_name(namespaceOid);
-
-		ExecBeforeCommandTriggers(evt);
-	}
-
 	namestrcpy(&(((Form_pg_ts_parser) GETSTRUCT(tup))->prsname), newname);
 	simple_heap_update(rel, &tup->t_self, tup);
 	CatalogUpdateIndexes(rel, tup);
 
 	heap_close(rel, NoLock);
 	heap_freetuple(tup);
-
-	/* Call AFTER ALTER TEXT SEARCH PARSER triggers */
-	if (CommandFiresAfterTriggers(evt))
-	{
-		evt->objectname = pstrdup(newname);
-		ExecAfterCommandTriggers(evt);
-	}
 }
 
 /*
  * ALTER TEXT SEARCH PARSER any_name SET SCHEMA name
  */
 void
-AlterTSParserNamespace(List *name, const char *newschema, EventContext evt)
+AlterTSParserNamespace(List *name, const char *newschema)
 {
 	Oid			prsId,
 				nspOid;
@@ -403,7 +366,7 @@ AlterTSParserNamespace(List *name, const char *newschema, EventContext evt)
 						 prsId, nspOid,
 						 Anum_pg_ts_parser_prsname,
 						 Anum_pg_ts_parser_prsnamespace,
-						 -1, -1, evt);
+						 -1, -1);
 
 	heap_close(rel, RowExclusiveLock);
 }
@@ -421,7 +384,7 @@ AlterTSParserNamespace_oid(Oid prsId, Oid newNspOid)
 							 prsId, newNspOid,
 							 Anum_pg_ts_parser_prsname,
 							 Anum_pg_ts_parser_prsnamespace,
-							 -1, -1, NULL);
+							 -1, -1);
 
 	heap_close(rel, RowExclusiveLock);
 
@@ -522,7 +485,7 @@ verify_dictoptions(Oid tmplId, List *dictoptions)
  * CREATE TEXT SEARCH DICTIONARY
  */
 void
-DefineTSDictionary(List *names, List *parameters, EventContext evt)
+DefineTSDictionary(List *names, List *parameters)
 {
 	ListCell   *pl;
 	Relation	dictRel;
@@ -575,18 +538,6 @@ DefineTSDictionary(List *names, List *parameters, EventContext evt)
 	verify_dictoptions(templId, dictoptions);
 
 	/*
-	 * Call BEFORE CREATE TEXT SEARCH DICTIONARY triggers
-	 */
-	if (CommandFiresTriggers(evt))
-	{
-		evt->objectId = InvalidOid;
-		evt->objectname = pstrdup(dictname);
-		evt->schemaname = get_namespace_name(namespaceoid);
-
-		ExecBeforeCommandTriggers(evt);
-	}
-
-	/*
 	 * Looks good, insert
 	 */
 	memset(values, 0, sizeof(values));
@@ -620,20 +571,13 @@ DefineTSDictionary(List *names, List *parameters, EventContext evt)
 	heap_freetuple(tup);
 
 	heap_close(dictRel, RowExclusiveLock);
-
-	/* Call AFTER CREATE TEXT SEARCH DICTIONARY triggers */
-	if (CommandFiresAfterTriggers(evt))
-	{
-		evt->objectId = dictOid;
-		ExecAfterCommandTriggers(evt);
-	}
 }
 
 /*
  * ALTER TEXT SEARCH DICTIONARY RENAME
  */
 void
-RenameTSDictionary(List *oldname, const char *newname, EventContext evt)
+RenameTSDictionary(List *oldname, const char *newname)
 {
 	HeapTuple	tup;
 	Relation	rel;
@@ -672,36 +616,19 @@ RenameTSDictionary(List *oldname, const char *newname, EventContext evt)
 		aclcheck_error(aclresult, ACL_KIND_NAMESPACE,
 					   get_namespace_name(namespaceOid));
 
-	/* Call BEFORE ALTER TEXT SEARCH DICTIONARY triggers */
-	if (CommandFiresTriggers(evt))
-	{
-		evt->objectId = dictId;
-		evt->objectname = pstrdup(NameStr(((Form_pg_ts_dict) GETSTRUCT(tup))->dictname));
-		evt->schemaname = get_namespace_name(namespaceOid);
-
-		ExecBeforeCommandTriggers(evt);
-	}
-
 	namestrcpy(&(((Form_pg_ts_dict) GETSTRUCT(tup))->dictname), newname);
 	simple_heap_update(rel, &tup->t_self, tup);
 	CatalogUpdateIndexes(rel, tup);
 
 	heap_close(rel, NoLock);
 	heap_freetuple(tup);
-
-	/* Call AFTER ALTER TEXT SEARCH DICTIONARY triggers */
-	if (CommandFiresAfterTriggers(evt))
-	{
-		evt->objectname = pstrdup(newname);
-		ExecAfterCommandTriggers(evt);
-	}
 }
 
 /*
  * ALTER TEXT SEARCH DICTIONARY any_name SET SCHEMA name
  */
 void
-AlterTSDictionaryNamespace(List *name, const char *newschema, EventContext evt)
+AlterTSDictionaryNamespace(List *name, const char *newschema)
 {
 	Oid			dictId,
 				nspOid;
@@ -719,7 +646,7 @@ AlterTSDictionaryNamespace(List *name, const char *newschema, EventContext evt)
 						 Anum_pg_ts_dict_dictname,
 						 Anum_pg_ts_dict_dictnamespace,
 						 Anum_pg_ts_dict_dictowner,
-						 ACL_KIND_TSDICTIONARY, evt);
+						 ACL_KIND_TSDICTIONARY);
 
 	heap_close(rel, RowExclusiveLock);
 }
@@ -738,7 +665,7 @@ AlterTSDictionaryNamespace_oid(Oid dictId, Oid newNspOid)
 							 Anum_pg_ts_dict_dictname,
 							 Anum_pg_ts_dict_dictnamespace,
 							 Anum_pg_ts_dict_dictowner,
-							 ACL_KIND_TSDICTIONARY, NULL);
+							 ACL_KIND_TSDICTIONARY);
 
 	heap_close(rel, RowExclusiveLock);
 
@@ -786,7 +713,6 @@ AlterTSDictionary(AlterTSDictionaryStmt *stmt)
 	Datum		repl_val[Natts_pg_ts_dict];
 	bool		repl_null[Natts_pg_ts_dict];
 	bool		repl_repl[Natts_pg_ts_dict];
-	EventContextData evt;
 
 	dictId = get_ts_dict_oid(stmt->dictname, false);
 
@@ -850,19 +776,6 @@ AlterTSDictionary(AlterTSDictionaryStmt *stmt)
 	verify_dictoptions(((Form_pg_ts_dict) GETSTRUCT(tup))->dicttemplate,
 					   dictoptions);
 
-	/* Call BEFORE ALTER TEXT SEARCH DICTIONARY command triggers */
-	InitEventContextForCommand(&evt, (Node *)stmt, E_AlterTextSearchDictionary);
-
-	if (CommandFiresTriggers(&evt))
-	{
-		Form_pg_ts_dict form = (Form_pg_ts_dict) GETSTRUCT(tup);
-		evt.objectId = dictId;
-		evt.objectname = pstrdup(NameStr(form->dictname));
-		evt.schemaname = get_namespace_name(form->dictnamespace);
-
-		ExecBeforeCommandTriggers(&evt);
-	}
-
 	/*
 	 * Looks good, update
 	 */
@@ -894,17 +807,13 @@ AlterTSDictionary(AlterTSDictionaryStmt *stmt)
 	ReleaseSysCache(tup);
 
 	heap_close(rel, RowExclusiveLock);
-
-	/* Call AFTER ALTER TEXT SEARCH DICTIONARY command triggers */
-	if (CommandFiresAfterTriggers(&evt))
-		ExecAfterCommandTriggers(&evt);
 }
 
 /*
  * ALTER TEXT SEARCH DICTIONARY OWNER
  */
 void
-AlterTSDictionaryOwner(List *name, Oid newOwnerId, EventContext evt)
+AlterTSDictionaryOwner(List *name, Oid newOwnerId)
 {
 	HeapTuple	tup;
 	Relation	rel;
@@ -946,16 +855,6 @@ AlterTSDictionaryOwner(List *name, Oid newOwnerId, EventContext evt)
 							   get_namespace_name(namespaceOid));
 		}
 
-		/* Call BEFORE ALTER TEXT SEARCH DICTIONARY triggers */
-		if (CommandFiresTriggers(evt))
-		{
-			evt->objectId = dictId;
-			evt->objectname = pstrdup(NameStr(form->dictname));
-			evt->schemaname = get_namespace_name(namespaceOid);
-
-			ExecBeforeCommandTriggers(evt);
-		}
-
 		form->dictowner = newOwnerId;
 
 		simple_heap_update(rel, &tup->t_self, tup);
@@ -964,10 +863,6 @@ AlterTSDictionaryOwner(List *name, Oid newOwnerId, EventContext evt)
 		/* Update owner dependency reference */
 		changeDependencyOnOwner(TSDictionaryRelationId, HeapTupleGetOid(tup),
 								newOwnerId);
-
-		/* Call AFTER ALTER TEXT SEARCH DICTIONARY triggers */
-		if (CommandFiresAfterTriggers(evt))
-			ExecAfterCommandTriggers(evt);
 	}
 
 	heap_close(rel, NoLock);
@@ -1062,7 +957,7 @@ makeTSTemplateDependencies(HeapTuple tuple)
  * CREATE TEXT SEARCH TEMPLATE
  */
 void
-DefineTSTemplate(List *names, List *parameters, EventContext evt)
+DefineTSTemplate(List *names, List *parameters)
 {
 	ListCell   *pl;
 	Relation	tmplRel;
@@ -1128,18 +1023,6 @@ DefineTSTemplate(List *names, List *parameters, EventContext evt)
 				 errmsg("text search template lexize method is required")));
 
 	/*
-	 * Call BEFORE CREATE TEXT SEARCH TEMPLATE triggers
-	 */
-	if (CommandFiresTriggers(evt))
-	{
-		evt->objectId = InvalidOid;
-		evt->objectname = pstrdup(NameStr(dname));
-		evt->schemaname = get_namespace_name(namespaceoid);
-
-		ExecBeforeCommandTriggers(evt);
-	}
-
-	/*
 	 * Looks good, insert
 	 */
 
@@ -1160,20 +1043,13 @@ DefineTSTemplate(List *names, List *parameters, EventContext evt)
 	heap_freetuple(tup);
 
 	heap_close(tmplRel, RowExclusiveLock);
-
-	/* Call AFTER CREATE TEXT SEARCH TEMPLATE triggers */
-	if (CommandFiresAfterTriggers(evt))
-	{
-		evt->objectId = dictOid;
-		ExecAfterCommandTriggers(evt);
-	}
 }
 
 /*
  * ALTER TEXT SEARCH TEMPLATE RENAME
  */
 void
-RenameTSTemplate(List *oldname, const char *newname, EventContext evt)
+RenameTSTemplate(List *oldname, const char *newname)
 {
 	HeapTuple	tup;
 	Relation	rel;
@@ -1205,36 +1081,19 @@ RenameTSTemplate(List *oldname, const char *newname, EventContext evt)
 				 errmsg("text search template \"%s\" already exists",
 						newname)));
 
-	/* Call BEFORE ALTER TEXT SEARCH TEMPLATE triggers */
-	if (CommandFiresTriggers(evt))
-	{
-		evt->objectId = tmplId;
-		evt->objectname = pstrdup(NameStr(((Form_pg_ts_template) GETSTRUCT(tup))->tmplname));
-		evt->schemaname = get_namespace_name(namespaceOid);
-
-		ExecBeforeCommandTriggers(evt);
-	}
-
 	namestrcpy(&(((Form_pg_ts_template) GETSTRUCT(tup))->tmplname), newname);
 	simple_heap_update(rel, &tup->t_self, tup);
 	CatalogUpdateIndexes(rel, tup);
 
 	heap_close(rel, NoLock);
 	heap_freetuple(tup);
-
-	/* Call AFTER ALTER TEXT SEARCH TEMPLATE triggers */
-	if (CommandFiresAfterTriggers(evt))
-	{
-		evt->objectname = pstrdup(newname);
-		ExecAfterCommandTriggers(evt);
-	}
 }
 
 /*
  * ALTER TEXT SEARCH TEMPLATE any_name SET SCHEMA name
  */
 void
-AlterTSTemplateNamespace(List *name, const char *newschema, EventContext evt)
+AlterTSTemplateNamespace(List *name, const char *newschema)
 {
 	Oid			tmplId,
 				nspOid;
@@ -1251,7 +1110,7 @@ AlterTSTemplateNamespace(List *name, const char *newschema, EventContext evt)
 						 tmplId, nspOid,
 						 Anum_pg_ts_template_tmplname,
 						 Anum_pg_ts_template_tmplnamespace,
-						 -1, -1, evt);
+						 -1, -1);
 
 	heap_close(rel, RowExclusiveLock);
 }
@@ -1269,7 +1128,7 @@ AlterTSTemplateNamespace_oid(Oid tmplId, Oid newNspOid)
 							 tmplId, newNspOid,
 							 Anum_pg_ts_template_tmplname,
 							 Anum_pg_ts_template_tmplnamespace,
-							 -1, -1, NULL);
+							 -1, -1);
 
 	heap_close(rel, RowExclusiveLock);
 
@@ -1417,7 +1276,7 @@ makeConfigurationDependencies(HeapTuple tuple, bool removeOld,
  * CREATE TEXT SEARCH CONFIGURATION
  */
 void
-DefineTSConfiguration(List *names, List *parameters, EventContext evt)
+DefineTSConfiguration(List *names, List *parameters)
 {
 	Relation	cfgRel;
 	Relation	mapRel = NULL;
@@ -1492,18 +1351,6 @@ DefineTSConfiguration(List *names, List *parameters, EventContext evt)
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_OBJECT_DEFINITION),
 				 errmsg("text search parser is required")));
-
-	/*
-	 * Call BEFORE CREATE TEXT SEARCH CONFIGURATION triggers
-	 */
-	if (CommandFiresTriggers(evt))
-	{
-		evt->objectId = InvalidOid;
-		evt->objectname = pstrdup(cfgname);
-		evt->schemaname = get_namespace_name(namespaceoid);
-
-		ExecBeforeCommandTriggers(evt);
-	}
 
 	/*
 	 * Looks good, build tuple and insert
@@ -1582,20 +1429,13 @@ DefineTSConfiguration(List *names, List *parameters, EventContext evt)
 	if (mapRel)
 		heap_close(mapRel, RowExclusiveLock);
 	heap_close(cfgRel, RowExclusiveLock);
-
-	/* Call AFTER CREATE TEXT SEARCH PARSER triggers */
-	if (CommandFiresAfterTriggers(evt))
-	{
-		evt->objectId = cfgOid;
-		ExecAfterCommandTriggers(evt);
-	}
 }
 
 /*
  * ALTER TEXT SEARCH CONFIGURATION RENAME
  */
 void
-RenameTSConfiguration(List *oldname, const char *newname, EventContext evt)
+RenameTSConfiguration(List *oldname, const char *newname)
 {
 	HeapTuple	tup;
 	Relation	rel;
@@ -1633,36 +1473,19 @@ RenameTSConfiguration(List *oldname, const char *newname, EventContext evt)
 	aclcheck_error(aclresult, ACL_KIND_NAMESPACE,
 				   get_namespace_name(namespaceOid));
 
-	/* Call BEFORE ALTER TEXT SEARCH CONFIGURATION triggers */
-	if (CommandFiresTriggers(evt))
-	{
-		evt->objectId = cfgId;
-		evt->objectname = pstrdup(NameStr(((Form_pg_ts_config) GETSTRUCT(tup))->cfgname));
-		evt->schemaname = get_namespace_name(namespaceOid);
-
-		ExecBeforeCommandTriggers(evt);
-	}
-
 	namestrcpy(&(((Form_pg_ts_config) GETSTRUCT(tup))->cfgname), newname);
 	simple_heap_update(rel, &tup->t_self, tup);
 	CatalogUpdateIndexes(rel, tup);
 
 	heap_close(rel, NoLock);
 	heap_freetuple(tup);
-
-	/* Call AFTER ALTER TEXT SEARCH CONFIGURATION triggers */
-	if (CommandFiresAfterTriggers(evt))
-	{
-		evt->objectname = pstrdup(newname);
-		ExecAfterCommandTriggers(evt);
-	}
 }
 
 /*
  * ALTER TEXT SEARCH CONFIGURATION any_name SET SCHEMA name
  */
 void
-AlterTSConfigurationNamespace(List *name, const char *newschema, EventContext evt)
+AlterTSConfigurationNamespace(List *name, const char *newschema)
 {
 	Oid			cfgId,
 				nspOid;
@@ -1680,7 +1503,7 @@ AlterTSConfigurationNamespace(List *name, const char *newschema, EventContext ev
 						 Anum_pg_ts_config_cfgname,
 						 Anum_pg_ts_config_cfgnamespace,
 						 Anum_pg_ts_config_cfgowner,
-						 ACL_KIND_TSCONFIGURATION, evt);
+						 ACL_KIND_TSCONFIGURATION);
 
 	heap_close(rel, RowExclusiveLock);
 }
@@ -1699,7 +1522,7 @@ AlterTSConfigurationNamespace_oid(Oid cfgId, Oid newNspOid)
 							 Anum_pg_ts_config_cfgname,
 							 Anum_pg_ts_config_cfgnamespace,
 							 Anum_pg_ts_config_cfgowner,
-							 ACL_KIND_TSCONFIGURATION, NULL);
+							 ACL_KIND_TSCONFIGURATION);
 
 	heap_close(rel, RowExclusiveLock);
 
@@ -1758,7 +1581,7 @@ RemoveTSConfigurationById(Oid cfgId)
  * ALTER TEXT SEARCH CONFIGURATION OWNER
  */
 void
-AlterTSConfigurationOwner(List *name, Oid newOwnerId, EventContext evt)
+AlterTSConfigurationOwner(List *name, Oid newOwnerId)
 {
 	HeapTuple	tup;
 	Relation	rel;
@@ -1800,16 +1623,6 @@ AlterTSConfigurationOwner(List *name, Oid newOwnerId, EventContext evt)
 							   get_namespace_name(namespaceOid));
 		}
 
-		/* Call BEFORE ALTER TEXT SEARCH CONFIGURATION triggers */
-		if (CommandFiresTriggers(evt))
-		{
-			evt->objectId = cfgId;
-			evt->objectname = pstrdup(NameStr(form->cfgname));
-			evt->schemaname = get_namespace_name(namespaceOid);
-
-			ExecBeforeCommandTriggers(evt);
-		}
-
 		form->cfgowner = newOwnerId;
 
 		simple_heap_update(rel, &tup->t_self, tup);
@@ -1818,11 +1631,8 @@ AlterTSConfigurationOwner(List *name, Oid newOwnerId, EventContext evt)
 		/* Update owner dependency reference */
 		changeDependencyOnOwner(TSConfigRelationId, HeapTupleGetOid(tup),
 								newOwnerId);
-
-		/* Call AFTER ALTER TEXT SEARCH CONFIGURATION triggers */
-		if (CommandFiresAfterTriggers(evt))
-			ExecAfterCommandTriggers(evt);
 	}
+
 	heap_close(rel, NoLock);
 	heap_freetuple(tup);
 }
@@ -1835,7 +1645,6 @@ AlterTSConfiguration(AlterTSConfigurationStmt *stmt)
 {
 	HeapTuple	tup;
 	Relation	relMap;
-	EventContextData evt;
 
 	/* Find the configuration */
 	tup = GetTSConfigTuple(stmt->cfgname);
@@ -1849,20 +1658,6 @@ AlterTSConfiguration(AlterTSConfigurationStmt *stmt)
 	if (!pg_ts_config_ownercheck(HeapTupleGetOid(tup), GetUserId()))
 		aclcheck_error(ACLCHECK_NOT_OWNER, ACL_KIND_TSCONFIGURATION,
 					   NameListToString(stmt->cfgname));
-
-	/* Call BEFORE ALTER TEXT SEARCH CONFIGURATION command triggers */
-	InitEventContextForCommand(&evt, (Node *)stmt, E_AlterTextSearchConfiguration);
-
-	if (CommandFiresTriggers(&evt))
-	{
-		Form_pg_ts_config form = (Form_pg_ts_config) GETSTRUCT(tup);
-
-		evt.objectId = HeapTupleGetOid(tup);
-		evt.objectname = pstrdup(NameStr(form->cfgname));
-		evt.schemaname = get_namespace_name(form->cfgnamespace);
-
-		ExecBeforeCommandTriggers(&evt);
-	}
 
 	relMap = heap_open(TSConfigMapRelationId, RowExclusiveLock);
 
@@ -1878,10 +1673,6 @@ AlterTSConfiguration(AlterTSConfigurationStmt *stmt)
 	heap_close(relMap, RowExclusiveLock);
 
 	ReleaseSysCache(tup);
-
-	/* Call AFTER ALTER TEXT SEARCH CONFIGURATION command triggers */
-	if (CommandFiresAfterTriggers(&evt))
-		ExecAfterCommandTriggers(&evt);
 }
 
 /*

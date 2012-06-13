@@ -15,16 +15,13 @@
 #ifndef COLLATIONCMDS_H
 #define COLLATIONCMDS_H
 
-#include "commands/event_trigger.h"
 #include "nodes/parsenodes.h"
 
-extern void DefineCollation(List *names, List *parameters, EventContext evt);
-extern void RenameCollation(List *name, const char *newname, EventContext evt);
-extern void AlterCollationOwner(List *name, Oid newOwnerId, EventContext evt);
-extern void AlterCollationOwner_oid(Oid collationOid, Oid newOwnerId, EventContext evt);
-extern void AlterCollationNamespace(List *name, const char *newschema,
-										EventContext evt);
-extern Oid	AlterCollationNamespace_oid(Oid collOid, Oid newNspOid,
-											EventContext evt);
+extern void DefineCollation(List *names, List *parameters);
+extern void RenameCollation(List *name, const char *newname);
+extern void AlterCollationOwner(List *name, Oid newOwnerId);
+extern void AlterCollationOwner_oid(Oid collationOid, Oid newOwnerId);
+extern void AlterCollationNamespace(List *name, const char *newschema);
+extern Oid	AlterCollationNamespace_oid(Oid collOid, Oid newNspOid);
 
 #endif   /* COLLATIONCMDS_H */

@@ -22,22 +22,15 @@
 #include "catalog/pg_class.h"
 #include "catalog/pg_proc.h"
 #include "commands/defrem.h"
-#include "commands/event_trigger.h"
 #include "miscadmin.h"
 #include "nodes/makefuncs.h"
 #include "parser/parse_type.h"
-#include "tcop/utility.h"
 #include "utils/acl.h"
 #include "utils/builtins.h"
-#include "utils/lsyscache.h"
 #include "utils/syscache.h"
 
 static void does_not_exist_skipping(ObjectType objtype,
 						List *objname, List *objargs);
-
-static void	get_object_name(EventContext evt,
-							ObjectType objtype,
-							Oid objectId, List *objname);
 
 /*
  * Drop one or more objects.
@@ -56,8 +49,6 @@ RemoveObjects(DropStmt *stmt)
 	ObjectAddresses *objects;
 	ListCell   *cell1;
 	ListCell   *cell2 = NULL;
-	int i = 0, n = list_length(stmt->objects);
-	EventContext *evts = (EventContext *) palloc(n * sizeof(EventContext));
 
 	objects = new_object_addresses();
 
@@ -68,7 +59,6 @@ RemoveObjects(DropStmt *stmt)
 		List	   *objargs = NIL;
 		Relation	relation = NULL;
 		Oid			namespaceId;
-		EventContextData evt;
 
 		if (stmt->arguments)
 		{
@@ -87,7 +77,6 @@ RemoveObjects(DropStmt *stmt)
 		if (!OidIsValid(address.objectId))
 		{
 			does_not_exist_skipping(stmt->removeType, objname, objargs);
-			evts[i++] = NULL;
 			continue;
 		}
 
@@ -126,36 +115,12 @@ RemoveObjects(DropStmt *stmt)
 		if (relation)
 			heap_close(relation, NoLock);
 
-		/*
-		 * Call BEFORE DROP command triggers
-		 */
-		InitEventContext(&evt, (Node *)stmt);
-
-		if (CommandFiresTriggers(&evt))
-		{
-			evt.objectId = address.objectId;
-			get_object_name(&evt, stmt->removeType, address.objectId, objname);
-			evt.schemaname = get_namespace_name(namespaceId);
-
-			ExecBeforeCommandTriggers(&evt);
-		}
-		evts[i++] = &evt;
-
 		add_exact_object_address(&address, objects);
 	}
 
 	/* Here we really delete them. */
 	performMultipleDeletions(objects, stmt->behavior, 0);
 
-	/* Call AFTER DROP command triggers */
-	for(i = 0; i<n; i++)
-	{
-		if (CommandFiresAfterTriggers(evts[i]))
-		{
-			evts[i]->objectId = InvalidOid;
-			ExecAfterCommandTriggers(evts[i]);
-		}
-	}
 	free_object_addresses(objects);
 }
 
@@ -241,11 +206,6 @@ does_not_exist_skipping(ObjectType objtype, List *objname, List *objargs)
 			args = NameListToString(list_truncate(objname,
 												  list_length(objname) - 1));
 			break;
-		case OBJECT_EVENT_TRIGGER:
-			msg = gettext_noop("trigger \"%s\" for command \"%s\" does not exist, skipping");
-			name = NameListToString(objname);
-			args = strVal(linitial(objargs));
-			break;
 		case OBJECT_RULE:
 			msg = gettext_noop("rule \"%s\" for relation \"%s\" does not exist, skipping");
 			name = strVal(llast(objname));
@@ -279,57 +239,4 @@ does_not_exist_skipping(ObjectType objtype, List *objname, List *objargs)
 		ereport(NOTICE, (errmsg(msg, name)));
 	else
 		ereport(NOTICE, (errmsg(msg, name, args)));
-}
-
-/*
- * Fill in the EventContext name, with the non-qualified part fo the name.
- */
-static void
-get_object_name(EventContext evt, ObjectType objtype,
-				Oid objectId, List *objname)
-{
-	switch (objtype)
-	{
-		case OBJECT_TYPE:
-		case OBJECT_DOMAIN:
-			evt->objectname = format_type_be_without_namespace(objectId);
-			break;
-		case OBJECT_CAST:
-			evt->objectname = NULL;
-			break;
-		case OBJECT_RULE:
-		case OBJECT_TRIGGER:
-			evt->objectname = pstrdup(strVal(llast(objname)));
-			break;
-		case OBJECT_COLLATION:
-		case OBJECT_CONVERSION:
-		case OBJECT_SCHEMA:
-		case OBJECT_TSPARSER:
-		case OBJECT_TSDICTIONARY:
-		case OBJECT_TSTEMPLATE:
-		case OBJECT_TSCONFIGURATION:
-		case OBJECT_EXTENSION:
-		case OBJECT_FUNCTION:
-		case OBJECT_AGGREGATE:
-		case OBJECT_OPERATOR:
-		case OBJECT_LANGUAGE:
-		case OBJECT_EVENT_TRIGGER:
-		case OBJECT_FDW:
-		case OBJECT_FOREIGN_SERVER:
-		case OBJECT_OPCLASS:
-		case OBJECT_OPFAMILY:
-		{
-			int len = list_length(objname);
-			if (len == 1)
-				evt->objectname = pstrdup(strVal(linitial(objname)));
-			else if (len == 2)
-				evt->objectname = pstrdup(strVal(lsecond(objname)));
-			else
-				elog(ERROR, "unexpected name list length (%d)", len);
-			break;
-		}
-		default:
-			elog(ERROR, "unexpected object type (%d)", (int)objtype);
-			break;
-	}
 }

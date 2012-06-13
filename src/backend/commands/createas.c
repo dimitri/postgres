@@ -47,7 +47,6 @@ typedef struct
 	CommandId	output_cid;		/* cmin to insert in output tuples */
 	int			hi_options;		/* heap_insert performance options */
 	BulkInsertState bistate;	/* bulk insert state */
-	EventContext evt;			/* Event Context, for event triggers */
 } DR_intorel;
 
 static void intorel_startup(DestReceiver *self, int operation, TupleDesc typeinfo);
@@ -70,14 +69,11 @@ ExecCreateTableAs(CreateTableAsStmt *stmt, const char *queryString,
 	PlannedStmt *plan;
 	QueryDesc  *queryDesc;
 	ScanDirection dir;
-	EventContextData evt;
 
 	/*
 	 * Create the tuple receiver object and insert info it will need
 	 */
-	InitEventContextForCommand(&evt, (Node *)stmt, E_CreateTableAs);
-
-	dest = CreateIntoRelDestReceiver(into, &evt);
+	dest = CreateIntoRelDestReceiver(into);
 
 	/*
 	 * The contained Query could be a SELECT, or an EXECUTE utility command.
@@ -191,7 +187,7 @@ GetIntoRelEFlags(IntoClause *intoClause)
  * self->into to be filled in immediately for other callers.
  */
 DestReceiver *
-CreateIntoRelDestReceiver(IntoClause *intoClause, EventContext evt)
+CreateIntoRelDestReceiver(IntoClause *intoClause)
 {
 	DR_intorel *self = (DR_intorel *) palloc0(sizeof(DR_intorel));
 
@@ -201,7 +197,6 @@ CreateIntoRelDestReceiver(IntoClause *intoClause, EventContext evt)
 	self->pub.rDestroy = intorel_destroy;
 	self->pub.mydest = DestIntoRel;
 	self->into = intoClause;
-	self->evt = evt;
 	/* other private fields will be set during intorel_startup */
 
 	return (DestReceiver *) self;
@@ -215,7 +210,6 @@ intorel_startup(DestReceiver *self, int operation, TupleDesc typeinfo)
 {
 	DR_intorel *myState = (DR_intorel *) self;
 	IntoClause *into = myState->into;
-EventContext evt = myState->evt;
 	CreateStmt *create;
 	Oid			intoRelationId;
 	Relation	intoRelationDesc;
@@ -309,7 +303,7 @@ EventContext evt = myState->evt;
 	/*
 	 * Actually create the target table
 	 */
-	intoRelationId = DefineRelation(create, RELKIND_RELATION, InvalidOid, evt);
+	intoRelationId = DefineRelation(create, RELKIND_RELATION, InvalidOid);
 
 	/*
 	 * If necessary, create a TOAST table for the target table.  Note that
@@ -413,13 +407,6 @@ intorel_shutdown(DestReceiver *self)
 	/* If we skipped using WAL, must heap_sync before commit */
 	if (myState->hi_options & HEAP_INSERT_SKIP_WAL)
 		heap_sync(myState->rel);
-
-	/* Call AFTER CREATE TABLE AS command triggers */
-	if (CommandFiresAfterTriggers(myState->evt))
-	{
-		myState->evt->objectId = RelationGetRelid(myState->rel);
-		ExecAfterCommandTriggers(myState->evt);
-	}
 
 	/* close rel, but keep lock until commit */
 	heap_close(myState->rel, NoLock);

@@ -21,7 +21,6 @@
 #include "catalog/namespace.h"
 #include "catalog/pg_namespace.h"
 #include "commands/dbcommands.h"
-#include "commands/event_trigger.h"
 #include "commands/schemacmds.h"
 #include "miscadmin.h"
 #include "parser/parse_utilcmd.h"
@@ -32,8 +31,7 @@
 #include "utils/syscache.h"
 
 
-static void AlterSchemaOwner_internal(HeapTuple tup, Relation rel,
-									  Oid newOwnerId, EventContext evt);
+static void AlterSchemaOwner_internal(HeapTuple tup, Relation rel, Oid newOwnerId);
 
 /*
  * CREATE SCHEMA
@@ -51,7 +49,6 @@ CreateSchemaCommand(CreateSchemaStmt *stmt, const char *queryString)
 	Oid			saved_uid;
 	int			save_sec_context;
 	AclResult	aclresult;
-	EventContextData evt;
 
 	GetUserIdAndSecContext(&saved_uid, &save_sec_context);
 
@@ -84,19 +81,6 @@ CreateSchemaCommand(CreateSchemaStmt *stmt, const char *queryString)
 				 errmsg("unacceptable schema name \"%s\"", schemaName),
 		   errdetail("The prefix \"pg_\" is reserved for system schemas.")));
 
-	/*
-	 * Call BEFORE CREATE SCHEMA triggers (before changing authorization)
-	 */
-	InitEventContextForCommand(&evt, (Node *)stmt, E_CreateSchema);
-
-	if (CommandFiresTriggers(&evt))
-	{
-		evt.objectId = InvalidOid;
-		evt.objectname = (char *)schemaName;
-		evt.schemaname = NULL;		/* a schema does not live in another schema */
-
-		ExecBeforeCommandTriggers(&evt);
-	}
 	/*
 	 * If the requested authorization is different from the current user,
 	 * temporarily set the current user so that the object(s) will be created
@@ -160,13 +144,6 @@ CreateSchemaCommand(CreateSchemaStmt *stmt, const char *queryString)
 
 	/* Reset current user and security context */
 	SetUserIdAndSecContext(saved_uid, save_sec_context);
-
-	/* Call AFTER CREATE SCHEMA triggers */
-	if (CommandFiresAfterTriggers(&evt))
-	{
-		evt.objectId = namespaceId;
-		ExecAfterCommandTriggers(&evt);
-	}
 }
 
 /*
@@ -197,7 +174,7 @@ RemoveSchemaById(Oid schemaOid)
  * Rename schema
  */
 void
-RenameSchema(const char *oldname, const char *newname, EventContext evt)
+RenameSchema(const char *oldname, const char *newname)
 {
 	HeapTuple	tup;
 	Relation	rel;
@@ -234,16 +211,6 @@ RenameSchema(const char *oldname, const char *newname, EventContext evt)
 				 errmsg("unacceptable schema name \"%s\"", newname),
 		   errdetail("The prefix \"pg_\" is reserved for system schemas.")));
 
-	/* Call BEFORE ALTER SCHEMA triggers */
-	if (CommandFiresTriggers(evt))
-	{
-		evt->objectId = HeapTupleGetOid(tup);
-		evt->objectname = pstrdup(oldname);
-		evt->schemaname = NULL;
-
-		ExecBeforeCommandTriggers(evt);
-	}
-
 	/* rename */
 	namestrcpy(&(((Form_pg_namespace) GETSTRUCT(tup))->nspname), newname);
 	simple_heap_update(rel, &tup->t_self, tup);
@@ -251,13 +218,6 @@ RenameSchema(const char *oldname, const char *newname, EventContext evt)
 
 	heap_close(rel, NoLock);
 	heap_freetuple(tup);
-
-	/* Call AFTER ALTER SCHEMA triggers */
-	if (CommandFiresAfterTriggers(evt))
-	{
-		evt->objectname = pstrdup(newname);
-		ExecAfterCommandTriggers(evt);
-	}
 }
 
 void
@@ -272,7 +232,7 @@ AlterSchemaOwner_oid(Oid oid, Oid newOwnerId)
 	if (!HeapTupleIsValid(tup))
 		elog(ERROR, "cache lookup failed for schema %u", oid);
 
-	AlterSchemaOwner_internal(tup, rel, newOwnerId, NULL);
+	AlterSchemaOwner_internal(tup, rel, newOwnerId);
 
 	ReleaseSysCache(tup);
 
@@ -284,7 +244,7 @@ AlterSchemaOwner_oid(Oid oid, Oid newOwnerId)
  * Change schema owner
  */
 void
-AlterSchemaOwner(const char *name, Oid newOwnerId, EventContext evt)
+AlterSchemaOwner(const char *name, Oid newOwnerId)
 {
 	HeapTuple	tup;
 	Relation	rel;
@@ -297,7 +257,7 @@ AlterSchemaOwner(const char *name, Oid newOwnerId, EventContext evt)
 				(errcode(ERRCODE_UNDEFINED_SCHEMA),
 				 errmsg("schema \"%s\" does not exist", name)));
 
-	AlterSchemaOwner_internal(tup, rel, newOwnerId, evt);
+	AlterSchemaOwner_internal(tup, rel, newOwnerId);
 
 	ReleaseSysCache(tup);
 
@@ -305,8 +265,7 @@ AlterSchemaOwner(const char *name, Oid newOwnerId, EventContext evt)
 }
 
 static void
-AlterSchemaOwner_internal(HeapTuple tup, Relation rel, Oid newOwnerId,
-						  EventContext evt)
+AlterSchemaOwner_internal(HeapTuple tup, Relation rel, Oid newOwnerId)
 {
 	Form_pg_namespace nspForm;
 
@@ -353,16 +312,6 @@ AlterSchemaOwner_internal(HeapTuple tup, Relation rel, Oid newOwnerId,
 			aclcheck_error(aclresult, ACL_KIND_DATABASE,
 						   get_database_name(MyDatabaseId));
 
-		/* Call BEFORE ALTER SCHEMA triggers */
-		if (CommandFiresTriggers(evt))
-		{
-			evt->objectId = HeapTupleGetOid(tup);
-			evt->objectname = pstrdup(NameStr(nspForm->nspname));
-			evt->schemaname = NULL;
-
-			ExecBeforeCommandTriggers(evt);
-		}
-
 		memset(repl_null, false, sizeof(repl_null));
 		memset(repl_repl, false, sizeof(repl_repl));
 
@@ -394,9 +343,6 @@ AlterSchemaOwner_internal(HeapTuple tup, Relation rel, Oid newOwnerId,
 		/* Update owner dependency reference */
 		changeDependencyOnOwner(NamespaceRelationId, HeapTupleGetOid(tup),
 								newOwnerId);
-
-		/* Call AFTER ALTER SCHEMA triggers */
-		if (CommandFiresAfterTriggers(evt))
-			ExecAfterCommandTriggers(evt);
 	}
+
 }

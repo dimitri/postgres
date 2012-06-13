@@ -51,8 +51,7 @@
 #include "utils/syscache.h"
 
 
-static void AlterOperatorOwner_internal(Relation rel, Oid operOid, Oid newOwnerId,
-										EventContext evt);
+static void AlterOperatorOwner_internal(Relation rel, Oid operOid, Oid newOwnerId);
 
 /*
  * DefineOperator
@@ -63,7 +62,7 @@ static void AlterOperatorOwner_internal(Relation rel, Oid operOid, Oid newOwnerI
  * 'parameters' is a list of DefElem
  */
 void
-DefineOperator(List *names, List *parameters, EventContext evt)
+DefineOperator(List *names, List *parameters)
 {
 	char	   *oprName;
 	Oid			oprNamespace;
@@ -311,8 +310,7 @@ DefineOperator(List *names, List *parameters, EventContext evt)
 				   restrictionOid,		/* optional restrict. sel. procedure */
 				   joinOid,		/* optional join sel. procedure name */
 				   canMerge,	/* operator merges */
-				   canHash, 	/* operator hashes */
-				   evt);
+				   canHash);	/* operator hashes */
 }
 
 
@@ -345,7 +343,7 @@ AlterOperatorOwner_oid(Oid operOid, Oid newOwnerId)
 
 	rel = heap_open(OperatorRelationId, RowExclusiveLock);
 
-	AlterOperatorOwner_internal(rel, operOid, newOwnerId, NULL);
+	AlterOperatorOwner_internal(rel, operOid, newOwnerId);
 
 	heap_close(rel, NoLock);
 }
@@ -355,7 +353,7 @@ AlterOperatorOwner_oid(Oid operOid, Oid newOwnerId)
  */
 void
 AlterOperatorOwner(List *name, TypeName *typeName1, TypeName *typeName2,
-				   Oid newOwnerId, EventContext evt)
+				   Oid newOwnerId)
 {
 	Oid			operOid;
 	Relation	rel;
@@ -366,14 +364,13 @@ AlterOperatorOwner(List *name, TypeName *typeName1, TypeName *typeName2,
 									  typeName1, typeName2,
 									  false, -1);
 
-	AlterOperatorOwner_internal(rel, operOid, newOwnerId, evt);
+	AlterOperatorOwner_internal(rel, operOid, newOwnerId);
 
 	heap_close(rel, NoLock);
 }
 
 static void
-AlterOperatorOwner_internal(Relation rel, Oid operOid, Oid newOwnerId,
-							EventContext evt)
+AlterOperatorOwner_internal(Relation rel, Oid operOid, Oid newOwnerId)
 {
 	HeapTuple	tup;
 	AclResult	aclresult;
@@ -413,16 +410,6 @@ AlterOperatorOwner_internal(Relation rel, Oid operOid, Oid newOwnerId,
 							   get_namespace_name(oprForm->oprnamespace));
 		}
 
-		/* Call BEFORE ALTER OPERATOR triggers */
-		if (CommandFiresTriggers(evt))
-		{
-			evt->objectId = operOid;
-			evt->objectname = pstrdup(NameStr(oprForm->oprname));
-			evt->schemaname = get_namespace_name(oprForm->oprnamespace);
-
-			ExecBeforeCommandTriggers(evt);
-		}
-
 		/*
 		 * Modify the owner --- okay to scribble on tup because it's a copy
 		 */
@@ -437,18 +424,13 @@ AlterOperatorOwner_internal(Relation rel, Oid operOid, Oid newOwnerId,
 	}
 
 	heap_freetuple(tup);
-
-	/* Call AFTER ALTER OPERATOR triggers */
-	if (CommandFiresAfterTriggers(evt))
-		ExecAfterCommandTriggers(evt);
 }
 
 /*
  * Execute ALTER OPERATOR SET SCHEMA
  */
 void
-AlterOperatorNamespace(List *names, List *argtypes, const char *newschema,
-					   EventContext evt)
+AlterOperatorNamespace(List *names, List *argtypes, const char *newschema)
 {
 	List	   *operatorName = names;
 	TypeName   *typeName1 = (TypeName *) linitial(argtypes);
@@ -472,7 +454,7 @@ AlterOperatorNamespace(List *names, List *argtypes, const char *newschema,
 						 Anum_pg_operator_oprname,
 						 Anum_pg_operator_oprnamespace,
 						 Anum_pg_operator_oprowner,
-						 ACL_KIND_OPER, evt);
+						 ACL_KIND_OPER);
 
 	heap_close(rel, RowExclusiveLock);
 }
@@ -490,7 +472,7 @@ AlterOperatorNamespace_oid(Oid operOid, Oid newNspOid)
 									 Anum_pg_operator_oprname,
 									 Anum_pg_operator_oprnamespace,
 									 Anum_pg_operator_oprowner,
-									 ACL_KIND_OPER, NULL);
+									 ACL_KIND_OPER);
 
 	heap_close(rel, RowExclusiveLock);
 

@@ -51,7 +51,6 @@
 #include "catalog/pg_type.h"
 #include "catalog/pg_type_fn.h"
 #include "commands/defrem.h"
-#include "commands/event_trigger.h"
 #include "commands/tablecmds.h"
 #include "commands/typecmds.h"
 #include "executor/executor.h"
@@ -64,7 +63,6 @@
 #include "parser/parse_expr.h"
 #include "parser/parse_func.h"
 #include "parser/parse_type.h"
-#include "tcop/utility.h"
 #include "utils/acl.h"
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
@@ -113,7 +111,7 @@ static char *domainAddConstraint(Oid domainOid, Oid domainNamespace,
  *		Registers a new base type.
  */
 void
-DefineType(List *names, List *parameters, EventContext evt)
+DefineType(List *names, List *parameters)
 {
 	char	   *typeName;
 	Oid			typeNamespace;
@@ -544,17 +542,6 @@ DefineType(List *names, List *parameters, EventContext evt)
 					   NameListToString(analyzeName));
 #endif
 
-	/*
-	 * Call BEFORE CREATE TYPE triggers
-	 */
-	if (CommandFiresTriggers(evt))
-	{
-		evt->objectId = InvalidOid;
-		evt->objectname = pstrdup(typeName);
-		evt->schemaname = get_namespace_name(typeNamespace);
-
-		ExecBeforeCommandTriggers(evt);
-	}
 	array_oid = AssignTypeArrayOid();
 
 	/*
@@ -638,13 +625,6 @@ DefineType(List *names, List *parameters, EventContext evt)
 			   collation);		/* type's collation */
 
 	pfree(array_type);
-
-	/* Call AFTER CREATE AGGREGATE triggers */
-	if (CommandFiresAfterTriggers(evt))
-	{
-		evt->objectId = typoid;
-		ExecAfterCommandTriggers(evt);
-	}
 }
 
 /*
@@ -726,7 +706,6 @@ DefineDomain(CreateDomainStmt *stmt)
 	Form_pg_type baseType;
 	int32		basetypeMod;
 	Oid			baseColl;
-	EventContextData evt;
 
 	/* Convert list of names to a name and namespace */
 	domainNamespace = QualifiedNameGetCreationNamespace(stmt->domainname,
@@ -990,21 +969,6 @@ DefineDomain(CreateDomainStmt *stmt)
 		}
 	}
 
-
-	/*
-	 * Call BEFORE CREATE DOMAIN triggers
-	 */
-	InitEventContextForCommand(&evt, (Node *)stmt, E_CreateDomain);
-
-	if (CommandFiresTriggers(&evt))
-	{
-		evt.objectId = InvalidOid;
-		evt.objectname = (char *)domainName;
-		evt.schemaname = get_namespace_name(domainNamespace);
-
-		ExecBeforeCommandTriggers(&evt);
-	}
-
 	/*
 	 * Have TypeCreate do all the real work.
 	 */
@@ -1072,13 +1036,6 @@ DefineDomain(CreateDomainStmt *stmt)
 	 * Now we can clean up.
 	 */
 	ReleaseSysCache(typeTup);
-
-	/* Call AFTER CREATE DOMAIN triggers */
-	if (CommandFiresAfterTriggers(&evt))
-	{
-		evt.objectId = domainoid;
-		ExecAfterCommandTriggers(&evt);
-	}
 }
 
 
@@ -1096,7 +1053,6 @@ DefineEnum(CreateEnumStmt *stmt)
 	AclResult	aclresult;
 	Oid			old_type_oid;
 	Oid			enumArrayOid;
-	EventContextData evt;
 
 	/* Convert list of names to a name and namespace */
 	enumNamespace = QualifiedNameGetCreationNamespace(stmt->typeName,
@@ -1121,20 +1077,6 @@ DefineEnum(CreateEnumStmt *stmt)
 			ereport(ERROR,
 					(errcode(ERRCODE_DUPLICATE_OBJECT),
 					 errmsg("type \"%s\" already exists", enumName)));
-	}
-
-	/*
-	 * Call BEFORE CREATE (enum) TYPE triggers
-	 */
-	InitEventContextForCommand(&evt, (Node *)stmt, E_CreateType);
-
-	if (CommandFiresTriggers(&evt))
-	{
-		evt.objectId = InvalidOid;
-		evt.objectname = enumName;
-		evt.schemaname = get_namespace_name(enumNamespace);
-
-		ExecBeforeCommandTriggers(&evt);
 	}
 
 	enumArrayOid = AssignTypeArrayOid();
@@ -1214,13 +1156,6 @@ DefineEnum(CreateEnumStmt *stmt)
 			   InvalidOid);		/* type's collation */
 
 	pfree(enumArrayName);
-
-	/* Call AFTER CREATE (enum) TYPE triggers */
-	if (CommandFiresAfterTriggers(&evt))
-	{
-		evt.objectId = enumTypeOid;
-		ExecAfterCommandTriggers(&evt);
-	}
 }
 
 /*
@@ -1305,7 +1240,6 @@ DefineRange(CreateRangeStmt *stmt)
 	char		alignment;
 	AclResult	aclresult;
 	ListCell   *lc;
-	EventContextData evt;
 
 	/* Convert list of names to a name and namespace */
 	typeNamespace = QualifiedNameGetCreationNamespace(stmt->typeName,
@@ -1453,20 +1387,6 @@ DefineRange(CreateRangeStmt *stmt)
 	/* alignment must be 'i' or 'd' for ranges */
 	alignment = (subtypalign == 'd') ? 'd' : 'i';
 
-	/*
-	 * Call BEFORE CREATE EXTENSION triggers
-	 */
-	InitEventContextForCommand(&evt, (Node *)stmt, E_CreateExtension);
-
-	if (CommandFiresTriggers(&evt))
-	{
-		evt.objectId = InvalidOid;
-		evt.objectname = typeName;
-		evt.schemaname = get_namespace_name(typeNamespace);
-
-		ExecBeforeCommandTriggers(&evt);
-	}
-
 	/* Allocate OID for array type */
 	rangeArrayOid = AssignTypeArrayOid();
 
@@ -1549,13 +1469,6 @@ DefineRange(CreateRangeStmt *stmt)
 
 	/* And create the constructor functions for this range type */
 	makeRangeConstructors(typeName, typeNamespace, typoid, rangeSubtype);
-
-	/* Call AFTER CREATE (range) TYPE triggers */
-	if (CommandFiresAfterTriggers(&evt))
-	{
-		evt.objectId = typoid;
-		ExecAfterCommandTriggers(&evt);
-	}
 }
 
 /*
@@ -2068,8 +1981,7 @@ AssignTypeArrayOid(void)
  *-------------------------------------------------------------------
  */
 Oid
-DefineCompositeType(RangeVar *typevar, List *coldeflist,
-					EventContext evt)
+DefineCompositeType(RangeVar *typevar, List *coldeflist)
 {
 	CreateStmt *createStmt = makeNode(CreateStmt);
 	Oid			old_type_oid;
@@ -2113,15 +2025,8 @@ DefineCompositeType(RangeVar *typevar, List *coldeflist,
 	/*
 	 * Finally create the relation.  This also creates the type.
 	 */
-	relid = DefineRelation(createStmt, RELKIND_COMPOSITE_TYPE, InvalidOid, evt);
+	relid = DefineRelation(createStmt, RELKIND_COMPOSITE_TYPE, InvalidOid);
 	Assert(relid != InvalidOid);
-
-	/* Call AFTER CREATE (composite) TYPE triggers */
-	if (CommandFiresAfterTriggers(evt))
-	{
-		evt->objectId = relid;
-		ExecAfterCommandTriggers(evt);
-	}
 	return relid;
 }
 
@@ -2131,7 +2036,7 @@ DefineCompositeType(RangeVar *typevar, List *coldeflist,
  * Routine implementing ALTER DOMAIN SET/DROP DEFAULT statements.
  */
 void
-AlterDomainDefault(List *names, Node *defaultRaw, EventContext evt)
+AlterDomainDefault(List *names, Node *defaultRaw)
 {
 	TypeName   *typename;
 	Oid			domainoid;
@@ -2160,16 +2065,6 @@ AlterDomainDefault(List *names, Node *defaultRaw, EventContext evt)
 
 	/* Check it's a domain and check user has permission for ALTER DOMAIN */
 	checkDomainOwner(tup);
-
-	/* Call BEFORE ALTER DOMAIN triggers */
-	if (CommandFiresTriggers(evt))
-	{
-		evt->objectId = HeapTupleGetOid(tup);
-		evt->objectname = pstrdup(NameStr(typTup->typname));
-		evt->schemaname = get_namespace_name(typTup->typnamespace);
-
-		ExecBeforeCommandTriggers(evt);
-	}
 
 	/* Setup new tuple */
 	MemSet(new_record, (Datum) 0, sizeof(new_record));
@@ -2267,10 +2162,6 @@ AlterDomainDefault(List *names, Node *defaultRaw, EventContext evt)
 	/* Clean up */
 	heap_close(rel, NoLock);
 	heap_freetuple(newtuple);
-
-	/* Call AFTER ALTER DOMAIN triggers */
-	if (CommandFiresAfterTriggers(evt))
-		ExecAfterCommandTriggers(evt);
 }
 
 /*
@@ -2279,7 +2170,7 @@ AlterDomainDefault(List *names, Node *defaultRaw, EventContext evt)
  * Routine implementing ALTER DOMAIN SET/DROP NOT NULL statements.
  */
 void
-AlterDomainNotNull(List *names, bool notNull, EventContext evt)
+AlterDomainNotNull(List *names, bool notNull)
 {
 	TypeName   *typename;
 	Oid			domainoid;
@@ -2301,16 +2192,6 @@ AlterDomainNotNull(List *names, bool notNull, EventContext evt)
 
 	/* Check it's a domain and check user has permission for ALTER DOMAIN */
 	checkDomainOwner(tup);
-
-	/* Call BEFORE ALTER DOMAIN triggers */
-	if (CommandFiresTriggers(evt))
-	{
-		evt->objectId = HeapTupleGetOid(tup);
-		evt->objectname = pstrdup(NameStr(typTup->typname));
-		evt->schemaname = get_namespace_name(typTup->typnamespace);
-
-		ExecBeforeCommandTriggers(evt);
-	}
 
 	/* Is the domain already set to the desired constraint? */
 	if (typTup->typnotnull == notNull)
@@ -2377,10 +2258,6 @@ AlterDomainNotNull(List *names, bool notNull, EventContext evt)
 	/* Clean up */
 	heap_freetuple(tup);
 	heap_close(typrel, RowExclusiveLock);
-
-	/* Call AFTER ALTER DOMAIN triggers */
-	if (CommandFiresAfterTriggers(evt))
-		ExecAfterCommandTriggers(evt);
 }
 
 /*
@@ -2390,7 +2267,7 @@ AlterDomainNotNull(List *names, bool notNull, EventContext evt)
  */
 void
 AlterDomainDropConstraint(List *names, const char *constrName,
-						  DropBehavior behavior, bool missing_ok, EventContext evt)
+						  DropBehavior behavior, bool missing_ok)
 {
 	TypeName   *typename;
 	Oid			domainoid;
@@ -2415,18 +2292,6 @@ AlterDomainDropConstraint(List *names, const char *constrName,
 
 	/* Check it's a domain and check user has permission for ALTER DOMAIN */
 	checkDomainOwner(tup);
-
-	/* Call BEFORE ALTER DOMAIN triggers */
-	if (CommandFiresTriggers(evt))
-	{
-		Form_pg_type typTup = (Form_pg_type) GETSTRUCT(tup);
-
-		evt->objectId = HeapTupleGetOid(tup);
-		evt->objectname = pstrdup(NameStr(typTup->typname));
-		evt->schemaname = get_namespace_name(typTup->typnamespace);
-
-		ExecBeforeCommandTriggers(evt);
-	}
 
 	/* Grab an appropriate lock on the pg_constraint relation */
 	conrel = heap_open(ConstraintRelationId, RowExclusiveLock);
@@ -2477,10 +2342,6 @@ AlterDomainDropConstraint(List *names, const char *constrName,
 					(errmsg("constraint \"%s\" of domain \"%s\" does not exist, skipping",
 							constrName, TypeNameToString(typename))));
 	}
-
-	/* Call AFTER ALTER DOMAIN triggers */
-	if (CommandFiresAfterTriggers(evt))
-		ExecAfterCommandTriggers(evt);
 }
 
 /*
@@ -2489,7 +2350,7 @@ AlterDomainDropConstraint(List *names, const char *constrName,
  * Implements the ALTER DOMAIN .. ADD CONSTRAINT statement.
  */
 void
-AlterDomainAddConstraint(List *names, Node *newConstraint, EventContext evt)
+AlterDomainAddConstraint(List *names, Node *newConstraint)
 {
 	TypeName   *typename;
 	Oid			domainoid;
@@ -2517,16 +2378,6 @@ AlterDomainAddConstraint(List *names, Node *newConstraint, EventContext evt)
 	if (!IsA(newConstraint, Constraint))
 		elog(ERROR, "unrecognized node type: %d",
 			 (int) nodeTag(newConstraint));
-
-	/* Call BEFORE ALTER DOMAIN triggers */
-	if (CommandFiresTriggers(evt))
-	{
-		evt->objectId = HeapTupleGetOid(tup);
-		evt->objectname = pstrdup(NameStr(typTup->typname));
-		evt->schemaname = get_namespace_name(typTup->typnamespace);
-
-		ExecBeforeCommandTriggers(evt);
-	}
 
 	constr = (Constraint *) newConstraint;
 
@@ -2594,10 +2445,6 @@ AlterDomainAddConstraint(List *names, Node *newConstraint, EventContext evt)
 
 	/* Clean up */
 	heap_close(typrel, RowExclusiveLock);
-
-	/* Call AFTER ALTER DOMAIN triggers */
-	if (CommandFiresAfterTriggers(evt))
-		ExecAfterCommandTriggers(evt);
 }
 
 /*
@@ -2606,7 +2453,7 @@ AlterDomainAddConstraint(List *names, Node *newConstraint, EventContext evt)
  * Implements the ALTER DOMAIN .. VALIDATE CONSTRAINT statement.
  */
 void
-AlterDomainValidateConstraint(List *names, char *constrName, EventContext evt)
+AlterDomainValidateConstraint(List *names, char *constrName)
 {
 	TypeName   *typename;
 	Oid			domainoid;
@@ -2679,18 +2526,6 @@ AlterDomainValidateConstraint(List *names, char *constrName, EventContext evt)
 			 HeapTupleGetOid(tuple));
 	conbin = TextDatumGetCString(val);
 
-	/* Call BEFORE ALTER DOMAIN triggers */
-	if (CommandFiresTriggers(evt))
-	{
-		Form_pg_type typTup = (Form_pg_type) GETSTRUCT(tup);
-
-		evt->objectId = HeapTupleGetOid(tup);
-		evt->objectname = pstrdup(NameStr(typTup->typname));
-		evt->schemaname = get_namespace_name(typTup->typnamespace);
-
-		ExecBeforeCommandTriggers(evt);
-	}
-
 	validateDomainConstraint(domainoid, conbin);
 
 	/*
@@ -2709,10 +2544,6 @@ AlterDomainValidateConstraint(List *names, char *constrName, EventContext evt)
 	heap_close(conrel, RowExclusiveLock);
 
 	ReleaseSysCache(tup);
-
-	/* Call AFTER ALTER DOMAIN triggers */
-	if (CommandFiresAfterTriggers(evt))
-		ExecAfterCommandTriggers(evt);
 }
 
 static void
@@ -3261,7 +3092,7 @@ GetDomainConstraints(Oid typeOid)
  * Execute ALTER TYPE RENAME
  */
 void
-RenameType(RenameStmt *stmt, EventContext evt)
+RenameType(RenameStmt *stmt)
 {
 	List	   *names = stmt->object;
 	const char *newTypeName = stmt->newname;
@@ -3323,10 +3154,10 @@ RenameType(RenameStmt *stmt, EventContext evt)
 	 * RenameRelationInternal will call RenameTypeInternal automatically.
 	 */
 	if (typTup->typtype == TYPTYPE_COMPOSITE)
-		RenameRelationInternal(typTup->typrelid, newTypeName, evt);
+		RenameRelationInternal(typTup->typrelid, newTypeName);
 	else
 		RenameTypeInternal(typeOid, newTypeName,
-						   typTup->typnamespace, evt);
+						   typTup->typnamespace);
 
 	/* Clean up */
 	heap_close(rel, RowExclusiveLock);
@@ -3336,8 +3167,7 @@ RenameType(RenameStmt *stmt, EventContext evt)
  * Change the owner of a type.
  */
 void
-AlterTypeOwner(List *names, Oid newOwnerId, ObjectType objecttype,
-			   EventContext evt)
+AlterTypeOwner(List *names, Oid newOwnerId, ObjectType objecttype)
 {
 	TypeName   *typename;
 	Oid			typeOid;
@@ -3423,16 +3253,6 @@ AlterTypeOwner(List *names, Oid newOwnerId, ObjectType objecttype,
 							   get_namespace_name(typTup->typnamespace));
 		}
 
-		/* Call BEFORE ALTER TYPE triggers */
-		if (CommandFiresTriggers(evt))
-		{
-			evt->objectId = typeOid;
-			evt->objectname = pstrdup(NameStr(typTup->typname));
-			evt->schemaname = get_namespace_name(typTup->typnamespace);
-
-			ExecBeforeCommandTriggers(evt);
-		}
-
 		/*
 		 * If it's a composite type, invoke ATExecChangeOwner so that we fix
 		 * up the pg_class entry properly.	That will call back to
@@ -3460,10 +3280,6 @@ AlterTypeOwner(List *names, Oid newOwnerId, ObjectType objecttype,
 			if (OidIsValid(typTup->typarray))
 				AlterTypeOwnerInternal(typTup->typarray, newOwnerId, false);
 		}
-
-		/* Call AFTER ALTER TYPE triggers */
-		if (CommandFiresAfterTriggers(evt))
-			ExecAfterCommandTriggers(evt);
 	}
 
 	/* Clean up */
@@ -3521,8 +3337,7 @@ AlterTypeOwnerInternal(Oid typeOid, Oid newOwnerId,
  * Execute ALTER TYPE SET SCHEMA
  */
 void
-AlterTypeNamespace(List *names, const char *newschema, ObjectType objecttype,
-				   EventContext evt)
+AlterTypeNamespace(List *names, const char *newschema, ObjectType objecttype)
 {
 	TypeName   *typename;
 	Oid			typeOid;
@@ -3542,11 +3357,11 @@ AlterTypeNamespace(List *names, const char *newschema, ObjectType objecttype,
 	/* get schema OID and check its permissions */
 	nspOid = LookupCreationNamespace(newschema);
 
-	AlterTypeNamespace_oid(typeOid, nspOid, evt);
+	AlterTypeNamespace_oid(typeOid, nspOid);
 }
 
 Oid
-AlterTypeNamespace_oid(Oid typeOid, Oid nspOid, EventContext evt)
+AlterTypeNamespace_oid(Oid typeOid, Oid nspOid)
 {
 	Oid			elemOid;
 
@@ -3566,7 +3381,7 @@ AlterTypeNamespace_oid(Oid typeOid, Oid nspOid, EventContext evt)
 						 format_type_be(elemOid))));
 
 	/* and do the work */
-	return AlterTypeNamespaceInternal(typeOid, nspOid, false, true, evt);
+	return AlterTypeNamespaceInternal(typeOid, nspOid, false, true);
 }
 
 /*
@@ -3587,8 +3402,7 @@ AlterTypeNamespace_oid(Oid typeOid, Oid nspOid, EventContext evt)
 Oid
 AlterTypeNamespaceInternal(Oid typeOid, Oid nspOid,
 						   bool isImplicitArray,
-						   bool errorOnTableType,
-						   EventContext evt)
+						   bool errorOnTableType)
 {
 	Relation	rel;
 	HeapTuple	tup;
@@ -3633,16 +3447,6 @@ AlterTypeNamespaceInternal(Oid typeOid, Oid nspOid,
 				 errmsg("%s is a table's row type",
 						format_type_be(typeOid)),
 				 errhint("Use ALTER TABLE instead.")));
-
-	/* Call BEFORE ALTER TYPE triggers */
-	if (CommandFiresTriggers(evt))
-	{
-		evt->objectId = typeOid;
-		evt->objectname = pstrdup(NameStr(typform->typname));
-		evt->schemaname = get_namespace_name(oldNspOid);
-
-		ExecBeforeCommandTriggers(evt);
-	}
 
 	/* OK, modify the pg_type row */
 
@@ -3701,12 +3505,7 @@ AlterTypeNamespaceInternal(Oid typeOid, Oid nspOid,
 
 	/* Recursively alter the associated array type, if any */
 	if (OidIsValid(arrayOid))
-		AlterTypeNamespaceInternal(arrayOid, nspOid, true, true, NULL);
+		AlterTypeNamespaceInternal(arrayOid, nspOid, true, true);
 
-	if (CommandFiresAfterTriggers(evt))
-	{
-		evt->schemaname = get_namespace_name(nspOid);
-		ExecAfterCommandTriggers(evt);
-	}
 	return oldNspOid;
 }

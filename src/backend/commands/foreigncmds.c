@@ -204,8 +204,7 @@ GetUserOidFromMapping(const char *username, bool missing_ok)
  * Rename foreign-data wrapper
  */
 void
-RenameForeignDataWrapper(const char *oldname, const char *newname,
-						 EventContext evt)
+RenameForeignDataWrapper(const char *oldname, const char *newname)
 {
 	HeapTuple	tup;
 	Relation	rel;
@@ -229,16 +228,6 @@ RenameForeignDataWrapper(const char *oldname, const char *newname,
 		aclcheck_error(ACLCHECK_NOT_OWNER, ACL_KIND_FDW,
 					   oldname);
 
-	/* Call BEFORE ALTER FOREIGN DATA WRAPPER triggers */
-	if (CommandFiresTriggers(evt))
-	{
-		evt->objectId = HeapTupleGetOid(tup);
-		evt->objectname = pstrdup(oldname);
-		evt->schemaname = NULL;
-
-		ExecBeforeCommandTriggers(evt);
-	}
-
 	/* rename */
 	namestrcpy(&(((Form_pg_foreign_data_wrapper) GETSTRUCT(tup))->fdwname), newname);
 	simple_heap_update(rel, &tup->t_self, tup);
@@ -246,13 +235,6 @@ RenameForeignDataWrapper(const char *oldname, const char *newname,
 
 	heap_close(rel, NoLock);
 	heap_freetuple(tup);
-
-	/* Call AFTER ALTER FOREIGN DATA WRAPPER triggers */
-	if (CommandFiresAfterTriggers(evt))
-	{
-		evt->objectname = pstrdup(newname);
-		ExecAfterCommandTriggers(evt);
-	}
 }
 
 
@@ -260,7 +242,7 @@ RenameForeignDataWrapper(const char *oldname, const char *newname,
  * Rename foreign server
  */
 void
-RenameForeignServer(const char *oldname, const char *newname, EventContext evt)
+RenameForeignServer(const char *oldname, const char *newname)
 {
 	HeapTuple	tup;
 	Relation	rel;
@@ -284,16 +266,6 @@ RenameForeignServer(const char *oldname, const char *newname, EventContext evt)
 		aclcheck_error(ACLCHECK_NOT_OWNER, ACL_KIND_FOREIGN_SERVER,
 					   oldname);
 
-	/* Call BEFORE ALTER SERVER triggers */
-	if (CommandFiresTriggers(evt))
-	{
-		evt->objectId = HeapTupleGetOid(tup);
-		evt->objectname = pstrdup(oldname);
-		evt->schemaname = NULL;
-
-		ExecBeforeCommandTriggers(evt);
-	}
-
 	/* rename */
 	namestrcpy(&(((Form_pg_foreign_server) GETSTRUCT(tup))->srvname), newname);
 	simple_heap_update(rel, &tup->t_self, tup);
@@ -301,13 +273,6 @@ RenameForeignServer(const char *oldname, const char *newname, EventContext evt)
 
 	heap_close(rel, NoLock);
 	heap_freetuple(tup);
-
-	/* Call AFTER ALTER SERVER triggers */
-	if (CommandFiresAfterTriggers(evt))
-	{
-		evt->objectname = pstrdup(newname);
-		ExecAfterCommandTriggers(evt);
-	}
 }
 
 
@@ -318,8 +283,7 @@ RenameForeignServer(const char *oldname, const char *newname, EventContext evt)
  * superuser.
  */
 static void
-AlterForeignDataWrapperOwner_internal(Relation rel, HeapTuple tup, Oid newOwnerId,
-									  EventContext evt)
+AlterForeignDataWrapperOwner_internal(Relation rel, HeapTuple tup, Oid newOwnerId)
 {
 	Form_pg_foreign_data_wrapper form;
 
@@ -341,16 +305,6 @@ AlterForeignDataWrapperOwner_internal(Relation rel, HeapTuple tup, Oid newOwnerI
 						NameStr(form->fdwname)),
 		errhint("The owner of a foreign-data wrapper must be a superuser.")));
 
-	/* Call BEFORE ALTER FOREIGN DATA WRAPPER triggers */
-	if (CommandFiresTriggers(evt))
-	{
-		evt->objectId = HeapTupleGetOid(tup);
-		evt->objectname = pstrdup(NameStr(form->fdwname));
-		evt->schemaname = NULL;
-
-		ExecBeforeCommandTriggers(evt);
-	}
-
 	if (form->fdwowner != newOwnerId)
 	{
 		form->fdwowner = newOwnerId;
@@ -363,10 +317,6 @@ AlterForeignDataWrapperOwner_internal(Relation rel, HeapTuple tup, Oid newOwnerI
 								HeapTupleGetOid(tup),
 								newOwnerId);
 	}
-
-	/* Call AFTER ALTER FOREIGN DATA WRAPPER triggers */
-	if (CommandFiresAfterTriggers(evt))
-		ExecAfterCommandTriggers(evt);
 }
 
 /*
@@ -375,8 +325,7 @@ AlterForeignDataWrapperOwner_internal(Relation rel, HeapTuple tup, Oid newOwnerI
  * Note restrictions in the "_internal" function, above.
  */
 void
-AlterForeignDataWrapperOwner(const char *name, Oid newOwnerId,
-							 EventContext evt)
+AlterForeignDataWrapperOwner(const char *name, Oid newOwnerId)
 {
 	HeapTuple	tup;
 	Relation	rel;
@@ -390,7 +339,7 @@ AlterForeignDataWrapperOwner(const char *name, Oid newOwnerId,
 				(errcode(ERRCODE_UNDEFINED_OBJECT),
 				 errmsg("foreign-data wrapper \"%s\" does not exist", name)));
 
-	AlterForeignDataWrapperOwner_internal(rel, tup, newOwnerId, evt);
+	AlterForeignDataWrapperOwner_internal(rel, tup, newOwnerId);
 
 	heap_freetuple(tup);
 
@@ -417,7 +366,7 @@ AlterForeignDataWrapperOwner_oid(Oid fwdId, Oid newOwnerId)
 				(errcode(ERRCODE_UNDEFINED_OBJECT),
 		  errmsg("foreign-data wrapper with OID %u does not exist", fwdId)));
 
-	AlterForeignDataWrapperOwner_internal(rel, tup, newOwnerId, NULL);
+	AlterForeignDataWrapperOwner_internal(rel, tup, newOwnerId);
 
 	heap_freetuple(tup);
 
@@ -428,8 +377,7 @@ AlterForeignDataWrapperOwner_oid(Oid fwdId, Oid newOwnerId)
  * Internal workhorse for changing a foreign server's owner
  */
 static void
-AlterForeignServerOwner_internal(Relation rel, HeapTuple tup, Oid newOwnerId,
-								 EventContext evt)
+AlterForeignServerOwner_internal(Relation rel, HeapTuple tup, Oid newOwnerId)
 {
 	Form_pg_foreign_server form;
 
@@ -463,16 +411,6 @@ AlterForeignServerOwner_internal(Relation rel, HeapTuple tup, Oid newOwnerId,
 			}
 		}
 
-		/* Call BEFORE ALTER SERVER triggers */
-		if (CommandFiresTriggers(evt))
-		{
-			evt->objectId = HeapTupleGetOid(tup);
-			evt->objectname = pstrdup(NameStr(form->srvname));
-			evt->schemaname = NULL;
-
-			ExecBeforeCommandTriggers(evt);
-		}
-
 		form->srvowner = newOwnerId;
 
 		simple_heap_update(rel, &tup->t_self, tup);
@@ -481,10 +419,6 @@ AlterForeignServerOwner_internal(Relation rel, HeapTuple tup, Oid newOwnerId,
 		/* Update owner dependency reference */
 		changeDependencyOnOwner(ForeignServerRelationId, HeapTupleGetOid(tup),
 								newOwnerId);
-
-		/* Call AFTER ALTER SERVER triggers */
-		if (CommandFiresAfterTriggers(evt))
-			ExecAfterCommandTriggers(evt);
 	}
 }
 
@@ -492,7 +426,7 @@ AlterForeignServerOwner_internal(Relation rel, HeapTuple tup, Oid newOwnerId,
  * Change foreign server owner -- by name
  */
 void
-AlterForeignServerOwner(const char *name, Oid newOwnerId, EventContext evt)
+AlterForeignServerOwner(const char *name, Oid newOwnerId)
 {
 	HeapTuple	tup;
 	Relation	rel;
@@ -506,7 +440,7 @@ AlterForeignServerOwner(const char *name, Oid newOwnerId, EventContext evt)
 				(errcode(ERRCODE_UNDEFINED_OBJECT),
 				 errmsg("server \"%s\" does not exist", name)));
 
-	AlterForeignServerOwner_internal(rel, tup, newOwnerId, evt);
+	AlterForeignServerOwner_internal(rel, tup, newOwnerId);
 
 	heap_freetuple(tup);
 
@@ -531,7 +465,7 @@ AlterForeignServerOwner_oid(Oid srvId, Oid newOwnerId)
 				(errcode(ERRCODE_UNDEFINED_OBJECT),
 				 errmsg("foreign server with OID %u does not exist", srvId)));
 
-	AlterForeignServerOwner_internal(rel, tup, newOwnerId, NULL);
+	AlterForeignServerOwner_internal(rel, tup, newOwnerId);
 
 	heap_freetuple(tup);
 
@@ -644,7 +578,6 @@ CreateForeignDataWrapper(CreateFdwStmt *stmt)
 	Oid			ownerId;
 	ObjectAddress myself;
 	ObjectAddress referenced;
-	EventContextData evt;
 
 	rel = heap_open(ForeignDataWrapperRelationId, RowExclusiveLock);
 
@@ -667,18 +600,6 @@ CreateForeignDataWrapper(CreateFdwStmt *stmt)
 				(errcode(ERRCODE_DUPLICATE_OBJECT),
 				 errmsg("foreign-data wrapper \"%s\" already exists",
 						stmt->fdwname)));
-
-	/* Call BEFORE CREATE FOREIGN DATA WRAPPER triggers */
-	InitEventContextForCommand(&evt, (Node *)stmt, E_CreateForeignDataWrapper);
-
-	if (CommandFiresTriggers(&evt))
-	{
-		evt.objectId = InvalidOid;
-		evt.objectname = stmt->fdwname;
-		evt.schemaname = NULL;
-
-		ExecBeforeCommandTriggers(&evt);
-	}
 
 	/*
 	 * Insert tuple into pg_foreign_data_wrapper.
@@ -748,13 +669,6 @@ CreateForeignDataWrapper(CreateFdwStmt *stmt)
 						   ForeignDataWrapperRelationId, fdwId, 0, NULL);
 
 	heap_close(rel, RowExclusiveLock);
-
-	/* Call AFTER CREATE FOREIGN DATA WRAPPER triggers */
-	if (CommandFiresAfterTriggers(&evt))
-	{
-		evt.objectId = fdwId;
-		ExecAfterCommandTriggers(&evt);
-	}
 }
 
 
@@ -777,7 +691,6 @@ AlterForeignDataWrapper(AlterFdwStmt *stmt)
 	bool		validator_given;
 	Oid			fdwhandler;
 	Oid			fdwvalidator;
-	EventContextData evt;
 
 	rel = heap_open(ForeignDataWrapperRelationId, RowExclusiveLock);
 
@@ -799,18 +712,6 @@ AlterForeignDataWrapper(AlterFdwStmt *stmt)
 
 	fdwForm = (Form_pg_foreign_data_wrapper) GETSTRUCT(tp);
 	fdwId = HeapTupleGetOid(tp);
-
-	/* Call BEFORE ALTER FOREIGN DATA WRAPPER triggers */
-	InitEventContextForCommand(&evt, (Node *)stmt, E_AlterForeignDataWrapper);
-
-	if (CommandFiresTriggers(&evt))
-	{
-		evt.objectId = fdwId;
-		evt.objectname = stmt->fdwname;
-		evt.schemaname = NULL;
-
-		ExecBeforeCommandTriggers(&evt);
-	}
 
 	memset(repl_val, 0, sizeof(repl_val));
 	memset(repl_null, false, sizeof(repl_null));
@@ -929,10 +830,6 @@ AlterForeignDataWrapper(AlterFdwStmt *stmt)
 	}
 
 	heap_close(rel, RowExclusiveLock);
-
-	/* Call AFTER ALTER FOREIGN DATA WRAPPER triggers */
-	if (CommandFiresAfterTriggers(&evt))
-		ExecAfterCommandTriggers(&evt);
 }
 
 
@@ -977,7 +874,6 @@ CreateForeignServer(CreateForeignServerStmt *stmt)
 	ObjectAddress myself;
 	ObjectAddress referenced;
 	ForeignDataWrapper *fdw;
-	EventContextData evt;
 
 	rel = heap_open(ForeignServerRelationId, RowExclusiveLock);
 
@@ -1002,18 +898,6 @@ CreateForeignServer(CreateForeignServerStmt *stmt)
 	aclresult = pg_foreign_data_wrapper_aclcheck(fdw->fdwid, ownerId, ACL_USAGE);
 	if (aclresult != ACLCHECK_OK)
 		aclcheck_error(aclresult, ACL_KIND_FDW, fdw->fdwname);
-
-	/* Call BEFORE CREATE SERVER triggers */
-	InitEventContextForCommand(&evt, (Node *)stmt, E_CreateForeignDataWrapper);
-
-	if (CommandFiresTriggers(&evt))
-	{
-		evt.objectId = InvalidOid;
-		evt.objectname = stmt->servername;
-		evt.schemaname = NULL;
-
-		ExecBeforeCommandTriggers(&evt);
-	}
 
 	/*
 	 * Insert tuple into pg_foreign_server.
@@ -1082,13 +966,6 @@ CreateForeignServer(CreateForeignServerStmt *stmt)
 						   ForeignServerRelationId, srvId, 0, NULL);
 
 	heap_close(rel, RowExclusiveLock);
-
-	/* Call AFTER CREATE SERVER triggers */
-	if (CommandFiresAfterTriggers(&evt))
-	{
-		evt.objectId = srvId;
-		ExecAfterCommandTriggers(&evt);
-	}
 }
 
 
@@ -1105,7 +982,6 @@ AlterForeignServer(AlterForeignServerStmt *stmt)
 	bool		repl_repl[Natts_pg_foreign_server];
 	Oid			srvId;
 	Form_pg_foreign_server srvForm;
-	EventContextData evt;
 
 	rel = heap_open(ForeignServerRelationId, RowExclusiveLock);
 
@@ -1126,18 +1002,6 @@ AlterForeignServer(AlterForeignServerStmt *stmt)
 	if (!pg_foreign_server_ownercheck(srvId, GetUserId()))
 		aclcheck_error(ACLCHECK_NOT_OWNER, ACL_KIND_FOREIGN_SERVER,
 					   stmt->servername);
-
-	/* Call BEFORE ALTER SERVER triggers */
-	InitEventContextForCommand(&evt, (Node *)stmt, E_AlterServer);
-
-	if (CommandFiresTriggers(&evt))
-	{
-		evt.objectId = srvId;
-		evt.objectname = stmt->servername;
-		evt.schemaname = NULL;
-
-		ExecBeforeCommandTriggers(&evt);
-	}
 
 	memset(repl_val, 0, sizeof(repl_val));
 	memset(repl_null, false, sizeof(repl_null));
@@ -1195,10 +1059,6 @@ AlterForeignServer(AlterForeignServerStmt *stmt)
 	heap_freetuple(tp);
 
 	heap_close(rel, RowExclusiveLock);
-
-	/* Call AFTER ALTER SERVER triggers */
-	if (CommandFiresAfterTriggers(&evt))
-		ExecAfterCommandTriggers(&evt);
 }
 
 
@@ -1270,7 +1130,6 @@ CreateUserMapping(CreateUserMappingStmt *stmt)
 	ObjectAddress referenced;
 	ForeignServer *srv;
 	ForeignDataWrapper *fdw;
-	EventContextData evt;
 
 	rel = heap_open(UserMappingRelationId, RowExclusiveLock);
 
@@ -1295,18 +1154,6 @@ CreateUserMapping(CreateUserMappingStmt *stmt)
 						stmt->servername)));
 
 	fdw = GetForeignDataWrapper(srv->fdwid);
-
-	/* Call BEFORE CREATE USER MAPPING triggers */
-	InitEventContextForCommand(&evt, (Node *)stmt, E_CreateUserMapping);
-
-	if (CommandFiresTriggers(&evt))
-	{
-		evt.objectId = InvalidOid;
-		evt.objectname = NULL;	/* composite object name */
-		evt.schemaname = NULL;
-
-		ExecBeforeCommandTriggers(&evt);
-	}
 
 	/*
 	 * Insert tuple into pg_user_mapping.
@@ -1360,13 +1207,6 @@ CreateUserMapping(CreateUserMappingStmt *stmt)
 						   UserMappingRelationId, umId, 0, NULL);
 
 	heap_close(rel, RowExclusiveLock);
-
-	/* Call AFTER CREATE USER MAPPING triggers */
-	if (CommandFiresAfterTriggers(&evt))
-	{
-		evt.objectId = umId;
-		ExecAfterCommandTriggers(&evt);
-	}
 }
 
 
@@ -1384,7 +1224,6 @@ AlterUserMapping(AlterUserMappingStmt *stmt)
 	Oid			useId;
 	Oid			umId;
 	ForeignServer *srv;
-	EventContextData evt;
 
 	rel = heap_open(UserMappingRelationId, RowExclusiveLock);
 
@@ -1406,18 +1245,6 @@ AlterUserMapping(AlterUserMappingStmt *stmt)
 
 	if (!HeapTupleIsValid(tp))
 		elog(ERROR, "cache lookup failed for user mapping %u", umId);
-
-	/* Call BEFORE ALTER USER MAPPING triggers */
-	InitEventContextForCommand(&evt, (Node *)stmt, E_AlterUserMapping);
-
-	if (CommandFiresTriggers(&evt))
-	{
-		evt.objectId = umId;
-		evt.objectname = NULL;	/* composite object name */
-		evt.schemaname = NULL;
-
-		ExecBeforeCommandTriggers(&evt);
-	}
 
 	memset(repl_val, 0, sizeof(repl_val));
 	memset(repl_null, false, sizeof(repl_null));
@@ -1466,10 +1293,6 @@ AlterUserMapping(AlterUserMappingStmt *stmt)
 	heap_freetuple(tp);
 
 	heap_close(rel, RowExclusiveLock);
-
-	/* Call AFTER ALTER SERVER triggers */
-	if (CommandFiresAfterTriggers(&evt))
-		ExecAfterCommandTriggers(&evt);
 }
 
 
@@ -1483,7 +1306,6 @@ RemoveUserMapping(DropUserMappingStmt *stmt)
 	Oid			useId;
 	Oid			umId;
 	ForeignServer *srv;
-	EventContextData evt;
 
 	useId = GetUserOidFromMapping(stmt->username, stmt->missing_ok);
 	srv = GetForeignServerByName(stmt->servername, true);
@@ -1531,18 +1353,6 @@ RemoveUserMapping(DropUserMappingStmt *stmt)
 
 	user_mapping_ddl_aclcheck(useId, srv->serverid, srv->servername);
 
-	/* Call BEFORE DROP USER MAPPING triggers */
-	InitEventContextForCommand(&evt, (Node *)stmt, E_DropUserMapping);
-
-	if (CommandFiresTriggers(&evt))
-	{
-		evt.objectId = umId;
-		evt.objectname = NULL;	/* composite object name */
-		evt.schemaname = NULL;
-
-		ExecBeforeCommandTriggers(&evt);
-	}
-
 	/*
 	 * Do the deletion
 	 */
@@ -1551,12 +1361,6 @@ RemoveUserMapping(DropUserMappingStmt *stmt)
 	object.objectSubId = 0;
 
 	performDeletion(&object, DROP_CASCADE, 0);
-
-	if (CommandFiresTriggers(&evt))
-	{
-		evt.objectId = InvalidOid;
-		ExecAfterCommandTriggers(&evt);
-	}
 }
 
 

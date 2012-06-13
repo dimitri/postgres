@@ -320,8 +320,7 @@ DefineIndex(RangeVar *heapRelation,
 			bool check_rights,
 			bool skip_build,
 			bool quiet,
-			bool concurrent,
-			EventContext evt)
+			bool concurrent)
 {
 	Oid		   *typeObjectId;
 	Oid		   *collationObjectId;
@@ -577,23 +576,6 @@ DefineIndex(RangeVar *heapRelation,
 		index_check_primary_key(rel, indexInfo, is_alter_table);
 
 	/*
-	 * Call BEFORE CREATE INDEX triggers
-	 *
-	 * evt.tag and evt.parseetree must have been prepared for us by the caller.
-	 *
-	 * Bootstrap code must be able to skip command triggers, it's passing NULL
-	 * as the EventContext pointer.
-	 */
-	if (CommandFiresTriggers(evt))
-	{
-		evt->objectId = InvalidOid;
-		evt->objectname = indexRelationName;
-		evt->schemaname = get_namespace_name(namespaceId);
-
-		ExecBeforeCommandTriggers(evt);
-	}
-
-	/*
 	 * Report index creation if appropriate (delay this till after most of the
 	 * error checks)
 	 */
@@ -645,13 +627,6 @@ DefineIndex(RangeVar *heapRelation,
 	{
 		/* Close the heap and we're done, in the non-concurrent case */
 		heap_close(rel, NoLock);
-
-		/* Call AFTER CREATE INDEX triggers */
-		if (CommandFiresAfterTriggers(evt))
-		{
-			evt->objectId = indexRelationId;
-			ExecAfterCommandTriggers(evt);
-		}
 		return indexRelationId;
 	}
 
@@ -941,11 +916,6 @@ DefineIndex(RangeVar *heapRelation,
 	 */
 	UnlockRelationIdForSession(&heaprelid, ShareUpdateExclusiveLock);
 
-	/*
-	 * Don't Call AFTER CREATE INDEX triggers here, because the transaction
-	 * that did the work is already commited, RAISE EXCEPTION in the trigger
-	 * can no longer undo what we did.
-	 */
 	return indexRelationId;
 }
 
@@ -1767,7 +1737,7 @@ ChooseIndexColumnNames(List *indexElems)
  *		Recreate a specific index.
  */
 void
-ReindexIndex(RangeVar *indexRelation, EventContext evt)
+ReindexIndex(RangeVar *indexRelation)
 {
 	Oid			indOid;
 	Oid			heapOid = InvalidOid;
@@ -1778,7 +1748,7 @@ ReindexIndex(RangeVar *indexRelation, EventContext evt)
 									  RangeVarCallbackForReindexIndex,
 									  (void *) &heapOid);
 
-	reindex_index(indOid, false, evt);
+	reindex_index(indOid, false);
 }
 
 /*
@@ -1845,7 +1815,7 @@ RangeVarCallbackForReindexIndex(const RangeVar *relation,
  *		Recreate all indexes of a table (and of its toast table, if any)
  */
 void
-ReindexTable(RangeVar *relation, EventContext evt)
+ReindexTable(RangeVar *relation)
 {
 	Oid			heapOid;
 
@@ -1853,7 +1823,7 @@ ReindexTable(RangeVar *relation, EventContext evt)
 	heapOid = RangeVarGetRelidExtended(relation, ShareLock, false, false,
 									   RangeVarCallbackOwnsTable, NULL);
 
-	if (!reindex_relation(heapOid, REINDEX_REL_PROCESS_TOAST, evt))
+	if (!reindex_relation(heapOid, REINDEX_REL_PROCESS_TOAST))
 		ereport(NOTICE,
 				(errmsg("table \"%s\" has no indexes",
 						relation->relname)));
@@ -1966,7 +1936,7 @@ ReindexDatabase(const char *databaseName, bool do_system, bool do_user)
 		StartTransactionCommand();
 		/* functions in indexes may want a snapshot set */
 		PushActiveSnapshot(GetTransactionSnapshot());
-		if (reindex_relation(relid, REINDEX_REL_PROCESS_TOAST, NULL))
+		if (reindex_relation(relid, REINDEX_REL_PROCESS_TOAST))
 			ereport(NOTICE,
 					(errmsg("table \"%s.%s\" was reindexed",
 							get_namespace_name(get_rel_namespace(relid)),

@@ -423,7 +423,7 @@ ExplainOnePlan(PlannedStmt *plannedstmt, IntoClause *into, ExplainState *es,
 	 * AS, we'd better use the appropriate tuple receiver.
 	 */
 	if (into)
-		dest = CreateIntoRelDestReceiver(into, NULL);
+		dest = CreateIntoRelDestReceiver(into);
 	else
 		dest = None_Receiver;
 

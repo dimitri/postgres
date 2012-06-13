@@ -336,8 +336,7 @@ OperatorCreate(const char *operatorName,
 			   Oid restrictionId,
 			   Oid joinId,
 			   bool canMerge,
-			   bool canHash,
-			   EventContext evt)
+			   bool canHash)
 {
 	Relation	pg_operator_desc;
 	HeapTuple	tup;
@@ -432,18 +431,6 @@ OperatorCreate(const char *operatorName,
 		!pg_oper_ownercheck(operatorObjectId, GetUserId()))
 		aclcheck_error(ACLCHECK_NOT_OWNER, ACL_KIND_OPER,
 					   operatorName);
-
-	/*
-	 * Call BEFORE CREATE AGGREGARE triggers
-	 */
-	if (CommandFiresTriggers(evt))
-	{
-		evt->objectId = InvalidOid;
-		evt->objectname = (char *)operatorName;
-		evt->schemaname = get_namespace_name(operatorNamespace);
-
-		ExecBeforeCommandTriggers(evt);
-	}
 
 	/*
 	 * Set up the other operators.	If they do not currently exist, create
@@ -577,13 +564,6 @@ OperatorCreate(const char *operatorName,
 
 	if (OidIsValid(commutatorId) || OidIsValid(negatorId))
 		OperatorUpd(operatorObjectId, commutatorId, negatorId);
-
-	/* Call AFTER CREATE OPERATOR triggers */
-	if (CommandFiresAfterTriggers(evt))
-	{
-		evt->objectId = operatorObjectId;
-		ExecAfterCommandTriggers(evt);
-	}
 }
 
 /*

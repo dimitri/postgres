@@ -195,13 +195,9 @@ DefineRule(RuleStmt *stmt, const char *queryString)
 	List	   *actions;
 	Node	   *whereClause;
 	Oid			relId;
-	EventContextData evt;
 
 	/* Parse analysis. */
 	transformRuleStmt(stmt, queryString, &actions, &whereClause);
-
-	/* Prepare command context */
-	InitEventContextForCommand(&evt, (Node *)stmt, E_CreateRule);
 
 	/*
 	 * Find and lock the relation.	Lock level should match
@@ -216,8 +212,7 @@ DefineRule(RuleStmt *stmt, const char *queryString)
 					   stmt->event,
 					   stmt->instead,
 					   stmt->replace,
-					   actions,
-					   &evt);
+					   actions);
 }
 
 
@@ -235,10 +230,8 @@ DefineQueryRewrite(char *rulename,
 				   CmdType event_type,
 				   bool is_instead,
 				   bool replace,
-				   List *action,
-				   EventContext evt)
+				   List *action)
 {
-	Oid         ruleOid;
 	Relation	event_relation;
 	int			event_attno;
 	ListCell   *l;
@@ -486,16 +479,6 @@ DefineQueryRewrite(char *rulename,
 		}
 	}
 
-	/* Call BEFORE CREATE RULE triggers */
-	if (CommandFiresTriggers(evt))
-	{
-		evt->objectId = InvalidOid;
-		evt->objectname = rulename;
-		evt->schemaname = NULL;	/* rules are not schema qualified */
-
-		ExecBeforeCommandTriggers(evt);
-	}
-
 	/*
 	 * This rule is allowed - prepare to install it.
 	 */
@@ -504,14 +487,14 @@ DefineQueryRewrite(char *rulename,
 	/* discard rule if it's null action and not INSTEAD; it's a no-op */
 	if (action != NIL || is_instead)
 	{
-		ruleOid = InsertRule(rulename,
-							 event_type,
-							 event_relid,
-							 event_attno,
-							 is_instead,
-							 event_qual,
-							 action,
-							 replace);
+		InsertRule(rulename,
+				   event_type,
+				   event_relid,
+				   event_attno,
+				   is_instead,
+				   event_qual,
+				   action,
+				   replace);
 
 		/*
 		 * Set pg_class 'relhasrules' field TRUE for event relation. If
@@ -536,13 +519,6 @@ DefineQueryRewrite(char *rulename,
 
 	/* Close rel, but keep lock till commit... */
 	heap_close(event_relation, NoLock);
-
-	/* Call AFTER CREATE RULE triggers */
-	if (CommandFiresAfterTriggers(evt))
-	{
-		evt->objectId = ruleOid;
-		ExecAfterCommandTriggers(evt);
-	}
 }
 
 /*

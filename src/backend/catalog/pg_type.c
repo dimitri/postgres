@@ -678,8 +678,7 @@ GenerateTypeDependencies(Oid typeNamespace,
  * ALTER TYPE RENAME TO command.
  */
 void
-RenameTypeInternal(Oid typeOid, const char *newTypeName, Oid typeNamespace,
-				   EventContext evt)
+RenameTypeInternal(Oid typeOid, const char *newTypeName, Oid typeNamespace)
 {
 	Relation	pg_type_desc;
 	HeapTuple	tuple;
@@ -706,16 +705,6 @@ RenameTypeInternal(Oid typeOid, const char *newTypeName, Oid typeNamespace,
 				(errcode(ERRCODE_DUPLICATE_OBJECT),
 				 errmsg("type \"%s\" already exists", newTypeName)));
 
-	/* Call BEFORE ALTER TYPE triggers */
-	if (CommandFiresTriggers(evt))
-	{
-		evt->objectId = typeOid;
-		evt->objectname = NameStr(typ->typname);
-		evt->schemaname = get_namespace_name(typeNamespace);
-
-		ExecBeforeCommandTriggers(evt);
-	}
-
 	/* OK, do the rename --- tuple is a copy, so OK to scribble on it */
 	namestrcpy(&(typ->typname), newTypeName);
 
@@ -732,15 +721,8 @@ RenameTypeInternal(Oid typeOid, const char *newTypeName, Oid typeNamespace,
 	{
 		char	   *arrname = makeArrayTypeName(newTypeName, typeNamespace);
 
-		RenameTypeInternal(arrayOid, arrname, typeNamespace, NULL);
+		RenameTypeInternal(arrayOid, arrname, typeNamespace);
 		pfree(arrname);
-	}
-
-	/* Call AFTER ALTER TYPE triggers */
-	if (CommandFiresAfterTriggers(evt))
-	{
-		evt->objectname = (char *)newTypeName;
-		ExecAfterCommandTriggers(evt);
 	}
 }
 
@@ -842,7 +824,7 @@ moveArrayTypeName(Oid typeOid, const char *typeName, Oid typeNamespace)
 	newname = makeArrayTypeName(typeName, typeNamespace);
 
 	/* Apply the rename */
-	RenameTypeInternal(typeOid, newname, typeNamespace, NULL);
+	RenameTypeInternal(typeOid, newname, typeNamespace);
 
 	/*
 	 * We must bump the command counter so that any subsequent use of

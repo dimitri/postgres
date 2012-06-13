@@ -28,7 +28,6 @@
 #include "rewrite/rewriteDefine.h"
 #include "rewrite/rewriteManip.h"
 #include "rewrite/rewriteSupport.h"
-#include "tcop/utility.h"
 #include "utils/acl.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
@@ -100,7 +99,7 @@ isViewOnTempTable_walker(Node *node, void *context)
  */
 static Oid
 DefineVirtualRelation(RangeVar *relation, List *tlist, bool replace,
-					  List *options, EventContext evt)
+					  List *options)
 {
 	Oid			viewOid;
 	LOCKMODE	lockmode;
@@ -173,8 +172,8 @@ DefineVirtualRelation(RangeVar *relation, List *tlist, bool replace,
 	{
 		Relation	rel;
 		TupleDesc	descriptor;
-		List	   *atevts = NIL;
-		AlterTableCmd *atevt;
+		List	   *atcmds = NIL;
+		AlterTableCmd *atcmd;
 
 		/* Relation is already locked, but we must build a relcache entry. */
 		rel = relation_open(viewOid, NoLock);
@@ -196,16 +195,6 @@ DefineVirtualRelation(RangeVar *relation, List *tlist, bool replace,
 		 */
 		Assert(relation->relpersistence == rel->rd_rel->relpersistence);
 
-		/* Call BEFORE CREATE VIEW triggers */
-		if (CommandFiresTriggers(evt))
-		{
-			evt->objectId = viewOid;
-			evt->objectname = RelationGetRelationName(rel);
-			evt->schemaname = get_namespace_name(RelationGetNamespace(rel));
-
-			ExecBeforeCommandTriggers(evt);
-		}
-
 		/*
 		 * Create a tuple descriptor to compare against the existing view, and
 		 * verify that the old column list is an initial prefix of the new
@@ -218,10 +207,10 @@ DefineVirtualRelation(RangeVar *relation, List *tlist, bool replace,
 		 * The new options list replaces the existing options list, even if
 		 * it's empty.
 		 */
-		atevt = makeNode(AlterTableCmd);
-		atevt->subtype = AT_ReplaceRelOptions;
-		atevt->def = (Node *) options;
-		atevts = lappend(atevts, atevt);
+		atcmd = makeNode(AlterTableCmd);
+		atcmd->subtype = AT_ReplaceRelOptions;
+		atcmd->def = (Node *) options;
+		atcmds = lappend(atcmds, atcmd);
 
 		/*
 		 * If new attributes have been added, we must add pg_attribute entries
@@ -240,15 +229,15 @@ DefineVirtualRelation(RangeVar *relation, List *tlist, bool replace,
 					skip--;
 					continue;
 				}
-				atevt = makeNode(AlterTableCmd);
-				atevt->subtype = AT_AddColumnToView;
-				atevt->def = (Node *) lfirst(c);
-				atevts = lappend(atevts, atevt);
+				atcmd = makeNode(AlterTableCmd);
+				atcmd->subtype = AT_AddColumnToView;
+				atcmd->def = (Node *) lfirst(c);
+				atcmds = lappend(atcmds, atcmd);
 			}
 		}
 
 		/* OK, let's do it. */
-		AlterTableInternal(viewOid, atevts, true);
+		AlterTableInternal(viewOid, atcmds, true);
 
 		/*
 		 * Seems okay, so return the OID of the pre-existing view.
@@ -280,7 +269,7 @@ DefineVirtualRelation(RangeVar *relation, List *tlist, bool replace,
 		 * existing view, so we don't need more code to complain if "replace"
 		 * is false).
 		 */
-		relid = DefineRelation(createStmt, RELKIND_VIEW, InvalidOid, evt);
+		relid = DefineRelation(createStmt, RELKIND_VIEW, InvalidOid);
 		Assert(relid != InvalidOid);
 		return relid;
 	}
@@ -354,8 +343,7 @@ DefineViewRules(Oid viewOid, Query *viewParse, bool replace)
 					   CMD_SELECT,
 					   true,
 					   replace,
-					   list_make1(viewParse),
-					   NULL);
+					   list_make1(viewParse));
 
 	/*
 	 * Someday: automatic ON INSERT, etc
@@ -438,7 +426,6 @@ DefineView(ViewStmt *stmt, const char *queryString)
 	Query	   *viewParse;
 	Oid			viewOid;
 	RangeVar   *view;
-	EventContextData evt;
 
 	/*
 	 * Run parse analysis to convert the raw parse tree to a Query.  Note this
@@ -528,21 +515,13 @@ DefineView(ViewStmt *stmt, const char *queryString)
 	}
 
 	/*
-	 * Prepare BEFORE CREATE VIEW triggers
-	 */
-	InitEventContextForCommand(&evt, (Node *)stmt, E_CreateView);
-
-	/*
 	 * Create the view relation
 	 *
 	 * NOTE: if it already exists and replace is false, the xact will be
 	 * aborted.
 	 */
 	viewOid = DefineVirtualRelation(view, viewParse->targetList,
-									stmt->replace, stmt->options, &evt);
-
-	if (!OidIsValid(viewOid))
-		return;
+									stmt->replace, stmt->options);
 
 	/*
 	 * The relation we have just created is not visible to any other commands
@@ -561,11 +540,4 @@ DefineView(ViewStmt *stmt, const char *queryString)
 	 * Now create the rules associated with the view.
 	 */
 	DefineViewRules(viewOid, viewParse, stmt->replace);
-
-	/* Call AFTER CREATE VIEW triggers */
-	if (CommandFiresAfterTriggers(&evt))
-	{
-		evt.objectId = viewOid;
-		ExecAfterCommandTriggers(&evt);
-	}
 }

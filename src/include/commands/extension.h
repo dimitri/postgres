@@ -14,7 +14,6 @@
 #ifndef EXTENSION_H
 #define EXTENSION_H
 
-#include "commands/event_trigger.h"
 #include "nodes/parsenodes.h"
 
 
@@ -44,7 +43,6 @@ extern void ExecAlterExtensionContentsStmt(AlterExtensionContentsStmt *stmt);
 extern Oid	get_extension_oid(const char *extname, bool missing_ok);
 extern char *get_extension_name(Oid ext_oid);
 
-extern void AlterExtensionNamespace(List *names, const char *newschema,
-									EventContext evt);
+extern void AlterExtensionNamespace(List *names, const char *newschema);
 
 #endif   /* EXTENSION_H */

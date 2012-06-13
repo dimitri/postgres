@@ -14,13 +14,10 @@
 #ifndef PG_COLLATION_FN_H
 #define PG_COLLATION_FN_H
 
-#include "commands/event_trigger.h"
-
 extern Oid CollationCreate(const char *collname, Oid collnamespace,
 				Oid collowner,
 				int32 collencoding,
-				const char *collcollate, const char *collctype,
-				EventContext evt);
+				const char *collcollate, const char *collctype);
 extern void RemoveCollationById(Oid collationOid);
 
 #endif   /* PG_COLLATION_FN_H */

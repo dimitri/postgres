@@ -55,7 +55,6 @@
 #include "parser/parse_expr.h"
 #include "parser/parse_func.h"
 #include "parser/parse_type.h"
-#include "tcop/utility.h"
 #include "utils/acl.h"
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
@@ -67,7 +66,7 @@
 
 
 static void AlterFunctionOwner_internal(Relation rel, HeapTuple tup,
-										Oid newOwnerId, EventContext evt);
+							Oid newOwnerId);
 
 
 /*
@@ -803,7 +802,6 @@ CreateFunction(CreateFunctionStmt *stmt, const char *queryString)
 {
 	char	   *probin_str;
 	char	   *prosrc_str;
-	Oid			procOid;
 	Oid			prorettype;
 	bool		returnsSet;
 	char	   *language;
@@ -829,7 +827,6 @@ CreateFunction(CreateFunctionStmt *stmt, const char *queryString)
 	HeapTuple	languageTuple;
 	Form_pg_language languageStruct;
 	List	   *as_clause;
-	EventContextData evt;
 
 	/* Convert list of names to a name and namespace */
 	namespaceId = QualifiedNameGetCreationNamespace(stmt->funcname,
@@ -973,54 +970,33 @@ CreateFunction(CreateFunctionStmt *stmt, const char *queryString)
 				 errmsg("ROWS is not applicable when function does not return a set")));
 
 	/*
-	 * Call BEFORE CREATE FUNCTION triggers
-	 */
-	InitEventContextForCommand(&evt, (Node *)stmt, E_CreateFunction);
-
-	if (CommandFiresTriggers(&evt))
-	{
-		evt.objectId = InvalidOid;
-		evt.objectname = (char *)funcname;
-		evt.schemaname = get_namespace_name(namespaceId);
-
-		ExecBeforeCommandTriggers(&evt);
-	}
-	/*
 	 * And now that we have all the parameters, and know we're permitted to do
 	 * so, go ahead and create the function.
 	 */
-	procOid =
-			ProcedureCreate(funcname,
-							namespaceId,
-							stmt->replace,
-							returnsSet,
-							prorettype,
-							GetUserId(),
-							languageOid,
-							languageValidator,
-							prosrc_str, /* converted to text later */
-							probin_str, /* converted to text later */
-							false,		/* not an aggregate */
-							isWindowFunc,
-							security,
-							isLeakProof,
-							isStrict,
-							volatility,
-							parameterTypes,
-							PointerGetDatum(allParameterTypes),
-							PointerGetDatum(parameterModes),
-							PointerGetDatum(parameterNames),
-							parameterDefaults,
-							PointerGetDatum(proconfig),
-							procost,
-							prorows);
-
-	/* Call AFTER CREATE FUNCTION triggers */
-	if (CommandFiresAfterTriggers(&evt))
-	{
-		evt.objectId = procOid;
-		ExecAfterCommandTriggers(&evt);
-	}
+	ProcedureCreate(funcname,
+					namespaceId,
+					stmt->replace,
+					returnsSet,
+					prorettype,
+					GetUserId(),
+					languageOid,
+					languageValidator,
+					prosrc_str, /* converted to text later */
+					probin_str, /* converted to text later */
+					false,		/* not an aggregate */
+					isWindowFunc,
+					security,
+					isLeakProof,
+					isStrict,
+					volatility,
+					parameterTypes,
+					PointerGetDatum(allParameterTypes),
+					PointerGetDatum(parameterModes),
+					PointerGetDatum(parameterNames),
+					parameterDefaults,
+					PointerGetDatum(proconfig),
+					procost,
+					prorows);
 }
 
 
@@ -1078,7 +1054,7 @@ RemoveFunctionById(Oid funcOid)
  * Rename function
  */
 void
-RenameFunction(List *name, List *argtypes, const char *newname, EventContext evt)
+RenameFunction(List *name, List *argtypes, const char *newname)
 {
 	Oid			procOid;
 	Oid			namespaceOid;
@@ -1132,16 +1108,6 @@ RenameFunction(List *name, List *argtypes, const char *newname, EventContext evt
 		aclcheck_error(aclresult, ACL_KIND_NAMESPACE,
 					   get_namespace_name(namespaceOid));
 
-	/* Call BEFORE ALTER FUNCTION triggers */
-	if (CommandFiresTriggers(evt))
-	{
-		evt->objectId = procOid;
-		evt->objectname = pstrdup(NameStr(procForm->proname));
-		evt->schemaname = get_namespace_name(namespaceOid);
-
-		ExecBeforeCommandTriggers(evt);
-	}
-
 	/* rename */
 	namestrcpy(&(procForm->proname), newname);
 	simple_heap_update(rel, &tup->t_self, tup);
@@ -1149,21 +1115,13 @@ RenameFunction(List *name, List *argtypes, const char *newname, EventContext evt
 
 	heap_close(rel, NoLock);
 	heap_freetuple(tup);
-
-	/* Call AFTER ALTER FUNCTION triggers */
-	if (CommandFiresAfterTriggers(evt))
-	{
-		evt->objectname = pstrdup(newname);
-		ExecAfterCommandTriggers(evt);
-	}
 }
 
 /*
  * Change function owner by name and args
  */
 void
-AlterFunctionOwner(List *name, List *argtypes, Oid newOwnerId,
-				   EventContext evt)
+AlterFunctionOwner(List *name, List *argtypes, Oid newOwnerId)
 {
 	Relation	rel;
 	Oid			procOid;
@@ -1184,7 +1142,7 @@ AlterFunctionOwner(List *name, List *argtypes, Oid newOwnerId,
 						NameListToString(name)),
 				 errhint("Use ALTER AGGREGATE to change owner of aggregate functions.")));
 
-	AlterFunctionOwner_internal(rel, tup, newOwnerId, evt);
+	AlterFunctionOwner_internal(rel, tup, newOwnerId);
 
 	heap_close(rel, NoLock);
 }
@@ -1193,7 +1151,7 @@ AlterFunctionOwner(List *name, List *argtypes, Oid newOwnerId,
  * Change function owner by Oid
  */
 void
-AlterFunctionOwner_oid(Oid procOid, Oid newOwnerId, EventContext evt)
+AlterFunctionOwner_oid(Oid procOid, Oid newOwnerId)
 {
 	Relation	rel;
 	HeapTuple	tup;
@@ -1203,14 +1161,13 @@ AlterFunctionOwner_oid(Oid procOid, Oid newOwnerId, EventContext evt)
 	tup = SearchSysCache1(PROCOID, ObjectIdGetDatum(procOid));
 	if (!HeapTupleIsValid(tup)) /* should not happen */
 		elog(ERROR, "cache lookup failed for function %u", procOid);
-	AlterFunctionOwner_internal(rel, tup, newOwnerId, evt);
+	AlterFunctionOwner_internal(rel, tup, newOwnerId);
 
 	heap_close(rel, NoLock);
 }
 
 static void
-AlterFunctionOwner_internal(Relation rel, HeapTuple tup, Oid newOwnerId,
-							EventContext evt)
+AlterFunctionOwner_internal(Relation rel, HeapTuple tup, Oid newOwnerId)
 {
 	Form_pg_proc procForm;
 	AclResult	aclresult;
@@ -1256,15 +1213,6 @@ AlterFunctionOwner_internal(Relation rel, HeapTuple tup, Oid newOwnerId,
 							   get_namespace_name(procForm->pronamespace));
 		}
 
-		/* Call BEFORE ALTER FUNCTION triggers */
-		if (CommandFiresTriggers(evt))
-		{
-			evt->objectId = procOid;
-			evt->objectname = pstrdup(NameStr(procForm->proname));
-			evt->schemaname = get_namespace_name(procForm->pronamespace);
-
-			ExecBeforeCommandTriggers(evt);
-		}
 		memset(repl_null, false, sizeof(repl_null));
 		memset(repl_repl, false, sizeof(repl_repl));
 
@@ -1296,10 +1244,6 @@ AlterFunctionOwner_internal(Relation rel, HeapTuple tup, Oid newOwnerId,
 
 		/* Update owner dependency reference */
 		changeDependencyOnOwner(ProcedureRelationId, procOid, newOwnerId);
-
-		/* Call AFTER ALTER FUNCTION triggers */
-		if (CommandFiresAfterTriggers(evt))
-			ExecAfterCommandTriggers(evt);
 	}
 
 	ReleaseSysCache(tup);
@@ -1325,7 +1269,6 @@ AlterFunction(AlterFunctionStmt *stmt)
 	List	   *set_items = NIL;
 	DefElem    *cost_item = NULL;
 	DefElem    *rows_item = NULL;
-	EventContextData evt;
 
 	rel = heap_open(ProcedureRelationId, RowExclusiveLock);
 
@@ -1400,19 +1343,6 @@ AlterFunction(AlterFunctionStmt *stmt)
 					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 					 errmsg("ROWS is not applicable when function does not return a set")));
 	}
-
-	/* Call BEFORE ALTER FUNCTION command triggers */
-	InitEventContextForCommand(&evt, (Node *)stmt, E_AlterFunction);
-
-	if (CommandFiresTriggers(&evt))
-	{
-		evt.objectId = HeapTupleGetOid(tup);
-		evt.objectname = pstrdup(NameStr(procForm->proname));
-		evt.schemaname = get_namespace_name(procForm->pronamespace);
-
-		ExecBeforeCommandTriggers(&evt);
-	}
-
 	if (set_items)
 	{
 		Datum		datum;
@@ -1454,10 +1384,6 @@ AlterFunction(AlterFunctionStmt *stmt)
 
 	heap_close(rel, NoLock);
 	heap_freetuple(tup);
-
-	/* Call AFTER ALTER FUNCTION command triggers */
-	if (CommandFiresAfterTriggers(&evt))
-		ExecAfterCommandTriggers(&evt);
 }
 
 /*
@@ -1554,7 +1480,6 @@ CreateCast(CreateCastStmt *stmt)
 	ObjectAddress myself,
 				referenced;
 	AclResult	aclresult;
-	EventContextData evt;
 
 	sourcetypeid = typenameTypeId(NULL, stmt->sourcetype);
 	targettypeid = typenameTypeId(NULL, stmt->targettype);
@@ -1784,18 +1709,6 @@ CreateCast(CreateCastStmt *stmt)
 			break;
 	}
 
-	/* Call BEFORE CREATE CAST command triggers */
-	InitEventContextForCommand(&evt, (Node *)stmt, E_CreateCast);
-
-	if (CommandFiresTriggers(&evt))
-	{
-		evt.objectId = InvalidOid;
-		evt.objectname = NULL;	/* composite name, not supported */
-		evt.schemaname = NULL;	/* casts don't live in a namespace */
-
-		ExecBeforeCommandTriggers(&evt);
-	}
-
 	relation = heap_open(CastRelationId, RowExclusiveLock);
 
 	/*
@@ -1864,12 +1777,6 @@ CreateCast(CreateCastStmt *stmt)
 	heap_freetuple(tuple);
 
 	heap_close(relation, RowExclusiveLock);
-
-	if (CommandFiresAfterTriggers(&evt))
-	{
-		evt.objectId = castid;
-		ExecAfterCommandTriggers(&evt);
-	}
 }
 
 /*
@@ -1928,7 +1835,7 @@ DropCastById(Oid castOid)
  */
 void
 AlterFunctionNamespace(List *name, List *argtypes, bool isagg,
-					   const char *newschema, EventContext evt)
+					   const char *newschema)
 {
 	Oid			procOid;
 	Oid			nspOid;
@@ -1942,11 +1849,11 @@ AlterFunctionNamespace(List *name, List *argtypes, bool isagg,
 	/* get schema OID and check its permissions */
 	nspOid = LookupCreationNamespace(newschema);
 
-	AlterFunctionNamespace_oid(procOid, nspOid, evt);
+	AlterFunctionNamespace_oid(procOid, nspOid);
 }
 
 Oid
-AlterFunctionNamespace_oid(Oid procOid, Oid nspOid, EventContext evt)
+AlterFunctionNamespace_oid(Oid procOid, Oid nspOid)
 {
 	Oid			oldNspOid;
 	HeapTuple	tup;
@@ -1981,16 +1888,6 @@ AlterFunctionNamespace_oid(Oid procOid, Oid nspOid, EventContext evt)
 						NameStr(proc->proname),
 						get_namespace_name(nspOid))));
 
-	/* Call BEFORE ALTER FUNCTION triggers */
-	if (CommandFiresTriggers(evt))
-	{
-		evt->objectId = procOid;
-		evt->objectname = pstrdup(NameStr(proc->proname));
-		evt->schemaname = get_namespace_name(oldNspOid);
-
-		ExecBeforeCommandTriggers(evt);
-	}
-
 	/* OK, modify the pg_proc row */
 
 	/* tup is a copy, so we can scribble directly on it */
@@ -2009,11 +1906,6 @@ AlterFunctionNamespace_oid(Oid procOid, Oid nspOid, EventContext evt)
 
 	heap_close(procRel, RowExclusiveLock);
 
-	if (CommandFiresAfterTriggers(evt))
-	{
-		evt->schemaname = get_namespace_name(nspOid);
-		ExecAfterCommandTriggers(evt);
-	}
 	return oldNspOid;
 }
 

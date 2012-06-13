@@ -88,16 +88,7 @@ typedef enum TrigEvent
 	E_SecurityCheck      = 10,
 	E_ConsistencyCheck   = 15,
 	E_NameLookup         = 20,
-
-	E_CreateCommand      = 30,
-
-	E_AlterCommand       = 40,
-	E_RenameCommand,
-	E_AlterOwnerCommand,
-	E_AlterSchemaCommand,
-
-	E_DropCommand        = 50,
-	E_CommandEnd         = 51,
+	E_CommandEnd         = 51
 } TrigEvent;
 
 #define EVTG_MAX_TRIG_EVENT 52
@@ -110,6 +101,7 @@ typedef enum TrigEventCommand
 	E_ANY = 1,
 
 	E_AlterAggregate   = 100,
+	E_AlterCast,
 	E_AlterCollation,
 	E_AlterConversion,
 	E_AlterDomain,
@@ -117,6 +109,7 @@ typedef enum TrigEventCommand
 	E_AlterForeignDataWrapper,
 	E_AlterForeignTable,
 	E_AlterFunction,
+	E_AlterIndex,
 	E_AlterLanguage,
 	E_AlterOperator,
 	E_AlterOperatorClass,

@@ -23,12 +23,10 @@
 #include "catalog/pg_collation.h"
 #include "catalog/pg_collation_fn.h"
 #include "catalog/pg_namespace.h"
-#include "commands/event_trigger.h"
 #include "mb/pg_wchar.h"
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
 #include "utils/rel.h"
-#include "utils/lsyscache.h"
 #include "utils/syscache.h"
 #include "utils/tqual.h"
 
@@ -42,8 +40,7 @@ Oid
 CollationCreate(const char *collname, Oid collnamespace,
 				Oid collowner,
 				int32 collencoding,
-				const char *collcollate, const char *collctype,
-				EventContext evt)
+				const char *collcollate, const char *collctype)
 {
 	Relation	rel;
 	TupleDesc	tupDesc;
@@ -92,18 +89,6 @@ CollationCreate(const char *collname, Oid collnamespace,
 				(errcode(ERRCODE_DUPLICATE_OBJECT),
 				 errmsg("collation \"%s\" already exists",
 						collname)));
-
-	/*
-	 * Call BEFORE CREATE COLLATION triggers
-	 */
-	if (CommandFiresTriggers(evt))
-	{
-		evt->objectId = InvalidOid;
-		evt->objectname = (char *)collname;
-		evt->schemaname = get_namespace_name(collnamespace);
-
-		ExecBeforeCommandTriggers(evt);
-	}
 
 	/* open pg_collation */
 	rel = heap_open(CollationRelationId, RowExclusiveLock);
@@ -156,12 +141,6 @@ CollationCreate(const char *collname, Oid collnamespace,
 	heap_freetuple(tup);
 	heap_close(rel, RowExclusiveLock);
 
-	/* Call AFTER CREATE COLLATION triggers */
-	if (CommandFiresAfterTriggers(evt))
-	{
-		evt->objectId = oid;
-		ExecAfterCommandTriggers(evt);
-	}
 	return oid;
 }
 

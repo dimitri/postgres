@@ -14,7 +14,6 @@
 #ifndef PG_TYPE_FN_H
 #define PG_TYPE_FN_H
 
-#include "commands/event_trigger.h"
 #include "nodes/nodes.h"
 
 
@@ -74,7 +73,7 @@ extern void GenerateTypeDependencies(Oid typeNamespace,
 						 bool rebuild);
 
 extern void RenameTypeInternal(Oid typeOid, const char *newTypeName,
-							   Oid typeNamespace, EventContext evt);
+				   Oid typeNamespace);
 
 extern char *makeArrayTypeName(const char *typeName, Oid typeNamespace);
 

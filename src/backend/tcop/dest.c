@@ -118,7 +118,7 @@ CreateDestReceiver(CommandDest dest)
 			return CreateTuplestoreDestReceiver();
 
 		case DestIntoRel:
-			return CreateIntoRelDestReceiver(NULL, NULL);
+			return CreateIntoRelDestReceiver(NULL);
 
 		case DestCopyOut:
 			return CreateCopyDestReceiver();

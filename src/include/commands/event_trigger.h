@@ -79,9 +79,4 @@ extern bool CommandFiresTriggersForEvent(EventContext ev_ctx, TrigEvent tev);
 extern void ExecEventTriggers(EventContext ev_ctx, TrigEvent tev);
 extern void ExecEventTriggers(EventContext ev_ctx, TrigEvent tev);
 
-/* COMPAT, meant to be removed */
-extern bool CommandFiresAfterTriggers(EventContext ev_ctx);
-extern void	ExecAfterCommandTriggers(EventContext ev_ctx);
-extern void ExecBeforeCommandTriggers(EventContext ev_ctx);
-
 #endif   /* EVENT_TRIGGER_H */

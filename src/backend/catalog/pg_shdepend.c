@@ -1327,11 +1327,11 @@ shdepReassignOwned(List *roleids, Oid newrole)
 			switch (sdepForm->classid)
 			{
 				case CollationRelationId:
-					AlterCollationOwner_oid(sdepForm->objid, newrole, NULL);
+					AlterCollationOwner_oid(sdepForm->objid, newrole);
 					break;
 
 				case ConversionRelationId:
-					AlterConversionOwner_oid(sdepForm->objid, newrole, NULL);
+					AlterConversionOwner_oid(sdepForm->objid, newrole);
 					break;
 
 				case TypeRelationId:
@@ -1357,7 +1357,7 @@ shdepReassignOwned(List *roleids, Oid newrole)
 					break;
 
 				case ProcedureRelationId:
-					AlterFunctionOwner_oid(sdepForm->objid, newrole, NULL);
+					AlterFunctionOwner_oid(sdepForm->objid, newrole);
 					break;
 
 				case LanguageRelationId:

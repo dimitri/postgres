@@ -31,7 +31,7 @@
 #include "utils/syscache.h"
 
 static void AlterConversionOwner_internal(Relation rel, Oid conversionOid,
-							  Oid newOwnerId, EventContext evt);
+							  Oid newOwnerId);
 
 /*
  * CREATE CONVERSION
@@ -39,7 +39,7 @@ static void AlterConversionOwner_internal(Relation rel, Oid conversionOid,
 void
 CreateConversionCommand(CreateConversionStmt *stmt)
 {
-	Oid			namespaceId, convOid;
+	Oid			namespaceId;
 	char	   *conversion_name;
 	AclResult	aclresult;
 	int			from_encoding;
@@ -50,7 +50,6 @@ CreateConversionCommand(CreateConversionStmt *stmt)
 	List	   *func_name = stmt->func_name;
 	static Oid	funcargs[] = {INT4OID, INT4OID, CSTRINGOID, INTERNALOID, INT4OID};
 	char		result[1];
-	EventContextData evt;
 
 	/* Convert list of names to a name and namespace */
 	namespaceId = QualifiedNameGetCreationNamespace(stmt->conversion_name,
@@ -110,38 +109,19 @@ CreateConversionCommand(CreateConversionStmt *stmt)
 					 CStringGetDatum(result),
 					 Int32GetDatum(0));
 
-	/* Call BEFORE CREATE CONVERSION command triggers */
-	InitEventContextForCommand(&evt, (Node *)stmt, E_CreateConversion);
-
-	if (CommandFiresTriggers(&evt))
-	{
-		evt.objectId = InvalidOid;
-		evt.objectname = conversion_name;
-		evt.schemaname = get_namespace_name(namespaceId);
-
-		ExecBeforeCommandTriggers(&evt);
-	}
-
 	/*
 	 * All seem ok, go ahead (possible failure would be a duplicate conversion
 	 * name)
 	 */
-	convOid = ConversionCreate(conversion_name, namespaceId, GetUserId(),
-							   from_encoding, to_encoding, funcoid, stmt->def);
-
-	/* Call AFTER CREATE CONVERSION command triggers */
-	if (CommandFiresAfterTriggers(&evt))
-	{
-		evt.objectId = convOid;
-		ExecAfterCommandTriggers(&evt);
-	}
+	ConversionCreate(conversion_name, namespaceId, GetUserId(),
+					 from_encoding, to_encoding, funcoid, stmt->def);
 }
 
 /*
  * Rename conversion
  */
 void
-RenameConversion(List *name, const char *newname, EventContext evt)
+RenameConversion(List *name, const char *newname)
 {
 	Oid			conversionOid;
 	Oid			namespaceOid;
@@ -179,16 +159,6 @@ RenameConversion(List *name, const char *newname, EventContext evt)
 		aclcheck_error(aclresult, ACL_KIND_NAMESPACE,
 					   get_namespace_name(namespaceOid));
 
-	/* Call BEFORE ALTER CONVERSION triggers */
-	if (CommandFiresTriggers(evt))
-	{
-		evt->objectId = HeapTupleGetOid(tup);
-		evt->objectname = pstrdup(NameStr((((Form_pg_conversion) GETSTRUCT(tup))->conname)));
-		evt->schemaname = get_namespace_name(namespaceOid);
-
-		ExecBeforeCommandTriggers(evt);
-	}
-
 	/* rename */
 	namestrcpy(&(((Form_pg_conversion) GETSTRUCT(tup))->conname), newname);
 	simple_heap_update(rel, &tup->t_self, tup);
@@ -196,20 +166,13 @@ RenameConversion(List *name, const char *newname, EventContext evt)
 
 	heap_close(rel, NoLock);
 	heap_freetuple(tup);
-
-	/* Call AFTER ALTER CONVERSION triggers */
-	if (CommandFiresAfterTriggers(evt))
-	{
-		evt->objectname = pstrdup(newname);
-		ExecAfterCommandTriggers(evt);
-	}
 }
 
 /*
  * Change conversion owner, by name
  */
 void
-AlterConversionOwner(List *name, Oid newOwnerId, EventContext evt)
+AlterConversionOwner(List *name, Oid newOwnerId)
 {
 	Oid			conversionOid;
 	Relation	rel;
@@ -218,7 +181,7 @@ AlterConversionOwner(List *name, Oid newOwnerId, EventContext evt)
 
 	conversionOid = get_conversion_oid(name, false);
 
-	AlterConversionOwner_internal(rel, conversionOid, newOwnerId, evt);
+	AlterConversionOwner_internal(rel, conversionOid, newOwnerId);
 
 	heap_close(rel, NoLock);
 }
@@ -227,13 +190,13 @@ AlterConversionOwner(List *name, Oid newOwnerId, EventContext evt)
  * Change conversion owner, by oid
  */
 void
-AlterConversionOwner_oid(Oid conversionOid, Oid newOwnerId, EventContext evt)
+AlterConversionOwner_oid(Oid conversionOid, Oid newOwnerId)
 {
 	Relation	rel;
 
 	rel = heap_open(ConversionRelationId, RowExclusiveLock);
 
-	AlterConversionOwner_internal(rel, conversionOid, newOwnerId, evt);
+	AlterConversionOwner_internal(rel, conversionOid, newOwnerId);
 
 	heap_close(rel, NoLock);
 }
@@ -245,8 +208,7 @@ AlterConversionOwner_oid(Oid conversionOid, Oid newOwnerId, EventContext evt)
  * open and suitably locked; it will not be closed.
  */
 static void
-AlterConversionOwner_internal(Relation rel, Oid conversionOid, Oid newOwnerId,
-							  EventContext evt)
+AlterConversionOwner_internal(Relation rel, Oid conversionOid, Oid newOwnerId)
 {
 	Form_pg_conversion convForm;
 	HeapTuple	tup;
@@ -287,16 +249,6 @@ AlterConversionOwner_internal(Relation rel, Oid conversionOid, Oid newOwnerId,
 							   get_namespace_name(convForm->connamespace));
 		}
 
-		/* Call BEFORE ALTER CONVERSION triggers */
-		if (CommandFiresTriggers(evt))
-		{
-			evt->objectId = HeapTupleGetOid(tup);
-			evt->objectname = pstrdup(NameStr(convForm->conname));
-			evt->schemaname = get_namespace_name(convForm->connamespace);
-
-			ExecBeforeCommandTriggers(evt);
-		}
-
 		/*
 		 * Modify the owner --- okay to scribble on tup because it's a copy
 		 */
@@ -309,10 +261,6 @@ AlterConversionOwner_internal(Relation rel, Oid conversionOid, Oid newOwnerId,
 		/* Update owner dependency reference */
 		changeDependencyOnOwner(ConversionRelationId, conversionOid,
 								newOwnerId);
-
-		/* Call AFTER ALTER CONVERSION triggers */
-		if (CommandFiresAfterTriggers(evt))
-			ExecAfterCommandTriggers(evt);
 	}
 
 	heap_freetuple(tup);
@@ -322,7 +270,7 @@ AlterConversionOwner_internal(Relation rel, Oid conversionOid, Oid newOwnerId,
  * Execute ALTER CONVERSION SET SCHEMA
  */
 void
-AlterConversionNamespace(List *name, const char *newschema, EventContext evt)
+AlterConversionNamespace(List *name, const char *newschema)
 {
 	Oid			convOid,
 				nspOid;
@@ -340,7 +288,7 @@ AlterConversionNamespace(List *name, const char *newschema, EventContext evt)
 						 Anum_pg_conversion_conname,
 						 Anum_pg_conversion_connamespace,
 						 Anum_pg_conversion_conowner,
-						 ACL_KIND_CONVERSION, evt);
+						 ACL_KIND_CONVERSION);
 
 	heap_close(rel, RowExclusiveLock);
 }
@@ -361,7 +309,7 @@ AlterConversionNamespace_oid(Oid convOid, Oid newNspOid)
 									 Anum_pg_conversion_conname,
 									 Anum_pg_conversion_connamespace,
 									 Anum_pg_conversion_conowner,
-									 ACL_KIND_CONVERSION, NULL);
+									 ACL_KIND_CONVERSION);
 
 	heap_close(rel, RowExclusiveLock);
 

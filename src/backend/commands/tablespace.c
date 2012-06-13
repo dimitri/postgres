@@ -67,7 +67,6 @@
 #include "postmaster/bgwriter.h"
 #include "storage/fd.h"
 #include "storage/standby.h"
-#include "tcop/utility.h"
 #include "utils/acl.h"
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
@@ -366,7 +365,6 @@ CreateTableSpace(CreateTableSpaceStmt *stmt)
 
 	/* We keep the lock on pg_tablespace until commit */
 	heap_close(rel, NoLock);
-
 #else							/* !HAVE_SYMLINK */
 	ereport(ERROR,
 			(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
@@ -530,7 +528,6 @@ DropTableSpace(DropTableSpaceStmt *stmt)
 
 	/* We keep the lock on pg_tablespace until commit */
 	heap_close(rel, NoLock);
-
 #else							/* !HAVE_SYMLINK */
 	ereport(ERROR,
 			(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),

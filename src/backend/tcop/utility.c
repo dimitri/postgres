@@ -347,10 +347,20 @@ standard_ProcessUtility(Node *parsetree,
 						DestReceiver *dest,
 						char *completionTag)
 {
+	EventContextData evt;
+
 	check_xact_readonly(parsetree);
 
 	if (completionTag)
 		completionTag[0] = '\0';
+
+	/* Event Trigger support for command_start */
+	InitEventContext(&evt, (Node *)parsetree);
+
+	if (CommandFiresTriggersForEvent(&evt, E_CommandStart))
+	{
+		ExecEventTriggers(&evt, E_CommandStart);
+	}
 
 	switch (nodeTag(parsetree))
 	{
@@ -514,10 +524,6 @@ standard_ProcessUtility(Node *parsetree,
 				ListCell   *l;
 				Oid			relOid = InvalidOid;
 				CreateStmt *stmt = (CreateStmt *) parsetree;
-				EventContextData evt;
-
-				/* Prepare BEFORE CREATE TABLE triggers */
-				InitEventContextForCommand(&evt, parsetree, E_CreateTable);
 
 				/* Run parse analysis ... */
 				stmts = transformCreateStmt(stmt, queryString);
@@ -535,8 +541,7 @@ standard_ProcessUtility(Node *parsetree,
 						/* Create the table itself */
 						relOid = DefineRelation((CreateStmt *) stmt,
 												RELKIND_RELATION,
-												InvalidOid,
-												&evt);
+												InvalidOid);
 
 						/*
 						 * Let AlterTableCreateToastTable decide if this one
@@ -560,8 +565,7 @@ standard_ProcessUtility(Node *parsetree,
 						/* Create the table itself */
 						relOid = DefineRelation((CreateStmt *) stmt,
 												RELKIND_FOREIGN_TABLE,
-												InvalidOid,
-												&evt);
+												InvalidOid);
 						CreateForeignTable((CreateForeignTableStmt *) stmt,
 										   relOid);
 					}
@@ -579,13 +583,6 @@ standard_ProcessUtility(Node *parsetree,
 					/* Need CCI between commands */
 					if (lnext(l) != NULL)
 						CommandCounterIncrement();
-				}
-
-				/* Call AFTER CREATE TABLE triggers */
-				if (CommandFiresAfterTriggers(&evt))
-				{
-					evt.objectId = relOid;
-					ExecAfterCommandTriggers(&evt);
 				}
 			}
 			break;
@@ -777,10 +774,6 @@ standard_ProcessUtility(Node *parsetree,
 		case T_AlterDomainStmt:
 			{
 				AlterDomainStmt *stmt = (AlterDomainStmt *) parsetree;
-				EventContextData evt;
-
-				/* Prepare BEFORE ALTER DOMAIN triggers */
-				InitEventContextForCommand(&evt, parsetree, E_AlterDomain);
 
 				/*
 				 * Some or all of these functions are recursive to cover
@@ -795,30 +788,29 @@ standard_ProcessUtility(Node *parsetree,
 						 * requested, for descendants
 						 */
 						AlterDomainDefault(stmt->typeName,
-										   stmt->def, &evt);
+										   stmt->def);
 						break;
 					case 'N':	/* ALTER DOMAIN DROP NOT NULL */
 						AlterDomainNotNull(stmt->typeName,
-										   false, &evt);
+										   false);
 						break;
 					case 'O':	/* ALTER DOMAIN SET NOT NULL */
 						AlterDomainNotNull(stmt->typeName,
-										   true, &evt);
+										   true);
 						break;
 					case 'C':	/* ADD CONSTRAINT */
 						AlterDomainAddConstraint(stmt->typeName,
-												 stmt->def, &evt);
+												 stmt->def);
 						break;
 					case 'X':	/* DROP CONSTRAINT */
 						AlterDomainDropConstraint(stmt->typeName,
 												  stmt->name,
 												  stmt->behavior,
-												  stmt->missing_ok,
-												  &evt);
+												  stmt->missing_ok);
 						break;
 					case 'V':	/* VALIDATE CONSTRAINT */
 						AlterDomainValidateConstraint(stmt->typeName,
-													  stmt->name, &evt);
+													  stmt->name);
 						break;
 					default:	/* oops */
 						elog(ERROR, "unrecognized alter domain type: %d",
@@ -846,49 +838,40 @@ standard_ProcessUtility(Node *parsetree,
 		case T_DefineStmt:
 			{
 				DefineStmt *stmt = (DefineStmt *) parsetree;
-				EventContextData evt;
 
 				switch (stmt->kind)
 				{
 					case OBJECT_AGGREGATE:
-						InitEventContextForCommand(&evt, parsetree, E_CreateAggregate);
 						DefineAggregate(stmt->defnames, stmt->args,
-										stmt->oldstyle, stmt->definition, &evt);
+										stmt->oldstyle, stmt->definition);
 						break;
 					case OBJECT_OPERATOR:
 						Assert(stmt->args == NIL);
-						InitEventContextForCommand(&evt, parsetree, E_CreateOperator);
-						DefineOperator(stmt->defnames, stmt->definition, &evt);
+						DefineOperator(stmt->defnames, stmt->definition);
 						break;
 					case OBJECT_TYPE:
 						Assert(stmt->args == NIL);
-						InitEventContextForCommand(&evt, parsetree, E_CreateType);
-						DefineType(stmt->defnames, stmt->definition, &evt);
+						DefineType(stmt->defnames, stmt->definition);
 						break;
 					case OBJECT_TSPARSER:
 						Assert(stmt->args == NIL);
-						InitEventContextForCommand(&evt, parsetree, E_CreateTextSearchParser);
-						DefineTSParser(stmt->defnames, stmt->definition, &evt);
+						DefineTSParser(stmt->defnames, stmt->definition);
 						break;
 					case OBJECT_TSDICTIONARY:
 						Assert(stmt->args == NIL);
-						InitEventContextForCommand(&evt, parsetree, E_CreateTextSearchDictionary);
-						DefineTSDictionary(stmt->defnames, stmt->definition, &evt);
+						DefineTSDictionary(stmt->defnames, stmt->definition);
 						break;
 					case OBJECT_TSTEMPLATE:
 						Assert(stmt->args == NIL);
-						InitEventContextForCommand(&evt, parsetree, E_CreateTextSearchTemplate);
-						DefineTSTemplate(stmt->defnames, stmt->definition, &evt);
+						DefineTSTemplate(stmt->defnames, stmt->definition);
 						break;
 					case OBJECT_TSCONFIGURATION:
 						Assert(stmt->args == NIL);
-						InitEventContextForCommand(&evt, parsetree, E_CreateTextSearchConfiguration);
-						DefineTSConfiguration(stmt->defnames, stmt->definition, &evt);
+						DefineTSConfiguration(stmt->defnames, stmt->definition);
 						break;
 					case OBJECT_COLLATION:
 						Assert(stmt->args == NIL);
-						InitEventContextForCommand(&evt, parsetree, E_CreateCollation);
-						DefineCollation(stmt->defnames, stmt->definition, &evt);
+						DefineCollation(stmt->defnames, stmt->definition);
 						break;
 					default:
 						elog(ERROR, "unrecognized define stmt type: %d",
@@ -901,10 +884,8 @@ standard_ProcessUtility(Node *parsetree,
 		case T_CompositeTypeStmt:		/* CREATE TYPE (composite) */
 			{
 				CompositeTypeStmt *stmt = (CompositeTypeStmt *) parsetree;
-				EventContextData evt;
 
-				InitEventContextForCommand(&evt, parsetree, E_CreateType);
-				DefineCompositeType(stmt->typevar, stmt->coldeflist, &evt);
+				DefineCompositeType(stmt->typevar, stmt->coldeflist);
 			}
 			break;
 
@@ -942,9 +923,6 @@ standard_ProcessUtility(Node *parsetree,
 		case T_IndexStmt:		/* CREATE INDEX */
 			{
 				IndexStmt  *stmt = (IndexStmt *) parsetree;
-				EventContextData evt;
-
-				InitEventContextForCommand(&evt, parsetree, E_CreateIndex);
 
 				if (stmt->concurrent)
 					PreventTransactionChain(isTopLevel,
@@ -975,8 +953,7 @@ standard_ProcessUtility(Node *parsetree,
 							true,		/* check_rights */
 							false,		/* skip_build */
 							false,		/* quiet */
-							stmt->concurrent,	/* concurrent */
-							&evt);
+							stmt->concurrent);	/* concurrent */
 			}
 			break;
 
@@ -1014,7 +991,7 @@ standard_ProcessUtility(Node *parsetree,
 				DropdbStmt *stmt = (DropdbStmt *) parsetree;
 
 				PreventTransactionChain(isTopLevel, "DROP DATABASE");
-				dropdb(stmt);
+				dropdb(stmt->dbname, stmt->missing_ok);
 			}
 			break;
 
@@ -1054,24 +1031,10 @@ standard_ProcessUtility(Node *parsetree,
 		case T_LoadStmt:
 			{
 				LoadStmt   *stmt = (LoadStmt *) parsetree;
-				EventContextData evt;
-
-				InitEventContextForCommand(&evt, parsetree, E_Load);
-
-				if (CommandFiresTriggers(&evt))
-				{
-					evt.objectname = stmt->filename;
-					evt.schemaname = NULL;
-
-					ExecBeforeCommandTriggers(&evt);
-				}
 
 				closeAllVfds(); /* probably not necessary... */
 				/* Allowed names are restricted if you're not superuser */
 				load_file(stmt->filename, !superuser());
-
-				if (CommandFiresAfterTriggers(&evt))
-					ExecAfterCommandTriggers(&evt);
 			}
 			break;
 
@@ -1200,19 +1163,16 @@ standard_ProcessUtility(Node *parsetree,
 		case T_ReindexStmt:
 			{
 				ReindexStmt *stmt = (ReindexStmt *) parsetree;
-				EventContextData evt;
-
-				InitEventContextForCommand(&evt, parsetree, E_Reindex);
 
 				/* we choose to allow this during "read only" transactions */
 				PreventCommandDuringRecovery("REINDEX");
 				switch (stmt->kind)
 				{
 					case OBJECT_INDEX:
-						ReindexIndex(stmt->relation, &evt);
+						ReindexIndex(stmt->relation);
 						break;
 					case OBJECT_TABLE:
-						ReindexTable(stmt->relation, &evt);
+						ReindexTable(stmt->relation);
 						break;
 					case OBJECT_DATABASE:
 

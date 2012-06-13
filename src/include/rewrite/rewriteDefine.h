@@ -14,7 +14,6 @@
 #ifndef REWRITEDEFINE_H
 #define REWRITEDEFINE_H
 
-#include "commands/event_trigger.h"
 #include "nodes/parsenodes.h"
 #include "utils/relcache.h"
 
@@ -31,8 +30,7 @@ extern void DefineQueryRewrite(char *rulename,
 				   CmdType event_type,
 				   bool is_instead,
 				   bool replace,
-				   List *action,
-				   EventContext evt);
+				   List *action);
 
 extern void RenameRewriteRule(Oid owningRel, const char *oldName,
 				  const char *newName);

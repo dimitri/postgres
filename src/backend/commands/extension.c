@@ -40,7 +40,6 @@
 #include "catalog/pg_type.h"
 #include "commands/alter.h"
 #include "commands/comment.h"
-#include "commands/event_trigger.h"
 #include "commands/extension.h"
 #include "commands/schemacmds.h"
 #include "funcapi.h"
@@ -1191,32 +1190,17 @@ CreateExtension(CreateExtensionStmt *stmt)
 	List	   *requiredSchemas;
 	Oid			extensionOid;
 	ListCell   *lc;
-	EventContextData evt;
 
 	/* Check extension name validity before any filesystem access */
 	check_valid_extension_name(stmt->extname);
 
-	/*
-	 * Call BEFORE CREATE EXTENSION triggers
-	 */
-	InitEventContextForCommand(&evt, (Node *)stmt, E_CreateExtension);
-
-	if (CommandFiresTriggers(&evt))
-	{
-		evt.objectId = InvalidOid;
-		evt.objectname = stmt->extname;
-		evt.schemaname = NULL;
-
-		ExecBeforeCommandTriggers(&evt);
-	}
 	/*
 	 * Check for duplicate extension name.	The unique index on
 	 * pg_extension.extname would catch this anyway, and serves as a backstop
 	 * in case of race conditions; but this is a friendlier error message, and
 	 * besides we need a check to support IF NOT EXISTS.
 	 */
-	extensionOid = get_extension_oid(stmt->extname, true);
-	if ( extensionOid != InvalidOid)
+	if (get_extension_oid(stmt->extname, true) != InvalidOid)
 	{
 		if (stmt->if_not_exists)
 		{
@@ -1224,13 +1208,6 @@ CreateExtension(CreateExtensionStmt *stmt)
 					(errcode(ERRCODE_DUPLICATE_OBJECT),
 					 errmsg("extension \"%s\" already exists, skipping",
 							stmt->extname)));
-
-			/* Call AFTER CREATE EXTENSION triggers */
-			if (CommandFiresAfterTriggers(&evt))
-			{
-				evt.objectId = extensionOid;
-				ExecAfterCommandTriggers(&evt);
-			}
 			return;
 		}
 		else
@@ -1490,13 +1467,6 @@ CreateExtension(CreateExtensionStmt *stmt)
 	 */
 	ApplyExtensionUpdates(extensionOid, pcontrol,
 						  versionName, updateVersions);
-
-	/* Call AFTER CREATE EXTENSION triggers */
-	if (CommandFiresAfterTriggers(&evt))
-	{
-		evt.objectId = extensionOid;
-		ExecAfterCommandTriggers(&evt);
-	}
 }
 
 /*
@@ -2216,7 +2186,7 @@ pg_extension_config_dump(PG_FUNCTION_ARGS)
  * Execute ALTER EXTENSION SET SCHEMA
  */
 void
-AlterExtensionNamespace(List *names, const char *newschema, EventContext evt)
+AlterExtensionNamespace(List *names, const char *newschema)
 {
 	char	   *extensionName;
 	Oid			extensionOid;
@@ -2276,16 +2246,6 @@ AlterExtensionNamespace(List *names, const char *newschema, EventContext evt)
 	extForm = (Form_pg_extension) GETSTRUCT(extTup);
 
 	systable_endscan(extScan);
-
-	/* Call BEFORE ALTER EXTENSION triggers */
-	if (CommandFiresTriggers(evt))
-	{
-		evt->objectId = extensionOid;
-		evt->objectname = extensionName;
-		evt->schemaname = NULL;
-
-		ExecBeforeCommandTriggers(evt);
-	}
 
 	/*
 	 * If the extension is already in the target schema, just silently do
@@ -2382,10 +2342,6 @@ AlterExtensionNamespace(List *names, const char *newschema, EventContext evt)
 	/* update dependencies to point to the new schema */
 	changeDependencyFor(ExtensionRelationId, extensionOid,
 						NamespaceRelationId, oldNspOid, nspOid);
-
-	/* Call AFTER ALTER EXTENSION triggers */
-	if (CommandFiresAfterTriggers(evt))
-		ExecAfterCommandTriggers(evt);
 }
 
 /*
@@ -2407,7 +2363,6 @@ ExecAlterExtensionStmt(AlterExtensionStmt *stmt)
 	Datum		datum;
 	bool		isnull;
 	ListCell   *lc;
-	EventContextData evt;
 
 	/*
 	 * We use global variables to track the extension being created, so we can
@@ -2458,20 +2413,6 @@ ExecAlterExtensionStmt(AlterExtensionStmt *stmt)
 	if (!pg_extension_ownercheck(extensionOid, GetUserId()))
 		aclcheck_error(ACLCHECK_NOT_OWNER, ACL_KIND_EXTENSION,
 					   stmt->extname);
-
-	/*
-	 * Call BEFORE ALTER EXTENSION triggers
-	 */
-	InitEventContextForCommand(&evt, (Node *)stmt, E_AlterExtension);
-
-	if (CommandFiresTriggers(&evt))
-	{
-		evt.objectId = extensionOid;
-		evt.objectname = stmt->extname;
-		evt.schemaname = NULL;
-
-		ExecBeforeCommandTriggers(&evt);
-	}
 
 	/*
 	 * Read the primary control file.  Note we assume that it does not contain
@@ -2539,10 +2480,6 @@ ExecAlterExtensionStmt(AlterExtensionStmt *stmt)
 	 */
 	ApplyExtensionUpdates(extensionOid, control,
 						  oldVersionName, updateVersions);
-
-	/* Call AFTER ALTER EXTENSION triggers */
-	if (CommandFiresAfterTriggers(&evt))
-		ExecAfterCommandTriggers(&evt);
 }
 
 /*
@@ -2712,7 +2649,6 @@ ExecAlterExtensionContentsStmt(AlterExtensionContentsStmt *stmt)
 	ObjectAddress object;
 	Relation	relation;
 	Oid			oldExtension;
-	EventContextData evt;
 
 	extension.classId = ExtensionRelationId;
 	extension.objectId = get_extension_oid(stmt->extname, false);
@@ -2741,13 +2677,6 @@ ExecAlterExtensionContentsStmt(AlterExtensionContentsStmt *stmt)
 	 */
 	oldExtension = getExtensionOfObject(object.classId, object.objectId);
 
-	InitEventContextForCommand(&evt, (Node *)stmt, E_AlterExtension);
-
-	/* Init the command context no matter what, that's cheap here */
-	evt.objectId = extension.objectId;
-	evt.objectname = stmt->extname;
-	evt.schemaname = NULL;
-
 	if (stmt->action > 0)
 	{
 		/*
@@ -2759,10 +2688,6 @@ ExecAlterExtensionContentsStmt(AlterExtensionContentsStmt *stmt)
 					 errmsg("%s is already a member of extension \"%s\"",
 							getObjectDescription(&object),
 							get_extension_name(oldExtension))));
-
-		/* Call BEFORE ALTER EXTENSION command triggers */
-		if (CommandFiresTriggers(&evt))
-			ExecBeforeCommandTriggers(&evt);
 
 		/*
 		 * OK, add the dependency.
@@ -2781,10 +2706,6 @@ ExecAlterExtensionContentsStmt(AlterExtensionContentsStmt *stmt)
 							getObjectDescription(&object),
 							stmt->extname)));
 
-		/* Call BEFORE ALTER EXTENSION command triggers */
-		if (CommandFiresTriggers(&evt))
-			ExecBeforeCommandTriggers(&evt);
-
 		/*
 		 * OK, drop the dependency.
 		 */
@@ -2802,8 +2723,4 @@ ExecAlterExtensionContentsStmt(AlterExtensionContentsStmt *stmt)
 	 */
 	if (relation != NULL)
 		relation_close(relation, NoLock);
-
-	/* Call AFTER ALTER EXTENSION command triggers */
-	if (CommandFiresAfterTriggers(&evt))
-		ExecAfterCommandTriggers(&evt);
 }

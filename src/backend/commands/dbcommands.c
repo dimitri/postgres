@@ -49,7 +49,6 @@
 #include "storage/ipc.h"
 #include "storage/procarray.h"
 #include "storage/smgr.h"
-#include "tcop/utility.h"
 #include "utils/acl.h"
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
@@ -737,10 +736,8 @@ createdb_failure_callback(int code, Datum arg)
  * DROP DATABASE
  */
 void
-dropdb(const DropdbStmt *stmt)
+dropdb(const char *dbname, bool missing_ok)
 {
-	const char *dbname = stmt->dbname;
-	bool missing_ok = stmt->missing_ok;
 	Oid			db_id;
 	bool		db_istemplate;
 	Relation	pgdbrel;

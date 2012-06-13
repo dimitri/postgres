@@ -100,10 +100,6 @@ static void reform_and_rewrite_tuple(HeapTuple tuple,
 void
 cluster(ClusterStmt *stmt, bool isTopLevel)
 {
-	EventContextData evt;
-
-	InitEventContextForCommand(&evt, (Node *)stmt, E_Cluster);
-
 	if (stmt->relation != NULL)
 	{
 		/* This is the single-relation case. */
@@ -177,7 +173,7 @@ cluster(ClusterStmt *stmt, bool isTopLevel)
 		heap_close(rel, NoLock);
 
 		/* Do the job */
-		cluster_rel(tableOid, indexOid, false, stmt->verbose, -1, -1, &evt);
+		cluster_rel(tableOid, indexOid, false, stmt->verbose, -1, -1);
 	}
 	else
 	{
@@ -188,10 +184,6 @@ cluster(ClusterStmt *stmt, bool isTopLevel)
 		MemoryContext cluster_context;
 		List	   *rvs;
 		ListCell   *rv;
-
-		/* Call BEFORE CLUSTER command triggers, all slots are NULL */
-		if (CommandFiresTriggers(&evt))
-			ExecBeforeCommandTriggers(&evt);
 
 		/*
 		 * We cannot run this form of CLUSTER inside a user transaction block;
@@ -231,7 +223,7 @@ cluster(ClusterStmt *stmt, bool isTopLevel)
 			/* functions in indexes may want a snapshot set */
 			PushActiveSnapshot(GetTransactionSnapshot());
 			cluster_rel(rvtc->tableOid, rvtc->indexOid, true, stmt->verbose,
-						-1, -1, NULL);
+						-1, -1);
 			PopActiveSnapshot();
 			CommitTransactionCommand();
 		}
@@ -263,7 +255,7 @@ cluster(ClusterStmt *stmt, bool isTopLevel)
  */
 void
 cluster_rel(Oid tableOid, Oid indexOid, bool recheck, bool verbose,
-			int freeze_min_age, int freeze_table_age, EventContext evt)
+			int freeze_min_age, int freeze_table_age)
 {
 	Relation	OldHeap;
 
@@ -384,16 +376,6 @@ cluster_rel(Oid tableOid, Oid indexOid, bool recheck, bool verbose,
 	if (OidIsValid(indexOid))
 		check_index_is_clusterable(OldHeap, indexOid, recheck, AccessExclusiveLock);
 
-	/* Call BEFORE CLUSTER command trigger */
-	if (CommandFiresTriggers(evt))
-	{
-		evt->objectId = RelationGetRelid(OldHeap);
-		evt->objectname = RelationGetRelationName(OldHeap);
-		evt->schemaname = get_namespace_name(RelationGetNamespace(OldHeap));
-
-		ExecBeforeCommandTriggers(evt);
-	}
-
 	/*
 	 * All predicate locks on the tuples or pages are about to be made
 	 * invalid, because we move tuples around.	Promote them to relation
@@ -407,11 +389,6 @@ cluster_rel(Oid tableOid, Oid indexOid, bool recheck, bool verbose,
 					 verbose);
 
 	/* NB: rebuild_relation does heap_close() on OldHeap */
-
-	/*
-	 * NB: we don't run AFTER CLUSTER command triggers because of transaction
-	 * control issues
-	 */
 }
 
 /*
@@ -1455,7 +1432,7 @@ finish_heap_swap(Oid OIDOldHeap, Oid OIDNewHeap,
 	reindex_flags = REINDEX_REL_SUPPRESS_INDEX_USE;
 	if (check_constraints)
 		reindex_flags |= REINDEX_REL_CHECK_CONSTRAINTS;
-	reindex_relation(OIDOldHeap, reindex_flags, NULL);
+	reindex_relation(OIDOldHeap, reindex_flags);
 
 	/* Destroy new heap with old filenode */
 	object.classId = RelationRelationId;
@@ -1509,13 +1486,13 @@ finish_heap_swap(Oid OIDOldHeap, Oid OIDNewHeap,
 			snprintf(NewToastName, NAMEDATALEN, "pg_toast_%u",
 					 OIDOldHeap);
 			RenameRelationInternal(newrel->rd_rel->reltoastrelid,
-								   NewToastName, NULL);
+								   NewToastName);
 
 			/* ... and its index too */
 			snprintf(NewToastName, NAMEDATALEN, "pg_toast_%u_index",
 					 OIDOldHeap);
 			RenameRelationInternal(toastidx,
-								   NewToastName, NULL);
+								   NewToastName);
 		}
 		relation_close(newrel, NoLock);
 	}

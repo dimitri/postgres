@@ -19,7 +19,6 @@
 #ifndef PG_AGGREGATE_H
 #define PG_AGGREGATE_H
 
-#include "commands/event_trigger.h"
 #include "catalog/genbki.h"
 #include "nodes/pg_list.h"
 
@@ -244,7 +243,6 @@ extern void AggregateCreate(const char *aggName,
 				List *aggfinalfnName,
 				List *aggsortopName,
 				Oid aggTransType,
-				const char *agginitval,
-				EventContext evt); 
+				const char *agginitval);
 
 #endif   /* PG_AGGREGATE_H */

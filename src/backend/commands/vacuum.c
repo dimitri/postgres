@@ -31,7 +31,6 @@
 #include "catalog/pg_database.h"
 #include "catalog/pg_namespace.h"
 #include "commands/cluster.h"
-#include "commands/event_trigger.h"
 #include "commands/vacuum.h"
 #include "miscadmin.h"
 #include "pgstat.h"
@@ -122,25 +121,6 @@ vacuum(VacuumStmt *vacstmt, Oid relid, bool do_toast,
 	}
 	else
 		in_outer_xact = IsInTransactionChain(isTopLevel);
-
-	/* Call BEFORE VACUUM command triggers */
-	if (!IsAutoVacuumWorkerProcess())
-	{
-		EventContextData evt;
-		InitEventContextForCommand(&evt, (Node *)vacstmt, E_Vacuum);
-
-		if (CommandFiresTriggers(&evt))
-		{
-			evt.objectId = relid;
-
-			if (vacstmt->relation != NULL)
-			{
-				evt.objectname = vacstmt->relation->relname;
-				evt.schemaname = vacstmt->relation->schemaname;
-			}
-			ExecBeforeCommandTriggers(&evt);
-		}
-	}
 
 	/*
 	 * Send info about dead objects to the statistics collector, unless we are
@@ -1074,7 +1054,7 @@ vacuum_rel(Oid relid, VacuumStmt *vacstmt, bool do_toast, bool for_wraparound)
 		/* VACUUM FULL is now a variant of CLUSTER; see cluster.c */
 		cluster_rel(relid, InvalidOid, false,
 					(vacstmt->options & VACOPT_VERBOSE) != 0,
-					vacstmt->freeze_min_age, vacstmt->freeze_table_age, NULL);
+					vacstmt->freeze_min_age, vacstmt->freeze_table_age);
 	}
 	else
 		lazy_vacuum_rel(onerel, vacstmt, vac_strategy);

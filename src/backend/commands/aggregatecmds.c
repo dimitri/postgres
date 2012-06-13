@@ -29,7 +29,6 @@
 #include "catalog/pg_proc.h"
 #include "catalog/pg_type.h"
 #include "commands/defrem.h"
-#include "commands/event_trigger.h"
 #include "miscadmin.h"
 #include "parser/parse_func.h"
 #include "parser/parse_type.h"
@@ -47,8 +46,7 @@
  * "args" defines the input type(s).
  */
 void
-DefineAggregate(List *name, List *args, bool oldstyle, List *parameters,
-				EventContext evt)
+DefineAggregate(List *name, List *args, bool oldstyle, List *parameters)
 {
 	char	   *aggName;
 	Oid			aggNamespace;
@@ -205,8 +203,7 @@ DefineAggregate(List *name, List *args, bool oldstyle, List *parameters,
 					finalfuncName,		/* final function name */
 					sortoperatorName,	/* sort operator name */
 					transTypeId,	/* transition data type */
-					initval,	/* initial condition */
-					evt);
+					initval);	/* initial condition */
 }
 
 
@@ -215,7 +212,7 @@ DefineAggregate(List *name, List *args, bool oldstyle, List *parameters,
  *		Rename an aggregate.
  */
 void
-RenameAggregate(List *name, List *args, const char *newname, EventContext evt)
+RenameAggregate(List *name, List *args, const char *newname)
 {
 	Oid			procOid;
 	Oid			namespaceOid;
@@ -223,14 +220,6 @@ RenameAggregate(List *name, List *args, const char *newname, EventContext evt)
 	Form_pg_proc procForm;
 	Relation	rel;
 	AclResult	aclresult;
-
-	evt->command = E_AlterAggregate;
-
-	if (CommandFiresTriggersForEvent(evt, E_CommandStart))
-	{
-		ExecEventTriggers(evt, E_CommandStart);
-		ExecEventTriggers(evt, E_NameLookup);
-	}
 
 	rel = heap_open(ProcedureRelationId, RowExclusiveLock);
 
@@ -258,15 +247,6 @@ RenameAggregate(List *name, List *args, const char *newname, EventContext evt)
 											   procForm->proargtypes.values),
 						get_namespace_name(namespaceOid))));
 
-	if (CommandFiresTriggersForEvent(evt, E_SecurityCheck))
-	{
-		evt->objectId = HeapTupleGetOid(tup);
-		evt->objectname = pstrdup(NameStr(procForm->proname));
-		evt->schemaname = get_namespace_name(namespaceOid);
-
-		ExecEventTriggers(evt, E_SecurityCheck);
-	}
-
 	/* must be owner */
 	if (!pg_proc_ownercheck(procOid, GetUserId()))
 		aclcheck_error(ACLCHECK_NOT_OWNER, ACL_KIND_PROC,
@@ -278,12 +258,6 @@ RenameAggregate(List *name, List *args, const char *newname, EventContext evt)
 		aclcheck_error(aclresult, ACL_KIND_NAMESPACE,
 					   get_namespace_name(namespaceOid));
 
-	if (CommandFiresTriggersForEvent(evt, E_AlterCommand))
-		ExecEventTriggers(evt, E_AlterCommand);
-
-	if (CommandFiresTriggersForEvent(evt, E_RenameCommand))
-		ExecEventTriggers(evt, E_RenameCommand);
-
 	/* rename */
 	namestrcpy(&(((Form_pg_proc) GETSTRUCT(tup))->proname), newname);
 	simple_heap_update(rel, &tup->t_self, tup);
@@ -291,16 +265,13 @@ RenameAggregate(List *name, List *args, const char *newname, EventContext evt)
 
 	heap_close(rel, NoLock);
 	heap_freetuple(tup);
-
-	if (CommandFiresTriggersForEvent(evt, E_CommandEnd))
-		ExecEventTriggers(evt, E_CommandEnd);
 }
 
 /*
  * Change aggregate owner
  */
 void
-AlterAggregateOwner(List *name, List *args, Oid newOwnerId, EventContext evt)
+AlterAggregateOwner(List *name, List *args, Oid newOwnerId)
 {
 	Oid			procOid;
 
@@ -308,5 +279,5 @@ AlterAggregateOwner(List *name, List *args, Oid newOwnerId, EventContext evt)
 	procOid = LookupAggNameTypeNames(name, args, false);
 
 	/* The rest is just like a function */
-	AlterFunctionOwner_oid(procOid, newOwnerId, evt);
+	AlterFunctionOwner_oid(procOid, newOwnerId);
 }

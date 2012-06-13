@@ -2914,7 +2914,7 @@ IndexGetRelation(Oid indexId, bool missing_ok)
  * reindex_index - This routine is used to recreate a single index
  */
 void
-reindex_index(Oid indexId, bool skip_constraint_checks, EventContext evt)
+reindex_index(Oid indexId, bool skip_constraint_checks)
 {
 	Relation	iRel,
 				heapRelation,
@@ -2952,16 +2952,6 @@ reindex_index(Oid indexId, bool skip_constraint_checks, EventContext evt)
 	 * don't want to reindex underneath an open indexscan.
 	 */
 	CheckTableNotInUse(iRel, "REINDEX INDEX");
-
-	/* Call BEFORE REINDEX INDEX command triggers */
-	if (CommandFiresTriggers(evt))
-	{
-		evt->objectId = indexId;
-		evt->objectname = RelationGetRelationName(iRel);
-		evt->schemaname = get_namespace_name(RelationGetNamespace(iRel));
-
-		ExecBeforeCommandTriggers(evt);
-	}
 
 	/*
 	 * All predicate locks on the index are about to be made invalid. Promote
@@ -3058,10 +3048,6 @@ reindex_index(Oid indexId, bool skip_constraint_checks, EventContext evt)
 	/* Close rels, but keep locks */
 	index_close(iRel, NoLock);
 	heap_close(heapRelation, NoLock);
-
-	/* Call AFTER REINDEX INDEX command triggers */
-	if (CommandFiresAfterTriggers(evt))
-		ExecAfterCommandTriggers(evt);
 }
 
 /*
@@ -3094,7 +3080,7 @@ reindex_index(Oid indexId, bool skip_constraint_checks, EventContext evt)
  * index rebuild.
  */
 bool
-reindex_relation(Oid relid, int flags, EventContext evt)
+reindex_relation(Oid relid, int flags)
 {
 	Relation	rel;
 	Oid			toast_relid;
@@ -3110,17 +3096,6 @@ reindex_relation(Oid relid, int flags, EventContext evt)
 	rel = heap_open(relid, ShareLock);
 
 	toast_relid = rel->rd_rel->reltoastrelid;
-
-	/* Call BEFORE REINDEX command triggers */
-	if (CommandFiresTriggers(evt))
-	{
-		evt->objectId = relid;
-		evt->objectname = RelationGetRelationName(rel);
-		evt->schemaname = get_namespace_name(RelationGetNamespace(rel));
-
-		ExecBeforeCommandTriggers(evt);
-	}
-
 
 	/*
 	 * Get the list of index OIDs for this relation.  (We trust to the
@@ -3183,7 +3158,7 @@ reindex_relation(Oid relid, int flags, EventContext evt)
 			if (is_pg_class)
 				RelationSetIndexList(rel, doneIndexes, InvalidOid);
 
-			reindex_index(indexOid, !(flags & REINDEX_REL_CHECK_CONSTRAINTS), NULL);
+			reindex_index(indexOid, !(flags & REINDEX_REL_CHECK_CONSTRAINTS));
 
 			CommandCounterIncrement();
 
@@ -3218,11 +3193,7 @@ reindex_relation(Oid relid, int flags, EventContext evt)
 	 * still hold the lock on the master table.
 	 */
 	if ((flags & REINDEX_REL_PROCESS_TOAST) && OidIsValid(toast_relid))
-		result |= reindex_relation(toast_relid, flags, NULL);
-
-	/* Call AFTER REINDEX command triggers */
-	if (CommandFiresAfterTriggers(evt))
-		ExecAfterCommandTriggers(evt);
+		result |= reindex_relation(toast_relid, flags);
 
 	return result;
 }

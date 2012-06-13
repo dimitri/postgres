@@ -15,14 +15,12 @@
 #define TABLECMDS_H
 
 #include "access/htup.h"
-#include "commands/event_trigger.h"
 #include "nodes/parsenodes.h"
 #include "storage/lock.h"
 #include "utils/relcache.h"
 
 
-extern Oid	DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId,
-						   EventContext evt);
+extern Oid	DefineRelation(CreateStmt *stmt, char relkind, Oid ownerId);
 
 extern void RemoveRelations(DropStmt *drop);
 
@@ -48,13 +46,14 @@ extern void ExecuteTruncate(TruncateStmt *stmt);
 
 extern void SetRelationHasSubclass(Oid relationId, bool relhassubclass);
 
-extern void renameatt(RenameStmt *stmt, EventContext evt);
+extern void renameatt(RenameStmt *stmt);
 
-extern void RenameRelation(RenameStmt *stmt, EventContext evt);
-extern void RenameConstraint(RenameStmt *stmt, EventContext evt);
+extern void RenameConstraint(RenameStmt *stmt);
+
+extern void RenameRelation(RenameStmt *stmt);
 
 extern void RenameRelationInternal(Oid myrelid,
-								   const char *newrelname, EventContext evt);
+					   const char *newrelname);
 
 extern void find_composite_type_dependencies(Oid typeOid,
 								 Relation origRelation,
