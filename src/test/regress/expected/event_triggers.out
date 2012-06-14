@@ -1,0 +1,65 @@
+--
+-- EVENT TRIGGERS
+--
+create or replace function snitch()
+ returns event_trigger
+ language plpgsql
+as $$
+begin
+  -- can't output tg_objectid here that would break pg_regress
+  raise notice 'snitch: % % %.%', tg_when, tg_tag, tg_schemaname, tg_objectname;
+end;
+$$;
+create event trigger foo
+              before command_start
+                when tag in (alter collation,
+                             alter conversion,
+                             alter domain,
+                             alter function,
+                             alter operator,
+                             alter schema,
+                             alter sequence,
+                             alter table,
+                             alter trigger,
+                             alter type,
+                             alter view,
+                             create aggregate,
+                             create cast,
+                             create collation,
+                             create domain,
+                             create function,
+                             create operator class,
+                             create operator,
+                             create schema,
+                             create sequence,
+                             create table as,
+                             create table,
+                             create text search configuration,
+                             create text search dictionary,
+                             create text search parser,
+                             create text search template,
+                             create trigger,
+                             create type,
+                             create view,
+                             drop aggregate,
+                             drop domain,
+                             drop schema,
+                             drop table,
+                             drop text search configuration,
+                             drop text search dictionary,
+                             drop text search parser,
+                             drop text search template,
+                             drop trigger,
+                             reindex,
+                             select into,
+                             vacuum)
+   execute procedure snitch();
+alter event trigger foo disable;
+alter event trigger foo enable;
+alter event trigger foo rename to snitch;
+ERROR:  unrecognized rename stmt type: 9
+create schema cmd;
+NOTICE:  snitch: command_start CREATE SCHEMA <NULL>.<NULL>
+NOTICE:  snitch: command_start CREATE SCHEMA <NULL>.<NULL>
+create schema cmd2;
+connection to server was lost
