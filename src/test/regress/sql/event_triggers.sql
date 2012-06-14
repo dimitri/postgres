@@ -11,7 +11,11 @@ begin
 end;
 $$;
 
-create event trigger foo
+create event trigger any_t
+              before command_start
+   execute procedure snitch();
+
+create event trigger foo_t
               before command_start
                 when tag in (alter collation,
                              alter conversion,
@@ -56,9 +60,11 @@ create event trigger foo
                              vacuum)
    execute procedure snitch();
 
-alter event trigger foo disable;
-alter event trigger foo enable;
-alter event trigger foo rename to snitch;
+alter event trigger foo_t disable;
+alter event trigger foo_t enable;
+alter event trigger foo_t rename to snitch;
+
+select * from pg_event_trigger;
 
 create schema cmd;
 create schema cmd2;

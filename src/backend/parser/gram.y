@@ -7064,7 +7064,7 @@ RenameStmt: ALTER AGGREGATE func_name aggr_args RENAME TO name
 				{
 					RenameStmt *n = makeNode(RenameStmt);
 					n->renameType = OBJECT_EVENT_TRIGGER;
-					n->object  = list_make1(makeString($4));
+					n->subname = $4;
 					n->newname = $7;
 					$$ = (Node *)n;
 				}

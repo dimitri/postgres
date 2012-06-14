@@ -298,17 +298,13 @@ AlterEventTrigger(AlterEventTrigStmt *stmt)
  * Rename command trigger
  */
 void
-RenameEventTrigger(List *name, const char *newname)
+RenameEventTrigger(const char *trigname, const char *newname)
 {
 	SysScanDesc tgscan;
 	ScanKeyData skey[1];
 	HeapTuple	tup;
 	Relation	rel;
 	Form_pg_event_trigger evtForm;
-	char *trigname;
-
-	Assert(list_length(name) == 1);
-	trigname = strVal((Value *)linitial(name));
 
 	CheckEventTriggerPrivileges();
 
@@ -442,17 +438,21 @@ check_event_trigger_name(const char *trigname, Relation tgrel)
 void
 BuildEventTriggerCache(bool force_rebuild)
 {
+	int			i, j;
 	Relation	rel, irel;
 	IndexScanDesc indexScan;
 	HeapTuple	tuple;
 
-	if (event_trigger_cache_is_stalled || force_rebuild)
-	{
-		int i, j;
-		for(i=1; i < EVTG_MAX_TRIG_EVENT_COMMAND; i++)
-			for(j=1; j < EVTG_MAX_TRIG_EVENT; j++)
-				EventCommandTriggerCache[i][j] = NIL;
-	}
+	if (!event_trigger_cache_is_stalled && !force_rebuild)
+		return;
+
+	/* DEBUG */
+	elog(NOTICE, "BuildEventTriggerCache rebuild");
+
+	/* first reinit the array */
+	for(i=1; i < EVTG_MAX_TRIG_EVENT_COMMAND; i++)
+		for(j=1; j < EVTG_MAX_TRIG_EVENT; j++)
+			EventCommandTriggerCache[i][j] = NIL;
 
 	rel = heap_open(EventTriggerRelationId, AccessShareLock);
 	irel = index_open(EventTriggerNameIndexId, AccessShareLock);
@@ -499,12 +499,11 @@ BuildEventTriggerCache(bool force_rebuild)
 
 		if (isNull)
 		{
-			/* we store triggers for all commands with command=0
-			 *
-			 * event triggers created without WHEN clause are targetting all
-			 * columns
+			/* event triggers created without WHEN clause are targetting all
+			 * commands (ANY command trigger)
 			 */
-			command = 0;
+			command = E_ANY;
+
 			if (EventCommandTriggerCache[command][event] == NIL)
 				EventCommandTriggerCache[command][event] =
 					list_make1_oid(form->evtfoid);
@@ -776,10 +775,16 @@ InitEventContext(EventContext evt, const Node *parsetree)
 				case OBJECT_VIEW:
 					evt->command = E_DropView;
 					break;
-				default:
-					/* Should not happen */
-					elog(ERROR, "unrecognized remove stmt type: %d",
-						 (int) ((DropStmt *) parsetree)->removeType);
+				case OBJECT_ROLE:
+				case OBJECT_EVENT_TRIGGER:
+				case OBJECT_ATTRIBUTE:
+				case OBJECT_COLUMN:
+				case OBJECT_CONSTRAINT:
+				case OBJECT_DATABASE:
+				case OBJECT_LARGEOBJECT:
+				case OBJECT_RULE:
+				case OBJECT_TABLESPACE:
+					/* no support for specific command triggers */
 					break;
 			}
 			break;
@@ -787,6 +792,9 @@ InitEventContext(EventContext evt, const Node *parsetree)
 		case T_RenameStmt:
 			switch (((RenameStmt *) parsetree)->renameType)
 			{
+				case OBJECT_ATTRIBUTE:
+					evt->command = E_AlterType;
+					break;
 				case OBJECT_AGGREGATE:
 					evt->command = E_AlterAggregate;
 					break;
@@ -795,6 +803,9 @@ InitEventContext(EventContext evt, const Node *parsetree)
 					break;
 				case OBJECT_COLLATION:
 					evt->command = E_AlterCollation;
+					break;
+				case OBJECT_COLUMN:
+					evt->command = E_AlterTable;
 					break;
 				case OBJECT_CONVERSION:
 					evt->command = E_AlterConversion;
@@ -862,10 +873,14 @@ InitEventContext(EventContext evt, const Node *parsetree)
 				case OBJECT_VIEW:
 					evt->command = E_AlterView;
 					break;
-				default:
-					/* Should not happen */
-					elog(ERROR, "unrecognized rename stmt type: %d",
-						 (int) ((RenameStmt *) parsetree)->renameType);
+				case OBJECT_ROLE:
+				case OBJECT_EVENT_TRIGGER:
+				case OBJECT_CONSTRAINT:
+				case OBJECT_DATABASE:
+				case OBJECT_LARGEOBJECT:
+				case OBJECT_RULE:
+				case OBJECT_TABLESPACE:
+					/* no support for specific command triggers */
 					break;
 			}
 			break;
@@ -948,10 +963,16 @@ InitEventContext(EventContext evt, const Node *parsetree)
 				case OBJECT_VIEW:
 					evt->command = E_AlterView;
 					break;
-				default:
-					/* Should not happen */
-					elog(ERROR, "unrecognized alter schema stmt type: %d",
-						 (int) ((AlterObjectSchemaStmt *) parsetree)->objectType);
+				case OBJECT_ROLE:
+				case OBJECT_EVENT_TRIGGER:
+				case OBJECT_ATTRIBUTE:
+				case OBJECT_COLUMN:
+				case OBJECT_CONSTRAINT:
+				case OBJECT_DATABASE:
+				case OBJECT_LARGEOBJECT:
+				case OBJECT_RULE:
+				case OBJECT_TABLESPACE:
+					/* no support for specific command triggers */
 					break;
 			}
 			break;
@@ -1034,10 +1055,16 @@ InitEventContext(EventContext evt, const Node *parsetree)
 				case OBJECT_VIEW:
 					evt->command = E_AlterView;
 					break;
-				default:
-					/* Should not happen */
-					elog(ERROR, "unrecognized alter owner stmt type: %d",
-						 (int) ((AlterOwnerStmt *) parsetree)->objectType);
+				case OBJECT_ROLE:
+				case OBJECT_EVENT_TRIGGER:
+				case OBJECT_ATTRIBUTE:
+				case OBJECT_COLUMN:
+				case OBJECT_CONSTRAINT:
+				case OBJECT_DATABASE:
+				case OBJECT_LARGEOBJECT:
+				case OBJECT_RULE:
+				case OBJECT_TABLESPACE:
+					/* no support for specific command triggers */
 					break;
 			}
 			break;
@@ -1234,6 +1261,15 @@ ExecEventTriggers(EventContext ev_ctx, TrigEvent tev)
 
 	BuildEventTriggerCache(false);
 
+	/* ANY command triggers */
+	foreach(lc, EventCommandTriggerCache[E_ANY][tev])
+	{
+		RegProcedure proc = (RegProcedure) lfirst_oid(lc);
+
+		call_event_trigger_procedure(ev_ctx, tev, proc);
+	}
+
+	/* Specific command triggers */
 	foreach(lc, EventCommandTriggerCache[ev_ctx->command][tev])
 	{
 		RegProcedure proc = (RegProcedure) lfirst_oid(lc);

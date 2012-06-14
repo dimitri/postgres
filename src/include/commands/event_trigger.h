@@ -62,7 +62,7 @@ extern void RemoveEventTriggerById(Oid ctrigOid);
 extern Oid	get_event_trigger_oid(const char *trigname, bool missing_ok);
 
 extern void AlterEventTrigger(AlterEventTrigStmt *stmt);
-extern void RenameEventTrigger(List *name, const char *newname);
+extern void RenameEventTrigger(const char* trigname, const char *newname);
 
 extern void InitEventContext(EventContext evt, const Node *stmt);
 extern void InitEventContextForCommand(EventContext evt, const Node *stmt,

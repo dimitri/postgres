@@ -69,6 +69,10 @@ ExecRenameStmt(RenameStmt *stmt)
 			RenameDatabase(stmt->subname, stmt->newname);
 			break;
 
+		case OBJECT_EVENT_TRIGGER:
+			RenameEventTrigger(stmt->subname, stmt->newname);
+			break;
+
 		case OBJECT_FDW:
 			RenameForeignDataWrapper(stmt->subname, stmt->newname);
 			break;
