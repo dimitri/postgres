@@ -98,6 +98,7 @@ typedef enum TrigEvent
  */
 typedef enum TrigEventCommand
 {
+	E_UNKNOWN = 0,
 	E_ANY = 1,
 
 	E_AlterAggregate   = 100,

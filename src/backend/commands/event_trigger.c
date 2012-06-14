@@ -165,16 +165,18 @@ CreateEventTrigger(CreateEventTrigStmt *stmt, const char *queryString)
 	CheckEventTriggerPrivileges();
 
 	/*
-	 * Find and validate the trigger function. When the function is coded in C
-	 * it receives an internal argument which is the parse tree as a Node *.
-	 *
-	 * Only C coded functions can accept an argument of type internal, so we
-	 * don't have to explicitely check about the prolang here.
+	 * Find and validate the trigger function.
 	 */
-	funcoid = LookupFuncName(stmt->funcname, 0, NULL, true);
+	funcoid = LookupFuncName(stmt->funcname, 0, NULL, false);
 
 	/* we need the trigger type to validate the return type */
 	funcrettype = get_func_rettype(funcoid);
+
+	if (funcrettype != CMDTRIGGEROID)
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_OBJECT_DEFINITION),
+				 errmsg("function \"%s\" must return type \"command_trigger\"",
+						NameListToString(stmt->funcname))));
 
 	/*
 	 * Generate the trigger's OID now, so that we can use it in the name if
@@ -191,12 +193,6 @@ CreateEventTrigger(CreateEventTrigStmt *stmt, const char *queryString)
 	 * the relation, so the trigger set won't be changing underneath us.
 	 */
 	check_event_trigger_name(stmt->trigname, tgrel);
-
-	if (funcrettype != CMDTRIGGEROID)
-		ereport(ERROR,
-				(errcode(ERRCODE_INVALID_OBJECT_DEFINITION),
-				 errmsg("function \"%s\" must return type \"command_trigger\"",
-						NameListToString(stmt->funcname))));
 
 	/* Insert the catalog entry */
 	trigoid = InsertEventTriggerTuple(tgrel, stmt->trigname, stmt->event,
@@ -637,7 +633,7 @@ call_event_trigger_procedure(EventContext ev_ctx, TrigEvent tev,
 void
 InitEventContext(EventContext evt, const Node *parsetree)
 {
-	evt->command	= -1;		/* worst case */
+	evt->command	= E_UNKNOWN;
 	evt->toplevel	= NULL;
 	evt->tag		= (char *) CreateCommandTag((Node *)parsetree);
 	evt->parsetree  = (Node *)parsetree;
@@ -1200,7 +1196,7 @@ CommandFiresTriggers(EventContext ev_ctx)
 {
 	int j;
 
-	if (ev_ctx == NULL || ev_ctx->command != -1)
+	if (ev_ctx == NULL || ev_ctx->command == E_UNKNOWN)
 		return false;
 
 	/* Make sure we have initialized at least once the cache */
@@ -1221,7 +1217,7 @@ CommandFiresTriggers(EventContext ev_ctx)
 bool
 CommandFiresTriggersForEvent(EventContext ev_ctx, TrigEvent tev)
 {
-	if (ev_ctx == NULL || ev_ctx->command != -1)
+	if (ev_ctx == NULL || ev_ctx->command == E_UNKNOWN)
 		return false;
 
 	BuildEventTriggerCache(false);
@@ -1233,7 +1229,7 @@ ExecEventTriggers(EventContext ev_ctx, TrigEvent tev)
 {
 	ListCell *lc;
 
-	if (ev_ctx == NULL || ev_ctx->command != -1)
+	if (ev_ctx == NULL || ev_ctx->command == E_UNKNOWN)
 		return;
 
 	BuildEventTriggerCache(false);

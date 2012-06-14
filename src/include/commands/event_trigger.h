@@ -34,12 +34,6 @@ typedef struct EventContextData
 	char		*schemaname;	/* schemaname or NULL if not relevant */
 	char		*objectname;	/* objectname */
 	Node		*parsetree;		/* command parsetree, given as an internal */
-	List		*before;		/* procedures to call before the command */
-	List		*after;			/* procedures to call after the command */
-	List		*before_any;	/* procedures to call before any command */
-	List		*after_any;		/* procedures to call after any command */
-	MemoryContext oldmctx;	/* Memory Context to switch back to */
-	MemoryContext cmdmctx;	/* Memory Context for the command triggers */
 } EventContextData;
 
 typedef struct EventContextData *EventContext;
