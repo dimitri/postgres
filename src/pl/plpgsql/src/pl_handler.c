@@ -247,7 +247,7 @@ plpgsql_validator(PG_FUNCTION_ARGS)
 		if (proc->prorettype == TRIGGEROID ||
 			(proc->prorettype == OPAQUEOID && proc->pronargs == 0))
 			is_dml_trigger = true;
-		else if (proc->prorettype == CMDTRIGGEROID)
+		else if (proc->prorettype == EVTTRIGGEROID)
 			is_cmd_trigger = true;
 		else if (proc->prorettype != RECORDOID &&
 				 proc->prorettype != VOIDOID &&

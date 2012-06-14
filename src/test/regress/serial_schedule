@@ -62,7 +62,7 @@ test: create_aggregate
 test: create_cast
 test: constraints
 test: triggers
-test: cmdtriggers
+test: event_triggers
 test: inherit
 test: create_table_like
 test: typed_table

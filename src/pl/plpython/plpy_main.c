@@ -349,7 +349,7 @@ PLy_procedure_is_trigger(Form_pg_proc procStruct)
 
 static bool PLy_procedure_is_command_trigger(Form_pg_proc procStruct)
 {
-	return (procStruct->prorettype == CMDTRIGGEROID);
+	return (procStruct->prorettype == EVTTRIGGEROID);
 }
 
 static void

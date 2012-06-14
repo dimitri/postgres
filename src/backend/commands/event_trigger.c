@@ -172,7 +172,7 @@ CreateEventTrigger(CreateEventTrigStmt *stmt, const char *queryString)
 	/* we need the trigger type to validate the return type */
 	funcrettype = get_func_rettype(funcoid);
 
-	if (funcrettype != CMDTRIGGEROID)
+	if (funcrettype != EVTTRIGGEROID)
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_OBJECT_DEFINITION),
 				 errmsg("function \"%s\" must return type \"command_trigger\"",
