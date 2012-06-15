@@ -54,10 +54,16 @@
  */
 static void BuildEventTriggerCache(bool force_rebuild);
 
-List *
-EventCommandTriggerCache[EVTG_MAX_TRIG_EVENT_COMMAND][EVTG_MAX_TRIG_EVENT];
-
+static HTAB *EventCommandTriggerCache = NULL;
 bool event_trigger_cache_is_stalled = true;
+
+/* entry for command event trigger lookup hashtable */
+typedef struct
+{
+	TrigEvent			event;
+	TrigEventCommand	command;
+	List               *funcs;
+} EventCommandTriggerEnt;
 
 static void check_event_trigger_name(const char *trigname, Relation tgrel);
 
@@ -200,7 +206,8 @@ CreateEventTrigger(CreateEventTrigStmt *stmt, const char *queryString)
 
 	heap_close(tgrel, RowExclusiveLock);
 
-	BuildEventTriggerCache(true);
+	/* force rebuild next time we look at the cache */
+	event_trigger_cache_is_stalled = true;
 
 	return trigoid;
 }
@@ -241,7 +248,8 @@ RemoveEventTriggerById(Oid trigOid)
 	systable_endscan(tgscan);
 	heap_close(tgrel, RowExclusiveLock);
 
-	BuildEventTriggerCache(true);
+	/* force rebuild next time we look at the cache */
+	event_trigger_cache_is_stalled = true;
 }
 
 /*
@@ -290,7 +298,8 @@ AlterEventTrigger(AlterEventTrigStmt *stmt)
 	heap_close(tgrel, RowExclusiveLock);
 	heap_freetuple(tup);
 
-	BuildEventTriggerCache(true);
+	/* force rebuild next time we look at the cache */
+	event_trigger_cache_is_stalled = true;
 }
 
 
@@ -344,8 +353,8 @@ RenameEventTrigger(const char *trigname, const char *newname)
 	heap_freetuple(tup);
 	heap_close(rel, NoLock);
 
-	/* Renaming impacts trigger calls orderding */
-	BuildEventTriggerCache(true);
+	/* force rebuild next time we look at the cache */
+	event_trigger_cache_is_stalled = true;
 }
 
 /*
@@ -426,6 +435,42 @@ check_event_trigger_name(const char *trigname, Relation tgrel)
 }
 
 /*
+ * Add a new function to EventCommandTriggerCache for given command and event,
+ * creating a new hash table entry when necessary.
+ *
+ * Returns the new hash entry value.
+ */
+static EventCommandTriggerEnt *
+add_funcall_to_command_event(TrigEventCommand command,
+							 TrigEvent event,
+							 Oid func)
+{
+	uint32 key = (command << 16) + event;
+	bool found;
+	EventCommandTriggerEnt *hresult;
+
+	hresult = (EventCommandTriggerEnt *)
+		hash_search(EventCommandTriggerCache, &key, HASH_ENTER, &found);
+
+	if (found)
+	{
+		Assert(hresult->command == command && hresult->event == event);
+		hresult->funcs = lappend_oid(hresult->funcs, func);
+	}
+	else
+	{
+		hresult->command = command;
+		hresult->event = event;
+		hresult->funcs = list_make1_oid(func);
+	}
+
+	elog(NOTICE, "add_funcall_to_command_event: %d %d %p %d",
+		 command, event, hresult->funcs, list_length(hresult->funcs));
+
+	return hresult;
+}
+
+/*
  * Scan the pg_event_trigger catalogs and build the EventTriggerCache, which is
  * an array of commands indexing arrays of events containing the List of
  * function to call, in order.
@@ -438,7 +483,7 @@ check_event_trigger_name(const char *trigname, Relation tgrel)
 void
 BuildEventTriggerCache(bool force_rebuild)
 {
-	int			i, j;
+	HASHCTL		info;
 	Relation	rel, irel;
 	IndexScanDesc indexScan;
 	HeapTuple	tuple;
@@ -449,10 +494,16 @@ BuildEventTriggerCache(bool force_rebuild)
 	/* DEBUG */
 	elog(NOTICE, "BuildEventTriggerCache rebuild");
 
-	/* first reinit the array */
-	for(i=1; i < EVTG_MAX_TRIG_EVENT_COMMAND; i++)
-		for(j=1; j < EVTG_MAX_TRIG_EVENT; j++)
-			EventCommandTriggerCache[i][j] = NIL;
+	/* build the hash table */
+	MemSet(&info, 0, sizeof(info));
+	info.keysize = sizeof(Oid);
+	info.entrysize = sizeof(EventCommandTriggerEnt);
+	info.hash = oid_hash;
+
+	EventCommandTriggerCache = hash_create("Local Event Triggers Cache",
+										   EVTG_MAX_TRIG_EVENT_COMMAND,
+										   &info,
+										   HASH_ELEM | HASH_FUNCTION);
 
 	rel = heap_open(EventTriggerRelationId, AccessShareLock);
 	irel = index_open(EventTriggerNameIndexId, AccessShareLock);
@@ -502,15 +553,7 @@ BuildEventTriggerCache(bool force_rebuild)
 			/* event triggers created without WHEN clause are targetting all
 			 * commands (ANY command trigger)
 			 */
-			command = E_ANY;
-
-			if (EventCommandTriggerCache[command][event] == NIL)
-				EventCommandTriggerCache[command][event] =
-					list_make1_oid(form->evtfoid);
-			else
-				EventCommandTriggerCache[command][event] =
-					lappend_oid(EventCommandTriggerCache[command][event],
-								form->evtfoid);
+			add_funcall_to_command_event(E_ANY, event, form->evtfoid);
 		}
 		else
 		{
@@ -532,14 +575,7 @@ BuildEventTriggerCache(bool force_rebuild)
 			for (i = 0; i < numkeys; i++)
 			{
 				 command = tags[i];
-
-				 if (EventCommandTriggerCache[command][event] == NIL)
-					 EventCommandTriggerCache[command][event] =
-						 list_make1_oid(form->evtfoid);
-				 else
-					 EventCommandTriggerCache[command][event] =
-						 lappend_oid(EventCommandTriggerCache[command][event],
-									 form->evtfoid);
+				 add_funcall_to_command_event(command, event, form->evtfoid);
 			}
 		}
 	}
@@ -1221,19 +1257,13 @@ InitEventContext(EventContext evt, const Node *parsetree)
 bool
 CommandFiresTriggers(EventContext ev_ctx)
 {
-	int j;
-
 	if (ev_ctx == NULL || ev_ctx->command == E_UNKNOWN)
 		return false;
 
 	/* Make sure we have initialized at least once the cache */
 	BuildEventTriggerCache(false);
 
-	for(j=1; j < EVTG_MAX_TRIG_EVENT; j++)
-		if (EventCommandTriggerCache[ev_ctx->command][j] != NIL)
-			/* this command fires at least a trigger */
-			return true;
-
+	elog(ERROR, "Not Yet Implemented");
 	return false;
 }
 
@@ -1244,16 +1274,32 @@ CommandFiresTriggers(EventContext ev_ctx)
 bool
 CommandFiresTriggersForEvent(EventContext ev_ctx, TrigEvent tev)
 {
+	uint32 anykey = (E_ANY << 16) + tev;
+	uint32 cmdkey = (ev_ctx->command << 16) + tev;
+	bool any = false, cmd = false;
+
 	if (ev_ctx == NULL || ev_ctx->command == E_UNKNOWN)
 		return false;
 
 	BuildEventTriggerCache(false);
-	return EventCommandTriggerCache[ev_ctx->command][tev] != NIL;
+
+	hash_search(EventCommandTriggerCache, &anykey, HASH_FIND, &any);
+
+	if (!any)
+		hash_search(EventCommandTriggerCache, &cmdkey, HASH_FIND, &cmd);
+
+	elog(NOTICE, "CommandFiresTriggersForEvent %d %d %s",
+		 ev_ctx->command, tev, (any||cmd) ? "yes" : "no");
+
+	return any||cmd;
 }
 
 void
 ExecEventTriggers(EventContext ev_ctx, TrigEvent tev)
 {
+	uint32 anykey = (E_ANY << 16) + tev;
+	uint32 cmdkey = (ev_ctx->command << 16) + tev;
+	EventCommandTriggerEnt *hresult;
 	ListCell *lc;
 
 	if (ev_ctx == NULL || ev_ctx->command == E_UNKNOWN)
@@ -1262,19 +1308,35 @@ ExecEventTriggers(EventContext ev_ctx, TrigEvent tev)
 	BuildEventTriggerCache(false);
 
 	/* ANY command triggers */
-	foreach(lc, EventCommandTriggerCache[E_ANY][tev])
-	{
-		RegProcedure proc = (RegProcedure) lfirst_oid(lc);
+	hresult = (EventCommandTriggerEnt *)
+		hash_search(EventCommandTriggerCache, &anykey, HASH_FIND, NULL);
 
-		call_event_trigger_procedure(ev_ctx, tev, proc);
+	elog(NOTICE, "ExecEventTriggers: any %p", hresult);
+
+	if (hresult != NULL)
+	{
+		foreach(lc, hresult->funcs)
+		{
+			RegProcedure proc = (RegProcedure) lfirst_oid(lc);
+
+			call_event_trigger_procedure(ev_ctx, tev, proc);
+		}
 	}
 
 	/* Specific command triggers */
-	foreach(lc, EventCommandTriggerCache[ev_ctx->command][tev])
-	{
-		RegProcedure proc = (RegProcedure) lfirst_oid(lc);
+	hresult = (EventCommandTriggerEnt *)
+		hash_search(EventCommandTriggerCache, &cmdkey, HASH_FIND, NULL);
 
-		call_event_trigger_procedure(ev_ctx, tev, proc);
+	elog(NOTICE, "ExecEventTriggers: cmd %p", hresult);
+
+	if (hresult != NULL)
+	{
+		foreach(lc, hresult->funcs)
+		{
+			RegProcedure proc = (RegProcedure) lfirst_oid(lc);
+
+			call_event_trigger_procedure(ev_ctx, tev, proc);
+		}
 	}
 	return;
 }
