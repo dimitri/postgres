@@ -368,9 +368,6 @@ exec_command(const char *cmd,
 					case '\0':
 						success = listConversions(pattern, show_verbose, show_system);
 						break;
-					case 't':
-						success = listCmdTriggers(pattern, show_verbose);
-						break;
 					default:
 						status = PSQL_CMD_UNKNOWN;
 						break;
@@ -488,6 +485,12 @@ exec_command(const char *cmd,
 						break;
 					case 't':
 						success = listForeignTables(pattern, show_verbose);
+						break;
+					case 'v':
+						/* \dev seems good, maybe we should find another
+						 * command so as not to mix with sql/med?
+						 */
+						success = listEvtTriggers(pattern, show_verbose);
 						break;
 					default:
 						status = PSQL_CMD_UNKNOWN;

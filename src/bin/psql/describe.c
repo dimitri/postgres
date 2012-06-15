@@ -2953,45 +2953,46 @@ listConversions(const char *pattern, bool verbose, bool showSystem)
 }
 
 /*
- * \dct
+ * \dev
  *
- * Describes command triggers.
+ * Describes Event Triggers.
  */
 bool
-listCmdTriggers(const char *pattern, bool verbose)
+listEvtTriggers(const char *pattern, bool verbose)
 {
 	PQExpBufferData buf;
 	PGresult   *res;
 	printQueryOpt myopt = pset.popt;
-	static const bool translate_columns[] = {true, true};
+	static const bool translate_columns[] = {true, true, true, true, true};
 
 	initPQExpBuffer(&buf);
 
 	printfPQExpBuffer(&buf,
-					  "SELECT ctgname as \"%s\", "
-					  "'CREATE TRIGGER ' || ctgname || ' ' || "
-					  "case ctgtype when 'A' then 'AFTER' "
-					  "             when 'B' then 'BEFORE' "
-					  "             when 'I' then 'INSTEAD OF' "
-					  "end || "
-					  "case ctgcommand when 'ANY' then ' ANY COMMAND '"
-					  "                else ' COMMAND ' || ctgcommand || ' '"
-					  "end ||"
-					  " 'EXECUTE PROCEDURE ' || proname || '();' as \"%s\" "
-					  "FROM pg_cmdtrigger c "
-					  "JOIN pg_proc p on c.ctgfoid = p.oid ",
+					  "select evtname as \"%s\", "
+					  " case evtenabled when 'O' then 'enabled' "
+					  "  when 'R' then 'replica' "
+					  "  when 'A' then 'always' "
+					  "  when 'D' then 'disabled' end as  \"%s\", "
+					  " case evttype when 'B' then 'BEFORE ' else 'INSTEAD OF ' end "
+					  " || pg_catalog.pg_evtevent_to_string(evtevent) as  \"%s\", "
+					  "n.nspname || '.' || p.proname || '()' as \"%s\", "
+					  " array_to_string(array(select pg_evttag_to_string(x) "
+					  "      from unnest(evttags) as t(x)), ', ') as  \"%s\" "
+					  "FROM pg_event_trigger e JOIN pg_proc p on e.evtfoid = p.oid "
+					  "JOIN pg_namespace n ON p.pronamespace = n.oid ",
 					  gettext_noop("Name"),
-					  gettext_noop("Definition"));
+					  gettext_noop("Enabled"),
+					  gettext_noop("Condition"),
+					  gettext_noop("Procedure"),
+					  gettext_noop("Tags"));
 
 	if (pattern)
 	{
 		processSQLNamePattern(pset.db, &buf, pattern, false, false,
-							  NULL, "ctgcommand", NULL, NULL);
-
-		appendPQExpBuffer(&buf, " OR ctgcommand = 'ANY' ");
+							  NULL, "evtname", NULL, NULL);
 	}
 
-	appendPQExpBuffer(&buf, "ORDER BY c.oid");
+	appendPQExpBuffer(&buf, "ORDER BY e.oid");
 
 	res = PSQLexec(buf.data, false);
 	termPQExpBuffer(&buf);
@@ -2999,7 +3000,7 @@ listCmdTriggers(const char *pattern, bool verbose)
 		return false;
 
 	myopt.nullPrint = NULL;
-	myopt.title = _("List of command triggers");
+	myopt.title = _("List of event triggers");
 	myopt.translate_header = true;
 	myopt.translate_columns = translate_columns;
 
