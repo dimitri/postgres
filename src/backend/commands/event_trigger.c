@@ -73,6 +73,8 @@ typedef struct
 	((Oid) (0x0 | (((uint32)command << 16) + (uint32) event)))
 
 static void check_event_trigger_name(const char *trigname, Relation tgrel);
+static char *event_to_string(TrigEvent event);
+static char *command_to_string(TrigEventCommand command);
 
 /*
  * Check permission: command triggers are only available for superusers. Raise
@@ -655,30 +657,7 @@ call_event_trigger_procedure(EventContext ev_ctx, TrigEvent tev,
 	trigdata.schemaname = ev_ctx->schemaname;
 	trigdata.objectname = ev_ctx->objectname;
 	trigdata.parsetree	= ev_ctx->parsetree;
-
-	/* rebuild the gram.y string from the TrigEvent enum value */
-	switch (tev)
-	{
-		case E_CommandStart:
-			trigdata.when = pstrdup("command_start");
-			break;
-
-		case E_CommandEnd:
-			trigdata.when = pstrdup("command_end");
-			break;
-
-		case E_SecurityCheck:
-			trigdata.when = pstrdup("security_check");
-			break;
-
-		case E_ConsistencyCheck:
-			trigdata.when = pstrdup("consistency_check");
-			break;
-
-		case E_NameLookup:
-			trigdata.when = pstrdup("name_lookup");
-			break;
-	}
+	trigdata.when       = pstrdup(event_to_string(tev));
 
 	/*
 	 * Call the function, passing no arguments but setting a context.
@@ -1348,3 +1327,237 @@ ExecEventTriggers(EventContext ev_ctx, TrigEvent tev)
 	}
 	return;
 }
+
+/*
+ * Some helper functions, part of a public API.
+ */
+static char *
+event_to_string(TrigEvent event)
+{
+	switch (event)
+	{
+		case E_CommandStart:
+			return "command_start";
+		case E_CommandEnd:
+			return "command_end";
+		case E_SecurityCheck:
+			return "security_check";
+			break;
+		case E_ConsistencyCheck:
+			return "consistency_check";
+		case E_NameLookup:
+			return "name_lookup";
+	}
+	return NULL;
+}
+
+/* that must implement the reverse of gram.y support for commands */
+static char *
+command_to_string(TrigEventCommand command)
+{
+	switch (command)
+	{
+		case E_UNKNOWN:
+			return "UNKNOWN";
+		case E_ANY:
+			return "ANY";
+		case E_AlterCast:
+			return "ALTER CAST";
+		case E_AlterIndex:
+			return "ALTER INDEX";
+		case E_AlterAggregate:
+			return "ALTER AGGREGATE";
+		case E_AlterCollation:
+			return "ALTER COLLATION";
+		case E_AlterConversion:
+			return "ALTER CONVERSION";
+		case E_AlterDomain:
+			return "ALTER DOMAIN";
+		case E_AlterExtension:
+			return "ALTER EXTENSION";
+		case E_AlterForeignDataWrapper:
+			return "ALTER FOREIGN DATA WRAPPER";
+		case E_AlterForeignTable:
+			return "ALTER FOREIGN TABLE";
+		case E_AlterFunction:
+			return "ALTER FUNCTION";
+		case E_AlterLanguage:
+			return "ALTER LANGUAGE";
+		case E_AlterOperator:
+			return "ALTER OPERATOR";
+		case E_AlterOperatorClass:
+			return "ALTER OPERATOR CLASS";
+		case E_AlterOperatorFamily:
+			return "ALTER OPERATOR FAMILY";
+		case E_AlterSequence:
+			return "ALTER SEQUENCE";
+		case E_AlterServer:
+			return "ALTER SERVER";
+		case E_AlterSchema:
+			return "ALTER SCHEMA";
+		case E_AlterTable:
+			return "ALTER TABLE";
+		case E_AlterTextSearchConfiguration:
+			return "ALTER TEXT SEARCH CONFIGURATION";
+		case E_AlterTextSearchDictionary:
+			return "ALTER TEXT SEARCH DICTIONARY";
+		case E_AlterTextSearchParser:
+			return "ALTER TEXT SEARCH PARSER";
+		case E_AlterTextSearchTemplate:
+			return "ALTER TEXT SEARCH TEMPLATE";
+		case E_AlterTrigger:
+			return "ALTER TRIGGER";
+		case E_AlterType:
+			return "ALTER TYPE";
+		case E_AlterUserMapping:
+			return "ALTER USER MAPPING";
+		case E_AlterView:
+			return "ALTER VIEW";
+		case E_Cluster:
+			return "CLUSTER";
+		case E_CreateAggregate:
+			return "CREATE AGGREGATE";
+		case E_CreateCast:
+			return "CREATE CAST";
+		case E_CreateCollation:
+			return "CREATE COLLATION";
+		case E_CreateConversion:
+			return "CREATE CONVERSION";
+		case E_CreateDomain:
+			return "CREATE DOMAIN";
+		case E_CreateExtension:
+			return "CREATE EXTENSION";
+		case E_CreateForeignDataWrapper:
+			return "CREATE FOREIGN DATA WRAPPER";
+		case E_CreateForeignTable:
+			return "CREATE FOREIGN TABLE";
+		case E_CreateFunction:
+			return "CREATE FUNCTION";
+		case E_CreateIndex:
+			return "CREATE INDEX";
+		case E_CreateLanguage:
+			return "CREATE LANGUAGE";
+		case E_CreateOperator:
+			return "CREATE OPERATOR";
+		case E_CreateOperatorClass:
+			return "CREATE OPERATOR CLASS";
+		case E_CreateOperatorFamily:
+			return "CREATE OPERATOR FAMILY";
+		case E_CreateRule:
+			return "CREATE RULE";
+		case E_CreateSequence:
+			return "CREATE SEQUENCE";
+		case E_CreateServer:
+			return "CREATE SERVER";
+		case E_CreateSchema:
+			return "CREATE SCHEMA";
+		case E_CreateTable:
+			return "CREATE TABLE";
+		case E_CreateTableAs:
+			return "CREATE TABLE AS";
+		case E_CreateTextSearchConfiguration:
+			return "CREATE TEXT SEARCH CONFIGURATION";
+		case E_CreateTextSearchDictionary:
+			return "CREATE TEXT SEARCH DICTIONARY";
+		case E_CreateTextSearchParser:
+			return "CREATE TEXT SEARCH PARSER";
+		case E_CreateTextSearchTemplate:
+			return "CREATE TEXT SEARCH TEMPLATE";
+		case E_CreateTrigger:
+			return "CREATE TRIGGER";
+		case E_CreateType:
+			return "CREATE TYPE";
+		case E_CreateUserMapping:
+			return "CREATE USER MAPPING";
+		case E_CreateView:
+			return "CREATE VIEW";
+		case E_DropAggregate:
+			return "DROP AGGREGATE";
+		case E_DropCast:
+			return "DROP CAST";
+		case E_DropCollation:
+			return "DROP COLLATION";
+		case E_DropConversion:
+			return "DROP CONVERSION";
+		case E_DropDomain:
+			return "DROP DOMAIN";
+		case E_DropExtension:
+			return "DROP EXTENSION";
+		case E_DropForeignDataWrapper:
+			return "DROP FOREIGN DATA WRAPPER";
+		case E_DropForeignTable:
+			return "DROP FOREIGN TABLE";
+		case E_DropFunction:
+			return "DROP FUNCTION";
+		case E_DropIndex:
+			return "DROP INDEX";
+		case E_DropLanguage:
+			return "DROP LANGUAGE";
+		case E_DropOperator:
+			return "DROP OPERATOR";
+		case E_DropOperatorClass:
+			return "DROP OPERATOR CLASS";
+		case E_DropOperatorFamily:
+			return "DROP OPERATOR FAMILY";
+		case E_DropRule:
+			return "DROP RULE";
+		case E_DropSchema:
+			return "DROP SCHEMA";
+		case E_DropSequence:
+			return "DROP SEQUENCE";
+		case E_DropServer:
+			return "DROP SERVER";
+		case E_DropTable:
+			return "DROP TABLE";
+		case E_DropTextSearchConfiguration:
+			return "DROP TEXT SEARCH CONFIGURATION";
+		case E_DropTextSearchDictionary:
+			return "DROP TEXT SEARCH DICTIONARY";
+		case E_DropTextSearchParser:
+			return "DROP TEXT SEARCH PARSER";
+		case E_DropTextSearchTemplate:
+			return "DROP TEXT SEARCH TEMPLATE";
+		case E_DropTrigger:
+			return "DROP TRIGGER";
+		case E_DropType:
+			return "DROP TYPE";
+		case E_DropUserMapping:
+			return "DROP USER MAPPING";
+		case E_DropView:
+			return "DROP VIEW";
+		case E_Load:
+			return "LOAD";
+		case E_Reindex:
+			return "REINDEX";
+		case E_SelectInto:
+			return "SELECT INTO";
+		case E_Vacuum:
+			return "VACUUM";
+	}
+	return NULL;
+}
+
+Datum
+pg_event_trigger_event_to_string(PG_FUNCTION_ARGS)
+{
+	int	event = PG_GETARG_INT32(0);
+	char *str = event_to_string((TrigEvent)event);
+
+	if (str == NULL)
+		PG_RETURN_NULL();
+
+	PG_RETURN_TEXT_P(cstring_to_text(str));
+}
+
+Datum
+pg_event_trigger_command_to_string(PG_FUNCTION_ARGS)
+{
+	int	command = PG_GETARG_INT32(0);
+	char *str = command_to_string((TrigEventCommand)command);
+
+	if (str == NULL)
+		PG_RETURN_NULL();
+
+	PG_RETURN_TEXT_P(cstring_to_text(str));
+}
+

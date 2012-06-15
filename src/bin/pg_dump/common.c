@@ -100,7 +100,7 @@ getSchemaData(Archive *fout, int *numTablesPtr)
 	int			numForeignDataWrappers;
 	int			numForeignServers;
 	int			numDefaultACLs;
-	int			numCmdTriggers;
+	int			numEvtTriggers;
 
 	if (g_verbose)
 		write_msg(NULL, "reading schemas\n");
@@ -243,7 +243,7 @@ getSchemaData(Archive *fout, int *numTablesPtr)
 
 	if (g_verbose)
 		write_msg(NULL, "reading command triggers\n");
-	getCmdTriggers(fout, &numCmdTriggers);
+	getEvtTriggers(fout, &numEvtTriggers);
 
 	*numTablesPtr = numTables;
 	return tblinfo;

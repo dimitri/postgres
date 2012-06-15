@@ -187,7 +187,7 @@ static void dumpConversion(Archive *fout, ConvInfo *convinfo);
 static void dumpRule(Archive *fout, RuleInfo *rinfo);
 static void dumpAgg(Archive *fout, AggInfo *agginfo);
 static void dumpTrigger(Archive *fout, TriggerInfo *tginfo);
-static void dumpCmdTrigger(Archive *fout, CmdTriggerInfo *ctginfo);
+static void dumpEvtTrigger(Archive *fout, EvtTriggerInfo *evtinfo);
 static void dumpTable(Archive *fout, TableInfo *tbinfo);
 static void dumpTableSchema(Archive *fout, TableInfo *tbinfo);
 static void dumpAttrDef(Archive *fout, AttrDefInfo *adinfo);
@@ -5267,23 +5267,24 @@ getTriggers(Archive *fout, TableInfo tblinfo[], int numTables)
 }
 
 /*
- * getCmdTriggers
+ * getEvtTriggers
  *	  get information about every command trigger on a dumpable table
  */
-CmdTriggerInfo *
-getCmdTriggers(Archive *fout, int *numCmdTriggers)
+EvtTriggerInfo *
+getEvtTriggers(Archive *fout, int *numEvtTriggers)
 {
 	int			i;
 	PQExpBuffer query = createPQExpBuffer();
 	PGresult   *res;
-	CmdTriggerInfo *ctginfo;
+	EvtTriggerInfo *evtinfo;
 	int			i_tableoid,
 				i_oid,
-				i_ctgcommand,
-				i_ctgname,
-				i_ctgfname,
-				i_ctgtype,
-				i_ctgenabled;
+				i_evtname,
+				i_evttype,
+				i_evttags,
+				i_evtevent,
+				i_evtfname,
+				i_evtenabled;
 	int			ntups;
 
 	/* Make sure we are in proper schema */
@@ -5292,49 +5293,54 @@ getCmdTriggers(Archive *fout, int *numCmdTriggers)
 	if (fout->remoteVersion >= 90200)
 	{
 		appendPQExpBuffer(query,
-						  "SELECT c.tableoid, c.oid, "
-						  "ctgname, ctgtype, ctgcommand, "
-						  "n.nspname || '.' || p.proname as ctgfname, ctgenabled "
-						  "FROM pg_cmdtrigger c JOIN pg_proc p on c.ctgfoid = p.oid "
+						  "SELECT e.tableoid, e.oid, evtname, evttype, evtenabled, "
+						  "pg_catalog.pg_evtevent_to_string(evtevent) as evtevent, "
+						  "array_to_string(array("
+						  "select pg_catalog.pg_evttag_to_string(x) "
+						  "from unnest(evttags) as t(x)), ', ') as evttags, "
+						  "n.nspname || '.' || p.proname as evtfname "
+						  "FROM pg_event_trigger e JOIN pg_proc p on e.evtfoid = p.oid "
 						  "JOIN pg_namespace n ON p.pronamespace = n.oid "
-						  "ORDER BY c.oid");
+						  "ORDER BY e.oid");
 	}
 
 	res = ExecuteSqlQuery(fout, query->data, PGRES_TUPLES_OK);
 
 	ntups = PQntuples(res);
 
-	*numCmdTriggers = ntups;
+	*numEvtTriggers = ntups;
 
-	ctginfo = (CmdTriggerInfo *) pg_malloc(ntups * sizeof(CmdTriggerInfo));
+	evtinfo = (EvtTriggerInfo *) pg_malloc(ntups * sizeof(EvtTriggerInfo));
 
 	i_tableoid = PQfnumber(res, "tableoid");
 	i_oid = PQfnumber(res, "oid");
-	i_ctgname = PQfnumber(res, "ctgname");
-	i_ctgtype = PQfnumber(res, "ctgtype");
-	i_ctgcommand = PQfnumber(res, "ctgcommand");
-	i_ctgfname = PQfnumber(res, "ctgfname");
-	i_ctgenabled = PQfnumber(res, "ctgenabled");
+	i_evtname = PQfnumber(res, "evtname");
+	i_evttype = PQfnumber(res, "evttype");
+	i_evttags = PQfnumber(res, "evttags");
+	i_evtevent = PQfnumber(res, "evtevent");
+	i_evtfname = PQfnumber(res, "evtfname");
+	i_evtenabled = PQfnumber(res, "evtenabled");
 
 	for (i = 0; i < ntups; i++)
 	{
-		ctginfo[i].dobj.objType = DO_CMDTRIGGER;
-		ctginfo[i].dobj.catId.tableoid = atooid(PQgetvalue(res, i, i_tableoid));
-		ctginfo[i].dobj.catId.oid = atooid(PQgetvalue(res, i, i_oid));
-		AssignDumpId(&ctginfo[i].dobj);
-		ctginfo[i].dobj.name = pg_strdup(PQgetvalue(res, i, i_ctgname));
-		ctginfo[i].ctgname = pg_strdup(PQgetvalue(res, i, i_ctgname));
-		ctginfo[i].ctgtype = *(PQgetvalue(res, i, i_ctgtype));
-		ctginfo[i].ctgcommand = pg_strdup(PQgetvalue(res, i, i_ctgcommand));
-		ctginfo[i].ctgfname = pg_strdup(PQgetvalue(res, i, i_ctgfname));
-		ctginfo[i].ctgenabled = *(PQgetvalue(res, i, i_ctgenabled));
+		evtinfo[i].dobj.objType = DO_EVTTRIGGER;
+		evtinfo[i].dobj.catId.tableoid = atooid(PQgetvalue(res, i, i_tableoid));
+		evtinfo[i].dobj.catId.oid = atooid(PQgetvalue(res, i, i_oid));
+		AssignDumpId(&evtinfo[i].dobj);
+		evtinfo[i].dobj.name = pg_strdup(PQgetvalue(res, i, i_evtname));
+		evtinfo[i].evtname = pg_strdup(PQgetvalue(res, i, i_evtname));
+		evtinfo[i].evttype = *(PQgetvalue(res, i, i_evttype));
+		evtinfo[i].evttags = pg_strdup(PQgetvalue(res, i, i_evttags));
+		evtinfo[i].evtevent = pg_strdup(PQgetvalue(res, i, i_evtevent));
+		evtinfo[i].evtfname = pg_strdup(PQgetvalue(res, i, i_evtfname));
+		evtinfo[i].evtenabled = *(PQgetvalue(res, i, i_evtenabled));
 	}
 
 	PQclear(res);
 
 	destroyPQExpBuffer(query);
 
-	return ctginfo;
+	return evtinfo;
 }
 
 /*
@@ -7207,8 +7213,8 @@ dumpDumpableObject(Archive *fout, DumpableObject *dobj)
 		case DO_TRIGGER:
 			dumpTrigger(fout, (TriggerInfo *) dobj);
 			break;
-		case DO_CMDTRIGGER:
-			dumpCmdTrigger(fout, (CmdTriggerInfo *) dobj);
+		case DO_EVTTRIGGER:
+			dumpEvtTrigger(fout, (EvtTriggerInfo *) dobj);
 			break;
 		case DO_CONSTRAINT:
 			dumpConstraint(fout, (ConstraintInfo *) dobj);
@@ -13689,7 +13695,7 @@ dumpTrigger(Archive *fout, TriggerInfo *tginfo)
 }
 
 static void
-dumpCmdTrigger(Archive *fout, CmdTriggerInfo *ctginfo)
+dumpEvtTrigger(Archive *fout, EvtTriggerInfo *evtinfo)
 {
 	PQExpBuffer query;
 	PQExpBuffer labelq;
@@ -13697,36 +13703,39 @@ dumpCmdTrigger(Archive *fout, CmdTriggerInfo *ctginfo)
 	query = createPQExpBuffer();
 	labelq = createPQExpBuffer();
 
-	appendPQExpBuffer(query, "CREATE COMMAND TRIGGER ");
-	appendPQExpBufferStr(query, fmtId(ctginfo->dobj.name));
+	appendPQExpBuffer(query, "CREATE EVENT TRIGGER ");
+	appendPQExpBufferStr(query, fmtId(evtinfo->dobj.name));
 
 	/* Trigger type */
-	if (ctginfo->ctgtype == EVTG_FIRED_BEFORE)
+	if (evtinfo->evttype == EVTG_FIRED_BEFORE)
 		appendPQExpBuffer(query, " BEFORE ");
-	else if (ctginfo->ctgtype == EVTG_FIRED_INSTEAD_OF)
+	else if (evtinfo->evttype == EVTG_FIRED_INSTEAD_OF)
 		appendPQExpBuffer(query, " INSTEAD OF ");
 	else
 	{
-		write_msg(NULL, "unexpected ctgtype value: %d\n", ctginfo->ctgtype);
+		write_msg(NULL, "unexpected ctgtype value: %d\n", evtinfo->evttype);
 		exit_nicely(1);
 	}
 
-	if (strcmp("ANY", ctginfo->ctgcommand) == 0)
-		appendPQExpBufferStr(query, "ANY COMMAND");
-	else
+	appendPQExpBufferStr(query, evtinfo->evtevent);
+	appendPQExpBufferStr(query, " ");
+
+	if (strcmp("", evtinfo->evttags) != 0)
 	{
-		appendPQExpBufferStr(query, ctginfo->ctgcommand);
+		appendPQExpBufferStr(query, "when tag in (");
+		appendPQExpBufferStr(query, evtinfo->evttags);
+		appendPQExpBufferStr(query, ") ");
 	}
 
-	appendPQExpBuffer(query, " EXECUTE PROCEDURE ");
-	appendPQExpBufferStr(query, ctginfo->ctgfname);
+	appendPQExpBuffer(query, "EXECUTE PROCEDURE ");
+	appendPQExpBufferStr(query, evtinfo->evtfname);
 	appendPQExpBuffer(query, " ();\n");
 
-	if (ctginfo->ctgenabled != 'O')
+	if (evtinfo->evtenabled != 'O')
 	{
-		appendPQExpBuffer(query, "\nALTER COMMAND TRIGGER %s SET ",
-						  fmtId(ctginfo->dobj.name));
-		switch (ctginfo->ctgenabled)
+		appendPQExpBuffer(query, "\nALTER EVENT TRIGGER %s ",
+						  fmtId(evtinfo->dobj.name));
+		switch (evtinfo->evtenabled)
 		{
 			case 'D':
 				appendPQExpBuffer(query, "DISABLE");
@@ -13743,17 +13752,17 @@ dumpCmdTrigger(Archive *fout, CmdTriggerInfo *ctginfo)
 		}
 		appendPQExpBuffer(query, ";\n");
 	}
-	appendPQExpBuffer(labelq, "COMMAND TRIGGER %s ",
-					  fmtId(ctginfo->dobj.name));
+	appendPQExpBuffer(labelq, "EVENT TRIGGER %s ",
+					  fmtId(evtinfo->dobj.name));
 
-	ArchiveEntry(fout, ctginfo->dobj.catId, ctginfo->dobj.dumpId,
-				 ctginfo->dobj.name, NULL, NULL, "", false,
-				 "COMMAND TRIGGER", SECTION_POST_DATA,
+	ArchiveEntry(fout, evtinfo->dobj.catId, evtinfo->dobj.dumpId,
+				 evtinfo->dobj.name, NULL, NULL, "", false,
+				 "EVENT TRIGGER", SECTION_POST_DATA,
 				 query->data, "", NULL, NULL, 0, NULL, NULL);
 
 	dumpComment(fout, labelq->data,
 				NULL, NULL,
-				ctginfo->dobj.catId, 0, ctginfo->dobj.dumpId);
+				evtinfo->dobj.catId, 0, evtinfo->dobj.dumpId);
 
 	destroyPQExpBuffer(query);
 	destroyPQExpBuffer(labelq);

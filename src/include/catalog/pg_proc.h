@@ -4641,6 +4641,10 @@ DESCR("SP-GiST support for suffix tree over text");
 DATA(insert OID = 4031 (  spg_text_leaf_consistent	PGNSP PGUID 12 1 0 0 0 f f f f t f i 2 0 16 "2281 2281" _null_ _null_ _null_ _null_  spg_text_leaf_consistent _null_ _null_ _null_ ));
 DESCR("SP-GiST support for suffix tree over text");
 
+DATA(insert OID = 3953 (  pg_evtevent_to_string	PGNSP PGUID 12 1 0 0 0 f f f f t f i 1 0 25 "20" _null_ _null_ _null_ _null_  pg_event_trigger_event_to_string _null_ _null_ _null_ ));
+DESCR("Convert Event Trigger evtevent to string");
+DATA(insert OID = 3954 (  pg_evttag_to_string	PGNSP PGUID 12 1 0 0 0 f f f f t f i 1 0 25 "20" _null_ _null_ _null_ _null_  pg_event_trigger_command_to_string _null_ _null_ _null_ ));
+DESCR("Convert Event Trigger command tag to string");
 
 /*
  * Symbolic values for provolatile column: these indicate whether the result

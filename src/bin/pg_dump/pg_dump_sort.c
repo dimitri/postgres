@@ -60,7 +60,7 @@ static const int oldObjectTypePriority[] =
 	9,							/* DO_BLOB */
 	11,							/* DO_BLOB_DATA */
 	2,							/* DO_COLLATION */
-	18							/* DO_CMDTRIGGER */
+	18							/* DO_EVTTRIGGER */
 };
 
 /*
@@ -100,7 +100,7 @@ static const int newObjectTypePriority[] =
 	21,							/* DO_BLOB */
 	23,							/* DO_BLOB_DATA */
 	3,							/* DO_COLLATION */
-	30							/* DO_CMDTRIGGER */
+	30							/* DO_EVTTRIGGER */
 };
 
 
@@ -1115,10 +1115,10 @@ describeDumpableObject(DumpableObject *obj, char *buf, int bufsize)
 					 "TRIGGER %s  (ID %d OID %u)",
 					 obj->name, obj->dumpId, obj->catId.oid);
 			return;
-		case DO_CMDTRIGGER:
+		case DO_EVTTRIGGER:
 			snprintf(buf, bufsize,
-					 "TRIGGER %s ON COMMAND %s (ID %d OID %u)",
-					 obj->name, ((CmdTriggerInfo *)obj)->ctgcommand, obj->dumpId, obj->catId.oid);
+					 "EVENT TRIGGER %s (ID %d OID %u)",
+					 obj->name, obj->dumpId, obj->catId.oid);
 			return;
 		case DO_CONSTRAINT:
 			snprintf(buf, bufsize,

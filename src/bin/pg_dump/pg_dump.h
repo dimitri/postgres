@@ -119,7 +119,7 @@ typedef enum
 	DO_BLOB,
 	DO_BLOB_DATA,
 	DO_COLLATION,
-	DO_CMDTRIGGER
+	DO_EVTTRIGGER
 } DumpableObjectType;
 
 typedef struct _dumpableObject
@@ -351,15 +351,16 @@ typedef struct _triggerInfo
 	char	   *tgdef;
 } TriggerInfo;
 
-typedef struct _cmdtriggerInfo
+typedef struct _evttriggerInfo
 {
 	DumpableObject dobj;
-	char	   *ctgcommand;
-	char	   *ctgname;
-	char	   *ctgfname;
-	char		ctgtype;
-	char		ctgenabled;
-} CmdTriggerInfo;
+	char	   *evtname;
+	char	   *evttags;
+	char	   *evtevent;
+	char	   *evtfname;
+	char		evttype;
+	char		evtenabled;
+} EvtTriggerInfo;
 
 /*
  * struct ConstraintInfo is used for all constraint types.	However we
@@ -570,6 +571,6 @@ extern ForeignServerInfo *getForeignServers(Archive *fout,
 extern DefaultACLInfo *getDefaultACLs(Archive *fout, int *numDefaultACLs);
 extern void getExtensionMembership(Archive *fout, ExtensionInfo extinfo[],
 					   int numExtensions);
-extern CmdTriggerInfo *getCmdTriggers(Archive *fout, int *numCmdTriggers);
+extern EvtTriggerInfo *getEvtTriggers(Archive *fout, int *numEvtTriggers);
 
 #endif   /* PG_DUMP_H */
