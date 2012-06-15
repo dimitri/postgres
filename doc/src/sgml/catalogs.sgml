@@ -99,7 +99,7 @@
      </row>
 
      <row>
-      <entry><link linkend="catalog-pg-cmdtrigger"><structname>pg_evttrigger</structname></link></entry>
+      <entry><link linkend="catalog-pg-event-trigger"><structname>pg_event_trigger</structname></link></entry>
       <entry>event triggers</entry>
      </row>
 
@@ -1862,19 +1862,19 @@
   </para>
  </sect1>
 
- <sect1 id="catalog-pg-cmdtrigger">
-  <title><structname>pg_cmdtrigger</structname></title>
+ <sect1 id="catalog-pg-event-trigger">
+  <title><structname>pg_event_trigger</structname></title>
 
-  <indexterm zone="catalog-pg-cmdtrigger">
-   <primary>pg_cmdtrigger</primary>
+  <indexterm zone="catalog-pg-event_trigger">
+   <primary>pg_event_trigger</primary>
   </indexterm>
 
   <para>
-   The catalog <structname>pg_evttrigger</structname> stores event triggers.
+   The catalog <structname>pg_event_trigger</structname> stores event triggers.
   </para>
 
   <table>
-   <title><structname>pg_evttrigger</> Columns</title>
+   <title><structname>pg_event_trigger</> Columns</title>
 
    <tgroup cols="4">
     <thead>
