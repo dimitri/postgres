@@ -60,10 +60,17 @@ bool event_trigger_cache_is_stalled = true;
 /* entry for command event trigger lookup hashtable */
 typedef struct
 {
+	Oid                 key;
 	TrigEvent			event;
 	TrigEventCommand	command;
 	List               *funcs;
 } EventCommandTriggerEnt;
+
+/* macro to compute the hash table key
+ * remembering that Oid is not forcibly 32 bits.
+ */
+#define EVENT_COMMAND_TRIGGER_KEY(command, event) \
+	((Oid) (0x0 | (((uint32)command << 16) + (uint32) event)))
 
 static void check_event_trigger_name(const char *trigname, Relation tgrel);
 
@@ -445,9 +452,10 @@ add_funcall_to_command_event(TrigEventCommand command,
 							 TrigEvent event,
 							 Oid func)
 {
-	uint32 key = (command << 16) + event;
+	Oid key = EVENT_COMMAND_TRIGGER_KEY(command, event);
 	bool found;
 	EventCommandTriggerEnt *hresult;
+	MemoryContext old = MemoryContextSwitchTo(CacheMemoryContext);
 
 	hresult = (EventCommandTriggerEnt *)
 		hash_search(EventCommandTriggerCache, &key, HASH_ENTER, &found);
@@ -459,16 +467,35 @@ add_funcall_to_command_event(TrigEventCommand command,
 	}
 	else
 	{
+		hresult->key = EVENT_COMMAND_TRIGGER_KEY(command, event);
 		hresult->command = command;
 		hresult->event = event;
 		hresult->funcs = list_make1_oid(func);
 	}
-
-	elog(NOTICE, "add_funcall_to_command_event: %d %d %p %d",
-		 command, event, hresult->funcs, list_length(hresult->funcs));
-
+	MemoryContextSwitchTo(old);
 	return hresult;
 }
+
+#ifdef UNDEFINED
+static void
+print_event_trigger_cache()
+{
+	ListCell *lc;
+	HASH_SEQ_STATUS stat;
+	EventCommandTriggerEnt *tabentry;
+
+	hash_seq_init(&stat, EventCommandTriggerCache);
+	while ((tabentry = (EventCommandTriggerEnt *) hash_seq_search(&stat)) != NULL)
+	{
+		elog(NOTICE, "BuildEventTriggerCache %3d.%d => %d @%p",
+			 tabentry->command, tabentry->event,
+			 list_length(tabentry->funcs), tabentry->funcs);
+
+		foreach(lc, tabentry->funcs)
+			elog(NOTICE, "                       call %u", lfirst_oid(lc));
+	}
+}
+#endif
 
 /*
  * Scan the pg_event_trigger catalogs and build the EventTriggerCache, which is
@@ -491,20 +518,24 @@ BuildEventTriggerCache(bool force_rebuild)
 	if (!event_trigger_cache_is_stalled && !force_rebuild)
 		return;
 
-	/* DEBUG */
-	elog(NOTICE, "BuildEventTriggerCache rebuild");
+	/* drop the old cache */
+	if (EventCommandTriggerCache != NULL)
+		hash_destroy(EventCommandTriggerCache);
 
-	/* build the hash table */
+	/* build the new hash table */
 	MemSet(&info, 0, sizeof(info));
 	info.keysize = sizeof(Oid);
 	info.entrysize = sizeof(EventCommandTriggerEnt);
 	info.hash = oid_hash;
+	info.hcxt = CacheMemoryContext;
 
-	EventCommandTriggerCache = hash_create("Local Event Triggers Cache",
-										   EVTG_MAX_TRIG_EVENT_COMMAND,
-										   &info,
-										   HASH_ELEM | HASH_FUNCTION);
+	EventCommandTriggerCache =
+		hash_create("Local Event Triggers Cache",
+					1024,		/* do we need something smarter? */
+					&info,
+					HASH_ELEM | HASH_FUNCTION | HASH_CONTEXT);
 
+	/* Now fill it from the catalogs */
 	rel = heap_open(EventTriggerRelationId, AccessShareLock);
 	irel = index_open(EventTriggerNameIndexId, AccessShareLock);
 
@@ -1247,35 +1278,15 @@ InitEventContext(EventContext evt, const Node *parsetree)
 }
 
 /*
- * InitEventContext() must have been called when CommandFiresTriggers() is
- * called. When CommandFiresTriggers() returns false, the EventContext
- * structure needs not be initialized further.
- *
- * When calling CommandFiresTriggers() the command field must already have been
- * set.
- */
-bool
-CommandFiresTriggers(EventContext ev_ctx)
-{
-	if (ev_ctx == NULL || ev_ctx->command == E_UNKNOWN)
-		return false;
-
-	/* Make sure we have initialized at least once the cache */
-	BuildEventTriggerCache(false);
-
-	elog(ERROR, "Not Yet Implemented");
-	return false;
-}
-
-/*
- * It's still interresting to avoid preparing the Command Context for AFTER
- * command triggers when we have none to Execute, so we provide this API too.
+ * InitEventContext() must have been called first. When
+ * CommandFiresTriggersForEvent() returns false, the EventContext structure
+ * needs not be initialized further.
  */
 bool
 CommandFiresTriggersForEvent(EventContext ev_ctx, TrigEvent tev)
 {
-	uint32 anykey = (E_ANY << 16) + tev;
-	uint32 cmdkey = (ev_ctx->command << 16) + tev;
+	Oid anykey = EVENT_COMMAND_TRIGGER_KEY(E_ANY, tev);
+	Oid cmdkey = EVENT_COMMAND_TRIGGER_KEY(ev_ctx->command, tev);
 	bool any = false, cmd = false;
 
 	if (ev_ctx == NULL || ev_ctx->command == E_UNKNOWN)
@@ -1288,17 +1299,18 @@ CommandFiresTriggersForEvent(EventContext ev_ctx, TrigEvent tev)
 	if (!any)
 		hash_search(EventCommandTriggerCache, &cmdkey, HASH_FIND, &cmd);
 
-	elog(NOTICE, "CommandFiresTriggersForEvent %d %d %s",
-		 ev_ctx->command, tev, (any||cmd) ? "yes" : "no");
-
 	return any||cmd;
 }
 
+/*
+ * Actually run command triggers of a specific command. We first run ANY
+ * command triggers.
+ */
 void
 ExecEventTriggers(EventContext ev_ctx, TrigEvent tev)
 {
-	uint32 anykey = (E_ANY << 16) + tev;
-	uint32 cmdkey = (ev_ctx->command << 16) + tev;
+	Oid anykey = EVENT_COMMAND_TRIGGER_KEY(E_ANY, tev);
+	Oid cmdkey = EVENT_COMMAND_TRIGGER_KEY(ev_ctx->command, tev);
 	EventCommandTriggerEnt *hresult;
 	ListCell *lc;
 
@@ -1310,8 +1322,6 @@ ExecEventTriggers(EventContext ev_ctx, TrigEvent tev)
 	/* ANY command triggers */
 	hresult = (EventCommandTriggerEnt *)
 		hash_search(EventCommandTriggerCache, &anykey, HASH_FIND, NULL);
-
-	elog(NOTICE, "ExecEventTriggers: any %p", hresult);
 
 	if (hresult != NULL)
 	{
@@ -1326,8 +1336,6 @@ ExecEventTriggers(EventContext ev_ctx, TrigEvent tev)
 	/* Specific command triggers */
 	hresult = (EventCommandTriggerEnt *)
 		hash_search(EventCommandTriggerCache, &cmdkey, HASH_FIND, NULL);
-
-	elog(NOTICE, "ExecEventTriggers: cmd %p", hresult);
 
 	if (hresult != NULL)
 	{

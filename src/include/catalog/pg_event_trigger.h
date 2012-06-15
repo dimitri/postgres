@@ -63,24 +63,6 @@ typedef FormData_pg_event_trigger *Form_pg_event_trigger;
 /*
  * Times at which an event trigger can be fired. These are the
  * possible values for pg_event_trigger.evtevent.
- *
- * We don't use 0 here because of how we manage the backend local caching of
- * event triggers. That cache is an array of commands that contains an array of
- * events that contains a list of function OIDs.
- *
- * To iterate over each function oid to call at a specific event timing for a
- * given command, it's then as easy as:
- *
- *  foreach(cell, EventCommandTriggerCache[TrigEventCommand][TrigEvent])
- *
- * The ordering here is not so important apart from E_CommandStart being first,
- * in order to be able to refuse some cases (later triggers are not possible in
- * commands implementing their own transaction control behavior, such as
- * CLUSTER or CREATE INDEX CONCURRENTLY).
- *
- * The ordering of events here also depends on whether we're doing a CREATE,
- * ALTER or DROP command, or something else entirely (not yet supported in the
- * code, though).
  */
 typedef enum TrigEvent
 {
@@ -90,8 +72,6 @@ typedef enum TrigEvent
 	E_NameLookup         = 20,
 	E_CommandEnd         = 51
 } TrigEvent;
-
-#define EVTG_MAX_TRIG_EVENT 52
 
 /*
  * Supported commands
@@ -191,8 +171,6 @@ typedef enum TrigEventCommand
 	E_DropUserMapping,
 	E_DropView
 } TrigEventCommand;
-
-#define EVTG_MAX_TRIG_EVENT_COMMAND 650
 
 /*
  * Times at which an event trigger can be fired. These are the

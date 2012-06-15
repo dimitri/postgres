@@ -93,7 +93,6 @@ SELECT relname, relhasindex
  pg_authid               | t
  pg_cast                 | t
  pg_class                | t
- pg_cmdtrigger           | t
  pg_collation            | t
  pg_constraint           | t
  pg_conversion           | t
@@ -103,6 +102,7 @@ SELECT relname, relhasindex
  pg_depend               | t
  pg_description          | t
  pg_enum                 | t
+ pg_event_trigger        | t
  pg_extension            | t
  pg_foreign_data_wrapper | t
  pg_foreign_server       | t

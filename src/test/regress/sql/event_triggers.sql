@@ -64,8 +64,6 @@ alter event trigger foo_t disable;
 alter event trigger foo_t enable;
 alter event trigger foo_t rename to snitch;
 
-select * from pg_event_trigger;
-
 create schema cmd;
 create schema cmd2;
 create role regbob;
@@ -246,4 +244,5 @@ drop schema cmd1 cascade;
 drop schema cmd2 cascade;
 drop role regbob;
 
+drop event trigger any_t;
 drop event trigger snitch;
