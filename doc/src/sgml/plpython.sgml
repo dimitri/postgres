@@ -875,15 +875,15 @@ $$ LANGUAGE plpythonu;
      <title>Trigger Procedures on Commands in PL/Python </title>
 
      <indexterm>
-      <primary>command trigger</primary>
+      <primary>event trigger</primary>
       <secondary>in PL/Python</secondary>
      </indexterm>
 
     <para>
-     Command trigger procedures can be written in PL/Python.
+     Event trigger procedures can be written in PL/Python.
      <productname>PostgreSQL</productname> requires that a procedure that is to be called
      as a trigger must be declared as a function with no arguments
-     and a return type of <literal>command_trigger</>.
+     and a return type of <literal>event_trigger</>.
     </para>
 
     <para>

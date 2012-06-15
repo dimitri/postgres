@@ -99,8 +99,8 @@
      </row>
 
      <row>
-      <entry><link linkend="catalog-pg-cmdtrigger"><structname>pg_cmdtrigger</structname></link></entry>
-      <entry>command triggers</entry>
+      <entry><link linkend="catalog-pg-cmdtrigger"><structname>pg_evttrigger</structname></link></entry>
+      <entry>event triggers</entry>
      </row>
 
      <row>
@@ -1870,11 +1870,11 @@
   </indexterm>
 
   <para>
-   The catalog <structname>pg_cmdtrigger</structname> stores command triggers.
+   The catalog <structname>pg_evttrigger</structname> stores event triggers.
   </para>
 
   <table>
-   <title><structname>pg_cmdtrigger</> Columns</title>
+   <title><structname>pg_evttrigger</> Columns</title>
 
    <tgroup cols="4">
     <thead>
@@ -1888,30 +1888,30 @@
 
     <tbody>
      <row>
-      <entry><structfield>ctgname</structfield></entry>
+      <entry><structfield>evtname</structfield></entry>
       <entry><type>name</type></entry>
       <entry></entry>
       <entry>Trigger name (unique)</entry>
      </row>
 
      <row>
-      <entry><structfield>ctgcommand</structfield></entry>
-      <entry><type>name</type></entry>
+      <entry><structfield>evtevent</structfield></entry>
+      <entry><type>event</type></entry>
       <entry></entry>
-      <entry>Command tag of the command this trigger fires for.</entry>
+      <entry>The event this trigger fires for.</entry>
      </row>
 
      <row>
-      <entry><structfield>ctgfoid</structfield></entry>
+      <entry><structfield>evtfoid</structfield></entry>
       <entry><type>oid</type></entry>
       <entry><literal><link linkend="catalog-pg-proc"><structname>pg_proc</structname></link>.oid</literal></entry>
       <entry>
-       The OID of the function called by this command trigger.
+       The OID of the function called by this event trigger.
       </entry>
      </row>
 
      <row>
-      <entry><structfield>ctgtype</structfield></entry>
+      <entry><structfield>evttype</structfield></entry>
       <entry><type>char</type></entry>
       <entry></entry>
       <entry>
@@ -1921,17 +1921,24 @@
      </row>
 
      <row>
-      <entry><structfield>ctgenabled</structfield></entry>
+      <entry><structfield>evtenabled</structfield></entry>
       <entry><type>char</type></entry>
       <entry></entry>
       <entry>
        Controls in which <xref linkend="guc-session-replication-role"> modes
-       the command trigger fires.
+       the event trigger fires.
        <literal>O</> = trigger fires in <quote>origin</> and <quote>local</> modes,
        <literal>D</> = trigger is disabled,
        <literal>R</> = trigger fires in <quote>replica</> mode,
        <literal>A</> = trigger fires always.
       </entry>
+     </row>
+
+     <row>
+      <entry><structfield>evttags</structfield></entry>
+      <entry><type>int[]</type></entry>
+      <entry></entry>
+      <entry>Command tags of the commands this trigger is restricted to.</entry>
      </row>
     </tbody>
    </tgroup>

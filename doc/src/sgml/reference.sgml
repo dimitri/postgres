@@ -41,6 +41,7 @@
    &alterDefaultPrivileges;
    &alterDomain;
    &alterExtension;
+   &alterEventTrigger;
    &alterForeignDataWrapper;
    &alterForeignTable;
    &alterFunction;
@@ -62,7 +63,6 @@
    &alterTSParser;
    &alterTSTemplate;
    &alterTrigger;
-   &alterCommandTrigger;
    &alterType;
    &alterUser;
    &alterUserMapping;
@@ -83,6 +83,7 @@
    &createDatabase;
    &createDomain;
    &createExtension;
+   &createEventTrigger;
    &createForeignDataWrapper;
    &createForeignTable;
    &createFunction;
@@ -105,7 +106,6 @@
    &createTSParser;
    &createTSTemplate;
    &createTrigger;
-   &createCommandTrigger;
    &createType;
    &createUser;
    &createUserMapping;
@@ -122,6 +122,7 @@
    &dropDatabase;
    &dropDomain;
    &dropExtension;
+   &dropEventTrigger;
    &dropForeignDataWrapper;
    &dropForeignTable;
    &dropFunction;
@@ -144,7 +145,6 @@
    &dropTSParser;
    &dropTSTemplate;
    &dropTrigger;
-   &dropCommandTrigger;
    &dropType;
    &dropUser;
    &dropUserMapping;

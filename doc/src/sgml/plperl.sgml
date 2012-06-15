@@ -1223,12 +1223,12 @@ CREATE TRIGGER test_valid_id_trig
      <title>Trigger Procedures on Commands in PL/Perl </title>
 
      <indexterm>
-      <primary>command trigger</primary>
+      <primary>event trigger</primary>
       <secondary>in PL/Perl</secondary>
      </indexterm>
 
     <para>
-     Command trigger procedures can be written in PL/Perl.
+     Event trigger procedures can be written in PL/Perl.
      <productname>PostgreSQL</productname> requires that a procedure that is to be called
      as a trigger must be declared as a function with no arguments
      and a return type of <literal>command_trigger</>.
