@@ -161,7 +161,7 @@ static const Oid object_classes[MAX_OCLASS] = {
 	UserMappingRelationId,		/* OCLASS_USER_MAPPING */
 	DefaultAclRelationId,		/* OCLASS_DEFACL */
 	ExtensionRelationId,		/* OCLASS_EXTENSION */
-	EventTriggerRelationId		/* OCLASS_CMDTRIGGER */
+	EventTriggerRelationId		/* OCLASS_EVENT_TRIGGER */
 };
 
 
@@ -1115,7 +1115,7 @@ doDeletion(const ObjectAddress *object, int flags)
 				break;
 			}
 
-		case OCLASS_CMDTRIGGER:
+		case OCLASS_EVENT_TRIGGER:
 			RemoveEventTriggerById(object->objectId);
 			break;
 
@@ -2278,7 +2278,7 @@ getObjectClass(const ObjectAddress *object)
 			return OCLASS_EXTENSION;
 
 		case EventTriggerRelationId:
-			return OCLASS_CMDTRIGGER;
+			return OCLASS_EVENT_TRIGGER;
 	}
 
 	/* shouldn't get here */
@@ -2913,7 +2913,7 @@ getObjectDescription(const ObjectAddress *object)
 				break;
 			}
 
-        case OCLASS_CMDTRIGGER:
+        case OCLASS_EVENT_TRIGGER:
 			{
 				Relation	trigDesc;
 				ScanKeyData skey[1];
