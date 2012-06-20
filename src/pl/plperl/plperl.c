@@ -235,11 +235,11 @@ static void set_interp_require(bool trusted);
 
 static Datum plperl_func_handler(PG_FUNCTION_ARGS);
 static Datum plperl_trigger_handler(PG_FUNCTION_ARGS);
-static void plperl_command_trigger_handler(PG_FUNCTION_ARGS);
+static void plperl_event_trigger_handler(PG_FUNCTION_ARGS);
 
 static plperl_proc_desc *compile_plperl_function(Oid fn_oid,
 												 bool is_dml_trigger,
-												 bool is_cmd_trigger);
+												 bool is_event_trigger);
 
 static SV  *plperl_hash_from_tuple(HeapTuple tuple, TupleDesc tupdesc);
 static SV  *plperl_hash_from_datum(Datum attr);
@@ -1573,7 +1573,7 @@ plperl_trigger_build_args(FunctionCallInfo fcinfo)
 
 /* Set up the arguments for a command trigger call. */
 static SV  *
-plperl_command_trigger_build_args(FunctionCallInfo fcinfo)
+plperl_event_trigger_build_args(FunctionCallInfo fcinfo)
 {
 	EventTriggerData *tdata;
 	char	   *objectid;
@@ -1702,7 +1702,7 @@ plperl_call_handler(PG_FUNCTION_ARGS)
 		if (CALLED_AS_TRIGGER(fcinfo))
 			retval = PointerGetDatum(plperl_trigger_handler(fcinfo));
 		else if (CALLED_AS_EVENT_TRIGGER(fcinfo))
-			plperl_command_trigger_handler(fcinfo);
+			plperl_event_trigger_handler(fcinfo);
 		else
 			retval = plperl_func_handler(fcinfo);
 	}
@@ -1829,7 +1829,7 @@ plperl_validator(PG_FUNCTION_ARGS)
 	Oid		   *argtypes;
 	char	  **argnames;
 	char	   *argmodes;
-	bool		is_dml_trigger = false, is_cmd_trigger = false;
+	bool		is_dml_trigger = false, is_event_trigger = false;
 	int			i;
 
 	/* Get the new function's pg_proc entry */
@@ -1849,7 +1849,7 @@ plperl_validator(PG_FUNCTION_ARGS)
 			(proc->prorettype == OPAQUEOID && proc->pronargs == 0))
 			is_dml_trigger = true;
 		else if (proc->prorettype == EVTTRIGGEROID)
-			is_cmd_trigger = true;
+			is_event_trigger = true;
 		else if (proc->prorettype != RECORDOID &&
 				 proc->prorettype != VOIDOID)
 			ereport(ERROR,
@@ -1876,7 +1876,7 @@ plperl_validator(PG_FUNCTION_ARGS)
 	/* Postpone body checks if !check_function_bodies */
 	if (check_function_bodies)
 	{
-		(void) compile_plperl_function(funcoid, is_dml_trigger, is_cmd_trigger);
+		(void) compile_plperl_function(funcoid, is_dml_trigger, is_event_trigger);
 	}
 
 	/* the result of a validator is ignored */
@@ -2148,7 +2148,7 @@ plperl_call_perl_trigger_func(plperl_proc_desc *desc, FunctionCallInfo fcinfo,
 
 
 static void
-plperl_call_perl_command_trigger_func(plperl_proc_desc *desc,
+plperl_call_perl_event_trigger_func(plperl_proc_desc *desc,
 									  FunctionCallInfo fcinfo,
 									  SV *td)
 {
@@ -2432,7 +2432,7 @@ plperl_trigger_handler(PG_FUNCTION_ARGS)
 
 
 static void
-plperl_command_trigger_handler(PG_FUNCTION_ARGS)
+plperl_event_trigger_handler(PG_FUNCTION_ARGS)
 {
 	plperl_proc_desc *prodesc;
 	SV		   *svTD;
@@ -2461,8 +2461,8 @@ plperl_command_trigger_handler(PG_FUNCTION_ARGS)
 
 	activate_interpreter(prodesc->interp);
 
-	svTD = plperl_command_trigger_build_args(fcinfo);
-	plperl_call_perl_command_trigger_func(prodesc, fcinfo, svTD);
+	svTD = plperl_event_trigger_build_args(fcinfo);
+	plperl_call_perl_event_trigger_func(prodesc, fcinfo, svTD);
 
 	if (SPI_finish() != SPI_OK_FINISH)
 		elog(ERROR, "SPI_finish() failed");
@@ -2515,7 +2515,7 @@ validate_plperl_function(plperl_proc_ptr *proc_ptr, HeapTuple procTup)
 
 
 static plperl_proc_desc *
-compile_plperl_function(Oid fn_oid, bool is_dml_trigger, bool is_cmd_trigger)
+compile_plperl_function(Oid fn_oid, bool is_dml_trigger, bool is_event_trigger)
 {
 	HeapTuple	procTup;
 	Form_pg_proc procStruct;
@@ -2617,7 +2617,7 @@ compile_plperl_function(Oid fn_oid, bool is_dml_trigger, bool is_cmd_trigger)
 		 * Get the required information for input conversion of the
 		 * return value.
 		 ************************************************************/
-		if (!is_dml_trigger && !is_cmd_trigger)
+		if (!is_dml_trigger && !is_event_trigger)
 		{
 			typeTup =
 				SearchSysCache1(TYPEOID,
@@ -2675,7 +2675,7 @@ compile_plperl_function(Oid fn_oid, bool is_dml_trigger, bool is_cmd_trigger)
 		 * Get the required information for output conversion
 		 * of all procedure arguments
 		 ************************************************************/
-		if (!is_dml_trigger && !is_cmd_trigger)
+		if (!is_dml_trigger && !is_event_trigger)
 		{
 			prodesc->nargs = procStruct->pronargs;
 			for (i = 0; i < prodesc->nargs; i++)

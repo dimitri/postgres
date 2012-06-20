@@ -264,7 +264,7 @@ do_compile(FunctionCallInfo fcinfo,
 {
 	Form_pg_proc procStruct = (Form_pg_proc) GETSTRUCT(procTup);
 	bool		is_dml_trigger = CALLED_AS_TRIGGER(fcinfo);
-	bool		is_cmd_trigger = CALLED_AS_EVENT_TRIGGER(fcinfo);
+	bool		is_event_trigger = CALLED_AS_EVENT_TRIGGER(fcinfo);
 	Datum		prosrcdatum;
 	bool		isnull;
 	char	   *proc_source;
@@ -353,8 +353,8 @@ do_compile(FunctionCallInfo fcinfo,
 
 	if (is_dml_trigger)
 		function->fn_is_trigger = PLPGSQL_DML_TRIGGER;
-	else if (is_cmd_trigger)
-		function->fn_is_trigger = PLPGSQL_CMD_TRIGGER;
+	else if (is_event_trigger)
+		function->fn_is_trigger = PLPGSQL_EVENT_TRIGGER;
 	else
 		function->fn_is_trigger = PLPGSQL_NOT_TRIGGER;
 
@@ -679,7 +679,7 @@ do_compile(FunctionCallInfo fcinfo,
 
 			break;
 
-		case PLPGSQL_CMD_TRIGGER:
+		case PLPGSQL_EVENT_TRIGGER:
 			function->fn_rettype = VOIDOID;
 			function->fn_retbyval = false;
 			function->fn_retistuple = true;

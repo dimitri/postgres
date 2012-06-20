@@ -26,7 +26,7 @@ static HTAB *PLy_procedure_cache = NULL;
 static HTAB *PLy_trigger_cache = NULL;
 
 static PLyProcedure *PLy_procedure_create(HeapTuple procTup, Oid fn_oid,
-										  bool is_dml_trigger, bool is_cmd_trigger);
+										  bool is_dml_trigger, bool is_event_trigger);
 static bool PLy_procedure_argument_valid(PLyTypeInfo *arg);
 static bool PLy_procedure_valid(PLyProcedure *proc, HeapTuple procTup);
 static char *PLy_procedure_munge_source(const char *name, const char *src);
@@ -74,7 +74,7 @@ PLy_procedure_name(PLyProcedure *proc)
  * function calls.
  */
 PLyProcedure *
-PLy_procedure_get(Oid fn_oid, bool is_dml_trigger, bool is_cmd_trigger)
+PLy_procedure_get(Oid fn_oid, bool is_dml_trigger, bool is_event_trigger)
 {
 	HeapTuple	procTup;
 	PLyProcedureEntry *volatile entry;
@@ -85,7 +85,7 @@ PLy_procedure_get(Oid fn_oid, bool is_dml_trigger, bool is_cmd_trigger)
 		elog(ERROR, "cache lookup failed for function %u", fn_oid);
 
 	/* Look for the function in the corresponding cache */
-	if (is_dml_trigger || is_cmd_trigger)
+	if (is_dml_trigger || is_event_trigger)
 		entry = hash_search(PLy_trigger_cache,
 							&fn_oid, HASH_ENTER, &found);
 	else
@@ -98,7 +98,7 @@ PLy_procedure_get(Oid fn_oid, bool is_dml_trigger, bool is_cmd_trigger)
 		{
 			/* Haven't found it, create a new cache entry */
 			entry->proc = PLy_procedure_create(procTup, fn_oid,
-											   is_dml_trigger, is_cmd_trigger);
+											   is_dml_trigger, is_event_trigger);
 		}
 		else if (!PLy_procedure_valid(entry->proc, procTup))
 		{
@@ -106,14 +106,14 @@ PLy_procedure_get(Oid fn_oid, bool is_dml_trigger, bool is_cmd_trigger)
 			PLy_procedure_delete(entry->proc);
 			PLy_free(entry->proc);
 			entry->proc = PLy_procedure_create(procTup, fn_oid,
-											   is_dml_trigger, is_cmd_trigger);
+											   is_dml_trigger, is_event_trigger);
 		}
 		/* Found it and it's valid, it's fine to use it */
 	}
 	PG_CATCH();
 	{
 		/* Do not leave an uninitialised entry in the cache */
-		if (is_dml_trigger || is_cmd_trigger)
+		if (is_dml_trigger || is_event_trigger)
 			hash_search(PLy_trigger_cache,
 						&fn_oid, HASH_REMOVE, NULL);
 		else
@@ -133,7 +133,7 @@ PLy_procedure_get(Oid fn_oid, bool is_dml_trigger, bool is_cmd_trigger)
  */
 static PLyProcedure *
 PLy_procedure_create(HeapTuple procTup, Oid fn_oid,
-					 bool is_dml_trigger, bool is_cmd_trigger)
+					 bool is_dml_trigger, bool is_event_trigger)
 {
 	char		procName[NAMEDATALEN + 256];
 	Form_pg_proc procStruct;
@@ -177,7 +177,7 @@ PLy_procedure_create(HeapTuple procTup, Oid fn_oid,
 		 * get information required for output conversion of the return value,
 		 * but only if this isn't a trigger.
 		 */
-		if (!is_dml_trigger && !is_cmd_trigger)
+		if (!is_dml_trigger && !is_event_trigger)
 		{
 			HeapTuple	rvTypeTup;
 			Form_pg_type rvTypeStruct;

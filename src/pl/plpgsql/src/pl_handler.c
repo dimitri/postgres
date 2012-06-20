@@ -119,8 +119,8 @@ plpgsql_call_handler(PG_FUNCTION_ARGS)
 			retval = PointerGetDatum(plpgsql_exec_trigger(func,
 										   (TriggerData *) fcinfo->context));
 		else if (CALLED_AS_EVENT_TRIGGER(fcinfo))
-			plpgsql_exec_command_trigger(func,
-										 (EventTriggerData *) fcinfo->context);
+			plpgsql_exec_event_trigger(func,
+									   (EventTriggerData *) fcinfo->context);
 		else
 			retval = plpgsql_exec_function(func, fcinfo);
 	}
@@ -228,7 +228,7 @@ plpgsql_validator(PG_FUNCTION_ARGS)
 	char	  **argnames;
 	char	   *argmodes;
 	bool		is_dml_trigger = false;
-	bool		is_cmd_trigger = false;
+	bool		is_event_trigger = false;
 	int			i;
 
 	/* Get the new function's pg_proc entry */
@@ -248,7 +248,7 @@ plpgsql_validator(PG_FUNCTION_ARGS)
 			(proc->prorettype == OPAQUEOID && proc->pronargs == 0))
 			is_dml_trigger = true;
 		else if (proc->prorettype == EVTTRIGGEROID)
-			is_cmd_trigger = true;
+			is_event_trigger = true;
 		else if (proc->prorettype != RECORDOID &&
 				 proc->prorettype != VOIDOID &&
 				 !IsPolymorphicType(proc->prorettype))
@@ -303,7 +303,7 @@ plpgsql_validator(PG_FUNCTION_ARGS)
 			trigdata.type = T_TriggerData;
 			fake_fcinfo.context = (Node *) &trigdata;
 		}
-		else if (is_cmd_trigger)
+		else if (is_event_trigger)
 		{
 			EventTriggerData trigdata;
 			MemSet(&trigdata, 0, sizeof(trigdata));

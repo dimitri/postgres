@@ -335,7 +335,7 @@ PLy_exec_trigger(FunctionCallInfo fcinfo, PLyProcedure *proc)
 /* command trigger handler
  */
 void
-PLy_exec_command_trigger(FunctionCallInfo fcinfo, PLyProcedure *proc)
+PLy_exec_event_trigger(FunctionCallInfo fcinfo, PLyProcedure *proc)
 {
 	PyObject   *volatile pltdata = NULL;
 	EventTriggerData *tdata;

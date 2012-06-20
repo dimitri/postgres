@@ -773,8 +773,8 @@ plpgsql_exec_trigger(PLpgSQL_function *func,
 	return rettup;
 }
 
-void plpgsql_exec_command_trigger(PLpgSQL_function *func,
-								  EventTriggerData *trigdata)
+void plpgsql_exec_event_trigger(PLpgSQL_function *func,
+								EventTriggerData *trigdata)
 {
 	PLpgSQL_execstate estate;
 	ErrorContextCallback plerrcontext;

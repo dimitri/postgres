@@ -64,7 +64,7 @@ PG_FUNCTION_INFO_V1(plpython2_inline_handler);
 
 
 static bool PLy_procedure_is_trigger(Form_pg_proc procStruct);
-static bool PLy_procedure_is_command_trigger(Form_pg_proc procStruct);
+static bool PLy_procedure_is_event_trigger(Form_pg_proc procStruct);
 static void plpython_error_callback(void *arg);
 static void plpython_inline_error_callback(void *arg);
 static void PLy_init_interp(void);
@@ -158,7 +158,7 @@ plpython_validator(PG_FUNCTION_ARGS)
 	Oid			funcoid = PG_GETARG_OID(0);
 	HeapTuple	tuple;
 	Form_pg_proc procStruct;
-	bool		is_dml_trigger, is_cmd_trigger;
+	bool		is_dml_trigger, is_event_trigger;
 
 	if (!check_function_bodies)
 	{
@@ -172,11 +172,11 @@ plpython_validator(PG_FUNCTION_ARGS)
 	procStruct = (Form_pg_proc) GETSTRUCT(tuple);
 
 	is_dml_trigger = PLy_procedure_is_trigger(procStruct);
-	is_cmd_trigger = PLy_procedure_is_command_trigger(procStruct);
+	is_event_trigger = PLy_procedure_is_event_trigger(procStruct);
 
 	ReleaseSysCache(tuple);
 
-	PLy_procedure_get(funcoid, is_dml_trigger, is_cmd_trigger);
+	PLy_procedure_get(funcoid, is_dml_trigger, is_event_trigger);
 
 	PG_RETURN_VOID();
 }
@@ -232,7 +232,7 @@ plpython_call_handler(PG_FUNCTION_ARGS)
 		{
 			proc = PLy_procedure_get(fcinfo->flinfo->fn_oid, false, true);
 			exec_ctx->curr_proc = proc;
-			PLy_exec_command_trigger(fcinfo, proc);
+			PLy_exec_event_trigger(fcinfo, proc);
 		}
 		else
 		{
@@ -347,7 +347,7 @@ PLy_procedure_is_trigger(Form_pg_proc procStruct)
 			 procStruct->pronargs == 0));
 }
 
-static bool PLy_procedure_is_command_trigger(Form_pg_proc procStruct)
+static bool PLy_procedure_is_event_trigger(Form_pg_proc procStruct)
 {
 	return (procStruct->prorettype == EVTTRIGGEROID);
 }
