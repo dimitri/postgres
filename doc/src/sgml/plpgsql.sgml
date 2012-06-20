@@ -3929,12 +3929,12 @@ SELECT * FROM sales_summary_bytime;
    </example>
 </sect2>
 
-  <sect2 id="plpgsql-cmd-trigger">
-   <title>Triggers on commands</title>
+  <sect2 id="plpgsql-event-trigger">
+   <title>Triggers on event</title>
 
    <para>
     <application>PL/pgSQL</application> can be used to define command
-    trigger procedures. An avent trigger procedure is created with the
+    trigger procedures. An event trigger procedure is created with the
     <command>CREATE FUNCTION</> command, declaring it as a function with
     no arguments and a return type of <type>event trigger</type>.
    </para>
@@ -3960,7 +3960,7 @@ SELECT * FROM sales_summary_bytime;
      <listitem>
       <para>
        Data type <type>text</type>; a string of
-       <literal>BEFORE</literal> or <literal>AFTER</literal> depending on
+       <literal>BEFORE</literal> or <literal>INSTEAD OF</literal> depending on
        the trigger's definition.
       </para>
      </listitem>
@@ -4005,11 +4005,11 @@ SELECT * FROM sales_summary_bytime;
   </para>
 
    <para>
-    <xref linkend="plpgsql-cmd-trigger-example"> shows an example of a
+    <xref linkend="plpgsql-event-trigger-example"> shows an example of a
     event trigger procedure in <application>PL/pgSQL</application>.
    </para>
 
-   <example id="plpgsql-cmd-trigger-example">
+   <example id="plpgsql-event-trigger-example">
     <title>A <application>PL/pgSQL</application> Event Trigger Procedure</title>
 
     <para>

@@ -195,12 +195,12 @@ static Datum pltcl_handler(PG_FUNCTION_ARGS, bool pltrusted);
 static Datum pltcl_func_handler(PG_FUNCTION_ARGS, bool pltrusted);
 
 static HeapTuple pltcl_trigger_handler(PG_FUNCTION_ARGS, bool pltrusted);
-static void pltcl_command_trigger_handler(PG_FUNCTION_ARGS, bool pltrusted);
+static void pltcl_event_trigger_handler(PG_FUNCTION_ARGS, bool pltrusted);
 
 static void throw_tcl_error(Tcl_Interp *interp, const char *proname);
 
 static pltcl_proc_desc *compile_pltcl_function(Oid fn_oid, Oid tgreloid,
-											   bool is_cmd_trigger,
+											   bool is_event_trigger,
 											   bool pltrusted);
 
 static int pltcl_elog(ClientData cdata, Tcl_Interp *interp,
@@ -643,7 +643,7 @@ pltcl_handler(PG_FUNCTION_ARGS, bool pltrusted)
 		else if (CALLED_AS_EVENT_TRIGGER(fcinfo))
 		{
 			pltcl_current_fcinfo = NULL;
-			pltcl_command_trigger_handler(fcinfo, pltrusted);
+			pltcl_event_trigger_handler(fcinfo, pltrusted);
 		}
 		else
 		{
@@ -845,7 +845,7 @@ pltcl_trigger_handler(PG_FUNCTION_ARGS, bool pltrusted)
 	/* Find or compile the function */
 	prodesc = compile_pltcl_function(fcinfo->flinfo->fn_oid,
 									 RelationGetRelid(trigdata->tg_relation),
-									 false, /* not a command trigger */
+									 false, /* not an event trigger */
 									 pltrusted);
 
 	pltcl_current_prodesc = prodesc;
@@ -1133,10 +1133,10 @@ pltcl_trigger_handler(PG_FUNCTION_ARGS, bool pltrusted)
 }
 
 /**********************************************************************
- * pltcl_command_trigger_handler()	- Handler for command trigger calls
+ * pltcl_event_trigger_handler()	- Handler for event trigger calls
  **********************************************************************/
 static void
-pltcl_command_trigger_handler(PG_FUNCTION_ARGS, bool pltrusted)
+pltcl_event_trigger_handler(PG_FUNCTION_ARGS, bool pltrusted)
 {
 	pltcl_proc_desc *prodesc;
 	Tcl_Interp *volatile interp;
@@ -1245,7 +1245,7 @@ throw_tcl_error(Tcl_Interp *interp, const char *proname)
  **********************************************************************/
 static pltcl_proc_desc *
 compile_pltcl_function(Oid fn_oid, Oid tgreloid,
-					   bool is_cmd_trigger, bool pltrusted)
+					   bool is_event_trigger, bool pltrusted)
 {
 	HeapTuple	procTup;
 	Form_pg_proc procStruct;
@@ -1322,10 +1322,10 @@ compile_pltcl_function(Oid fn_oid, Oid tgreloid,
 		 * "_trigger" when appropriate to ensure the normal and trigger
 		 * cases are kept separate.
 		 ************************************************************/
-		if (!is_dml_trigger && !is_cmd_trigger)
+		if (!is_dml_trigger && !is_event_trigger)
 			snprintf(internal_proname, sizeof(internal_proname),
 					 "__PLTcl_proc_%u", fn_oid);
-		else if (is_cmd_trigger)
+		else if (is_event_trigger)
 			snprintf(internal_proname, sizeof(internal_proname),
 					 "__PLTcl_proc_%u_cmdtrigger", fn_oid);
 		else if (is_dml_trigger)
@@ -1366,7 +1366,7 @@ compile_pltcl_function(Oid fn_oid, Oid tgreloid,
 		 * Get the required information for input conversion of the
 		 * return value.
 		 ************************************************************/
-		if (!is_dml_trigger && !is_cmd_trigger)
+		if (!is_dml_trigger && !is_event_trigger)
 		{
 			typeTup =
 				SearchSysCache1(TYPEOID,
@@ -1427,7 +1427,7 @@ compile_pltcl_function(Oid fn_oid, Oid tgreloid,
 		 * Get the required information for output conversion
 		 * of all procedure arguments
 		 ************************************************************/
-		if (!is_dml_trigger && !is_cmd_trigger)
+		if (!is_dml_trigger && !is_event_trigger)
 		{
 			prodesc->nargs = procStruct->pronargs;
 			proc_internal_args[0] = '\0';
@@ -1483,9 +1483,9 @@ compile_pltcl_function(Oid fn_oid, Oid tgreloid,
 			strcpy(proc_internal_args,
 				   "TG_name TG_relid TG_table_name TG_table_schema TG_relatts TG_when TG_level TG_op __PLTcl_Tup_NEW __PLTcl_Tup_OLD args");
 		}
-		else if (is_cmd_trigger)
+		else if (is_event_trigger)
 		{
-			/* command trigger procedure has fixed args */
+			/* event trigger procedure has fixed args */
 			strcpy(proc_internal_args,
 				   "TG_when TG_tag TG_objectid TG_schemaname TG_objectname");
 		}
@@ -1524,9 +1524,9 @@ compile_pltcl_function(Oid fn_oid, Oid tgreloid,
 							  "}\n"
 							  "unset i v\n\n", -1);
 		}
-		else if (is_cmd_trigger)
+		else if (is_event_trigger)
 		{
-			/* no argument support for command triggers */
+			/* no argument support for event triggers */
 		}
 		else
 		{

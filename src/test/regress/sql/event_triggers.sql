@@ -11,6 +11,10 @@ begin
 end;
 $$;
 
+--
+-- TODO: REASSIGN OWNED and DROP OWNED
+--
+
 create event trigger any_t
               before command_start
    execute procedure snitch();

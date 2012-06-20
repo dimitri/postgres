@@ -257,8 +257,6 @@ static ObjectAddress get_object_address_type(ObjectType objtype,
 						List *objname, bool missing_ok);
 static ObjectAddress get_object_address_opcf(ObjectType objtype, List *objname,
 						List *objargs, bool missing_ok);
-static ObjectAddress get_object_address_event_trigger(ObjectType objtype,
-						List *objname, bool missing_ok);
 static ObjectPropertyType *get_object_property_data(Oid class_id);
 
 /*
@@ -327,10 +325,6 @@ get_object_address(ObjectType objtype, List *objname, List *objargs,
 				address = get_object_address_relobject(objtype, objname,
 													   &relation, missing_ok);
 				break;
-			case OBJECT_EVENT_TRIGGER:
-				address = get_object_address_event_trigger(objtype, objname,
-														   missing_ok);
-				break;
 			case OBJECT_DATABASE:
 			case OBJECT_EXTENSION:
 			case OBJECT_TABLESPACE:
@@ -339,6 +333,7 @@ get_object_address(ObjectType objtype, List *objname, List *objargs,
 			case OBJECT_LANGUAGE:
 			case OBJECT_FDW:
 			case OBJECT_FOREIGN_SERVER:
+			case OBJECT_EVENT_TRIGGER:
 				address = get_object_address_unqualified(objtype,
 														 objname, missing_ok);
 				break;
@@ -560,6 +555,9 @@ get_object_address_unqualified(ObjectType objtype,
 			case OBJECT_FOREIGN_SERVER:
 				msg = gettext_noop("server name cannot be qualified");
 				break;
+			case OBJECT_EVENT_TRIGGER:
+				msg = gettext_noop("event trigger name cannot be qualified");
+				break;
 			default:
 				elog(ERROR, "unrecognized objtype: %d", (int) objtype);
 				msg = NULL;		/* placate compiler */
@@ -613,6 +611,11 @@ get_object_address_unqualified(ObjectType objtype,
 		case OBJECT_FOREIGN_SERVER:
 			address.classId = ForeignServerRelationId;
 			address.objectId = get_foreign_server_oid(name, missing_ok);
+			address.objectSubId = 0;
+			break;
+		case OBJECT_EVENT_TRIGGER:
+			address.classId = EventTriggerRelationId;
+			address.objectId = get_event_trigger_oid(name, missing_ok);
 			address.objectSubId = 0;
 			break;
 		default:
@@ -916,27 +919,6 @@ get_object_address_opcf(ObjectType objtype,
 			address.objectId = InvalidOid;
 			address.objectSubId = 0;
 	}
-
-	return address;
-}
-
-/*
- * Find the ObjectAddress for a command trigger.
- */
-static ObjectAddress
-get_object_address_event_trigger(ObjectType objtype,
-								 List *objname, bool missing_ok)
-{
-	char *name;
-	ObjectAddress address;
-
-	Assert(list_length(objname) == 1); /* event triggers are not schema qualified */
-
-	name = strVal(linitial(objname));
-
-	address.classId = EventTriggerRelationId;
-	address.objectId = get_event_trigger_oid(name, missing_ok);
-	address.objectSubId = 0;
 
 	return address;
 }

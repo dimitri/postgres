@@ -1,12 +1,12 @@
 /*-------------------------------------------------------------------------
  *
- * cmdtrigger.c
- *	  PostgreSQL COMMAND TRIGGER support code.
+ * event_trigger.c
+ *	  PostgreSQL EVENT TRIGGER support code.
  *
  * Portions Copyright (c) 2011, PostgreSQL Global Development Group
  *
  * IDENTIFICATION
- *	  src/backend/commands/cmdtrigger.c
+ *	  src/backend/commands/event_trigger.c
  *
  *-------------------------------------------------------------------------
  */
@@ -55,7 +55,7 @@
 static void BuildEventTriggerCache(bool force_rebuild);
 
 static HTAB *EventCommandTriggerCache = NULL;
-bool event_trigger_cache_is_stalled = true;
+bool event_trigger_cache_is_stale = true;
 
 /* entry for command event trigger lookup hashtable */
 typedef struct
@@ -96,7 +96,7 @@ CheckEventTriggerPrivileges()
 /*
  * Insert Command Trigger Tuple
  *
- * Insert the new pg_cmdtrigger row, and return the OID assigned to the new
+ * Insert the new pg_event_trigger row, and return the OID assigned to the new
  * row.
  */
 static Oid
@@ -216,7 +216,7 @@ CreateEventTrigger(CreateEventTrigStmt *stmt, const char *queryString)
 	heap_close(tgrel, RowExclusiveLock);
 
 	/* force rebuild next time we look at the cache */
-	event_trigger_cache_is_stalled = true;
+	event_trigger_cache_is_stale = true;
 
 	return trigoid;
 }
@@ -250,7 +250,7 @@ RemoveEventTriggerById(Oid trigOid)
 		elog(ERROR, "could not find tuple for event trigger %u", trigOid);
 
 	/*
-	 * Delete the pg_cmdtrigger tuple.
+	 * Delete the pg_event_trigger tuple.
 	 */
 	simple_heap_delete(tgrel, &tup->t_self);
 
@@ -258,7 +258,7 @@ RemoveEventTriggerById(Oid trigOid)
 	heap_close(tgrel, RowExclusiveLock);
 
 	/* force rebuild next time we look at the cache */
-	event_trigger_cache_is_stalled = true;
+	event_trigger_cache_is_stale = true;
 }
 
 /*
@@ -308,7 +308,7 @@ AlterEventTrigger(AlterEventTrigStmt *stmt)
 	heap_freetuple(tup);
 
 	/* force rebuild next time we look at the cache */
-	event_trigger_cache_is_stalled = true;
+	event_trigger_cache_is_stale = true;
 }
 
 
@@ -363,7 +363,7 @@ RenameEventTrigger(const char *trigname, const char *newname)
 	heap_close(rel, NoLock);
 
 	/* force rebuild next time we look at the cache */
-	event_trigger_cache_is_stalled = true;
+	event_trigger_cache_is_stale = true;
 }
 
 /*
@@ -478,27 +478,6 @@ add_funcall_to_command_event(TrigEventCommand command,
 	return hresult;
 }
 
-#ifdef UNDEFINED
-static void
-print_event_trigger_cache()
-{
-	ListCell *lc;
-	HASH_SEQ_STATUS stat;
-	EventCommandTriggerEnt *tabentry;
-
-	hash_seq_init(&stat, EventCommandTriggerCache);
-	while ((tabentry = (EventCommandTriggerEnt *) hash_seq_search(&stat)) != NULL)
-	{
-		elog(NOTICE, "BuildEventTriggerCache %3d.%d => %d @%p",
-			 tabentry->command, tabentry->event,
-			 list_length(tabentry->funcs), tabentry->funcs);
-
-		foreach(lc, tabentry->funcs)
-			elog(NOTICE, "                       call %u", lfirst_oid(lc));
-	}
-}
-#endif
-
 /*
  * Scan the pg_event_trigger catalogs and build the EventTriggerCache, which is
  * an array of commands indexing arrays of events containing the List of
@@ -517,7 +496,7 @@ BuildEventTriggerCache(bool force_rebuild)
 	IndexScanDesc indexScan;
 	HeapTuple	tuple;
 
-	if (!event_trigger_cache_is_stalled && !force_rebuild)
+	if (!event_trigger_cache_is_stale && !force_rebuild)
 		return;
 
 	/* drop the old cache */
@@ -616,7 +595,7 @@ BuildEventTriggerCache(bool force_rebuild)
 	index_close(irel, AccessShareLock);
 	heap_close(rel, AccessShareLock);
 
-	event_trigger_cache_is_stalled = false;
+	event_trigger_cache_is_stale = false;
 }
 
 /*
