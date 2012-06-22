@@ -53,22 +53,20 @@
  */
 static HTAB *EventCommandTriggerCache = NULL;
 
+/* event and command form the lookup key, and must appear first */
+typedef struct
+{
+	TrigEvent			event;
+	TrigEventCommand	command;
+} EventCommandTriggerCacheKey;
+
+
 /* entry for command event trigger lookup hashtable */
 typedef struct
 {
-	Oid                 key;
-	TrigEvent			event;
-	TrigEventCommand	command;
-	List               *funcs;
-} EventCommandTriggerEnt;
-
-/*
- * macro to compute the hash table key
- * remembering that Oid is not forcibly 32 bits.
- */
-#define EVENT_COMMAND_TRIGGER_KEY(command, event) \
-	((Oid) (0x0 | (((uint32)command << 16) + (uint32) event)))
-
+	EventCommandTriggerCacheKey key; /* lookup key, must be first */
+	List *funcs;					 /* list of triggers to call */
+} EventCommandTriggerCacheEntry;
 
 /*
  * Add a new function to EventCommandTriggerCache for given command and event,
@@ -76,31 +74,28 @@ typedef struct
  *
  * Returns the new hash entry value.
  */
-static EventCommandTriggerEnt *
-add_funcall_to_command_event(TrigEventCommand command,
-							 TrigEvent event,
+static EventCommandTriggerCacheEntry *
+add_funcall_to_command_event(TrigEvent event,
+							 TrigEventCommand command,
 							 Oid func)
 {
-	Oid key = EVENT_COMMAND_TRIGGER_KEY(command, event);
 	bool found;
-	EventCommandTriggerEnt *hresult;
+	EventCommandTriggerCacheKey key;
+	EventCommandTriggerCacheEntry *hresult;
 	MemoryContext old = MemoryContextSwitchTo(CacheMemoryContext);
 
-	hresult = (EventCommandTriggerEnt *)
-		hash_search(EventCommandTriggerCache, &key, HASH_ENTER, &found);
+	memset(&key, 0, sizeof(key));
+	key.event = event;
+	key.command = command;
+
+	hresult = (EventCommandTriggerCacheEntry *)
+		hash_search(EventCommandTriggerCache, (void *)&key, HASH_ENTER, &found);
 
 	if (found)
-	{
-		Assert(hresult->command == command && hresult->event == event);
 		hresult->funcs = lappend_oid(hresult->funcs, func);
-	}
 	else
-	{
-		hresult->key = EVENT_COMMAND_TRIGGER_KEY(command, event);
-		hresult->command = command;
-		hresult->event = event;
 		hresult->funcs = list_make1_oid(func);
-	}
+
 	MemoryContextSwitchTo(old);
 	return hresult;
 }
@@ -171,7 +166,7 @@ BuildEventTriggerCache()
 			/* event triggers created without WHEN clause are targetting all
 			 * commands (ANY command trigger)
 			 */
-			add_funcall_to_command_event(E_ANY, event, form->evtfoid);
+			add_funcall_to_command_event(event, E_ANY, form->evtfoid);
 		}
 		else
 		{
@@ -193,7 +188,7 @@ BuildEventTriggerCache()
 			for (i = 0; i < numkeys; i++)
 			{
 				 command = tags[i];
-				 add_funcall_to_command_event(command, event, form->evtfoid);
+				 add_funcall_to_command_event(event, command, form->evtfoid);
 			}
 		}
 	}
@@ -226,9 +221,9 @@ InitializeEvtTriggerCommandCache(void)
 
 	/* build the new hash table */
 	MemSet(&info, 0, sizeof(info));
-	info.keysize = sizeof(Oid);
-	info.entrysize = sizeof(EventCommandTriggerEnt);
-	info.hash = oid_hash;
+	info.keysize = sizeof(EventCommandTriggerCacheKey);
+	info.entrysize = sizeof(EventCommandTriggerCacheEntry);
+	info.hash = tag_hash;
 	info.hcxt = CacheMemoryContext;
 
 	/* Make sure we've initialized CacheMemoryContext. */
@@ -259,9 +254,8 @@ get_event_triggers(TrigEvent event, TrigEventCommand command)
 {
 	EventCommandTriggers *triggers =
 		(EventCommandTriggers *) palloc(sizeof(EventCommandTriggers));
-	Oid anykey = EVENT_COMMAND_TRIGGER_KEY(E_ANY, event);
-	Oid cmdkey = EVENT_COMMAND_TRIGGER_KEY(command, event);
-	EventCommandTriggerEnt *hresult;
+	EventCommandTriggerCacheKey anykey, cmdkey;
+	EventCommandTriggerCacheEntry *any, *cmd;
 
 	triggers->event = event;
 	triggers->command = command;
@@ -273,18 +267,24 @@ get_event_triggers(TrigEvent event, TrigEventCommand command)
 		InitializeEvtTriggerCommandCache();
 
 	/* ANY command triggers */
-	hresult = (EventCommandTriggerEnt *)
-		hash_search(EventCommandTriggerCache, &anykey, HASH_FIND, NULL);
+	memset(&anykey, 0, sizeof(anykey));
+	anykey.event = event;
+	anykey.command = E_ANY;
+	any = (EventCommandTriggerCacheEntry *)
+		hash_search(EventCommandTriggerCache, (void *)&anykey, HASH_FIND, NULL);
 
-	if (hresult != NULL)
-		triggers->any_triggers = hresult->funcs;
+	if (any != NULL)
+		triggers->any_triggers = any->funcs;
 
 	/* Specific command triggers */
-	hresult = (EventCommandTriggerEnt *)
-		hash_search(EventCommandTriggerCache, &cmdkey, HASH_FIND, NULL);
+	memset(&cmdkey, 0, sizeof(cmdkey));
+	cmdkey.event = event;
+	cmdkey.command = command;
+	cmd = (EventCommandTriggerCacheEntry *)
+		hash_search(EventCommandTriggerCache, (void *)&cmdkey, HASH_FIND, NULL);
 
-	if (hresult != NULL)
-		triggers->cmd_triggers = hresult->funcs;
+	if (cmd != NULL)
+		triggers->cmd_triggers = cmd->funcs;
 
 	return triggers;
 }

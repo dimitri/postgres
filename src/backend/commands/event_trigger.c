@@ -1050,7 +1050,9 @@ CommandFiresTriggersForEvent(EventContext ev_ctx, TrigEvent tev)
 		return false;
 
 	triggers = get_event_triggers(tev, ev_ctx->command);
-	return triggers->any_triggers || triggers->cmd_triggers;
+
+	return triggers->any_triggers != NIL
+		|| triggers->cmd_triggers != NIL;
 }
 
 /*
