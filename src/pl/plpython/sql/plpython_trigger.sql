@@ -389,13 +389,12 @@ INSERT INTO composite_trigger_nested_test VALUES (ROW(ROW(NULL, 't'), ROW(1, 'f'
 SELECT * FROM composite_trigger_nested_test;
 
 -- test plpython command triggers
-create or replace function pysnitch() returns command_trigger language plpythonu as $$
+create or replace function pysnitch() returns event_trigger language plpythonu as $$
   plpy.notice("  pysnitch: %s %s %s.%s" %
               (TD["when"], TD["tag"], TD["schemaname"], TD["objectname"]));
 $$;
 
-create command trigger py_a_snitch after any command execute procedure pysnitch();
-create command trigger py_b_snitch before any command execute procedure pysnitch();
+create event trigger py_snitch before command_start execute procedure pysnitch();
 
 create or replace function foobar() returns int language sql as $$select 1;$$;
 alter function foobar() cost 77;
@@ -404,5 +403,4 @@ drop function foobar();
 create table foo();
 drop table foo;
 
-drop command trigger py_a_snitch;
-drop command trigger py_b_snitch;
+drop event trigger py_snitch;
