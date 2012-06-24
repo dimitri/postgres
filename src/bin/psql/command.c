@@ -363,15 +363,7 @@ exec_command(const char *cmd,
 				success = describeTablespaces(pattern, show_verbose);
 				break;
 			case 'c':
-				switch (cmd[2])
-				{
-					case '\0':
-						success = listConversions(pattern, show_verbose, show_system);
-						break;
-					default:
-						status = PSQL_CMD_UNKNOWN;
-						break;
-				}
+				success = listConversions(pattern, show_verbose, show_system);
 				break;
 			case 'C':
 				success = listCasts(pattern, show_verbose);
@@ -486,12 +478,6 @@ exec_command(const char *cmd,
 					case 't':
 						success = listForeignTables(pattern, show_verbose);
 						break;
-					case 'v':
-						/* \dev seems good, maybe we should find another
-						 * command so as not to mix with sql/med?
-						 */
-						success = listEvtTriggers(pattern, show_verbose);
-						break;
 					default:
 						status = PSQL_CMD_UNKNOWN;
 						break;
@@ -502,6 +488,9 @@ exec_command(const char *cmd,
 					success = listExtensionContents(pattern);
 				else
 					success = listExtensions(pattern);
+				break;
+			case 'y':			/* Event Triggers */
+				success = listEvtTriggers(pattern, show_verbose);
 				break;
 			default:
 				status = PSQL_CMD_UNKNOWN;
