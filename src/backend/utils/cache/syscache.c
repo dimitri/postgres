@@ -391,6 +391,17 @@ static const struct cachedesc cacheinfo[] = {
 		},
 		8
 	},
+	{EventTriggerRelationId,			/* EVENTTRIGGEROID */
+		EventTriggerOidIndexId,
+		1,
+		{
+			ObjectIdAttributeNumber,
+			0,
+			0,
+			0
+		},
+		8
+	},
 	{ForeignDataWrapperRelationId,		/* FOREIGNDATAWRAPPERNAME */
 		ForeignDataWrapperNameIndexId,
 		1,

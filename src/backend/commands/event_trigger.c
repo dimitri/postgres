@@ -40,7 +40,6 @@
 #include "utils/syscache.h"
 #include "tcop/utility.h"
 
-static void check_event_trigger_name(const char *trigname, Relation tgrel);
 static char *event_to_string(TrigEvent event);
 static char *command_to_string(TrigEventCommand command);
 
@@ -68,15 +67,18 @@ CheckEventTriggerPrivileges()
  * row.
  */
 static Oid
-InsertEventTriggerTuple(Relation tgrel, char *trigname, TrigEvent event,
+InsertEventTriggerTuple(char *trigname, TrigEvent event,
 						Oid funcoid, char evttype, List *cmdlist)
 {
+	Relation tgrel;
 	Oid         trigoid;
 	HeapTuple	tuple;
 	Datum		values[Natts_pg_trigger];
 	bool		nulls[Natts_pg_trigger];
 	ObjectAddress myself, referenced;
 	ArrayType  *tagArray;
+
+	tgrel = heap_open(EventTriggerRelationId, RowExclusiveLock);
 
 	/*
 	 * Build the new pg_trigger tuple.
@@ -118,6 +120,7 @@ InsertEventTriggerTuple(Relation tgrel, char *trigname, TrigEvent event,
 	trigoid = HeapTupleGetOid(tuple);
 
 	heap_freetuple(tuple);
+	heap_close(tgrel, RowExclusiveLock);
 
 	/*
 	 * Record dependencies for trigger.  Always place a normal dependency on
@@ -141,7 +144,7 @@ InsertEventTriggerTuple(Relation tgrel, char *trigname, TrigEvent event,
 Oid
 CreateEventTrigger(CreateEventTrigStmt *stmt, const char *queryString)
 {
-	Relation	tgrel;
+	HeapTuple	tuple;
 	Oid			funcoid, trigoid;
 	Oid			funcrettype;
 
@@ -162,64 +165,41 @@ CreateEventTrigger(CreateEventTrigStmt *stmt, const char *queryString)
 						NameListToString(stmt->funcname))));
 
 	/*
-	 * Generate the trigger's OID now, so that we can use it in the name if
-	 * needed.
+	 * Give user a nice error message in case an event trigger of the same name
+	 * already exists.
 	 */
-	tgrel = heap_open(EventTriggerRelationId, RowExclusiveLock);
-
-	/*
-	 * Scan pg_event_trigger for existing triggers on command. We do this only
-	 * to give a nice error message if there's already a trigger of the same
-	 * name. (The unique index on evtname would complain anyway.)
-	 *
-	 * NOTE that this is cool only because we have AccessExclusiveLock on
-	 * the relation, so the trigger set won't be changing underneath us.
-	 */
-	check_event_trigger_name(stmt->trigname, tgrel);
+	tuple = SearchSysCache1(EVENTTRIGGERNAME, CStringGetDatum(stmt->trigname));
+	if (HeapTupleIsValid(tuple))
+		ereport(ERROR,
+				(errcode(ERRCODE_DUPLICATE_OBJECT),
+				 errmsg("event trigger \"%s\" already exists", stmt->trigname)));
 
 	/* Insert the catalog entry */
-	trigoid = InsertEventTriggerTuple(tgrel, stmt->trigname, stmt->event,
+	trigoid = InsertEventTriggerTuple(stmt->trigname, stmt->event,
 									  funcoid, stmt->timing, stmt->cmdlist);
-
-	heap_close(tgrel, RowExclusiveLock);
 
 	return trigoid;
 }
 
 /*
- * Guts of command trigger deletion.
+ * Guts of event trigger deletion.
  */
 void
 RemoveEventTriggerById(Oid trigOid)
 {
 	Relation	tgrel;
-	SysScanDesc tgscan;
-	ScanKeyData skey[1];
 	HeapTuple	tup;
 
 	tgrel = heap_open(EventTriggerRelationId, RowExclusiveLock);
 
-	/*
-	 * Find the trigger to delete.
-	 */
-	ScanKeyInit(&skey[0],
-				ObjectIdAttributeNumber,
-				BTEqualStrategyNumber, F_OIDEQ,
-				ObjectIdGetDatum(trigOid));
-
-	tgscan = systable_beginscan(tgrel, EventTriggerOidIndexId, true,
-								SnapshotNow, 1, skey);
-
-	tup = systable_getnext(tgscan);
+	tup = SearchSysCache1(EVENTTRIGGEROID, ObjectIdGetDatum(trigOid));
 	if (!HeapTupleIsValid(tup))
-		elog(ERROR, "could not find tuple for event trigger %u", trigOid);
+		elog(ERROR, "cache lookup failed for event trigger %u", trigOid);
 
-	/*
-	 * Delete the pg_event_trigger tuple.
-	 */
 	simple_heap_delete(tgrel, &tup->t_self);
 
-	systable_endscan(tgscan);
+	ReleaseSysCache(tup);
+
 	heap_close(tgrel, RowExclusiveLock);
 }
 
@@ -230,8 +210,6 @@ void
 AlterEventTrigger(AlterEventTrigStmt *stmt)
 {
 	Relation	tgrel;
-	SysScanDesc tgscan;
-	ScanKeyData skey[1];
 	HeapTuple	tup;
 	Form_pg_event_trigger evtForm;
 	char        tgenabled = pstrdup(stmt->tgenabled)[0]; /* works with gram.y */
@@ -239,35 +217,23 @@ AlterEventTrigger(AlterEventTrigStmt *stmt)
 	CheckEventTriggerPrivileges();
 
 	tgrel = heap_open(EventTriggerRelationId, RowExclusiveLock);
-	ScanKeyInit(&skey[0],
-				Anum_pg_event_trigger_evtname,
-				BTEqualStrategyNumber, F_NAMEEQ,
-				CStringGetDatum(stmt->trigname));
 
-	tgscan = systable_beginscan(tgrel, EventTriggerNameIndexId, true,
-								SnapshotNow, 1, skey);
-
-	tup = systable_getnext(tgscan);
-
+	tup = SearchSysCacheCopy1(EVENTTRIGGERNAME, CStringGetDatum(stmt->trigname));
 	if (!HeapTupleIsValid(tup))
 		ereport(ERROR,
 				(errcode(ERRCODE_UNDEFINED_OBJECT),
-				 errmsg("trigger \"%s\" does not exist",
-						stmt->trigname)));
+				 errmsg("event trigger \"%s\" does not exist", stmt->trigname)));
 
-	/* Copy tuple so we can modify it below */
-	tup = heap_copytuple(tup);
+	/* tuple is a copy, so we can modify it below */
 	evtForm = (Form_pg_event_trigger) GETSTRUCT(tup);
-
-	systable_endscan(tgscan);
-
 	evtForm->evtenabled = tgenabled;
 
 	simple_heap_update(tgrel, &tup->t_self, tup);
 	CatalogUpdateIndexes(tgrel, tup);
 
-	heap_close(tgrel, RowExclusiveLock);
+	/* clean up */
 	heap_freetuple(tup);
+	heap_close(tgrel, RowExclusiveLock);
 }
 
 
@@ -277,8 +243,6 @@ AlterEventTrigger(AlterEventTrigStmt *stmt)
 void
 RenameEventTrigger(const char *trigname, const char *newname)
 {
-	SysScanDesc tgscan;
-	ScanKeyData skey[1];
 	HeapTuple	tup;
 	Relation	rel;
 	Form_pg_event_trigger evtForm;
@@ -288,38 +252,28 @@ RenameEventTrigger(const char *trigname, const char *newname)
 	rel = heap_open(EventTriggerRelationId, RowExclusiveLock);
 
 	/* newname must be available */
-	check_event_trigger_name(newname, rel);
+	tup = SearchSysCacheCopy1(EVENTTRIGGERNAME, CStringGetDatum(newname));
+	if (HeapTupleIsValid(tup))
+		ereport(ERROR,
+				(errcode(ERRCODE_DUPLICATE_OBJECT),
+				 errmsg("event trigger \"%s\" already exists", newname)));
 
-	/* get existing tuple */
-	ScanKeyInit(&skey[0],
-				Anum_pg_event_trigger_evtname,
-				BTEqualStrategyNumber, F_NAMEEQ,
-				CStringGetDatum(trigname));
-
-	tgscan = systable_beginscan(rel, EventTriggerNameIndexId, true,
-								SnapshotNow, 1, skey);
-
-	tup = systable_getnext(tgscan);
-
+	/* trigname must exists */
+	tup = SearchSysCacheCopy1(EVENTTRIGGERNAME, CStringGetDatum(trigname));
 	if (!HeapTupleIsValid(tup))
 		ereport(ERROR,
 				(errcode(ERRCODE_UNDEFINED_OBJECT),
-				 errmsg("command trigger \"%s\" does not exist",
-						trigname)));
+				 errmsg("event trigger \"%s\" does not exist", trigname)));
 
-	/* Copy tuple so we can modify it below */
-	tup = heap_copytuple(tup);
 	evtForm = (Form_pg_event_trigger) GETSTRUCT(tup);
 
-	systable_endscan(tgscan);
-
-	/* rename */
+	/* tuple is a copy, so we can rename it now */
 	namestrcpy(&(evtForm->evtname), newname);
 	simple_heap_update(rel, &tup->t_self, tup);
 	CatalogUpdateIndexes(rel, tup);
 
 	heap_freetuple(tup);
-	heap_close(rel, NoLock);
+	heap_close(rel, RowExclusiveLock);
 }
 
 /*
@@ -331,72 +285,22 @@ RenameEventTrigger(const char *trigname, const char *newname)
 Oid
 get_event_trigger_oid(const char *trigname, bool missing_ok)
 {
-	Relation	tgrel;
-	ScanKeyData skey[1];
-	SysScanDesc tgscan;
 	HeapTuple	tup;
 	Oid			oid;
 
-	/*
-	 * Find the trigger, verify permissions, set up object address
-	 */
-	tgrel = heap_open(EventTriggerRelationId, AccessShareLock);
-
-	ScanKeyInit(&skey[0],
-				Anum_pg_event_trigger_evtname,
-				BTEqualStrategyNumber, F_NAMEEQ,
-				CStringGetDatum(trigname));
-
-	tgscan = systable_beginscan(tgrel, EventTriggerNameIndexId, true,
-								SnapshotNow, 1, skey);
-
-	tup = systable_getnext(tgscan);
-
+	tup = SearchSysCache1(EVENTTRIGGERNAME, CStringGetDatum(trigname));
 	if (!HeapTupleIsValid(tup))
 	{
 		if (!missing_ok)
 			ereport(ERROR,
-						(errcode(ERRCODE_UNDEFINED_OBJECT),
-							 errmsg("event trigger \"%s\" does not exist",
-							 trigname)));
+					(errcode(ERRCODE_UNDEFINED_OBJECT),
+					 errmsg("event trigger \"%s\" does not exist", trigname)));
 		oid = InvalidOid;
 	}
 	else
-	{
 		oid = HeapTupleGetOid(tup);
-	}
 
-	systable_endscan(tgscan);
-	heap_close(tgrel, AccessShareLock);
 	return oid;
-}
-
-/*
- * Scan pg_event_trigger for existing triggers on event. We do this only to
- * give a nice error message if there's already a trigger of the same name.
- */
-void
-check_event_trigger_name(const char *trigname, Relation tgrel)
-{
-	SysScanDesc tgscan;
-	ScanKeyData skey[1];
-	HeapTuple	tuple;
-
-	ScanKeyInit(&skey[0],
-				Anum_pg_event_trigger_evtname,
-				BTEqualStrategyNumber, F_NAMEEQ,
-				CStringGetDatum(trigname));
-
-	tgscan = systable_beginscan(tgrel, EventTriggerNameIndexId, true,
-								SnapshotNow, 1, skey);
-
-	tuple = systable_getnext(tgscan);
-
-	if (HeapTupleIsValid(tuple))
-		ereport(ERROR,
-				(errcode(ERRCODE_DUPLICATE_OBJECT),
-				 errmsg("event trigger \"%s\" already exists", trigname)));
-	systable_endscan(tgscan);
 }
 
 /*
