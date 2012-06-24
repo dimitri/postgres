@@ -4375,90 +4375,182 @@ trigger_command_list:
 
 
 trigger_command:
-		   ALTER AGGREGATE						{ $$ = E_AlterAggregate; }
-		   | ALTER COLLATION					{ $$ = E_AlterCollation; }
-		   | ALTER CONVERSION_P					{ $$ = E_AlterConversion; }
-		   | ALTER DOMAIN_P						{ $$ = E_AlterDomain; }
-		   | ALTER EXTENSION					{ $$ = E_AlterExtension; }
-		   | ALTER FOREIGN DATA_P WRAPPER		{ $$ = E_AlterForeignDataWrapper; }
-		   | ALTER FOREIGN TABLE				{ $$ = E_AlterForeignTable; }
-		   | ALTER FUNCTION						{ $$ = E_AlterFunction; }
-		   | ALTER LANGUAGE						{ $$ = E_AlterLanguage; }
-		   | ALTER OPERATOR						{ $$ = E_AlterOperator; }
-		   | ALTER OPERATOR CLASS				{ $$ = E_AlterOperatorClass; }
-		   | ALTER OPERATOR FAMILY				{ $$ = E_AlterOperatorFamily; }
-		   | ALTER SEQUENCE						{ $$ = E_AlterSequence; }
-		   | ALTER SERVER						{ $$ = E_AlterServer; }
-           | ALTER SCHEMA						{ $$ = E_AlterSchema; }
-		   | ALTER TABLE						{ $$ = E_AlterTable; }
-		   | ALTER TEXT_P SEARCH CONFIGURATION	{ $$ = E_AlterTextSearchConfiguration; }
-		   | ALTER TEXT_P SEARCH DICTIONARY		{ $$ = E_AlterTextSearchDictionary; }
-		   | ALTER TEXT_P SEARCH PARSER			{ $$ = E_AlterTextSearchParser; }
-		   | ALTER TEXT_P SEARCH TEMPLATE		{ $$ = E_AlterTextSearchTemplate; }
-		   | ALTER TRIGGER						{ $$ = E_AlterTrigger; }
-		   | ALTER TYPE_P						{ $$ = E_AlterType; }
-		   | ALTER USER MAPPING					{ $$ = E_AlterUserMapping; }
-		   | ALTER VIEW							{ $$ = E_AlterView; }
-		   | CLUSTER							{ $$ = E_Cluster; }
-		   | CREATE AGGREGATE					{ $$ = E_CreateAggregate; }
-		   | CREATE CAST						{ $$ = E_CreateCast; }
-		   | CREATE COLLATION					{ $$ = E_CreateCollation; }
-		   | CREATE CONVERSION_P				{ $$ = E_CreateConversion; }
-		   | CREATE DOMAIN_P					{ $$ = E_CreateDomain; }
-		   | CREATE EXTENSION					{ $$ = E_CreateExtension; }
-		   | CREATE FOREIGN DATA_P WRAPPER		{ $$ = E_CreateForeignDataWrapper; }
-		   | CREATE FOREIGN TABLE				{ $$ = E_CreateForeignTable; }
-		   | CREATE FUNCTION					{ $$ = E_CreateFunction; }
-		   | CREATE INDEX						{ $$ = E_CreateIndex; }
-		   | CREATE LANGUAGE					{ $$ = E_CreateLanguage; }
-		   | CREATE OPERATOR					{ $$ = E_CreateOperator; }
-		   | CREATE OPERATOR CLASS				{ $$ = E_CreateOperatorClass; }
-		   | CREATE OPERATOR FAMILY				{ $$ = E_CreateOperatorFamily; }
-		   | CREATE RULE						{ $$ = E_CreateRule; }
-		   | CREATE SEQUENCE					{ $$ = E_CreateSequence; }
-		   | CREATE SERVER						{ $$ = E_CreateServer; }
-           | CREATE SCHEMA						{ $$ = E_CreateSchema; }
-		   | CREATE TABLE						{ $$ = E_CreateTable; }
-		   | CREATE TABLE AS					{ $$ = E_CreateTableAs; }
-		   | CREATE TEXT_P SEARCH CONFIGURATION	{ $$ = E_CreateTextSearchConfiguration; }
-		   | CREATE TEXT_P SEARCH DICTIONARY	{ $$ = E_CreateTextSearchDictionary; }
-		   | CREATE TEXT_P SEARCH PARSER		{ $$ = E_CreateTextSearchParser; }
-		   | CREATE TEXT_P SEARCH TEMPLATE		{ $$ = E_CreateTextSearchTemplate; }
-		   | CREATE TRIGGER						{ $$ = E_CreateTrigger; }
-		   | CREATE TYPE_P						{ $$ = E_CreateType; }
-		   | CREATE USER MAPPING				{ $$ = E_CreateUserMapping; }
-		   | CREATE VIEW						{ $$ = E_CreateView; }
-		   | DROP AGGREGATE						{ $$ = E_DropAggregate; }
-		   | DROP CAST							{ $$ = E_DropCast; }
-		   | DROP COLLATION						{ $$ = E_DropCollation; }
-		   | DROP CONVERSION_P					{ $$ = E_DropConversion; }
-		   | DROP DOMAIN_P						{ $$ = E_DropDomain; }
-		   | DROP EXTENSION						{ $$ = E_DropExtension; }
-		   | DROP FOREIGN DATA_P WRAPPER		{ $$ = E_DropForeignDataWrapper; }
-		   | DROP FOREIGN TABLE					{ $$ = E_DropForeignTable; }
-		   | DROP FUNCTION						{ $$ = E_DropFunction; }
-		   | DROP INDEX							{ $$ = E_DropIndex; }
-		   | DROP LANGUAGE						{ $$ = E_DropLanguage; }
-		   | DROP OPERATOR						{ $$ = E_DropOperator; }
-		   | DROP OPERATOR CLASS				{ $$ = E_DropOperatorClass; }
-		   | DROP OPERATOR FAMILY				{ $$ = E_DropOperatorFamily; }
-		   | DROP RULE							{ $$ = E_DropRule; }
-		   | DROP SCHEMA						{ $$ = E_DropSchema; }
-		   | DROP SEQUENCE						{ $$ = E_DropSequence; }
-		   | DROP SERVER						{ $$ = E_DropServer; }
-		   | DROP TABLE							{ $$ = E_DropTable; }
-		   | DROP TEXT_P SEARCH CONFIGURATION	{ $$ = E_DropTextSearchConfiguration; }
-		   | DROP TEXT_P SEARCH DICTIONARY		{ $$ = E_DropTextSearchDictionary; }
-		   | DROP TEXT_P SEARCH PARSER			{ $$ = E_DropTextSearchParser; }
-		   | DROP TEXT_P SEARCH TEMPLATE		{ $$ = E_DropTextSearchTemplate; }
-		   | DROP TRIGGER						{ $$ = E_DropTrigger; }
-		   | DROP TYPE_P						{ $$ = E_DropType; }
-		   | DROP USER MAPPING					{ $$ = E_DropUserMapping; }
-		   | DROP VIEW							{ $$ = E_DropView; }
-		   | LOAD								{ $$ = E_Load; }
-		   | REINDEX							{ $$ = E_Reindex; }
-		   | SELECT INTO						{ $$ = E_SelectInto; }
-		   | VACUUM								{ $$ = E_Vacuum; }
+			SCONST
+				{
+					if (pg_strcasecmp($1, "ALTER AGGREGATE") == 0)
+						$$ = E_AlterAggregate;
+                    else if (pg_strcasecmp($1, "ALTER COLLATION") == 0)
+                        $$ = E_AlterCollation;
+                    else if (pg_strcasecmp($1, "ALTER CONVERSION") == 0)
+                        $$ = E_AlterConversion;
+                    else if (pg_strcasecmp($1, "ALTER DOMAIN") == 0)
+                        $$ = E_AlterDomain;
+                    else if (pg_strcasecmp($1, "ALTER EXTENSION") == 0)
+                        $$ = E_AlterExtension;
+                    else if (pg_strcasecmp($1, "ALTER FOREIGN DATA WRAPPER") == 0)
+                        $$ = E_AlterForeignDataWrapper;
+                    else if (pg_strcasecmp($1, "ALTER FOREIGN TABLE") == 0)
+                        $$ = E_AlterForeignTable;
+                    else if (pg_strcasecmp($1, "ALTER FUNCTION") == 0)
+                        $$ = E_AlterFunction;
+                    else if (pg_strcasecmp($1, "ALTER LANGUAGE") == 0)
+                        $$ = E_AlterLanguage;
+                    else if (pg_strcasecmp($1, "ALTER OPERATOR") == 0)
+                        $$ = E_AlterOperator;
+                    else if (pg_strcasecmp($1, "ALTER OPERATOR CLASS") == 0)
+                        $$ = E_AlterOperatorClass;
+                    else if (pg_strcasecmp($1, "ALTER OPERATOR FAMILY") == 0)
+                        $$ = E_AlterOperatorFamily;
+                    else if (pg_strcasecmp($1, "ALTER SEQUENCE") == 0)
+                        $$ = E_AlterSequence;
+                    else if (pg_strcasecmp($1, "ALTER SERVER") == 0)
+                        $$ = E_AlterServer;
+                    else if (pg_strcasecmp($1, "ALTER SCHEMA") == 0)
+                        $$ = E_AlterSchema;
+                    else if (pg_strcasecmp($1, "ALTER TABLE") == 0)
+                        $$ = E_AlterTable;
+                    else if (pg_strcasecmp($1, "ALTER TEXT SEARCH CONFIGURATION") == 0)
+                        $$ = E_AlterTextSearchConfiguration;
+                    else if (pg_strcasecmp($1, "ALTER TEXT SEARCH DICTIONARY") == 0)
+                        $$ = E_AlterTextSearchDictionary;
+                    else if (pg_strcasecmp($1, "ALTER TEXT SEARCH PARSER") == 0)
+                        $$ = E_AlterTextSearchParser;
+                    else if (pg_strcasecmp($1, "ALTER TEXT SEARCH TEMPLATE") == 0)
+                        $$ = E_AlterTextSearchTemplate;
+                    else if (pg_strcasecmp($1, "ALTER TRIGGER") == 0)
+                        $$ = E_AlterTrigger;
+                    else if (pg_strcasecmp($1, "ALTER TYPE") == 0)
+                        $$ = E_AlterType;
+                    else if (pg_strcasecmp($1, "ALTER USER MAPPING") == 0)
+                        $$ = E_AlterUserMapping;
+                    else if (pg_strcasecmp($1, "ALTER VIEW") == 0)
+                        $$ = E_AlterView;
+                    else if (pg_strcasecmp($1, "CLUSTER") == 0)
+                        $$ = E_Cluster;
+                    else if (pg_strcasecmp($1, "CREATE AGGREGATE") == 0)
+                        $$ = E_CreateAggregate;
+                    else if (pg_strcasecmp($1, "CREATE CAST") == 0)
+                        $$ = E_CreateCast;
+                    else if (pg_strcasecmp($1, "CREATE COLLATION") == 0)
+                        $$ = E_CreateCollation;
+                    else if (pg_strcasecmp($1, "CREATE CONVERSION") == 0)
+                        $$ = E_CreateConversion;
+                    else if (pg_strcasecmp($1, "CREATE DOMAIN") == 0)
+                        $$ = E_CreateDomain;
+                    else if (pg_strcasecmp($1, "CREATE EXTENSION") == 0)
+                        $$ = E_CreateExtension;
+                    else if (pg_strcasecmp($1, "CREATE FOREIGN DATA WRAPPER") == 0)
+                        $$ = E_CreateForeignDataWrapper;
+                    else if (pg_strcasecmp($1, "CREATE FOREIGN TABLE") == 0)
+                        $$ = E_CreateForeignTable;
+                    else if (pg_strcasecmp($1, "CREATE FUNCTION") == 0)
+                        $$ = E_CreateFunction;
+                    else if (pg_strcasecmp($1, "CREATE INDEX") == 0)
+                        $$ = E_CreateIndex;
+                    else if (pg_strcasecmp($1, "CREATE LANGUAGE") == 0)
+                        $$ = E_CreateLanguage;
+                    else if (pg_strcasecmp($1, "CREATE OPERATOR") == 0)
+                        $$ = E_CreateOperator;
+                    else if (pg_strcasecmp($1, "CREATE OPERATOR CLASS") == 0)
+                        $$ = E_CreateOperatorClass;
+                    else if (pg_strcasecmp($1, "CREATE OPERATOR FAMILY") == 0)
+                        $$ = E_CreateOperatorFamily;
+                    else if (pg_strcasecmp($1, "CREATE RULE") == 0)
+                        $$ = E_CreateRule;
+                    else if (pg_strcasecmp($1, "CREATE SEQUENCE") == 0)
+                        $$ = E_CreateSequence;
+                    else if (pg_strcasecmp($1, "CREATE SERVER") == 0)
+                        $$ = E_CreateServer;
+                    else if (pg_strcasecmp($1, "CREATE SCHEMA") == 0)
+                        $$ = E_CreateSchema;
+                    else if (pg_strcasecmp($1, "CREATE TABLE") == 0)
+                        $$ = E_CreateTable;
+                    else if (pg_strcasecmp($1, "CREATE TABLE AS") == 0)
+                        $$ = E_CreateTableAs;
+                    else if (pg_strcasecmp($1, "CREATE TEXT SEARCH CONFIGURATION") == 0)
+                        $$ = E_CreateTextSearchConfiguration;
+                    else if (pg_strcasecmp($1, "CREATE TEXT SEARCH DICTIONARY") == 0)
+                        $$ = E_CreateTextSearchDictionary;
+                    else if (pg_strcasecmp($1, "CREATE TEXT SEARCH PARSER") == 0)
+                        $$ = E_CreateTextSearchParser;
+                    else if (pg_strcasecmp($1, "CREATE TEXT SEARCH TEMPLATE") == 0)
+                        $$ = E_CreateTextSearchTemplate;
+                    else if (pg_strcasecmp($1, "CREATE TRIGGER") == 0)
+                        $$ = E_CreateTrigger;
+                    else if (pg_strcasecmp($1, "CREATE TYPE") == 0)
+                        $$ = E_CreateType;
+                    else if (pg_strcasecmp($1, "CREATE USER MAPPING") == 0)
+                        $$ = E_CreateUserMapping;
+                    else if (pg_strcasecmp($1, "CREATE VIEW") == 0)
+                        $$ = E_CreateView;
+                    else if (pg_strcasecmp($1, "DROP AGGREGATE") == 0)
+                        $$ = E_DropAggregate;
+                    else if (pg_strcasecmp($1, "DROP CAST") == 0)
+                        $$ = E_DropCast;
+                    else if (pg_strcasecmp($1, "DROP COLLATION") == 0)
+                        $$ = E_DropCollation;
+                    else if (pg_strcasecmp($1, "DROP CONVERSION") == 0)
+                        $$ = E_DropConversion;
+                    else if (pg_strcasecmp($1, "DROP DOMAIN") == 0)
+                        $$ = E_DropDomain;
+                    else if (pg_strcasecmp($1, "DROP EXTENSION") == 0)
+                        $$ = E_DropExtension;
+                    else if (pg_strcasecmp($1, "DROP FOREIGN DATA WRAPPER") == 0)
+                        $$ = E_DropForeignDataWrapper;
+                    else if (pg_strcasecmp($1, "DROP FOREIGN TABLE") == 0)
+                        $$ = E_DropForeignTable;
+                    else if (pg_strcasecmp($1, "DROP FUNCTION") == 0)
+                        $$ = E_DropFunction;
+                    else if (pg_strcasecmp($1, "DROP INDEX") == 0)
+                        $$ = E_DropIndex;
+                    else if (pg_strcasecmp($1, "DROP LANGUAGE") == 0)
+                        $$ = E_DropLanguage;
+                    else if (pg_strcasecmp($1, "DROP OPERATOR") == 0)
+                        $$ = E_DropOperator;
+                    else if (pg_strcasecmp($1, "DROP OPERATOR CLASS") == 0)
+                        $$ = E_DropOperatorClass;
+                    else if (pg_strcasecmp($1, "DROP OPERATOR FAMILY") == 0)
+                        $$ = E_DropOperatorFamily;
+                    else if (pg_strcasecmp($1, "DROP RULE") == 0)
+                        $$ = E_DropRule;
+                    else if (pg_strcasecmp($1, "DROP SCHEMA") == 0)
+                        $$ = E_DropSchema;
+                    else if (pg_strcasecmp($1, "DROP SEQUENCE") == 0)
+                        $$ = E_DropSequence;
+                    else if (pg_strcasecmp($1, "DROP SERVER") == 0)
+                        $$ = E_DropServer;
+                    else if (pg_strcasecmp($1, "DROP TABLE") == 0)
+                        $$ = E_DropTable;
+                    else if (pg_strcasecmp($1, "DROP TEXT SEARCH CONFIGURATION") == 0)
+                        $$ = E_DropTextSearchConfiguration;
+                    else if (pg_strcasecmp($1, "DROP TEXT SEARCH DICTIONARY") == 0)
+                        $$ = E_DropTextSearchDictionary;
+                    else if (pg_strcasecmp($1, "DROP TEXT SEARCH PARSER") == 0)
+                        $$ = E_DropTextSearchParser;
+                    else if (pg_strcasecmp($1, "DROP TEXT SEARCH TEMPLATE") == 0)
+                        $$ = E_DropTextSearchTemplate;
+                    else if (pg_strcasecmp($1, "DROP TRIGGER") == 0)
+                        $$ = E_DropTrigger;
+                    else if (pg_strcasecmp($1, "DROP TYPE") == 0)
+                        $$ = E_DropType;
+                    else if (pg_strcasecmp($1, "DROP USER MAPPING") == 0)
+                        $$ = E_DropUserMapping;
+                    else if (pg_strcasecmp($1, "DROP VIEW") == 0)
+                        $$ = E_DropView;
+                    else if (pg_strcasecmp($1, "LOAD") == 0)
+                        $$ = E_Load;
+                    else if (pg_strcasecmp($1, "REINDEX") == 0)
+                        $$ = E_Reindex;
+                    else if (pg_strcasecmp($1, "SELECT INTO") == 0)
+                        $$ = E_SelectInto;
+                    else if (pg_strcasecmp($1, "VACUUM") == 0)
+                        $$ = E_Vacuum;
+                    else
+						ereport(ERROR,
+								(errcode(ERRCODE_SYNTAX_ERROR),
+								 errmsg("unrecognized command \"%s\"", $1),
+									 parser_errposition(@1)));
+				}
 		;
 
 DropEventTrigStmt:
