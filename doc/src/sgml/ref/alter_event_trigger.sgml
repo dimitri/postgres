@@ -1,0 +1,103 @@
+<!--
+doc/src/sgml/ref/alter_trigger.sgml
+PostgreSQL documentation
+-->
+
+<refentry id="SQL-ALTEREVENTTRIGGER">
+ <refmeta>
+  <refentrytitle>ALTER EVENT TRIGGER</refentrytitle>
+  <manvolnum>7</manvolnum>
+  <refmiscinfo>SQL - Language Statements</refmiscinfo>
+ </refmeta>
+
+ <refnamediv>
+  <refname>ALTER EVENT TRIGGER</refname>
+  <refpurpose>change the definition of a trigger</refpurpose>
+ </refnamediv>
+
+ <indexterm zone="sql-altereventtrigger">
+  <primary>ALTER EVENT TRIGGER</primary>
+ </indexterm>
+
+ <refsynopsisdiv>
+<synopsis>
+ALTER EVENT TRIGGER <replaceable class="PARAMETER">name</replaceable> <replaceable class="parameter">enabled</replaceable>
+ALTER EVENT TRIGGER <replaceable class="PARAMETER">name</replaceable> RENAME TO <replaceable class="PARAMETER">newname</replaceable>
+
+<phrase>where <replaceable class="parameter">enabled</replaceable> can be one of:</phrase>
+
+    ENABLE
+    ENABLE ALWAYS
+    ENABLE REPLICA
+    DISABLE
+
+<phrase>and where <replaceable class="parameter">command</replaceable> can be one of the same list as in <xref linkend="sql-createeventtrigger">.</phrase>
+
+</synopsis>
+ </refsynopsisdiv>
+
+ <refsect1>
+  <title>Description</title>
+
+  <para>
+   <command>ALTER EVENT TRIGGER</command> changes properties of an
+   existing event trigger.
+  </para>
+
+  <para>
+   You must be superuser to alter a event trigger.
+  </para>
+ </refsect1>
+
+ <refsect1>
+  <title>Parameters</title>
+
+  <variablelist>
+   <varlistentry>
+    <term><replaceable class="PARAMETER">name</replaceable></term>
+    <listitem>
+     <para>
+      The name of an existing trigger to alter.
+     </para>
+    </listitem>
+   </varlistentry>
+
+   <varlistentry>
+    <term><replaceable class="PARAMETER">newname</replaceable></term>
+    <listitem>
+     <para>
+      The new name of the event trigger.
+     </para>
+    </listitem>
+   </varlistentry>
+
+   <varlistentry>
+    <term><replaceable class="PARAMETER">enabled</replaceable></term>
+    <listitem>
+     <para>
+      When to enable this trigger. See
+      the <literal>session_replication_role</literal> parameter.
+     </para>
+    </listitem>
+   </varlistentry>
+  </variablelist>
+ </refsect1>
+
+ <refsect1>
+  <title>Compatibility</title>
+
+  <para>
+   <command>ALTER EVENT TRIGGER</command> is a <productname>PostgreSQL</>
+   extension of the SQL standard.
+  </para>
+ </refsect1>
+
+ <refsect1>
+  <title>See Also</title>
+
+  <simplelist type="inline">
+   <member><xref linkend="sql-createeventtrigger"></member>
+   <member><xref linkend="sql-dropeventtrigger"></member>
+  </simplelist>
+ </refsect1>
+</refentry>
