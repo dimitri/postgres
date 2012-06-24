@@ -8,11 +8,11 @@ Complete list of usable sgml source files in this directory.
 <!ENTITY abort              SYSTEM "abort.sgml">
 <!ENTITY alterAggregate     SYSTEM "alter_aggregate.sgml">
 <!ENTITY alterCollation     SYSTEM "alter_collation.sgml">
-<!ENTITY alterCommandTrigger SYSTEM "alter_command_trigger.sgml">
 <!ENTITY alterConversion    SYSTEM "alter_conversion.sgml">
 <!ENTITY alterDatabase      SYSTEM "alter_database.sgml">
 <!ENTITY alterDefaultPrivileges SYSTEM "alter_default_privileges.sgml">
 <!ENTITY alterDomain        SYSTEM "alter_domain.sgml">
+<!ENTITY alterEventTrigger  SYSTEM "alter_event_trigger.sgml">
 <!ENTITY alterExtension     SYSTEM "alter_extension.sgml">
 <!ENTITY alterForeignDataWrapper SYSTEM "alter_foreign_data_wrapper.sgml">
 <!ENTITY alterForeignTable  SYSTEM "alter_foreign_table.sgml">
@@ -51,10 +51,10 @@ Complete list of usable sgml source files in this directory.
 <!ENTITY createAggregate    SYSTEM "create_aggregate.sgml">
 <!ENTITY createCast         SYSTEM "create_cast.sgml">
 <!ENTITY createCollation    SYSTEM "create_collation.sgml">
-<!ENTITY createCommandTrigger SYSTEM "create_command_trigger.sgml">
 <!ENTITY createConversion   SYSTEM "create_conversion.sgml">
 <!ENTITY createDatabase     SYSTEM "create_database.sgml">
 <!ENTITY createDomain       SYSTEM "create_domain.sgml">
+<!ENTITY createEventTrigger SYSTEM "create_event_trigger.sgml">
 <!ENTITY createExtension    SYSTEM "create_extension.sgml">
 <!ENTITY createForeignDataWrapper SYSTEM "create_foreign_data_wrapper.sgml">
 <!ENTITY createForeignTable SYSTEM "create_foreign_table.sgml">
@@ -90,10 +90,10 @@ Complete list of usable sgml source files in this directory.
 <!ENTITY dropAggregate      SYSTEM "drop_aggregate.sgml">
 <!ENTITY dropCast           SYSTEM "drop_cast.sgml">
 <!ENTITY dropCollation      SYSTEM "drop_collation.sgml">
-<!ENTITY dropCommandTrigger SYSTEM "drop_command_trigger.sgml">
 <!ENTITY dropConversion     SYSTEM "drop_conversion.sgml">
 <!ENTITY dropDatabase       SYSTEM "drop_database.sgml">
 <!ENTITY dropDomain         SYSTEM "drop_domain.sgml">
+<!ENTITY dropEventTrigger   SYSTEM "drop_event_trigger.sgml">
 <!ENTITY dropExtension      SYSTEM "drop_extension.sgml">
 <!ENTITY dropForeignDataWrapper SYSTEM "drop_foreign_data_wrapper.sgml">
 <!ENTITY dropForeignTable   SYSTEM "drop_foreign_table.sgml">

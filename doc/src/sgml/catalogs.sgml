@@ -1865,7 +1865,7 @@
  <sect1 id="catalog-pg-event-trigger">
   <title><structname>pg_event_trigger</structname></title>
 
-  <indexterm zone="catalog-pg-event_trigger">
+  <indexterm zone="catalog-pg-event-trigger">
    <primary>pg_event_trigger</primary>
   </indexterm>
 
