@@ -112,15 +112,10 @@ InsertEventTriggerTuple(char *trigname, TrigEvent event,
 
 	tuple = heap_form_tuple(tgrel->rd_att, values, nulls);
 
-	simple_heap_insert(tgrel, tuple);
-
+	trigoid = simple_heap_insert(tgrel, tuple);
 	CatalogUpdateIndexes(tgrel, tuple);
 
-	/* remember oid for record dependencies */
-	trigoid = HeapTupleGetOid(tuple);
-
 	heap_freetuple(tuple);
-	heap_close(tgrel, RowExclusiveLock);
 
 	/*
 	 * Record dependencies for trigger.  Always place a normal dependency on
@@ -134,6 +129,8 @@ InsertEventTriggerTuple(char *trigname, TrigEvent event,
 	referenced.objectId = funcoid;
 	referenced.objectSubId = 0;
 	recordDependencyOn(&myself, &referenced, DEPENDENCY_NORMAL);
+
+	heap_close(tgrel, RowExclusiveLock);
 
 	return trigoid;
 }
@@ -252,8 +249,7 @@ RenameEventTrigger(const char *trigname, const char *newname)
 	rel = heap_open(EventTriggerRelationId, RowExclusiveLock);
 
 	/* newname must be available */
-	tup = SearchSysCacheCopy1(EVENTTRIGGERNAME, CStringGetDatum(newname));
-	if (HeapTupleIsValid(tup))
+	if (SearchSysCacheExists1(EVENTTRIGGERNAME, CStringGetDatum(newname)))
 		ereport(ERROR,
 				(errcode(ERRCODE_DUPLICATE_OBJECT),
 				 errmsg("event trigger \"%s\" already exists", newname)));
@@ -288,18 +284,11 @@ get_event_trigger_oid(const char *trigname, bool missing_ok)
 	HeapTuple	tup;
 	Oid			oid;
 
-	tup = SearchSysCache1(EVENTTRIGGERNAME, CStringGetDatum(trigname));
-	if (!HeapTupleIsValid(tup))
-	{
-		if (!missing_ok)
-			ereport(ERROR,
-					(errcode(ERRCODE_UNDEFINED_OBJECT),
-					 errmsg("event trigger \"%s\" does not exist", trigname)));
-		oid = InvalidOid;
-	}
-	else
-		oid = HeapTupleGetOid(tup);
-
+	oid = GetSysCacheOid1(EVENTTRIGGERNAME, CStringGetDatum(trigname));
+	if (!OidIsValid(oid) && !missing_ok)
+		ereport(ERROR,
+				(errcode(ERRCODE_UNDEFINED_OBJECT),
+				 errmsg("event trigger \"%s\" does not exist", trigname)));
 	return oid;
 }
 
