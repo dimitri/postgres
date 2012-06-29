@@ -14,6 +14,7 @@
 
 #include "access/heapam.h"
 #include "access/sysattr.h"
+#include "access/xact.h"
 #include "catalog/catalog.h"
 #include "catalog/dependency.h"
 #include "catalog/indexing.h"
@@ -966,6 +967,7 @@ ExecEventTriggers(EventContext ev_ctx, TrigEvent tev)
 		RegProcedure proc = (RegProcedure) lfirst_oid(lc);
 
 		call_event_trigger_procedure(ev_ctx, tev, proc);
+		CommandCounterIncrement();
 	}
 	return;
 }

@@ -460,3 +460,38 @@ NOTICE:  snitch: command_start DROP SCHEMA <NULL>.<NULL>
 drop role regbob;
 drop event trigger any_t;
 drop event trigger snitch;
+create table onerow(id integer);
+create or replace function insert_one_row()
+ returns event_trigger
+ language plpgsql
+as $$
+begin
+  insert into onerow values (1);
+  raise notice 'insert_one_row';
+end;
+$$;
+create or replace function check_one_row()
+ returns event_trigger
+ language plpgsql
+as $$
+declare
+ c integer;
+begin
+  select into c count(*) from onerow;
+  raise notice 'check_one_row: %', c;
+end;
+$$;
+create event trigger insert_one_row
+             before command_start
+        when tag in ('alter table')
+   execute procedure insert_one_row();
+create event trigger check_one_row
+              before command_start
+         when tag in ('alter table')
+   execute procedure check_one_row();
+alter table onerow alter column id type bigint;
+NOTICE:  check_one_row: 1
+NOTICE:  insert_one_row
+drop event trigger check_one_row cascade;
+drop event trigger insert_one_row cascade;
+drop table onerow;
