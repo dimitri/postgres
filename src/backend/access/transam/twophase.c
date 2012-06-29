@@ -58,6 +58,7 @@
 #include "replication/syncrep.h"
 #include "storage/fd.h"
 #include "storage/predicate.h"
+#include "storage/proc.h"
 #include "storage/procarray.h"
 #include "storage/sinvaladt.h"
 #include "storage/smgr.h"
@@ -333,8 +334,7 @@ MarkAsPreparing(TransactionId xid, const char *gid,
 
 	gxact->prepared_at = prepared_at;
 	/* initialize LSN to 0 (start of WAL) */
-	gxact->prepare_lsn.xlogid = 0;
-	gxact->prepare_lsn.xrecoff = 0;
+	gxact->prepare_lsn = 0;
 	gxact->owner = owner;
 	gxact->locking_xid = xid;
 	gxact->valid = false;

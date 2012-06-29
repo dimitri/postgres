@@ -29,7 +29,7 @@
  *	We control all assignments of pg_enum.oid because these oids are stored
  *	in user tables as enum values.
  *
- *	We control all assignments of pg_auth.oid because these oids are stored
+ *	We control all assignments of pg_authid.oid because these oids are stored
  *	in pg_largeobject_metadata.
  */
 
@@ -354,11 +354,9 @@ copy_clog_xlog_xid(void)
 	prep_status("Resetting WAL archives");
 	exec_prog(true, true, UTILITY_LOG_FILE,
 			  SYSTEMQUOTE
-			  "\"%s/pg_resetxlog\" -l %u,%u,%u \"%s\" >> \"%s\" 2>&1"
+			  "\"%s/pg_resetxlog\" -l %s \"%s\" >> \"%s\" 2>&1"
 			  SYSTEMQUOTE, new_cluster.bindir,
-			  old_cluster.controldata.chkpnt_tli,
-			  old_cluster.controldata.logid,
-			  old_cluster.controldata.nxtlogseg,
+			  old_cluster.controldata.nextxlogfile,
 			  new_cluster.pgdata, UTILITY_LOG_FILE);
 	check_ok();
 }

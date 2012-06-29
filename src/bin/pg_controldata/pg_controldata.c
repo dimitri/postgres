@@ -31,17 +31,11 @@ static void
 usage(const char *progname)
 {
 	printf(_("%s displays control information of a PostgreSQL database cluster.\n\n"), progname);
-	printf
-		(
-		 _(
-		   "Usage:\n"
-		   "  %s [OPTION] [DATADIR]\n\n"
-		   "Options:\n"
-		   "  --help         show this help, then exit\n"
-		   "  --version      output version information, then exit\n"
-		   ),
-		 progname
-		);
+	printf(_("Usage:\n"));
+	printf(_("  %s [OPTION] [DATADIR]\n"), progname);
+	printf(_("\nOptions:\n"));
+	printf(_("  -V, --version  output version information, then exit\n"));
+	printf(_("  -?, --help     show this help, then exit\n"));
 	printf(_("\nIf no data directory (DATADIR) is specified, "
 			 "the environment variable PGDATA\nis used.\n\n"));
 	printf(_("Report bugs to <pgsql-bugs@postgresql.org>.\n"));
@@ -199,14 +193,14 @@ main(int argc, char *argv[])
 	printf(_("pg_control last modified:             %s\n"),
 		   pgctime_str);
 	printf(_("Latest checkpoint location:           %X/%X\n"),
-		   ControlFile.checkPoint.xlogid,
-		   ControlFile.checkPoint.xrecoff);
+		   (uint32) (ControlFile.checkPoint >> 32),
+		   (uint32) ControlFile.checkPoint);
 	printf(_("Prior checkpoint location:            %X/%X\n"),
-		   ControlFile.prevCheckPoint.xlogid,
-		   ControlFile.prevCheckPoint.xrecoff);
+		   (uint32) (ControlFile.prevCheckPoint >> 32),
+		   (uint32) ControlFile.prevCheckPoint);
 	printf(_("Latest checkpoint's REDO location:    %X/%X\n"),
-		   ControlFile.checkPointCopy.redo.xlogid,
-		   ControlFile.checkPointCopy.redo.xrecoff);
+		   (uint32) (ControlFile.checkPointCopy.redo >> 32),
+		   (uint32) ControlFile.checkPointCopy.redo);
 	printf(_("Latest checkpoint's TimeLineID:       %u\n"),
 		   ControlFile.checkPointCopy.ThisTimeLineID);
 	printf(_("Latest checkpoint's full_page_writes: %s\n"),
@@ -229,14 +223,14 @@ main(int argc, char *argv[])
 	printf(_("Time of latest checkpoint:            %s\n"),
 		   ckpttime_str);
 	printf(_("Minimum recovery ending location:     %X/%X\n"),
-		   ControlFile.minRecoveryPoint.xlogid,
-		   ControlFile.minRecoveryPoint.xrecoff);
+		   (uint32) (ControlFile.minRecoveryPoint >> 32),
+		   (uint32) ControlFile.minRecoveryPoint);
 	printf(_("Backup start location:                %X/%X\n"),
-		   ControlFile.backupStartPoint.xlogid,
-		   ControlFile.backupStartPoint.xrecoff);
+		   (uint32) (ControlFile.backupStartPoint >> 32),
+		   (uint32) ControlFile.backupStartPoint);
 	printf(_("Backup end location:                  %X/%X\n"),
-		   ControlFile.backupEndPoint.xlogid,
-		   ControlFile.backupEndPoint.xrecoff);
+		   (uint32) (ControlFile.backupEndPoint >> 32),
+		   (uint32) ControlFile.backupEndPoint);
 	printf(_("End-of-backup record required:        %s\n"),
 		   ControlFile.backupEndRequired ? _("yes") : _("no"));
 	printf(_("Current wal_level setting:            %s\n"),

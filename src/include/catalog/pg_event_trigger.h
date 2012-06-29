@@ -31,13 +31,13 @@
 CATALOG(pg_event_trigger,3466)
 {
 	NameData	evtname;		/* trigger's name */
-	int2	    evtevent;		/* trigger's event */
+	int16	    evtevent;		/* trigger's event */
 	Oid			evtfoid;		/* OID of function to be called */
 	char		evttype;		/* BEFORE/INSTEAD OF */
 	char		evtenabled;		/* trigger's firing configuration WRT
 								 * session_replication_role */
 #ifdef CATALOG_VARLEN
-	int2        evttags[1];		/* command TAGs this event trigger targets */
+	int16       evttags[1];		/* command TAGs this event trigger targets */
 #endif
 } FormData_pg_event_trigger;
 

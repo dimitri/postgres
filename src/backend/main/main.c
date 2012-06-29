@@ -173,7 +173,7 @@ main(int argc, char *argv[])
 
 #ifdef EXEC_BACKEND
 	if (argc > 1 && strncmp(argv[1], "--fork", 6) == 0)
-		exit(SubPostmasterMain(argc, argv));
+		SubPostmasterMain(argc, argv); /* does not return */
 #endif
 
 #ifdef WIN32
@@ -189,14 +189,13 @@ main(int argc, char *argv[])
 
 	if (argc > 1 && strcmp(argv[1], "--boot") == 0)
 		AuxiliaryProcessMain(argc, argv);		/* does not return */
-
-	if (argc > 1 && strcmp(argv[1], "--describe-config") == 0)
-		exit(GucInfoMain());
-
-	if (argc > 1 && strcmp(argv[1], "--single") == 0)
-		exit(PostgresMain(argc, argv, get_current_username(progname)));
-
-	exit(PostmasterMain(argc, argv));
+	else if (argc > 1 && strcmp(argv[1], "--describe-config") == 0)
+		GucInfoMain();			/* does not return */
+	else if (argc > 1 && strcmp(argv[1], "--single") == 0)
+		PostgresMain(argc, argv, get_current_username(progname)); /* does not return */
+	else
+		PostmasterMain(argc, argv); /* does not return */
+	abort();						/* should not get here */
 }
 
 
@@ -279,7 +278,7 @@ help(const char *progname)
 #endif
 	printf(_("  -B NBUFFERS        number of shared buffers\n"));
 	printf(_("  -c NAME=VALUE      set run-time parameter\n"));
-	printf(_("  -C NAME            return run-time parameter\n"));
+	printf(_("  -C NAME            print value of run-time parameter, then exit\n"));
 	printf(_("  -d 1-5             debugging level\n"));
 	printf(_("  -D DATADIR         database directory\n"));
 	printf(_("  -e                 use European date input format (DMY)\n"));
@@ -295,10 +294,10 @@ help(const char *progname)
 	printf(_("  -p PORT            port number to listen on\n"));
 	printf(_("  -s                 show statistics after each query\n"));
 	printf(_("  -S WORK-MEM        set amount of memory for sorts (in kB)\n"));
+	printf(_("  -V, --version      output version information, then exit\n"));
 	printf(_("  --NAME=VALUE       set run-time parameter\n"));
 	printf(_("  --describe-config  describe configuration parameters, then exit\n"));
-	printf(_("  --help             show this help, then exit\n"));
-	printf(_("  --version          output version information, then exit\n"));
+	printf(_("  -?, --help         show this help, then exit\n"));
 
 	printf(_("\nDeveloper options:\n"));
 	printf(_("  -f s|i|n|m|h       forbid use of some plan types\n"));

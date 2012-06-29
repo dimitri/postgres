@@ -121,7 +121,7 @@ CreateTrigger(CreateTrigStmt *stmt, const char *queryString,
 {
 	int16		tgtype;
 	int			ncolumns;
-	int2	   *columns;
+	int16	   *columns;
 	int2vector *tgattr;
 	Node	   *whenClause;
 	List	   *whenRtable;
@@ -589,11 +589,11 @@ CreateTrigger(CreateTrigStmt *stmt, const char *queryString,
 		ListCell   *cell;
 		int			i = 0;
 
-		columns = (int2 *) palloc(ncolumns * sizeof(int2));
+		columns = (int16 *) palloc(ncolumns * sizeof(int16));
 		foreach(cell, stmt->columns)
 		{
 			char	   *name = strVal(lfirst(cell));
-			int2		attnum;
+			int16		attnum;
 			int			j;
 
 			/* Lookup column name.	System columns are not allowed */
@@ -805,7 +805,7 @@ ConvertTriggerToFK(CreateTrigStmt *stmt, Oid funcoid)
 	char	   *constr_name;
 	char	   *fk_table_name;
 	char	   *pk_table_name;
-	char		fk_matchtype = FKCONSTR_MATCH_UNSPECIFIED;
+	char		fk_matchtype = FKCONSTR_MATCH_SIMPLE;
 	List	   *fk_attrs = NIL;
 	List	   *pk_attrs = NIL;
 	StringInfoData buf;
@@ -831,7 +831,7 @@ ConvertTriggerToFK(CreateTrigStmt *stmt, Oid funcoid)
 			if (strcmp(strVal(arg), "FULL") == 0)
 				fk_matchtype = FKCONSTR_MATCH_FULL;
 			else
-				fk_matchtype = FKCONSTR_MATCH_UNSPECIFIED;
+				fk_matchtype = FKCONSTR_MATCH_SIMPLE;
 			continue;
 		}
 		if (i % 2)
@@ -1501,9 +1501,9 @@ RelationBuildTriggers(Relation relation)
 		build->tgnattr = pg_trigger->tgattr.dim1;
 		if (build->tgnattr > 0)
 		{
-			build->tgattr = (int2 *) palloc(build->tgnattr * sizeof(int2));
+			build->tgattr = (int16 *) palloc(build->tgnattr * sizeof(int16));
 			memcpy(build->tgattr, &(pg_trigger->tgattr.values),
-				   build->tgnattr * sizeof(int2));
+				   build->tgnattr * sizeof(int16));
 		}
 		else
 			build->tgattr = NULL;
@@ -1654,11 +1654,11 @@ CopyTriggerDesc(TriggerDesc *trigdesc)
 		trigger->tgname = pstrdup(trigger->tgname);
 		if (trigger->tgnattr > 0)
 		{
-			int2	   *newattr;
+			int16	   *newattr;
 
-			newattr = (int2 *) palloc(trigger->tgnattr * sizeof(int2));
+			newattr = (int16 *) palloc(trigger->tgnattr * sizeof(int16));
 			memcpy(newattr, trigger->tgattr,
-				   trigger->tgnattr * sizeof(int2));
+				   trigger->tgnattr * sizeof(int16));
 			trigger->tgattr = newattr;
 		}
 		if (trigger->tgnargs > 0)
@@ -1772,7 +1772,7 @@ equalTriggerDescs(TriggerDesc *trigdesc1, TriggerDesc *trigdesc2)
 				return false;
 			if (trig1->tgnattr > 0 &&
 				memcmp(trig1->tgattr, trig2->tgattr,
-					   trig1->tgnattr * sizeof(int2)) != 0)
+					   trig1->tgnattr * sizeof(int16)) != 0)
 				return false;
 			for (j = 0; j < trig1->tgnargs; j++)
 				if (strcmp(trig1->tgargs[j], trig2->tgargs[j]) != 0)
@@ -4582,39 +4582,30 @@ AfterTriggerSaveEvent(EState *estate, ResultRelInfo *relinfo,
 			continue;
 
 		/*
-		 * If this is an UPDATE of a PK table or FK table that does not change
-		 * the PK or FK respectively, we can skip queuing the event: there is
-		 * no need to fire the trigger.
+		 * If the trigger is a foreign key enforcement trigger, there are
+		 * certain cases where we can skip queueing the event because we can
+		 * tell by inspection that the FK constraint will still pass.
 		 */
 		if (TRIGGER_FIRED_BY_UPDATE(event))
 		{
 			switch (RI_FKey_trigger_type(trigger->tgfoid))
 			{
 				case RI_TRIGGER_PK:
-					/* Update on PK table */
-					if (RI_FKey_keyequal_upd_pk(trigger, rel, oldtup, newtup))
+					/* Update on trigger's PK table */
+					if (!RI_FKey_pk_upd_check_required(trigger, rel,
+													   oldtup, newtup))
 					{
-						/* key unchanged, so skip queuing this event */
+						/* skip queuing this event */
 						continue;
 					}
 					break;
 
 				case RI_TRIGGER_FK:
-
-					/*
-					 * Update on FK table
-					 *
-					 * There is one exception when updating FK tables: if the
-					 * updated row was inserted by our own transaction and the
-					 * FK is deferred, we still need to fire the trigger. This
-					 * is because our UPDATE will invalidate the INSERT so the
-					 * end-of-transaction INSERT RI trigger will not do
-					 * anything, so we have to do the check for the UPDATE
-					 * anyway.
-					 */
-					if (!TransactionIdIsCurrentTransactionId(HeapTupleHeaderGetXmin(oldtup->t_data)) &&
-						RI_FKey_keyequal_upd_fk(trigger, rel, oldtup, newtup))
+					/* Update on trigger's FK table */
+					if (!RI_FKey_fk_upd_check_required(trigger, rel,
+													   oldtup, newtup))
 					{
+						/* skip queuing this event */
 						continue;
 					}
 					break;

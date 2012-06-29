@@ -1768,10 +1768,10 @@ do_help(void)
 	printf(_("  -D, --pgdata=DATADIR   location of the database storage area\n"));
 	printf(_("  -s, --silent           only print errors, no informational messages\n"));
 	printf(_("  -t, --timeout=SECS     seconds to wait when using -w option\n"));
+	printf(_("  -V, --version          output version information, then exit\n"));
 	printf(_("  -w                     wait until operation completes\n"));
 	printf(_("  -W                     do not wait until operation completes\n"));
-	printf(_("  --help                 show this help, then exit\n"));
-	printf(_("  --version              output version information, then exit\n"));
+	printf(_("  -?, --help             show this help, then exit\n"));
 	printf(_("(The default is to wait for shutdown, but not for start or restart.)\n\n"));
 	printf(_("If the -D option is omitted, the environment variable PGDATA is used.\n"));
 
@@ -1901,6 +1901,10 @@ adjust_data_dir(void)
 				filename[MAXPGPATH],
 			   *my_exec_path;
 	FILE	   *fd;
+
+	/* do nothing if we're working without knowledge of data dir */
+	if (pg_config == NULL)
+		return;
 
 	/* If there is no postgresql.conf, it can't be a config-only dir */
 	snprintf(filename, sizeof(filename), "%s/postgresql.conf", pg_config);
@@ -2188,8 +2192,10 @@ main(int argc, char **argv)
 		pg_data = xstrdup(pg_config);
 	}
 
+	/* -D might point at config-only directory; if so find the real PGDATA */
 	adjust_data_dir();
 
+	/* Complain if -D needed and not provided */
 	if (pg_config == NULL &&
 		ctl_command != KILL_COMMAND && ctl_command != UNREGISTER_COMMAND)
 	{

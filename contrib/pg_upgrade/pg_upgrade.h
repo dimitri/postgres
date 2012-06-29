@@ -168,8 +168,7 @@ typedef struct
 {
 	uint32		ctrl_ver;
 	uint32		cat_ver;
-	uint32		logid;
-	uint32		nxtlogseg;
+	char		nextxlogfile[25];
 	uint32		chkpnt_tli;
 	uint32		chkpnt_nxtxid;
 	uint32		chkpnt_nxtoid;
@@ -232,6 +231,8 @@ typedef struct
 	char		major_version_str[64];	/* string PG_VERSION of cluster */
 	uint32		bin_version;	/* version returned from pg_ctl */
 	Oid			pg_database_oid;	/* OID of pg_database relation */
+	Oid			install_role_oid;	/* OID of connected role */
+	Oid			role_count;			/* number of roles defined in the cluster */
 	char	   *tablespace_suffix;		/* directory specification */
 } ClusterInfo;
 

@@ -203,7 +203,8 @@ typedef struct PgStat_MsgDummy
 typedef struct PgStat_MsgInquiry
 {
 	PgStat_MsgHdr m_hdr;
-	TimestampTz inquiry_time;	/* minimum acceptable file timestamp */
+	TimestampTz clock_time;		/* observed local clock time */
+	TimestampTz cutoff_time;	/* minimum acceptable file timestamp */
 } PgStat_MsgInquiry;
 
 
@@ -748,7 +749,7 @@ extern void pgstat_reset_all(void);
 extern void allow_immediate_pgstat_restart(void);
 
 #ifdef EXEC_BACKEND
-extern void PgstatCollectorMain(int argc, char *argv[]);
+extern void PgstatCollectorMain(int argc, char *argv[]) __attribute__((noreturn));
 #endif
 
 
