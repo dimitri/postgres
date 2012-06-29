@@ -3719,7 +3719,7 @@ _copyAlterTSConfigurationStmt(const AlterTSConfigurationStmt *from)
 /*
  * Perform a deep copy of the specified list, using copyObject(). The
  * list MUST be of type T_List; T_IntList and T_OidList nodes don't
- * need deep copies, so they should be copied via list_copy(const )
+ * need deep copies, so they should be copied via list_copy()
  */
 #define COPY_NODE_CELL(new, old)					\
 	(new) = (ListCell *) palloc(sizeof(ListCell));	\

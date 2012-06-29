@@ -101,7 +101,7 @@ format_type_be(Oid type_oid)
 
 /*
  * Allow formating a type name without namespace, useful for command context
- * where we probide object name and namespace separately and still want nice
+ * where we provide object name and namespace separately and still want nice
  * formating of type names.
  */
 char *

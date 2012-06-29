@@ -66,9 +66,6 @@ extern bool listDomains(const char *pattern, bool verbose, bool showSystem);
 /* \dc */
 extern bool listConversions(const char *pattern, bool verbose, bool showSystem);
 
-/* \dev */
-extern bool listEvtTriggers(const char *pattern, bool verbose);
-
 /* \dC */
 extern bool listCasts(const char *pattern, bool verbose);
 
@@ -98,5 +95,8 @@ extern bool listExtensions(const char *pattern);
 
 /* \dx+ */
 extern bool listExtensionContents(const char *pattern);
+
+/* \dy */
+extern bool listEvtTriggers(const char *pattern, bool verbose);
 
 #endif   /* DESCRIBE_H */

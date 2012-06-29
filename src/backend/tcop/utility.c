@@ -2240,13 +2240,6 @@ CreateCommandTag(Node *parsetree)
 			break;
 	}
 
-	/*
-	 * Useful to raise WARNINGs for any DDL command not yet supported.
-	 *
-	elog(WARNING, "Command Tag:    %s", tag);
-	elog(WARNING, "Note to String: %s", nodeToString(parsetree));
-	 */
-
 	return tag;
 }
 
