@@ -100,17 +100,6 @@ format_type_be(Oid type_oid)
 }
 
 /*
- * Allow formating a type name without namespace, useful for command context
- * where we provide object name and namespace separately and still want nice
- * formating of type names.
- */
-char *
-format_type_be_without_namespace(Oid type_oid)
-{
-	return format_type_internal(type_oid, -1, false, false, false);
-}
-
-/*
  * This version allows a nondefault typemod to be specified.
  */
 char *
