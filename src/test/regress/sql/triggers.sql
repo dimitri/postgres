@@ -962,6 +962,7 @@ SELECT * FROM city_view;
 DROP TABLE city_table CASCADE;
 DROP TABLE country_table;
 
+
 -- Test pg_trigger_depth()
 
 create table depth_a (id int not null primary key);
