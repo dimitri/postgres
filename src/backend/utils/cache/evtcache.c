@@ -45,11 +45,8 @@
  * command, have a user friendly syntax and find what we need in a single index
  * scan.
  *
- * This cache is indexed by Event Command id (see pg_event_trigger.h) then
- * Event Id. It's containing a list of function oid.
- *
- * We're wasting some memory here, but that's local and in the kB range... so
- * the easier code makes up fot it big time.
+ * This cache is indexed by Event id then Event Command id (see
+ * pg_event_trigger.h). It's containing a list of function oid.
  */
 static HTAB *EventCommandTriggerCache = NULL;
 
@@ -65,7 +62,8 @@ typedef struct
 typedef struct
 {
 	EventCommandTriggerCacheKey key; /* lookup key, must be first */
-	List *funcs;					 /* list of triggers to call */
+	List *names;					 /* list of names of the triggers to call */
+	List *procs;					 /* list of triggers to call */
 } EventCommandTriggerCacheEntry;
 
 /*
@@ -77,7 +75,8 @@ typedef struct
 static EventCommandTriggerCacheEntry *
 add_funcall_to_command_event(TrigEvent event,
 							 TrigEventCommand command,
-							 Oid func)
+							 NameData evtname,
+							 Oid proc)
 {
 	bool found;
 	EventCommandTriggerCacheKey key;
@@ -92,9 +91,15 @@ add_funcall_to_command_event(TrigEvent event,
 		hash_search(EventCommandTriggerCache, (void *)&key, HASH_ENTER, &found);
 
 	if (found)
-		hresult->funcs = lappend_oid(hresult->funcs, func);
+	{
+		hresult->names = lappend(hresult->names, pstrdup(NameStr(evtname)));
+		hresult->procs = lappend_oid(hresult->procs, proc);
+	}
 	else
-		hresult->funcs = list_make1_oid(func);
+	{
+		hresult->names = list_make1(pstrdup(NameStr(evtname)));
+		hresult->procs = list_make1_oid(proc);
+	}
 
 	MemoryContextSwitchTo(old);
 	return hresult;
@@ -113,9 +118,24 @@ add_funcall_to_command_event(TrigEvent event,
 static void
 BuildEventTriggerCache()
 {
+	HASHCTL		info;
 	Relation	rel, irel;
 	IndexScanDesc indexScan;
 	HeapTuple	tuple;
+
+	/* build the new hash table */
+	MemSet(&info, 0, sizeof(info));
+	info.keysize = sizeof(EventCommandTriggerCacheKey);
+	info.entrysize = sizeof(EventCommandTriggerCacheEntry);
+	info.hash = tag_hash;
+	info.hcxt = CacheMemoryContext;
+
+	/* Create the hash table holding our cache */
+	EventCommandTriggerCache =
+		hash_create("Event Trigger Command Cache",
+					1024,
+					&info,
+					HASH_ELEM | HASH_FUNCTION | HASH_CONTEXT);
 
 	/* fill in the cache from the catalogs */
 	rel = heap_open(EventTriggerRelationId, AccessShareLock);
@@ -136,6 +156,8 @@ BuildEventTriggerCache()
 		int			numkeys;
 		TrigEvent event;
 		TrigEventCommand command;
+		NameData    name;
+		Oid         proc;
 
 		/*
 		 * First check if this trigger is enabled, taking into consideration
@@ -157,6 +179,8 @@ BuildEventTriggerCache()
 		}
 
 		event = form->evtevent;
+		name = form->evtname;
+		proc = form->evtfoid;
 
 		adatum = heap_getattr(tuple, Anum_pg_event_trigger_evttags,
 							  RelationGetDescr(rel), &isNull);
@@ -166,7 +190,7 @@ BuildEventTriggerCache()
 			/* event triggers created without WHEN clause are targetting all
 			 * commands (ANY command trigger)
 			 */
-			add_funcall_to_command_event(event, E_ANY, form->evtfoid);
+			add_funcall_to_command_event(event, E_ANY, name, proc);
 		}
 		else
 		{
@@ -188,7 +212,7 @@ BuildEventTriggerCache()
 			for (i = 0; i < numkeys; i++)
 			{
 				 command = tags[i];
-				 add_funcall_to_command_event(event, command, form->evtfoid);
+				 add_funcall_to_command_event(event, command, name, proc);
 			}
 		}
 	}
@@ -213,32 +237,17 @@ InvalidateEvtTriggerCommandCacheCallback(Datum arg,
 /*
  * InitializeEvtTriggerCommandCache
  *		Initialize the event trigger command cache.
+ *
+ * That routime is called from postinit.c and must not do any database access.
  */
-static void
-InitializeEvtTriggerCommandCache(void)
+void
+InitEventTriggerCache(void)
 {
-	HASHCTL		info;
-
-	/* build the new hash table */
-	MemSet(&info, 0, sizeof(info));
-	info.keysize = sizeof(EventCommandTriggerCacheKey);
-	info.entrysize = sizeof(EventCommandTriggerCacheEntry);
-	info.hash = tag_hash;
-	info.hcxt = CacheMemoryContext;
-
 	/* Make sure we've initialized CacheMemoryContext. */
 	if (!CacheMemoryContext)
 		CreateCacheMemoryContext();
 
-	/* Create the hash table holding our cache */
-	EventCommandTriggerCache =
-		hash_create("Event Trigger Command Cache",
-					1024,
-					&info,
-					HASH_ELEM | HASH_FUNCTION | HASH_CONTEXT);
-
-	/* Build the cache */
-	BuildEventTriggerCache();
+	EventCommandTriggerCache = NULL;
 
 	/* Watch for invalidation events. */
 	CacheRegisterSyscacheCallback(EVENTTRIGGERNAME,
@@ -259,12 +268,11 @@ get_event_triggers(TrigEvent event, TrigEventCommand command)
 
 	triggers->event = event;
 	triggers->command = command;
-	triggers->any_triggers = NIL;
-	triggers->cmd_triggers = NIL;
+	triggers->procs = NIL;
 
 	/* Find existing cache entry, if any. */
 	if (!EventCommandTriggerCache)
-		InitializeEvtTriggerCommandCache();
+		BuildEventTriggerCache();
 
 	/* ANY command triggers */
 	memset(&anykey, 0, sizeof(anykey));
@@ -273,9 +281,6 @@ get_event_triggers(TrigEvent event, TrigEventCommand command)
 	any = (EventCommandTriggerCacheEntry *)
 		hash_search(EventCommandTriggerCache, (void *)&anykey, HASH_FIND, NULL);
 
-	if (any != NULL)
-		triggers->any_triggers = any->funcs;
-
 	/* Specific command triggers */
 	memset(&cmdkey, 0, sizeof(cmdkey));
 	cmdkey.event = event;
@@ -283,8 +288,64 @@ get_event_triggers(TrigEvent event, TrigEventCommand command)
 	cmd = (EventCommandTriggerCacheEntry *)
 		hash_search(EventCommandTriggerCache, (void *)&cmdkey, HASH_FIND, NULL);
 
-	if (cmd != NULL)
-		triggers->cmd_triggers = cmd->funcs;
+	if (any == NULL && cmd == NULL)
+		return triggers;
+	else if (any == NULL)
+		triggers->procs = cmd->procs;
+	else if (cmd == NULL)
+		triggers->procs = any->procs;
+	else
+	{
+		/* merge join the two lists keeping the ordering by name */
+		ListCell *lc_any_procs, *lc_any_names, *lc_cmd_procs, *lc_cmd_names;
+		char *current_any_name, *current_cmd_name;
 
+		lc_any_names = list_head(any->names);
+		lc_any_procs = list_head(any->procs);
+
+		lc_cmd_names = list_head(cmd->names);
+		lc_cmd_procs = list_head(cmd->procs);
+
+		do
+		{
+			current_cmd_name = (char *) lfirst(lc_cmd_names);
+
+			/* append all elements from ANY list named before those from CMD */
+			while (lc_any_procs != NULL
+				   && strcmp((current_any_name = (char *) lfirst(lc_any_names)),
+							 current_cmd_name) < 0)
+			{
+				if (triggers->procs == NULL)
+					triggers->procs = list_make1_oid(lfirst_oid(lc_any_procs));
+				else
+					triggers->procs = lappend_oid(triggers->procs,
+												  lfirst_oid(lc_any_procs));
+
+				lc_any_names = lnext(lc_any_names);
+				lc_any_procs = lnext(lc_any_procs);
+			}
+
+			/* now append as many elements from CMD list named before next ANY
+			 * entry
+			 */
+			do
+			{
+				if (triggers->procs == NULL)
+					triggers->procs = list_make1_oid(lfirst_oid(lc_cmd_procs));
+				else
+					triggers->procs = lappend_oid(triggers->procs,
+												  lfirst_oid(lc_cmd_procs));
+
+				lc_cmd_names = lnext(lc_cmd_names);
+				lc_cmd_procs = lnext(lc_cmd_procs);
+
+				if (lc_cmd_names != NULL)
+					current_cmd_name = (char *) lfirst(lc_cmd_names);
+			}
+			while (lc_cmd_names != NULL
+				   && strcmp(current_cmd_name, current_any_name) < 0);
+		}
+		while( lc_cmd_names != NULL && lc_any_names != NULL );
+	}
 	return triggers;
 }

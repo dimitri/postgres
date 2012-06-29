@@ -281,7 +281,6 @@ RenameEventTrigger(const char *trigname, const char *newname)
 Oid
 get_event_trigger_oid(const char *trigname, bool missing_ok)
 {
-	HeapTuple	tup;
 	Oid			oid;
 
 	oid = GetSysCacheOid1(EVENTTRIGGERNAME, CStringGetDatum(trigname));
@@ -944,8 +943,7 @@ CommandFiresTriggersForEvent(EventContext ev_ctx, TrigEvent tev)
 
 	triggers = get_event_triggers(tev, ev_ctx->command);
 
-	return triggers->any_triggers != NIL
-		|| triggers->cmd_triggers != NIL;
+	return triggers->procs != NIL;
 }
 
 /*
@@ -963,16 +961,7 @@ ExecEventTriggers(EventContext ev_ctx, TrigEvent tev)
 
 	triggers = get_event_triggers(tev, ev_ctx->command);
 
-	/* ANY triggers first */
-	foreach(lc, triggers->any_triggers)
-	{
-		RegProcedure proc = (RegProcedure) lfirst_oid(lc);
-
-		call_event_trigger_procedure(ev_ctx, tev, proc);
-	}
-
-	/* Now, event triggers for this specific command */
-	foreach(lc, triggers->cmd_triggers)
+	foreach(lc, triggers->procs)
 	{
 		RegProcedure proc = (RegProcedure) lfirst_oid(lc);
 

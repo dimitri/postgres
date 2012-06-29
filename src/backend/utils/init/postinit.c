@@ -49,6 +49,7 @@
 #include "storage/smgr.h"
 #include "tcop/tcopprot.h"
 #include "utils/acl.h"
+#include "utils/evtcache.h"
 #include "utils/fmgroids.h"
 #include "utils/guc.h"
 #include "utils/pg_locale.h"
@@ -532,6 +533,7 @@ InitPostgres(const char *in_dbname, Oid dboid, const char *username,
 	 */
 	RelationCacheInitialize();
 	InitCatalogCache();
+	InitEventTriggerCache();
 	InitPlanCache();
 
 	/* Initialize portal manager */

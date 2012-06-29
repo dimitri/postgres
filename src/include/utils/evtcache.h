@@ -13,6 +13,8 @@
 #ifndef EVTCACHE_H
 #define EVTCACHE_H
 
+#include "catalog/pg_event_trigger.h"
+
 /*
  * Event Triggers to fire for a given event and command, including ANY command
  * triggers.
@@ -21,10 +23,10 @@ typedef struct EventCommandTriggers
 {
 	TrigEvent			event;
 	TrigEventCommand	command;
-	List               *any_triggers;
-	List               *cmd_triggers;
+	List               *procs;
 } EventCommandTriggers;
 
+void InitEventTriggerCache(void);
 EventCommandTriggers *get_event_triggers(TrigEvent event,
 										 TrigEventCommand command);
 
