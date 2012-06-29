@@ -63,14 +63,13 @@ typedef FormData_pg_event_trigger *Form_pg_event_trigger;
 /*
  * Times at which an event trigger can be fired. These are the
  * possible values for pg_event_trigger.evtevent.
+ *
+ * As of now we only implement the command_start firing point, we intend on
+ * adding more firing points later.
  */
 typedef enum TrigEvent
 {
 	E_CommandStart       = 1,
-	E_SecurityCheck      = 10,
-	E_ConsistencyCheck   = 15,
-	E_NameLookup         = 20,
-	E_CommandEnd         = 51
 } TrigEvent;
 
 /*

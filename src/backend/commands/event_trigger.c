@@ -980,15 +980,6 @@ event_to_string(TrigEvent event)
 	{
 		case E_CommandStart:
 			return "command_start";
-		case E_CommandEnd:
-			return "command_end";
-		case E_SecurityCheck:
-			return "security_check";
-			break;
-		case E_ConsistencyCheck:
-			return "consistency_check";
-		case E_NameLookup:
-			return "name_lookup";
 	}
 	return NULL;
 }

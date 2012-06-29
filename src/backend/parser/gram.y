@@ -4338,17 +4338,12 @@ event_name:
 					 * We handle identifiers that aren't parser keywords with
 					 * the following special-case codes, to avoid bloating the
 					 * size of the main parser.
+					 *
+					 * As of now we only support the command_start event name,
+					 * more will get added later.
 					 */
 					if (strcmp($1, "command_start") == 0)
 						$$ = E_CommandStart;
-					else if (strcmp($1, "commend_end") == 0)
-						$$ = E_CommandEnd;
-					else if (strcmp($1, "security_check") == 0)
-						$$ = E_SecurityCheck;
-					else if (strcmp($1, "consistency_check") == 0)
-						$$ = E_ConsistencyCheck;
-					else if (strcmp($1, "name_lookup") == 0)
-						$$ = E_NameLookup;
 					else
 						ereport(ERROR,
 								(errcode(ERRCODE_SYNTAX_ERROR),
