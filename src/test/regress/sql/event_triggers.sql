@@ -275,18 +275,18 @@ begin
 end;
 $$;
 
-create event trigger insert_one_row
+create event trigger a_insert_one_row
              before command_start
         when tag in ('alter table')
    execute procedure insert_one_row();
 
-create event trigger check_one_row
+create event trigger b_check_one_row
               before command_start
          when tag in ('alter table')
    execute procedure check_one_row();
 
 alter table onerow alter column id type bigint;
 
-drop event trigger check_one_row cascade;
-drop event trigger insert_one_row cascade;
+drop event trigger b_check_one_row cascade;
+drop event trigger a_insert_one_row cascade;
 drop table onerow;
