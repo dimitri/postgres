@@ -35,7 +35,6 @@ CREATE [ CONSTRAINT ] TRIGGER <replaceable class="PARAMETER">name</replaceable> 
     UPDATE [ OF <replaceable class="parameter">column_name</replaceable> [, ... ] ]
     DELETE
     TRUNCATE
-
 </synopsis>
  </refsynopsisdiv>
 

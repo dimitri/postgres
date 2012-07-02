@@ -1911,16 +1911,6 @@
      </row>
 
      <row>
-      <entry><structfield>evttype</structfield></entry>
-      <entry><type>char</type></entry>
-      <entry></entry>
-      <entry>
-        <literal>B</> = BEFORE
-        <literal>A</> = AFTER
-      </entry>
-     </row>
-
-     <row>
       <entry><structfield>evtenabled</structfield></entry>
       <entry><type>char</type></entry>
       <entry></entry>

@@ -871,8 +871,8 @@ $$ LANGUAGE plpythonu;
   </para>
   </sect2>
 
-   <sect2 id="plpython-cmd-trigger">
-     <title>Trigger Procedures on Commands in PL/Python </title>
+   <sect2 id="plpython-event-trigger">
+     <title>Trigger Procedures on Events in PL/Python </title>
 
      <indexterm>
       <primary>event trigger</primary>
@@ -896,8 +896,7 @@ $$ LANGUAGE plpythonu;
        <term><varname>TD["when"]</varname></term>
        <listitem>
         <para>
-         The timing of the event that fires the trigger, either the
-         string <literal>BEFORE</literal> or <literal>AFTER</literal>.
+         The name of the event for which the trigger is called.
         </para>
        </listitem>
       </varlistentry>

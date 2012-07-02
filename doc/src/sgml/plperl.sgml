@@ -1219,8 +1219,8 @@ CREATE TRIGGER test_valid_id_trig
   </para>
   </sect2>
 
-    <sect2 id="plperl-cmd-trigger">
-     <title>Trigger Procedures on Commands in PL/Perl </title>
+    <sect2 id="plperl-event-trigger">
+     <title>Trigger Procedures on Events in PL/Perl </title>
 
      <indexterm>
       <primary>event trigger</primary>
@@ -1244,8 +1244,7 @@ CREATE TRIGGER test_valid_id_trig
        <term><varname>$_TD-&gt;{when}</varname></term>
        <listitem>
         <para>
-         The timing of the event that fires the trigger, either the
-         string <literal>BEFORE</literal> or <literal>AFTER</literal>.
+         The name of the event for which the trigger is called.
         </para>
        </listitem>
       </varlistentry>

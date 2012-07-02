@@ -715,8 +715,8 @@ CREATE TRIGGER trig_mytab_modcount BEFORE INSERT OR UPDATE ON mytab
     </para>
     </sect2>
 
-    <sect2 id="plctl-cmd-trigger">
-     <title>Trigger Procedures on Commands in PL/Tcl </title>
+    <sect2 id="plctl-event-trigger">
+     <title>Trigger Procedures on Events in PL/Tcl </title>
 
      <indexterm>
       <primary>event trigger</primary>
@@ -740,8 +740,7 @@ CREATE TRIGGER trig_mytab_modcount BEFORE INSERT OR UPDATE ON mytab
        <term><varname>$TG_when</varname></term>
        <listitem>
         <para>
-         The timing of the event that fires the trigger, either the
-         string <literal>BEFORE</literal> or <literal>AFTER</literal>.
+         The name of the event for which the trigger is called.
         </para>
        </listitem>
       </varlistentry>
