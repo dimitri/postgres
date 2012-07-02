@@ -1796,7 +1796,6 @@ _equalCreateEventTrigStmt(const CreateEventTrigStmt *a, const CreateEventTrigStm
 {
 	COMPARE_STRING_FIELD(trigname);
 	COMPARE_SCALAR_FIELD(event);
-	COMPARE_SCALAR_FIELD(timing);
 	COMPARE_NODE_FIELD(funcname);
 	COMPARE_STRING_FIELD(variable);
 	COMPARE_NODE_FIELD(cmdlist);

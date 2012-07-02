@@ -13741,18 +13741,7 @@ dumpEvtTrigger(Archive *fout, EvtTriggerInfo *evtinfo)
 
 	appendPQExpBuffer(query, "CREATE EVENT TRIGGER ");
 	appendPQExpBufferStr(query, fmtId(evtinfo->dobj.name));
-
-	/* Trigger type */
-	if (evtinfo->evttype == EVTG_FIRED_BEFORE)
-		appendPQExpBuffer(query, " BEFORE ");
-	else if (evtinfo->evttype == EVTG_FIRED_INSTEAD_OF)
-		appendPQExpBuffer(query, " INSTEAD OF ");
-	else
-	{
-		write_msg(NULL, "unexpected ctgtype value: %d\n", evtinfo->evttype);
-		exit_nicely(1);
-	}
-
+	appendPQExpBuffer(query, " ON ");
 	appendPQExpBufferStr(query, evtinfo->evtevent);
 	appendPQExpBufferStr(query, " ");
 

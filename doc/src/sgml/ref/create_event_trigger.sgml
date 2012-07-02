@@ -22,7 +22,7 @@ PostgreSQL documentation
  <refsynopsisdiv>
 <synopsis>
 CREATE EVENT TRIGGER <replaceable class="PARAMETER">name</replaceable>
-  { BEFORE | INSTEAD OF  } <replaceable class="PARAMETER">event</replaceable>
+  ON <replaceable class="PARAMETER">event</replaceable>
   [ WHEN <replaceable class="PARAMETER">variable</replaceable> IN (tag [, tag [, ...] ] ) ]
   EXECUTE PROCEDURE <replaceable class="PARAMETER">function_name</replaceable> ()
 
@@ -185,13 +185,6 @@ CREATE EVENT TRIGGER <replaceable class="PARAMETER">name</replaceable>
       and roles, are not supported.
      </para>
      <para>
-      Commands that exercise their own transaction control are only
-      supported in <literal>BEFORE</literal> command triggers.  This is the
-      case for <literal>VACUUM</literal>, <literal>CLUSTER</literal>,
-      <literal>CREATE INDEX CONCURRENTLY</literal>, and <literal>REINDEX
-      DATABASE</literal>.
-     </para>
-     <para>
       The command <literal>ALTER TYPE ... ADD VALUE ...</literal> prevents
       transaction control entirely, thus no command trigger will get fired
       when it's used.
@@ -269,9 +262,8 @@ BEGIN
 END;
 $$;
 
-CREATE EVENT TRIGGER abort_ddl
-        BEFORE command_start
-       EXECUTE PROCEDURE abort_any_command();
+CREATE EVENT TRIGGER abort_ddl ON command_start
+   EXECUTE PROCEDURE abort_any_command();
 </programlisting>
 
    Execute the function <function>enforce_local_style</> each time
@@ -291,7 +283,7 @@ END;
 $$;
 
   CREATE EVENT TRIGGER check_style
-        BEFORE command_start
+            ON command_start
           WHEN tag IN (CREATE TABLE)
        EXECUTE PROCEDURE enforce_local_style();
 </programlisting>

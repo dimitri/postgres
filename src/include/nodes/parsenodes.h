@@ -1740,7 +1740,6 @@ typedef struct CreateEventTrigStmt
 	NodeTag		type;
 	char	   *trigname;		/* TRIGGER's name */
 	int			event;			/* event's identifier */
-	char		timing;			/* BEFORE, INSTEAD OF */
 	List	   *funcname;		/* qual. name of function to call */
 	char	   *variable;		/* variable used in the where clause */
 	List       *cmdlist;		/* list of commands to fire for */

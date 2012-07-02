@@ -266,7 +266,7 @@ static void processCASbits(int cas_bits, int location, const char *constrType,
 %type <list>	OptSchemaEltList
 
 %type <boolean> TriggerForSpec TriggerForType
-%type <ival>	TriggerActionTime EventTriggerActionTime
+%type <ival>	TriggerActionTime
 %type <list>	TriggerEvents TriggerOneEvent trigger_command_list
 %type <value>	TriggerFuncArg
 %type <node>	TriggerWhen
@@ -4300,35 +4300,28 @@ DropTrigStmt:
  *****************************************************************************/
 
 CreateEventTrigStmt:
-			CREATE EVENT TRIGGER name EventTriggerActionTime event_name
+			CREATE EVENT TRIGGER name ON event_name
 			EXECUTE PROCEDURE func_name '(' ')'
 				{
 					CreateEventTrigStmt *n = makeNode(CreateEventTrigStmt);
 					n->trigname = $4;
-					n->timing   = $5;
 					n->event    = $6;
 					n->funcname = $9;
 					n->variable = NULL;
 					$$ = (Node *)n;
 				}
-			| CREATE EVENT TRIGGER name EventTriggerActionTime event_name
+			| CREATE EVENT TRIGGER name ON event_name
 			WHEN event_trigger_variable IN_P '(' trigger_command_list ')'
 			EXECUTE PROCEDURE func_name '(' ')'
 				{
 					CreateEventTrigStmt *n = makeNode(CreateEventTrigStmt);
 					n->trigname = $4;
-					n->timing   = $5;
 					n->event    = $6;
 					n->variable = $8;
 					n->cmdlist  = $11;
 					n->funcname = $15;
 					$$ = (Node *)n;
 				}
-		;
-
-EventTriggerActionTime:
-			BEFORE						{ $$ = EVTG_FIRED_BEFORE; }
-			| INSTEAD OF				{ $$ = EVTG_FIRED_INSTEAD_OF; }
 		;
 
 event_name:

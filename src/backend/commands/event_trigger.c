@@ -69,7 +69,7 @@ CheckEventTriggerPrivileges()
  */
 static Oid
 InsertEventTriggerTuple(char *trigname, TrigEvent event,
-						Oid funcoid, char evttype, List *cmdlist)
+						Oid funcoid, List *cmdlist)
 {
 	Relation tgrel;
 	Oid         trigoid;
@@ -89,7 +89,6 @@ InsertEventTriggerTuple(char *trigname, TrigEvent event,
 	values[Anum_pg_event_trigger_evtevent - 1] = NameGetDatum(event);
 	values[Anum_pg_event_trigger_evtname - 1] = NameGetDatum(trigname);
 	values[Anum_pg_event_trigger_evtfoid - 1] = ObjectIdGetDatum(funcoid);
-	values[Anum_pg_event_trigger_evttype - 1] = CharGetDatum(evttype);
 	values[Anum_pg_event_trigger_evtenabled - 1] = CharGetDatum(TRIGGER_FIRES_ON_ORIGIN);
 
 	if (cmdlist == NIL)
@@ -174,7 +173,7 @@ CreateEventTrigger(CreateEventTrigStmt *stmt, const char *queryString)
 
 	/* Insert the catalog entry */
 	trigoid = InsertEventTriggerTuple(stmt->trigname, stmt->event,
-									  funcoid, stmt->timing, stmt->cmdlist);
+									  funcoid, stmt->cmdlist);
 
 	return trigoid;
 }

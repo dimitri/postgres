@@ -15,12 +15,10 @@ $$;
 -- TODO: REASSIGN OWNED and DROP OWNED
 --
 
-create event trigger any_t
-              before command_start
+create event trigger any_t on command_start
    execute procedure snitch();
 
-create event trigger foo_t
-              before command_start
+create event trigger foo_t on command_start
                 when tag in ('alter collation',
                              'alter conversion',
                              'alter domain',
@@ -275,13 +273,11 @@ begin
 end;
 $$;
 
-create event trigger a_insert_one_row
-             before command_start
+create event trigger a_insert_one_row on command_start
         when tag in ('alter table')
    execute procedure insert_one_row();
 
-create event trigger b_check_one_row
-              before command_start
+create event trigger b_check_one_row on command_start
          when tag in ('alter table')
    execute procedure check_one_row();
 
