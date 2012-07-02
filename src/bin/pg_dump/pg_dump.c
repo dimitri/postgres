@@ -5312,7 +5312,6 @@ getEvtTriggers(Archive *fout, int *numEvtTriggers)
 	int			i_tableoid,
 				i_oid,
 				i_evtname,
-				i_evttype,
 				i_evttags,
 				i_evtevent,
 				i_evtfname,
@@ -5325,10 +5324,10 @@ getEvtTriggers(Archive *fout, int *numEvtTriggers)
 	if (fout->remoteVersion >= 90200)
 	{
 		appendPQExpBuffer(query,
-						  "SELECT e.tableoid, e.oid, evtname, evttype, evtenabled, "
+						  "SELECT e.tableoid, e.oid, evtname, evtenabled, "
 						  "pg_catalog.pg_evtevent_to_string(evtevent) as evtevent, "
 						  "array_to_string(array("
-						  "select pg_catalog.pg_evttag_to_string(x) "
+						  "select '''' || pg_catalog.pg_evttag_to_string(x) || '''' "
 						  "from unnest(evttags) as t(x)), ', ') as evttags, "
 						  "n.nspname || '.' || p.proname as evtfname "
 						  "FROM pg_event_trigger e JOIN pg_proc p on e.evtfoid = p.oid "
@@ -5347,7 +5346,6 @@ getEvtTriggers(Archive *fout, int *numEvtTriggers)
 	i_tableoid = PQfnumber(res, "tableoid");
 	i_oid = PQfnumber(res, "oid");
 	i_evtname = PQfnumber(res, "evtname");
-	i_evttype = PQfnumber(res, "evttype");
 	i_evttags = PQfnumber(res, "evttags");
 	i_evtevent = PQfnumber(res, "evtevent");
 	i_evtfname = PQfnumber(res, "evtfname");
@@ -5361,7 +5359,6 @@ getEvtTriggers(Archive *fout, int *numEvtTriggers)
 		AssignDumpId(&evtinfo[i].dobj);
 		evtinfo[i].dobj.name = pg_strdup(PQgetvalue(res, i, i_evtname));
 		evtinfo[i].evtname = pg_strdup(PQgetvalue(res, i, i_evtname));
-		evtinfo[i].evttype = *(PQgetvalue(res, i, i_evttype));
 		evtinfo[i].evttags = pg_strdup(PQgetvalue(res, i, i_evttags));
 		evtinfo[i].evtevent = pg_strdup(PQgetvalue(res, i, i_evtevent));
 		evtinfo[i].evtfname = pg_strdup(PQgetvalue(res, i, i_evtfname));
@@ -14288,6 +14285,7 @@ addBoundaryDependencies(DumpableObject **dobjs, int numObjs,
 				break;
 			case DO_INDEX:
 			case DO_TRIGGER:
+			case DO_EVENT_TRIGGER:
 			case DO_DEFAULT_ACL:
 				/* Post-data objects: must come after the post-data boundary */
 				addObjectDependency(dobj, postDataBound->dumpId);
