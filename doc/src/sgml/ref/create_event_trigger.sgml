@@ -250,7 +250,8 @@ CREATE EVENT TRIGGER <replaceable class="PARAMETER">name</replaceable>
   <title>Examples</title>
 
   <para>
-   Forbids the execution of any DDL command:
+   Forbids the execution of any command supported by the event trigger
+   mechanism, which includes all commands listed above:
 
 <programlisting>
 CREATE OR REPLACE FUNCTION abort_any_command()
