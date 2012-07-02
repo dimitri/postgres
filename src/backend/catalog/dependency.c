@@ -2915,35 +2915,16 @@ getObjectDescription(const ObjectAddress *object)
 
         case OCLASS_EVENT_TRIGGER:
 			{
-				Relation	trigDesc;
-				ScanKeyData skey[1];
-				SysScanDesc tgscan;
 				HeapTuple	tup;
-				Form_pg_event_trigger trig;
 
-				trigDesc = heap_open(EventTriggerRelationId, AccessShareLock);
-
-				ScanKeyInit(&skey[0],
-							ObjectIdAttributeNumber,
-							BTEqualStrategyNumber, F_OIDEQ,
-							ObjectIdGetDatum(object->objectId));
-
-				tgscan = systable_beginscan(trigDesc, EventTriggerOidIndexId, true,
-											SnapshotNow, 1, skey);
-
-				tup = systable_getnext(tgscan);
-
+				tup = SearchSysCache1(EVTTRIGGEROID,
+									  ObjectIdGetDatum(object->objectId));
 				if (!HeapTupleIsValid(tup))
-					elog(ERROR, "could not find tuple for command trigger %u",
+					elog(ERROR, "cache lookup failed for event trigger %u",
 						 object->objectId);
-
-				trig = (Form_pg_event_trigger) GETSTRUCT(tup);
-
 				appendStringInfo(&buffer, _("event trigger %s"),
-								 NameStr(trig->evtname));
-
-				systable_endscan(tgscan);
-				heap_close(trigDesc, AccessShareLock);
+					 NameStr(((Form_pg_event_trigger) GETSTRUCT(tup))->evtname));
+				ReleaseSysCache(tup);
 				break;
 			}
 
