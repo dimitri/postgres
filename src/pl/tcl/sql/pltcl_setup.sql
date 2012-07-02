@@ -565,9 +565,7 @@ create or replace function tclsnitch() returns event_trigger language pltcl as $
   elog NOTICE " tclsnitch: $TG_when $TG_tag $TG_schemaname $TG_objectname"
 $$;
 
-create event trigger tcl_snitch
-              before command_start
-   execute procedure tclsnitch();
+create event trigger tcl_snitch on command_start execute procedure tclsnitch();
 
 create or replace function foobar() returns int language sql as $$select 1;$$;
 alter function foobar() cost 77;
