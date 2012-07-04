@@ -23,6 +23,7 @@
 #include "catalog/index.h"
 #include "catalog/indexing.h"
 #include "catalog/pg_event_trigger.h"
+#include "catalog/pg_event_trigger_fn.h"
 #include "catalog/pg_proc.h"
 #include "catalog/pg_trigger.h"
 #include "catalog/pg_type.h"
@@ -195,7 +196,7 @@ BuildEventTriggerCache()
 		else
 		{
 			ArrayType	*arr;
-			int16		*tags;
+			Datum		*tags;
 			int			 i;
 
 			arr = DatumGetArrayTypeP(adatum);		/* ensure not toasted */
@@ -204,15 +205,17 @@ BuildEventTriggerCache()
 			if (ARR_NDIM(arr) != 1 ||
 				numkeys < 0 ||
 				ARR_HASNULL(arr) ||
-				ARR_ELEMTYPE(arr) != INT2OID)
-				elog(ERROR, "evttags is not a 1-D smallint array");
+				ARR_ELEMTYPE(arr) != TEXTOID)
+				elog(ERROR, "evttags is not a 1-D text array");
 
-			tags = (int16 *) ARR_DATA_PTR(arr);
+			deconstruct_array(arr, TEXTOID, -1, false, 'i',
+							  &tags, NULL, &numkeys);
 
 			for (i = 0; i < numkeys; i++)
 			{
-				 command = tags[i];
-				 add_funcall_to_command_event(event, command, name, proc);
+				char *cmdstr = TextDatumGetCString(tags[i]);
+				command = parse_event_tag(cmdstr, false);
+				add_funcall_to_command_event(event, command, name, proc);
 			}
 		}
 	}

@@ -103,9 +103,13 @@ InsertEventTriggerTuple(char *trigname, TrigEvent event,
 
 		foreach(lc, cmdlist)
 		{
-			tags[i++] = Int16GetDatum(lfirst_int(lc));
+			TrigEventCommand cmd = lfirst_int(lc);
+			char *cmdstr = command_to_string(cmd);
+			if (cmd == E_UNKNOWN || cmdstr == NULL)
+				elog(ERROR, "Unknown command %d", cmd);
+			tags[i++] = PointerGetDatum(cstring_to_text(cmdstr));
 		}
-		tagArray = construct_array(tags, l, INT2OID, 2, true, 's');
+		tagArray = construct_array(tags, l, TEXTOID, -1, false, 'i');
 
 		values[Anum_pg_event_trigger_evttags - 1] = PointerGetDatum(tagArray);
 	}

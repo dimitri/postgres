@@ -36,7 +36,7 @@ CATALOG(pg_event_trigger,3466)
 	char		evtenabled;		/* trigger's firing configuration WRT
 								 * session_replication_role */
 #ifdef CATALOG_VARLEN
-	int16       evttags[1];		/* command TAGs this event trigger targets */
+	text        evttags[1];		/* command TAGs this event trigger targets */
 #endif
 } FormData_pg_event_trigger;
 
