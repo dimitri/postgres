@@ -2917,7 +2917,7 @@ getObjectDescription(const ObjectAddress *object)
 			{
 				HeapTuple	tup;
 
-				tup = SearchSysCache1(EVTTRIGGEROID,
+				tup = SearchSysCache1(EVENTTRIGGEROID,
 									  ObjectIdGetDatum(object->objectId));
 				if (!HeapTupleIsValid(tup))
 					elog(ERROR, "cache lookup failed for event trigger %u",
