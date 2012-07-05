@@ -300,7 +300,7 @@ get_event_triggers(TrigEvent event, TrigEventCommand command)
 	{
 		/* merge join the two lists keeping the ordering by name */
 		ListCell *lc_any_procs, *lc_any_names, *lc_cmd_procs, *lc_cmd_names;
-		char *current_any_name, *current_cmd_name;
+		char *current_any_name = NULL, *current_cmd_name;
 
 		lc_any_names = list_head(any->names);
 		lc_any_procs = list_head(any->procs);
@@ -345,7 +345,8 @@ get_event_triggers(TrigEvent event, TrigEventCommand command)
 					current_cmd_name = (char *) lfirst(lc_cmd_names);
 			}
 			while (lc_cmd_names != NULL
-				   && strcmp(current_cmd_name, current_any_name) < 0);
+				   && (current_any_name == NULL
+					   || strcmp(current_cmd_name, current_any_name) < 0));
 		}
 		while( lc_cmd_names != NULL && lc_any_names != NULL );
 	}

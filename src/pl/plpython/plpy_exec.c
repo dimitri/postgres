@@ -334,9 +334,10 @@ PLy_exec_trigger(FunctionCallInfo fcinfo, PLyProcedure *proc)
 
 /* command trigger handler
  */
-void
+Datum
 PLy_exec_event_trigger(FunctionCallInfo fcinfo, PLyProcedure *proc)
 {
+	Datum             rv = (Datum) NULL;
 	PyObject   *volatile pltdata = NULL;
 	EventTriggerData *tdata;
 
@@ -415,7 +416,7 @@ PLy_exec_event_trigger(FunctionCallInfo fcinfo, PLyProcedure *proc)
 	}
 	PG_END_TRY();
 
-	return;
+	return rv;
 }
 
 /* helper functions for Python code execution */

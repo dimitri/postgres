@@ -195,7 +195,7 @@ static Datum pltcl_handler(PG_FUNCTION_ARGS, bool pltrusted);
 static Datum pltcl_func_handler(PG_FUNCTION_ARGS, bool pltrusted);
 
 static HeapTuple pltcl_trigger_handler(PG_FUNCTION_ARGS, bool pltrusted);
-static void pltcl_event_trigger_handler(PG_FUNCTION_ARGS, bool pltrusted);
+static Datum pltcl_event_trigger_handler(PG_FUNCTION_ARGS, bool pltrusted);
 
 static void throw_tcl_error(Tcl_Interp *interp, const char *proname);
 
@@ -643,7 +643,7 @@ pltcl_handler(PG_FUNCTION_ARGS, bool pltrusted)
 		else if (CALLED_AS_EVENT_TRIGGER(fcinfo))
 		{
 			pltcl_current_fcinfo = NULL;
-			pltcl_event_trigger_handler(fcinfo, pltrusted);
+			retval = pltcl_event_trigger_handler(fcinfo, pltrusted);
 		}
 		else
 		{
@@ -1135,7 +1135,7 @@ pltcl_trigger_handler(PG_FUNCTION_ARGS, bool pltrusted)
 /**********************************************************************
  * pltcl_event_trigger_handler()	- Handler for event trigger calls
  **********************************************************************/
-static void
+static Datum
 pltcl_event_trigger_handler(PG_FUNCTION_ARGS, bool pltrusted)
 {
 	pltcl_proc_desc *prodesc;
@@ -1144,6 +1144,7 @@ pltcl_event_trigger_handler(PG_FUNCTION_ARGS, bool pltrusted)
 	char	   *stroid;
 	Tcl_DString tcl_cmd;
 	int			tcl_rc;
+	Datum		retval = (Datum) 0;
 
 	/* Connect to SPI manager */
 	if (SPI_connect() != SPI_OK_CONNECT)
@@ -1203,7 +1204,7 @@ pltcl_event_trigger_handler(PG_FUNCTION_ARGS, bool pltrusted)
 	if (SPI_finish() != SPI_OK_FINISH)
 		elog(ERROR, "SPI_finish() failed");
 
-	return;
+	return retval;
 }
 
 

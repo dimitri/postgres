@@ -232,7 +232,7 @@ plpython_call_handler(PG_FUNCTION_ARGS)
 		{
 			proc = PLy_procedure_get(fcinfo->flinfo->fn_oid, false, true);
 			exec_ctx->curr_proc = proc;
-			PLy_exec_event_trigger(fcinfo, proc);
+			retval = PLy_exec_event_trigger(fcinfo, proc);
 		}
 		else
 		{

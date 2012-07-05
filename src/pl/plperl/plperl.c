@@ -235,7 +235,7 @@ static void set_interp_require(bool trusted);
 
 static Datum plperl_func_handler(PG_FUNCTION_ARGS);
 static Datum plperl_trigger_handler(PG_FUNCTION_ARGS);
-static void plperl_event_trigger_handler(PG_FUNCTION_ARGS);
+static Datum plperl_event_trigger_handler(PG_FUNCTION_ARGS);
 
 static plperl_proc_desc *compile_plperl_function(Oid fn_oid,
 												 bool is_dml_trigger,
@@ -1702,7 +1702,7 @@ plperl_call_handler(PG_FUNCTION_ARGS)
 		if (CALLED_AS_TRIGGER(fcinfo))
 			retval = PointerGetDatum(plperl_trigger_handler(fcinfo));
 		else if (CALLED_AS_EVENT_TRIGGER(fcinfo))
-			plperl_event_trigger_handler(fcinfo);
+			retval = plperl_event_trigger_handler(fcinfo);
 		else
 			retval = plperl_func_handler(fcinfo);
 	}
@@ -2431,11 +2431,12 @@ plperl_trigger_handler(PG_FUNCTION_ARGS)
 }
 
 
-static void
+static Datum
 plperl_event_trigger_handler(PG_FUNCTION_ARGS)
 {
 	plperl_proc_desc *prodesc;
 	SV		   *svTD;
+	Datum       retval = (Datum) 0; /* no return value here */
 	ErrorContextCallback pl_error_context;
 
 	/*
@@ -2472,7 +2473,7 @@ plperl_event_trigger_handler(PG_FUNCTION_ARGS)
 
 	SvREFCNT_dec(svTD);
 
-	return;
+	return retval;
 }
 
 
