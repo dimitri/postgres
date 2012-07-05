@@ -70,6 +70,8 @@ create schema cmd;
 create schema cmd2;
 create role regbob;
 
+alter event trigger snitch owner to regbob;
+
 create table cmd.foo(id bigserial primary key);
 create view cmd.v as select * from cmd.foo;
 alter table cmd.foo add column t text;
@@ -244,10 +246,13 @@ alter schema cmd rename to cmd1;
 
 drop schema cmd1 cascade;
 drop schema cmd2 cascade;
+
+-- fail because owning event trigger snitch
 drop role regbob;
 
 drop event trigger any_t;
 drop event trigger snitch;
+drop role regbob;
 
 create table onerow(id integer);
 

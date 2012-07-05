@@ -32,6 +32,7 @@ CATALOG(pg_event_trigger,3466)
 {
 	NameData	evtname;		/* trigger's name */
 	NameData	evtevent;		/* trigger's event */
+	Oid			evtowner;		/* trigger's owner */
 	Oid			evtfoid;		/* OID of function to be called */
 	char		evtenabled;		/* trigger's firing configuration WRT
 								 * session_replication_role */
@@ -54,9 +55,10 @@ typedef FormData_pg_event_trigger *Form_pg_event_trigger;
 #define Natts_pg_event_trigger					6
 #define Anum_pg_event_trigger_evtname			1
 #define Anum_pg_event_trigger_evtevent			2
-#define Anum_pg_event_trigger_evtfoid			3
-#define Anum_pg_event_trigger_evtenabled		4
-#define Anum_pg_event_trigger_evttags			5
+#define Anum_pg_event_trigger_evtowner			3
+#define Anum_pg_event_trigger_evtfoid			4
+#define Anum_pg_event_trigger_evtenabled		5
+#define Anum_pg_event_trigger_evttags			6
 
 /*
  * Times at which an event trigger can be fired. These are the

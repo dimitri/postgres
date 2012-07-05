@@ -539,6 +539,10 @@ ExecAlterOwnerStmt(AlterOwnerStmt *stmt)
 			AlterForeignServerOwner(strVal(linitial(stmt->object)), newowner);
 			break;
 
+		case OBJECT_EVENT_TRIGGER:
+			AlterEventTriggerOwner(strVal(linitial(stmt->object)), newowner);
+			break;
+
 		default:
 			elog(ERROR, "unrecognized AlterOwnerStmt type: %d",
 				 (int) stmt->objectType);

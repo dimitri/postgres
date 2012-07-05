@@ -1807,7 +1807,7 @@ static bool
 _equalAlterEventTrigStmt(const AlterEventTrigStmt *a, const AlterEventTrigStmt *b)
 {
 	COMPARE_STRING_FIELD(trigname);
-	COMPARE_STRING_FIELD(tgenabled);
+	COMPARE_SCALAR_FIELD(tgenabled);
 
 	return true;
 }

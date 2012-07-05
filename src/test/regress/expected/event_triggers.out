@@ -68,14 +68,13 @@ create schema cmd2;
 NOTICE:  snitch: command_start CREATE SCHEMA <NULL>.<NULL>
 NOTICE:  snitch: command_start CREATE SCHEMA <NULL>.<NULL>
 create role regbob;
+alter event trigger snitch owner to regbob;
 create table cmd.foo(id bigserial primary key);
 NOTICE:  snitch: command_start CREATE TABLE <NULL>.<NULL>
 NOTICE:  snitch: command_start CREATE TABLE <NULL>.<NULL>
-NOTICE:  CREATE TABLE will create implicit sequence "foo_id_seq" for serial column "foo.id"
 NOTICE:  snitch: command_start CREATE SEQUENCE <NULL>.<NULL>
 NOTICE:  snitch: command_start CREATE SEQUENCE <NULL>.<NULL>
 NOTICE:  snitch: command_start CREATE INDEX <NULL>.<NULL>
-NOTICE:  CREATE TABLE / PRIMARY KEY will create implicit index "foo_pkey" for table "foo"
 NOTICE:  snitch: command_start ALTER SEQUENCE <NULL>.<NULL>
 NOTICE:  snitch: command_start ALTER SEQUENCE <NULL>.<NULL>
 create view cmd.v as select * from cmd.foo;
@@ -455,9 +454,13 @@ drop cascades to cast from text to integer
 drop schema cmd2 cascade;
 NOTICE:  snitch: command_start DROP SCHEMA <NULL>.<NULL>
 NOTICE:  snitch: command_start DROP SCHEMA <NULL>.<NULL>
+-- fail because owning event trigger snitch
 drop role regbob;
+ERROR:  role "regbob" cannot be dropped because some objects depend on it
+DETAIL:  owner of event trigger snitch
 drop event trigger any_t;
 drop event trigger snitch;
+drop role regbob;
 create table onerow(id integer);
 create or replace function insert_one_row()
  returns event_trigger

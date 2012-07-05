@@ -22,7 +22,8 @@ PostgreSQL documentation
  <refsynopsisdiv>
 <synopsis>
 ALTER EVENT TRIGGER <replaceable class="PARAMETER">name</replaceable> <replaceable class="parameter">enabled</replaceable>
-ALTER EVENT TRIGGER <replaceable class="PARAMETER">name</replaceable> RENAME TO <replaceable class="PARAMETER">newname</replaceable>
+ALTER EVENT TRIGGER <replaceable class="PARAMETER">name</replaceable> OWNER TO <replaceable class="PARAMETER">new_owner</replaceable>
+ALTER EVENT TRIGGER <replaceable class="PARAMETER">name</replaceable> RENAME TO <replaceable class="PARAMETER">new_name</replaceable>
 
 <phrase>where <replaceable class="parameter">enabled</replaceable> can be one of:</phrase>
 
@@ -63,7 +64,16 @@ ALTER EVENT TRIGGER <replaceable class="PARAMETER">name</replaceable> RENAME TO 
    </varlistentry>
 
    <varlistentry>
-    <term><replaceable class="PARAMETER">newname</replaceable></term>
+    <term><replaceable class="PARAMETER">new_owner</replaceable></term>
+    <listitem>
+     <para>
+      The user name of the new owner of the event trigger.
+     </para>
+    </listitem>
+   </varlistentry>
+
+   <varlistentry>
+    <term><replaceable class="PARAMETER">new_name</replaceable></term>
     <listitem>
      <para>
       The new name of the event trigger.

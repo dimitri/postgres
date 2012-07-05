@@ -3485,7 +3485,7 @@ _copyAlterEventTrigStmt(const AlterEventTrigStmt *from)
 	AlterEventTrigStmt *newnode = makeNode(AlterEventTrigStmt);
 
 	COPY_STRING_FIELD(trigname);
-	COPY_STRING_FIELD(tgenabled);
+	COPY_SCALAR_FIELD(tgenabled);
 
 	return newnode;
 }

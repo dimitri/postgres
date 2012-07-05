@@ -2969,19 +2969,21 @@ listEvtTriggers(const char *pattern, bool verbose)
 
 	printfPQExpBuffer(&buf,
 					  "select evtname as \"%s\", "
+					  "evtevent as  \"%s\", "
+					  "pg_catalog.pg_get_userbyid(e.evtowner) AS \"%s\", "
 					  " case evtenabled when 'O' then 'enabled' "
 					  "  when 'R' then 'replica' "
 					  "  when 'A' then 'always' "
 					  "  when 'D' then 'disabled' end as  \"%s\", "
-					  "evtevent as  \"%s\", "
 					  "n.nspname || '.' || p.proname || '()' as \"%s\", "
 					  " array_to_string(array(select x "
 					  "      from unnest(evttags) as t(x)), ', ') as  \"%s\" "
 					  "FROM pg_event_trigger e JOIN pg_proc p on e.evtfoid = p.oid "
 					  "JOIN pg_namespace n ON p.pronamespace = n.oid ",
 					  gettext_noop("Name"),
+					  gettext_noop("Event"),
+					  gettext_noop("Owner"),
 					  gettext_noop("Enabled"),
-					  gettext_noop("Condition"),
 					  gettext_noop("Procedure"),
 					  gettext_noop("Tags"));
 

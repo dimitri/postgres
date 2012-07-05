@@ -357,8 +357,9 @@ typedef struct _evttriggerInfo
 {
 	DumpableObject dobj;
 	char	   *evtname;
-	char	   *evttags;
 	char	   *evtevent;
+	char	   *evtowner;
+	char	   *evttags;
 	char	   *evtfname;
 	char		evttype;
 	char		evtenabled;

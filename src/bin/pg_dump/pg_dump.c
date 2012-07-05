@@ -5312,8 +5312,9 @@ getEvtTriggers(Archive *fout, int *numEvtTriggers)
 	int			i_tableoid,
 				i_oid,
 				i_evtname,
-				i_evttags,
 				i_evtevent,
+                i_evtowner,
+				i_evttags,
 				i_evtfname,
 				i_evtenabled;
 	int			ntups;
@@ -5325,14 +5326,16 @@ getEvtTriggers(Archive *fout, int *numEvtTriggers)
 	{
 		appendPQExpBuffer(query,
 						  "SELECT e.tableoid, e.oid, evtname, evtenabled, "
-						  "evtevent, "
+						  "evtevent, (%s evtowner) AS evtowner, "
 						  "array_to_string(array("
 						  "select '''' || x || '''' "
 						  " from unnest(evttags) as t(x)), ', ') as evttags, "
 						  "n.nspname || '.' || p.proname as evtfname "
-						  "FROM pg_event_trigger e JOIN pg_proc p on e.evtfoid = p.oid "
+						  "FROM pg_event_trigger e "
+						  "JOIN pg_proc p on e.evtfoid = p.oid "
 						  "JOIN pg_namespace n ON p.pronamespace = n.oid "
-						  "ORDER BY e.oid");
+						  "ORDER BY e.oid",
+						  username_subquery);
 	}
 
 	res = ExecuteSqlQuery(fout, query->data, PGRES_TUPLES_OK);
@@ -5346,8 +5349,9 @@ getEvtTriggers(Archive *fout, int *numEvtTriggers)
 	i_tableoid = PQfnumber(res, "tableoid");
 	i_oid = PQfnumber(res, "oid");
 	i_evtname = PQfnumber(res, "evtname");
-	i_evttags = PQfnumber(res, "evttags");
 	i_evtevent = PQfnumber(res, "evtevent");
+	i_evtowner = PQfnumber(res, "evtowner");
+	i_evttags = PQfnumber(res, "evttags");
 	i_evtfname = PQfnumber(res, "evtfname");
 	i_evtenabled = PQfnumber(res, "evtenabled");
 
@@ -5359,8 +5363,9 @@ getEvtTriggers(Archive *fout, int *numEvtTriggers)
 		AssignDumpId(&evtinfo[i].dobj);
 		evtinfo[i].dobj.name = pg_strdup(PQgetvalue(res, i, i_evtname));
 		evtinfo[i].evtname = pg_strdup(PQgetvalue(res, i, i_evtname));
-		evtinfo[i].evttags = pg_strdup(PQgetvalue(res, i, i_evttags));
 		evtinfo[i].evtevent = pg_strdup(PQgetvalue(res, i, i_evtevent));
+		evtinfo[i].evtowner = pg_strdup(PQgetvalue(res, i, i_evtowner));
+		evtinfo[i].evttags = pg_strdup(PQgetvalue(res, i, i_evttags));
 		evtinfo[i].evtfname = pg_strdup(PQgetvalue(res, i, i_evtfname));
 		evtinfo[i].evtenabled = *(PQgetvalue(res, i, i_evtenabled));
 	}
@@ -13788,7 +13793,7 @@ dumpEvtTrigger(Archive *fout, EvtTriggerInfo *evtinfo)
 					  fmtId(evtinfo->dobj.name));
 
 	ArchiveEntry(fout, evtinfo->dobj.catId, evtinfo->dobj.dumpId,
-				 evtinfo->dobj.name, NULL, NULL, "", false,
+				 evtinfo->dobj.name, NULL, NULL, evtinfo->evtowner, false,
 				 "EVENT TRIGGER", SECTION_POST_DATA,
 				 query->data, "", NULL, NULL, 0, NULL, NULL);
 

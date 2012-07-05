@@ -42,6 +42,13 @@
 #include "tcop/utility.h"
 
 /*
+ * local prototypes
+ */
+static void AlterEventTriggerOwner_internal(Relation rel,
+											HeapTuple tup,
+											Oid newOwnerId);
+
+/*
  * Check permission: command triggers are only available for superusers. Raise
  * an exception when requirements are not fullfilled.
  *
@@ -65,7 +72,7 @@ CheckEventTriggerPrivileges()
  * row.
  */
 static Oid
-InsertEventTriggerTuple(char *trigname, TrigEvent event,
+InsertEventTriggerTuple(char *trigname, TrigEvent event, Oid evtOwner,
 						Oid funcoid, List *cmdlist)
 {
 	Relation tgrel;
@@ -86,6 +93,7 @@ InsertEventTriggerTuple(char *trigname, TrigEvent event,
 
 	values[Anum_pg_event_trigger_evtname - 1] = NameGetDatum(trigname);
 	values[Anum_pg_event_trigger_evtevent - 1] = NameGetDatum(evtevent);
+	values[Anum_pg_event_trigger_evtowner - 1] = ObjectIdGetDatum(evtOwner);
 	values[Anum_pg_event_trigger_evtfoid - 1] = ObjectIdGetDatum(funcoid);
 	values[Anum_pg_event_trigger_evtenabled - 1] = CharGetDatum(TRIGGER_FIRES_ON_ORIGIN);
 
@@ -123,6 +131,8 @@ InsertEventTriggerTuple(char *trigname, TrigEvent event,
 	 * Record dependencies for trigger.  Always place a normal dependency on
 	 * the function.
 	 */
+	recordDependencyOnOwner(EventTriggerRelationId, trigoid, evtOwner);
+
 	myself.classId = EventTriggerRelationId;
 	myself.objectId = trigoid;
 	myself.objectSubId = 0;
@@ -146,6 +156,7 @@ CreateEventTrigger(CreateEventTrigStmt *stmt, const char *queryString)
 	HeapTuple	tuple;
 	Oid			funcoid, trigoid;
 	Oid			funcrettype;
+	Oid			evtowner = GetUserId();
 
 	CheckEventTriggerPrivileges();
 
@@ -175,7 +186,7 @@ CreateEventTrigger(CreateEventTrigStmt *stmt, const char *queryString)
 
 	/* Insert the catalog entry */
 	trigoid = InsertEventTriggerTuple(stmt->trigname, stmt->event,
-									  funcoid, stmt->cmdlist);
+									  evtowner, funcoid, stmt->cmdlist);
 
 	return trigoid;
 }
@@ -272,6 +283,83 @@ RenameEventTrigger(const char *trigname, const char *newname)
 
 	heap_freetuple(tup);
 	heap_close(rel, RowExclusiveLock);
+}
+
+
+/*
+ * Change event trigger's owner -- by name
+ */
+void
+AlterEventTriggerOwner(const char *name, Oid newOwnerId)
+{
+	HeapTuple	tup;
+	Relation	rel;
+
+	rel = heap_open(EventTriggerRelationId, RowExclusiveLock);
+
+	tup = SearchSysCacheCopy1(EVENTTRIGGERNAME, CStringGetDatum(name));
+
+	if (!HeapTupleIsValid(tup))
+		ereport(ERROR,
+				(errcode(ERRCODE_UNDEFINED_OBJECT),
+				 errmsg("event trigger \"%s\" does not exist", name)));
+
+	AlterEventTriggerOwner_internal(rel, tup, newOwnerId);
+
+	heap_freetuple(tup);
+
+	heap_close(rel, RowExclusiveLock);
+}
+
+/*
+ * Change extension owner, by OID
+ */
+void
+AlterEventTriggerOwner_oid(Oid trigOid, Oid newOwnerId)
+{
+	HeapTuple	tup;
+	Relation	rel;
+
+	rel = heap_open(EventTriggerRelationId, RowExclusiveLock);
+
+	tup = SearchSysCacheCopy1(EVENTTRIGGEROID, ObjectIdGetDatum(trigOid));
+
+	if (!HeapTupleIsValid(tup))
+		ereport(ERROR,
+				(errcode(ERRCODE_UNDEFINED_OBJECT),
+		  errmsg("event trigger with OID %u does not exist", trigOid)));
+
+	AlterEventTriggerOwner_internal(rel, tup, newOwnerId);
+
+	heap_freetuple(tup);
+
+	heap_close(rel, RowExclusiveLock);
+}
+
+/*
+ * Internal workhorse for changing an event trigger's owner
+ */
+static void
+AlterEventTriggerOwner_internal(Relation rel, HeapTuple tup, Oid newOwnerId)
+{
+	Form_pg_event_trigger form;
+
+	CheckEventTriggerPrivileges();
+
+	form = (Form_pg_event_trigger) GETSTRUCT(tup);
+
+	if (form->evtowner != newOwnerId)
+	{
+		form->evtowner = newOwnerId;
+
+		simple_heap_update(rel, &tup->t_self, tup);
+		CatalogUpdateIndexes(rel, tup);
+
+		/* Update owner dependency reference */
+		changeDependencyOnOwner(EventTriggerRelationId,
+								HeapTupleGetOid(tup),
+								newOwnerId);
+	}
 }
 
 /*
