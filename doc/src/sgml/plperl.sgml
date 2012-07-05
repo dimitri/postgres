@@ -1231,7 +1231,7 @@ CREATE TRIGGER test_valid_id_trig
      Event trigger procedures can be written in PL/Perl.
      <productname>PostgreSQL</productname> requires that a procedure that is to be called
      as a trigger must be declared as a function with no arguments
-     and a return type of <literal>command_trigger</>.
+     and a return type of <literal>event_trigger</>.
     </para>
 
     <para>
