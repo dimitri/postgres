@@ -2973,7 +2973,7 @@ listEvtTriggers(const char *pattern, bool verbose)
 					  "  when 'R' then 'replica' "
 					  "  when 'A' then 'always' "
 					  "  when 'D' then 'disabled' end as  \"%s\", "
-					  "pg_catalog.pg_evtevent_to_string(evtevent) as  \"%s\", "
+					  "evtevent as  \"%s\", "
 					  "n.nspname || '.' || p.proname || '()' as \"%s\", "
 					  " array_to_string(array(select x "
 					  "      from unnest(evttags) as t(x)), ', ') as  \"%s\" "

@@ -1753,7 +1753,7 @@ typedef struct AlterEventTrigStmt
 {
 	NodeTag		type;
 	char	   *trigname;		/* TRIGGER's name */
-	char       *tgenabled;		/* trigger's firing configuration WRT
+	char        tgenabled;		/* trigger's firing configuration WRT
 								 * session_replication_role */
 } AlterEventTrigStmt;
 

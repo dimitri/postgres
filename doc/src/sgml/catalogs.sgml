@@ -1896,7 +1896,7 @@
 
      <row>
       <entry><structfield>evtevent</structfield></entry>
-      <entry><type>event</type></entry>
+      <entry><type>name</type></entry>
       <entry></entry>
       <entry>The event this trigger fires for.</entry>
      </row>

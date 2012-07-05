@@ -178,7 +178,7 @@ BuildEventTriggerCache()
 				continue;
 		}
 
-		event = form->evtevent;
+		event = parse_event_name(NameStr(form->evtevent));
 		name = form->evtname;
 		proc = form->evtfoid;
 

@@ -31,7 +31,7 @@
 CATALOG(pg_event_trigger,3466)
 {
 	NameData	evtname;		/* trigger's name */
-	int16	    evtevent;		/* trigger's event */
+	NameData	evtevent;		/* trigger's event */
 	Oid			evtfoid;		/* OID of function to be called */
 	char		evtenabled;		/* trigger's firing configuration WRT
 								 * session_replication_role */
@@ -168,5 +168,12 @@ typedef enum TrigEventCommand
 	E_DropUserMapping,
 	E_DropView
 } TrigEventCommand;
+
+/* implemented in src/backend/catalog/pg_event_trigger.c */
+char * event_to_string(TrigEvent event);
+TrigEvent parse_event_name(char *event);
+
+char * command_to_string(TrigEventCommand command);
+TrigEventCommand parse_event_tag(char *command, bool noerror);
 
 #endif   /* PG_EVENT_TRIGGER_H */

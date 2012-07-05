@@ -270,8 +270,8 @@ static void processCASbits(int cas_bits, int location, const char *constrType,
 %type <list>	TriggerEvents TriggerOneEvent trigger_command_list
 %type <value>	TriggerFuncArg
 %type <node>	TriggerWhen
-%type <str>		enable_trigger event_trigger_variable
-%type <ival>    event_name trigger_command
+%type <str>		event_trigger_variable
+%type <ival>    event_name trigger_command enable_trigger
 
 %type <str>		copy_file_name
 				database_name access_method_clause access_method attr_name
@@ -4327,21 +4327,7 @@ CreateEventTrigStmt:
 event_name:
 			IDENT
 				{
-					/*
-					 * We handle identifiers that aren't parser keywords with
-					 * the following special-case codes, to avoid bloating the
-					 * size of the main parser.
-					 *
-					 * As of now we only support the command_start event name,
-					 * more will get added later.
-					 */
-					if (strcmp($1, "command_start") == 0)
-						$$ = E_CommandStart;
-					else
-						ereport(ERROR,
-								(errcode(ERRCODE_SYNTAX_ERROR),
-								 errmsg("unrecognized event name \"%s\"", $1),
-									 parser_errposition(@1)));
+					$$ = parse_event_name($1);
 				}
 		;
 
@@ -4424,10 +4410,10 @@ AlterEventTrigStmt:
 		;
 
 enable_trigger:
-			ENABLE_P					{ $$ = "O"; }
-			| ENABLE_P REPLICA			{ $$ = "R"; }
-			| ENABLE_P ALWAYS			{ $$ = "A"; }
-			| DISABLE_P					{ $$ = "D"; }
+			ENABLE_P					{ $$ = 'O'; }
+			| ENABLE_P REPLICA			{ $$ = 'R'; }
+			| ENABLE_P ALWAYS			{ $$ = 'A'; }
+			| DISABLE_P					{ $$ = 'D'; }
 		;
 
 /*****************************************************************************

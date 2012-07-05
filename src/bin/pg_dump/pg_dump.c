@@ -5325,7 +5325,7 @@ getEvtTriggers(Archive *fout, int *numEvtTriggers)
 	{
 		appendPQExpBuffer(query,
 						  "SELECT e.tableoid, e.oid, evtname, evtenabled, "
-						  "pg_catalog.pg_evtevent_to_string(evtevent) as evtevent, "
+						  "evtevent, "
 						  "array_to_string(array("
 						  "select '''' || x || '''' "
 						  " from unnest(evttags) as t(x)), ', ') as evttags, "
