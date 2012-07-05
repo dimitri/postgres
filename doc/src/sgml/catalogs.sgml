@@ -1926,7 +1926,7 @@
 
      <row>
       <entry><structfield>evttags</structfield></entry>
-      <entry><type>int[]</type></entry>
+      <entry><type>text[]</type></entry>
       <entry></entry>
       <entry>Command tags of the commands this trigger is restricted to.</entry>
      </row>

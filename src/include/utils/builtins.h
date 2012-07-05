@@ -1143,8 +1143,4 @@ extern Datum pg_prepared_statement(PG_FUNCTION_ARGS);
 /* utils/mmgr/portalmem.c */
 extern Datum pg_cursor(PG_FUNCTION_ARGS);
 
-/* commands/event_trigger.c */
-extern Datum pg_event_trigger_event_to_string(PG_FUNCTION_ARGS);
-extern Datum pg_event_trigger_command_to_string(PG_FUNCTION_ARGS);
-
 #endif   /* BUILTINS_H */

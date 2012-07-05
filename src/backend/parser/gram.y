@@ -54,7 +54,6 @@
 #include "catalog/index.h"
 #include "catalog/namespace.h"
 #include "catalog/pg_event_trigger.h"
-#include "catalog/pg_event_trigger_fn.h"
 #include "catalog/pg_trigger.h"
 #include "commands/defrem.h"
 #include "commands/event_trigger.h"

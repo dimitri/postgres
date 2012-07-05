@@ -39,7 +39,7 @@ typedef struct EventContextData
 typedef struct EventContextData *EventContext;
 
 /*
- * CommandTriggerData is the node type that is passed as fmgr "context" info
+ * EventTriggerData is the node type that is passed as fmgr "context" info
  * when a function is called by the command trigger manager.
  */
 #define CALLED_AS_EVENT_TRIGGER(fcinfo) \

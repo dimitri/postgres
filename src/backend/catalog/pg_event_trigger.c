@@ -15,8 +15,21 @@
 #include "postgres.h"
 
 #include "catalog/pg_event_trigger.h"
-#include "catalog/pg_event_trigger_fn.h"
 #include "utils/builtins.h"
+
+TrigEvent
+parse_event_name(char *event)
+{
+	if (pg_strcasecmp(event, "command_start") == 0)
+		return E_CommandStart;
+	else
+		ereport(ERROR,
+				(errcode(ERRCODE_SYNTAX_ERROR),
+				 errmsg("unrecognized event \"%s\"", event)));
+
+	/* make compiler happy */
+	return -1;
+}
 
 TrigEventCommand
 parse_event_tag(char *command, bool noerror)

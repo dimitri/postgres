@@ -1732,7 +1732,7 @@ typedef struct CreateTrigStmt
 } CreateTrigStmt;
 
 /* ----------------------
- *		Create COMMAND TRIGGER Statement
+ *		Create EVENT TRIGGER Statement
  * ----------------------
  */
 typedef struct CreateEventTrigStmt
@@ -1746,7 +1746,7 @@ typedef struct CreateEventTrigStmt
 } CreateEventTrigStmt;
 
 /* ----------------------
- *		Alter COMMAND TRIGGER Statement
+ *		Alter EVENT TRIGGER Statement
  * ----------------------
  */
 typedef struct AlterEventTrigStmt

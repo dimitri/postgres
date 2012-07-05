@@ -169,15 +169,4 @@ typedef enum TrigEventCommand
 	E_DropView
 } TrigEventCommand;
 
-/*
- * Times at which an event trigger can be fired. These are the
- * possible values for pg_event_trigger.evttype.
- *
- * pg_trigger is using binary mask tricks to make it super fast, but we don't
- * need to be that tricky here: we're talking about commands, not data editing,
- * and we don't have so many conditions, only type and enabled.
- */
-#define EVTG_FIRED_BEFORE			'B'
-#define EVTG_FIRED_INSTEAD_OF		'I'
-
 #endif   /* PG_EVENT_TRIGGER_H */
