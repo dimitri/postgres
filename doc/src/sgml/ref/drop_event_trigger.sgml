@@ -29,8 +29,9 @@ DROP EVENT TRIGGER [ IF EXISTS ] <replaceable class="PARAMETER">name</replaceabl
   <title>Description</title>
 
   <para>
-   <command>DROP EVENT TRIGGER</command> removes an existing trigger definition.
-   To execute this command, the current user must be superuser.
+   <command>DROP EVENT TRIGGER</command> removes an existing event trigger.
+   To execute this command, the current user must be the owner of the event
+   trigger.
   </para>
  </refsect1>
 
@@ -79,7 +80,7 @@ DROP EVENT TRIGGER [ IF EXISTS ] <replaceable class="PARAMETER">name</replaceabl
   </variablelist>
  </refsect1>
 
- <refsect1 id="SQL-DROPEVENTTRIGGER-examples">
+ <refsect1 id="sql-dropeventtrigger-examples">
   <title>Examples</title>
 
   <para>
@@ -90,13 +91,14 @@ DROP EVENT TRIGGER snitch;
 </programlisting></para>
  </refsect1>
 
- <refsect1 id="SQL-DROPEVENTTRIGGER-compatibility">
+ <refsect1 id="sql-dropeventtrigger-compatibility">
   <title>Compatibility</title>
 
   <para>
-   The <command>DROP EVENT TRIGGER</command> statement is a
-   <productname>PostgreSQL</productname> extension.
+   There is no <command>DROP EVENT TRIGGER</command> statement in the
+   SQL standard.
   </para>
+
  </refsect1>
 
  <refsect1>

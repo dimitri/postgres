@@ -872,7 +872,7 @@ $$ LANGUAGE plpythonu;
   </sect2>
 
    <sect2 id="plpython-event-trigger">
-     <title>Trigger Procedures on Events in PL/Python </title>
+     <title>Trigger Procedures on Events in PL/Python</title>
 
      <indexterm>
       <primary>event trigger</primary>
@@ -881,9 +881,9 @@ $$ LANGUAGE plpythonu;
 
     <para>
      Event trigger procedures can be written in PL/Python.
-     <productname>PostgreSQL</productname> requires that a procedure that is to be called
-     as a trigger must be declared as a function with no arguments
-     and a return type of <literal>event_trigger</>.
+     <productname>PostgreSQL</productname> requires that a procedure that
+     is to be called as an event trigger must be declared as a function with
+     no arguments and a return type of <literal>event_trigger</>.
     </para>
 
     <para>
@@ -924,7 +924,7 @@ $$ LANGUAGE plpythonu;
        <term><varname>TD["objectname"]</varname></term>
        <listitem>
         <para>
-         The name of the objectthat caused the trigger procedure
+         The name of the object that caused the trigger procedure
          to be invoked.
         </para>
        </listitem>

@@ -93,12 +93,12 @@ ALTER EVENT TRIGGER <replaceable class="PARAMETER">name</replaceable> RENAME TO 
   </variablelist>
  </refsect1>
 
- <refsect1>
+ <refsect1 id="sql-alterventtrigger-compatibility">
   <title>Compatibility</title>
 
   <para>
-   <command>ALTER EVENT TRIGGER</command> is a <productname>PostgreSQL</>
-   extension of the SQL standard.
+   There is no <command>ALTER EVENT TRIGGER</command> statement in the
+   SQL standard.
   </para>
  </refsect1>
 

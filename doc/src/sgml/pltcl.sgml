@@ -725,9 +725,9 @@ CREATE TRIGGER trig_mytab_modcount BEFORE INSERT OR UPDATE ON mytab
 
     <para>
      Event trigger procedures can be written in PL/Tcl.
-     <productname>PostgreSQL</productname> requires that a procedure that is to be called
-     as a trigger must be declared as a function with no arguments
-     and a return type of <literal>event_trigger</>.
+     <productname>PostgreSQL</productname> requires that a procedure that
+     is to be called as an event trigger must be declared as a function with
+     no arguments and a return type of <literal>event_trigger</>.
     </para>
 
     <para>
@@ -768,7 +768,7 @@ CREATE TRIGGER trig_mytab_modcount BEFORE INSERT OR UPDATE ON mytab
        <term><varname>$TG_objectname</varname></term>
        <listitem>
         <para>
-         The name of the objectthat caused the trigger procedure
+         The name of the object that caused the trigger procedure
          to be invoked.
         </para>
        </listitem>

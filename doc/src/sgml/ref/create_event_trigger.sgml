@@ -24,7 +24,7 @@ PostgreSQL documentation
 CREATE EVENT TRIGGER <replaceable class="PARAMETER">name</replaceable>
   ON <replaceable class="PARAMETER">event</replaceable>
   [ WHEN <replaceable class="PARAMETER">filter_variable</replaceable> IN (filter_value [ , ... ] ) ]
-  EXECUTE PROCEDURE <replaceable class="PARAMETER">function_name</replaceable> ()
+  EXECUTE PROCEDURE <replaceable class="PARAMETER">function_name</replaceable>()
 </synopsis>
  </refsynopsisdiv>
 
@@ -33,35 +33,11 @@ CREATE EVENT TRIGGER <replaceable class="PARAMETER">name</replaceable>
 
   <para>
    <command>CREATE EVENT TRIGGER</command> creates a new event trigger.
-   The trigger will be associated with the specified event and will
-   execute the specified
-   function <replaceable class="parameter">function_name</replaceable> when
-   that event occurs.
-  </para>
-
-  <para>
-   The event trigger gives a procedure to fire before the event is
-   executed. In some cases the procedure can be fired instead of the event
-   code PostgreSQL would run itself. A event trigger's function must
-   return <literal>event_trigger</literal> data type. It can then only
-   abort the execution of the command by raising an exception.
-  </para>
-
-  <para>
-   If multiple triggers of the same kind are defined for the same event,
-   they will be fired in alphabetical order by name.
-  </para>
-
-  <para>
-   Note that objects dropped by the effect of <literal>DROP
-   CASCADE</literal> will not result in a event trigger firing, only the
-   top-level event for the main object will fire a event trigger. That
-   also applies to other dependencies following, as in <literal>DROP OWNED
-   BY</literal>.
-  </para>
-
-  <para>
-   Refer to <xref linkend="triggers"> for more information about triggers.
+   Whenever the designated event occurs and the <literal>WHEN</> condition
+   associated with the trigger, if any, is satisfied, the trigger function
+   will be executed.  For a general introduction to event triggers, see
+   <xref linkend="event-triggers">.  The user who creates an event trigger
+   becomes its owner.
   </para>
  </refsect1>
 
@@ -73,9 +49,8 @@ CREATE EVENT TRIGGER <replaceable class="PARAMETER">name</replaceable>
     <term><replaceable class="parameter">name</replaceable></term>
     <listitem>
      <para>
-      The name to give the new trigger. This must be distinct from the name
-      of any other trigger for the same table. The name cannot be
-      schema-qualified.
+      The name to give the new trigger.  This name must be unique within
+      the database.
      </para>
     </listitem>
    </varlistentry>
@@ -85,8 +60,8 @@ CREATE EVENT TRIGGER <replaceable class="PARAMETER">name</replaceable>
     <listitem>
      <para>
       The name of the event that triggers a call to the given function.
-      Currently only <literal>command_start</literal> is supported, that
-      event is run before the specific command code takes control.
+      See <xref linkend="event-trigger-definition"> for more information
+      on event names.
      </para>
     </listitem>
    </varlistentry>
@@ -95,12 +70,11 @@ CREATE EVENT TRIGGER <replaceable class="PARAMETER">name</replaceable>
     <term><replaceable class="parameter">filter_variable</replaceable></term>
     <listitem>
      <para>
-      The name of a variable used to filter events, allowing to control
-      which cases must be handled by the trigger function. Currently the
-      only
-      provided <replaceable class="parameter">filter_variable</replaceable>
-      is named <literal>TAG</literal> and contains the command tag for which
-      the trigger is about to fire.
+      The name of a variable used to filter events.  This makes it possible
+      to restrict the firing of the trigger to a subset of the cases in which
+      it is supported.  Currently the only suppoted
+      <replaceable class="parameter">filter_variable</replaceable>
+      is <literal>TAG</literal>.
      </para>
     </listitem>
    </varlistentry>
@@ -109,364 +83,10 @@ CREATE EVENT TRIGGER <replaceable class="PARAMETER">name</replaceable>
     <term><replaceable class="parameter">filter_value</replaceable></term>
     <listitem>
      <para>
-      A list of values that the
+      A list of values for the
       associated <replaceable class="parameter">filter_variable</replaceable>
-      can have to allow for the trigger to fire.
-     </para>
-     <para>
-      The <literal>TAG</literal> variable accepts the following values:
-     </para>
-     <informaltable id="supported-command-tags">
-      <tgroup cols="2">
-       <thead>
-        <row>
-         <entry>command tag</entry>
-         <entry>supported events, in order</entry>
-        </row>
-       </thead>
-       <tbody>
-        <row>
-         <entry align="left"><literal>ALTER AGGREGATE</literal></entry>
-         <entry align="left"><literal>command_start</literal></entry>
-        </row>
-        <row>
-         <entry align="left"><literal>ALTER COLLATION</literal></entry>
-         <entry align="left"><literal>command_start</literal></entry>
-        </row>
-        <row>
-         <entry align="left"><literal>ALTER CONVERSION</literal></entry>
-         <entry align="left"><literal>command_start</literal></entry>
-        </row>
-        <row>
-         <entry align="left"><literal>ALTER DOMAIN</literal></entry>
-         <entry align="left"><literal>command_start</literal></entry>
-        </row>
-        <row>
-         <entry align="left"><literal>ALTER EXTENSION</literal></entry>
-         <entry align="left"><literal>command_start</literal></entry>
-        </row>
-        <row>
-         <entry align="left"><literal>ALTER FOREIGN DATA WRAPPER</literal></entry>
-         <entry align="left"><literal>command_start</literal></entry>
-        </row>
-        <row>
-         <entry align="left"><literal>ALTER FOREIGN TABLE</literal></entry>
-         <entry align="left"><literal>command_start</literal></entry>
-        </row>
-        <row>
-         <entry align="left"><literal>ALTER FUNCTION</literal></entry>
-         <entry align="left"><literal>command_start</literal></entry>
-        </row>
-        <row>
-         <entry align="left"><literal>ALTER LANGUAGE</literal></entry>
-         <entry align="left"><literal>command_start</literal></entry>
-        </row>
-        <row>
-         <entry align="left"><literal>ALTER OPERATOR</literal></entry>
-         <entry align="left"><literal>command_start</literal></entry>
-        </row>
-        <row>
-         <entry align="left"><literal>ALTER OPERATOR CLASS</literal></entry>
-         <entry align="left"><literal>command_start</literal></entry>
-        </row>
-        <row>
-         <entry align="left"><literal>ALTER OPERATOR FAMILY</literal></entry>
-         <entry align="left"><literal>command_start</literal></entry>
-        </row>
-        <row>
-         <entry align="left"><literal>ALTER SCHEMA</literal></entry>
-         <entry align="left"><literal>command_start</literal></entry>
-        </row>
-        <row>
-         <entry align="left"><literal>ALTER SEQUENCE</literal></entry>
-         <entry align="left"><literal>command_start</literal></entry>
-        </row>
-        <row>
-         <entry align="left"><literal>ALTER SERVER</literal></entry>
-         <entry align="left"><literal>command_start</literal></entry>
-        </row>
-        <row>
-         <entry align="left"><literal>ALTER TABLE</literal></entry>
-         <entry align="left"><literal>command_start</literal></entry>
-        </row>
-        <row>
-         <entry align="left"><literal>ALTER TEXT SEARCH CONFIGURATION</literal></entry>
-         <entry align="left"><literal>command_start</literal></entry>
-        </row>
-        <row>
-         <entry align="left"><literal>ALTER TEXT SEARCH DICTIONARY</literal></entry>
-         <entry align="left"><literal>command_start</literal></entry>
-        </row>
-        <row>
-         <entry align="left"><literal>ALTER TEXT SEARCH PARSER</literal></entry>
-         <entry align="left"><literal>command_start</literal></entry>
-        </row>
-        <row>
-         <entry align="left"><literal>ALTER TEXT SEARCH TEMPLATE</literal></entry>
-         <entry align="left"><literal>command_start</literal></entry>
-        </row>
-        <row>
-         <entry align="left"><literal>ALTER TRIGGER</literal></entry>
-         <entry align="left"><literal>command_start</literal></entry>
-        </row>
-        <row>
-         <entry align="left"><literal>ALTER TYPE</literal></entry>
-         <entry align="left"><literal>command_start</literal></entry>
-        </row>
-        <row>
-         <entry align="left"><literal>ALTER USER MAPPING</literal></entry>
-         <entry align="left"><literal>command_start</literal></entry>
-        </row>
-        <row>
-         <entry align="left"><literal>ALTER VIEW</literal></entry>
-         <entry align="left"><literal>command_start</literal></entry>
-        </row>
-        <row>
-         <entry align="left"><literal>CLUSTER</literal></entry>
-         <entry align="left"><literal>command_start</literal></entry>
-        </row>
-        <row>
-         <entry align="left"><literal>CREATE AGGREGATE</literal></entry>
-         <entry align="left"><literal>command_start</literal></entry>
-        </row>
-        <row>
-         <entry align="left"><literal>CREATE CAST</literal></entry>
-         <entry align="left"><literal>command_start</literal></entry>
-        </row>
-        <row>
-         <entry align="left"><literal>CREATE COLLATION</literal></entry>
-         <entry align="left"><literal>command_start</literal></entry>
-        </row>
-        <row>
-         <entry align="left"><literal>CREATE CONVERSION</literal></entry>
-         <entry align="left"><literal>command_start</literal></entry>
-        </row>
-        <row>
-         <entry align="left"><literal>CREATE DOMAIN</literal></entry>
-         <entry align="left"><literal>command_start</literal></entry>
-        </row>
-        <row>
-         <entry align="left"><literal>CREATE EXTENSION</literal></entry>
-         <entry align="left"><literal>command_start</literal></entry>
-        </row>
-        <row>
-         <entry align="left"><literal>CREATE FOREIGN DATA WRAPPER</literal></entry>
-         <entry align="left"><literal>command_start</literal></entry>
-        </row>
-        <row>
-         <entry align="left"><literal>CREATE FOREIGN TABLE</literal></entry>
-         <entry align="left"><literal>command_start</literal></entry>
-        </row>
-        <row>
-         <entry align="left"><literal>CREATE FUNCTION</literal></entry>
-         <entry align="left"><literal>command_start</literal></entry>
-        </row>
-        <row>
-         <entry align="left"><literal>CREATE INDEX</literal></entry>
-         <entry align="left"><literal>command_start</literal></entry>
-        </row>
-        <row>
-         <entry align="left"><literal>CREATE LANGUAGE</literal></entry>
-         <entry align="left"><literal>command_start</literal></entry>
-        </row>
-        <row>
-         <entry align="left"><literal>CREATE OPERATOR</literal></entry>
-         <entry align="left"><literal>command_start</literal></entry>
-        </row>
-        <row>
-         <entry align="left"><literal>CREATE OPERATOR CLASS</literal></entry>
-         <entry align="left"><literal>command_start</literal></entry>
-        </row>
-        <row>
-         <entry align="left"><literal>CREATE OPERATOR FAMILY</literal></entry>
-         <entry align="left"><literal>command_start</literal></entry>
-        </row>
-        <row>
-         <entry align="left"><literal>CREATE RULE</literal></entry>
-         <entry align="left"><literal>command_start</literal></entry>
-        </row>
-        <row>
-         <entry align="left"><literal>CREATE SCHEMA</literal></entry>
-         <entry align="left"><literal>command_start</literal></entry>
-        </row>
-        <row>
-         <entry align="left"><literal>CREATE SEQUENCE</literal></entry>
-         <entry align="left"><literal>command_start</literal></entry>
-        </row>
-        <row>
-         <entry align="left"><literal>CREATE SERVER</literal></entry>
-         <entry align="left"><literal>command_start</literal></entry>
-        </row>
-        <row>
-         <entry align="left"><literal>CREATE TABLE</literal></entry>
-         <entry align="left"><literal>command_start</literal></entry>
-        </row>
-        <row>
-         <entry align="left"><literal>CREATE TABLE AS</literal></entry>
-         <entry align="left"><literal>command_start</literal></entry>
-        </row>
-        <row>
-         <entry align="left"><literal>CREATE TEXT SEARCH CONFIGURATION</literal></entry>
-         <entry align="left"><literal>command_start</literal></entry>
-        </row>
-        <row>
-         <entry align="left"><literal>CREATE TEXT SEARCH DICTIONARY</literal></entry>
-         <entry align="left"><literal>command_start</literal></entry>
-        </row>
-        <row>
-         <entry align="left"><literal>CREATE TEXT SEARCH PARSER</literal></entry>
-         <entry align="left"><literal>command_start</literal></entry>
-        </row>
-        <row>
-         <entry align="left"><literal>CREATE TEXT SEARCH TEMPLATE</literal></entry>
-         <entry align="left"><literal>command_start</literal></entry>
-        </row>
-        <row>
-         <entry align="left"><literal>CREATE TRIGGER</literal></entry>
-         <entry align="left"><literal>command_start</literal></entry>
-        </row>
-        <row>
-         <entry align="left"><literal>CREATE TYPE</literal></entry>
-         <entry align="left"><literal>command_start</literal></entry>
-        </row>
-        <row>
-         <entry align="left"><literal>CREATE USER MAPPING</literal></entry>
-         <entry align="left"><literal>command_start</literal></entry>
-        </row>
-        <row>
-         <entry align="left"><literal>CREATE VIEW</literal></entry>
-         <entry align="left"><literal>command_start</literal></entry>
-        </row>
-        <row>
-         <entry align="left"><literal>DROP AGGREGATE</literal></entry>
-         <entry align="left"><literal>command_start</literal></entry>
-        </row>
-        <row>
-         <entry align="left"><literal>DROP CAST</literal></entry>
-         <entry align="left"><literal>command_start</literal></entry>
-        </row>
-        <row>
-         <entry align="left"><literal>DROP COLLATION</literal></entry>
-         <entry align="left"><literal>command_start</literal></entry>
-        </row>
-        <row>
-         <entry align="left"><literal>DROP CONVERSION</literal></entry>
-         <entry align="left"><literal>command_start</literal></entry>
-        </row>
-        <row>
-         <entry align="left"><literal>DROP DOMAIN</literal></entry>
-         <entry align="left"><literal>command_start</literal></entry>
-        </row>
-        <row>
-         <entry align="left"><literal>DROP EXTENSION</literal></entry>
-         <entry align="left"><literal>command_start</literal></entry>
-        </row>
-        <row>
-         <entry align="left"><literal>DROP FOREIGN DATA WRAPPER</literal></entry>
-         <entry align="left"><literal>command_start</literal></entry>
-        </row>
-        <row>
-         <entry align="left"><literal>DROP FOREIGN TABLE</literal></entry>
-         <entry align="left"><literal>command_start</literal></entry>
-        </row>
-        <row>
-         <entry align="left"><literal>DROP FUNCTION</literal></entry>
-         <entry align="left"><literal>command_start</literal></entry>
-        </row>
-        <row>
-         <entry align="left"><literal>DROP INDEX</literal></entry>
-         <entry align="left"><literal>command_start</literal></entry>
-        </row>
-        <row>
-         <entry align="left"><literal>DROP LANGUAGE</literal></entry>
-         <entry align="left"><literal>command_start</literal></entry>
-        </row>
-        <row>
-         <entry align="left"><literal>DROP OPERATOR</literal></entry>
-         <entry align="left"><literal>command_start</literal></entry>
-        </row>
-        <row>
-         <entry align="left"><literal>DROP OPERATOR CLASS</literal></entry>
-         <entry align="left"><literal>command_start</literal></entry>
-        </row>
-        <row>
-         <entry align="left"><literal>DROP OPERATOR FAMILY</literal></entry>
-         <entry align="left"><literal>command_start</literal></entry>
-        </row>
-        <row>
-         <entry align="left"><literal>DROP RULE</literal></entry>
-         <entry align="left"><literal>command_start</literal></entry>
-        </row>
-        <row>
-         <entry align="left"><literal>DROP SCHEMA</literal></entry>
-         <entry align="left"><literal>command_start</literal></entry>
-        </row>
-        <row>
-         <entry align="left"><literal>DROP SEQUENCE</literal></entry>
-         <entry align="left"><literal>command_start</literal></entry>
-        </row>
-        <row>
-         <entry align="left"><literal>DROP SERVER</literal></entry>
-         <entry align="left"><literal>command_start</literal></entry>
-        </row>
-        <row>
-         <entry align="left"><literal>DROP TABLE</literal></entry>
-         <entry align="left"><literal>command_start</literal></entry>
-        </row>
-        <row>
-         <entry align="left"><literal>DROP TEXT SEARCH CONFIGURATION</literal></entry>
-         <entry align="left"><literal>command_start</literal></entry>
-        </row>
-        <row>
-         <entry align="left"><literal>DROP TEXT SEARCH DICTIONARY</literal></entry>
-         <entry align="left"><literal>command_start</literal></entry>
-        </row>
-        <row>
-         <entry align="left"><literal>DROP TEXT SEARCH PARSER</literal></entry>
-         <entry align="left"><literal>command_start</literal></entry>
-        </row>
-        <row>
-         <entry align="left"><literal>DROP TEXT SEARCH TEMPLATE</literal></entry>
-         <entry align="left"><literal>command_start</literal></entry>
-        </row>
-        <row>
-         <entry align="left"><literal>DROP TRIGGER</literal></entry>
-         <entry align="left"><literal>command_start</literal></entry>
-        </row>
-        <row>
-         <entry align="left"><literal>DROP TYPE</literal></entry>
-         <entry align="left"><literal>command_start</literal></entry>
-        </row>
-        <row>
-         <entry align="left"><literal>DROP USER MAPPING</literal></entry>
-         <entry align="left"><literal>command_start</literal></entry>
-        </row>
-        <row>
-         <entry align="left"><literal>DROP VIEW</literal></entry>
-         <entry align="left"><literal>command_start</literal></entry>
-        </row>
-        <row>
-         <entry align="left"><literal>LOAD</literal></entry>
-         <entry align="left"><literal>command_start</literal></entry>
-        </row>
-        <row>
-         <entry align="left"><literal>REINDEX</literal></entry>
-         <entry align="left"><literal>command_start</literal></entry>
-        </row>
-        <row>
-         <entry align="left"><literal>SELECT INTO</literal></entry>
-         <entry align="left"><literal>command_start</literal></entry>
-        </row>
-        <row>
-         <entry align="left"><literal>VACUUM</literal></entry>
-         <entry align="left"><literal>command_start</literal></entry>
-        </row>
-       </tbody>
-      </tgroup>
-     </informaltable>
-     <para>
-      That list is also the list of supported commands on which you can
-      attach an event trigger.
+      for which the trigger should fire.  For <literal>TAG</>, this means a
+      list of command tags (e.g. <literal>'DROP FUNCTION'</>).
      </para>
     </listitem>
    </varlistentry>
@@ -476,7 +96,7 @@ CREATE EVENT TRIGGER <replaceable class="PARAMETER">name</replaceable>
     <listitem>
      <para>
       A user-supplied function that is declared as taking no argument and
-      returning type <literal>event trigger</literal>.
+      returning type <literal>event_trigger</literal>.
      </para>
      <para>
       If your event trigger is implemented in <literal>C</literal> then it
@@ -490,24 +110,20 @@ CREATE EVENT TRIGGER <replaceable class="PARAMETER">name</replaceable>
   </variablelist>
  </refsect1>
 
- <refsect1 id="SQL-CREATEEVENTTRIGGER-notes">
+ <refsect1 id="sql-createeventtrigger-notes">
   <title>Notes</title>
 
   <para>
    To create a trigger on a event, the user must be superuser.
   </para>
-
-  <para>
-   Use <xref linkend="sql-dropeventtrigger"> to remove a event trigger.
-  </para>
  </refsect1>
 
- <refsect1 id="SQL-CREATEEVENTTRIGGER-examples">
+ <refsect1 id="sql-createeventtrigger-examples">
   <title>Examples</title>
 
   <para>
-   Forbids the execution of any command supported by the event trigger
-   mechanism, which includes all commands listed above:
+   Forbid the execution of any command supported by the event trigger
+   mechanism:
 
 <programlisting>
 CREATE OR REPLACE FUNCTION abort_any_command()
@@ -547,13 +163,12 @@ $$;
   </para>
  </refsect1>
 
- <refsect1 id="SQL-CREATEEVENTTRIGGER-compatibility">
+ <refsect1 id="sql-createeventtrigger-compatibility">
   <title>Compatibility</title>
 
   <para>
-   <command>CREATE EVENT TRIGGER</command> is a
-   <productname>PostgreSQL</productname> extension of the <acronym>SQL</>
-   standard.
+   There is no <command>CREATE EVENT TRIGGER</command> statement in the
+   SQL standard.
   </para>
 
  </refsect1>

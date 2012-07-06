@@ -99,11 +99,6 @@
      </row>
 
      <row>
-      <entry><link linkend="catalog-pg-event-trigger"><structname>pg_event_trigger</structname></link></entry>
-      <entry>event triggers</entry>
-     </row>
-
-     <row>
       <entry><link linkend="catalog-pg-constraint"><structname>pg_constraint</structname></link></entry>
       <entry>check constraints, unique constraints, primary key constraints, foreign key constraints</entry>
      </row>
@@ -146,6 +141,11 @@
      <row>
       <entry><link linkend="catalog-pg-enum"><structname>pg_enum</structname></link></entry>
       <entry>enum label and value definitions</entry>
+     </row>
+
+     <row>
+      <entry><link linkend="catalog-pg-event-trigger"><structname>pg_event_trigger</structname></link></entry>
+      <entry>event triggers</entry>
      </row>
 
      <row>
@@ -1871,6 +1871,7 @@
 
   <para>
    The catalog <structname>pg_event_trigger</structname> stores event triggers.
+   See <xref linkend="event-triggers"> for more information.
   </para>
 
   <table>
@@ -1891,30 +1892,28 @@
       <entry><structfield>evtname</structfield></entry>
       <entry><type>name</type></entry>
       <entry></entry>
-      <entry>Trigger name (unique)</entry>
+      <entry>Trigger name (must be unique)</entry>
      </row>
 
      <row>
       <entry><structfield>evtevent</structfield></entry>
       <entry><type>name</type></entry>
       <entry></entry>
-      <entry>The event this trigger fires for.</entry>
+      <entry>Identifies the event for which this trigger fires</entry>
      </row>
 
      <row>
       <entry><structfield>evtowner</structfield></entry>
       <entry><type>oid</type></entry>
       <entry><literal><link linkend="catalog-pg-authid"><structname>pg_authid</structname></link>.oid</literal></entry>
-      <entry>Owner of the event</entry>
+      <entry>Owner of the event trigger</entry>
      </row>
 
      <row>
       <entry><structfield>evtfoid</structfield></entry>
       <entry><type>oid</type></entry>
       <entry><literal><link linkend="catalog-pg-proc"><structname>pg_proc</structname></link>.oid</literal></entry>
-      <entry>
-       The OID of the function called by this event trigger.
-      </entry>
+      <entry>The function to be called</entry>
      </row>
 
      <row>
@@ -1935,7 +1934,10 @@
       <entry><structfield>evttags</structfield></entry>
       <entry><type>text[]</type></entry>
       <entry></entry>
-      <entry>Command tags of the commands this trigger is restricted to.</entry>
+      <entry>
+        Command tags for which this trigger will fire.  If NULL, the firing
+        of this trigger is not restricted on the basis of the command tag.
+      </entry>
      </row>
     </tbody>
    </tgroup>
