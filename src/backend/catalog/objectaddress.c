@@ -997,6 +997,11 @@ check_object_ownership(Oid roleid, ObjectType objtype, ObjectAddress address,
 				aclcheck_error(ACLCHECK_NOT_OWNER, ACL_KIND_FOREIGN_SERVER,
 							   NameListToString(objname));
 			break;
+		case OBJECT_EVENT_TRIGGER:
+			if (!pg_event_trigger_ownercheck(address.objectId, roleid))
+				aclcheck_error(ACLCHECK_NOT_OWNER, ACL_KIND_EVENT_TRIGGER,
+							   NameListToString(objname));
+			break;
 		case OBJECT_LANGUAGE:
 			if (!pg_language_ownercheck(address.objectId, roleid))
 				aclcheck_error(ACLCHECK_NOT_OWNER, ACL_KIND_LANGUAGE,
@@ -1075,7 +1080,6 @@ check_object_ownership(Oid roleid, ObjectType objtype, ObjectAddress address,
 			break;
 		case OBJECT_TSPARSER:
 		case OBJECT_TSTEMPLATE:
-		case OBJECT_EVENT_TRIGGER:
 			/* We treat these object types as being owned by superusers */
 			if (!superuser_arg(roleid))
 				ereport(ERROR,

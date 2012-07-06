@@ -49,23 +49,6 @@ static void AlterEventTriggerOwner_internal(Relation rel,
 											Oid newOwnerId);
 
 /*
- * Check permission: event triggers are only available for superusers. Raise
- * an exception when requirements are not fullfilled.
- *
- * It's not clear how to accept that database owners be able to create command
- * triggers, a superuser could run a command that fires a trigger's procedure
- * written by the database owner and now running with superuser privileges.
- */
-static void
-CheckEventTriggerPrivileges()
-{
-	if (!superuser())
-		ereport(ERROR,
-				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
-				 (errmsg("must be superuser to use event triggers"))));
-}
-
-/*
  * Insert Command Trigger Tuple
  *
  * Insert the new pg_event_trigger row, and return the OID assigned to the new
@@ -158,7 +141,16 @@ CreateEventTrigger(CreateEventTrigStmt *stmt, const char *queryString)
 	Oid			funcrettype;
 	Oid			evtowner = GetUserId();
 
-	CheckEventTriggerPrivileges();
+	/*
+	 * It would be nice to allow database owners or even regular users to do
+	 * this, but there are obvious privilege escalation risks which would have
+	 * to somehow be plugged first.
+	 */
+	if (!superuser())
+		ereport(ERROR,
+			(errmsg("permission denied to create event trigger \"%s\"",
+                   stmt->trigname),
+            errhint("Must be superuser to create an event trigger.")));
 
 	/*
 	 * Find and validate the trigger function.
@@ -171,7 +163,7 @@ CreateEventTrigger(CreateEventTrigStmt *stmt, const char *queryString)
 	if (funcrettype != EVTTRIGGEROID)
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_OBJECT_DEFINITION),
-				 errmsg("function \"%s\" must return type \"command_trigger\"",
+				 errmsg("function \"%s\" must return type \"event_trigger\"",
 						NameListToString(stmt->funcname))));
 
 	/*
@@ -224,15 +216,18 @@ AlterEventTrigger(AlterEventTrigStmt *stmt)
 	Form_pg_event_trigger evtForm;
 	char        tgenabled = stmt->tgenabled;
 
-	CheckEventTriggerPrivileges();
-
 	tgrel = heap_open(EventTriggerRelationId, RowExclusiveLock);
 
-	tup = SearchSysCacheCopy1(EVENTTRIGGERNAME, CStringGetDatum(stmt->trigname));
+	tup = SearchSysCacheCopy1(EVENTTRIGGERNAME,
+							  CStringGetDatum(stmt->trigname));
 	if (!HeapTupleIsValid(tup))
 		ereport(ERROR,
 				(errcode(ERRCODE_UNDEFINED_OBJECT),
-				 errmsg("event trigger \"%s\" does not exist", stmt->trigname)));
+				 errmsg("event trigger \"%s\" does not exist",
+					stmt->trigname)));
+    if (!pg_event_trigger_ownercheck(HeapTupleGetOid(tup), GetUserId()))
+        aclcheck_error(ACLCHECK_NOT_OWNER, ACL_KIND_EVENT_TRIGGER,
+                       stmt->trigname);
 
 	/* tuple is a copy, so we can modify it below */
 	evtForm = (Form_pg_event_trigger) GETSTRUCT(tup);
@@ -257,8 +252,6 @@ RenameEventTrigger(const char *trigname, const char *newname)
 	Relation	rel;
 	Form_pg_event_trigger evtForm;
 
-	CheckEventTriggerPrivileges();
-
 	rel = heap_open(EventTriggerRelationId, RowExclusiveLock);
 
 	/* newname must be available */
@@ -273,6 +266,9 @@ RenameEventTrigger(const char *trigname, const char *newname)
 		ereport(ERROR,
 				(errcode(ERRCODE_UNDEFINED_OBJECT),
 				 errmsg("event trigger \"%s\" does not exist", trigname)));
+    if (!pg_event_trigger_ownercheck(HeapTupleGetOid(tup), GetUserId()))
+        aclcheck_error(ACLCHECK_NOT_OWNER, ACL_KIND_EVENT_TRIGGER,
+                       trigname);
 
 	evtForm = (Form_pg_event_trigger) GETSTRUCT(tup);
 
@@ -344,22 +340,31 @@ AlterEventTriggerOwner_internal(Relation rel, HeapTuple tup, Oid newOwnerId)
 {
 	Form_pg_event_trigger form;
 
-	CheckEventTriggerPrivileges();
-
 	form = (Form_pg_event_trigger) GETSTRUCT(tup);
 
-	if (form->evtowner != newOwnerId)
-	{
-		form->evtowner = newOwnerId;
+	if (form->evtowner == newOwnerId)
+		return;
 
-		simple_heap_update(rel, &tup->t_self, tup);
-		CatalogUpdateIndexes(rel, tup);
+    if (!pg_event_trigger_ownercheck(HeapTupleGetOid(tup), GetUserId()))
+        aclcheck_error(ACLCHECK_NOT_OWNER, ACL_KIND_EVENT_TRIGGER,
+                       NameStr(form->evtname));
 
-		/* Update owner dependency reference */
-		changeDependencyOnOwner(EventTriggerRelationId,
-								HeapTupleGetOid(tup),
-								newOwnerId);
-	}
+	/* New owner must be a superuser */
+	if (!superuser_arg(newOwnerId))
+		ereport(ERROR,
+				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
+				 errmsg("permission denied to change owner of event trigger \"%s\"",
+					NameStr(form->evtname)),
+				 errhint("The owner of an event trigger must be a superuser.")));
+
+	form->evtowner = newOwnerId;
+	simple_heap_update(rel, &tup->t_self, tup);
+	CatalogUpdateIndexes(rel, tup);
+
+	/* Update owner dependency reference */
+	changeDependencyOnOwner(EventTriggerRelationId,
+							HeapTupleGetOid(tup),
+							newOwnerId);
 }
 
 /*
@@ -412,14 +417,14 @@ call_event_trigger_procedure(EventContext ev_ctx, TrigEvent tev,
 	 * Prepare the event trigger function context from the Command Context.
 	 * We prepare a dedicated Node here so as not to publish internal data.
 	 */
-	trigdata.type		= T_EventTriggerData;
-	trigdata.toplevel	= ev_ctx->toplevel;
-	trigdata.tag		= ev_ctx->tag;
-	trigdata.objectId	= ev_ctx->objectId;
+	trigdata.type = T_EventTriggerData;
+	trigdata.toplevel = ev_ctx->toplevel;
+	trigdata.tag = ev_ctx->tag;
+	trigdata.objectId = ev_ctx->objectId;
 	trigdata.schemaname = ev_ctx->schemaname;
 	trigdata.objectname = ev_ctx->objectname;
-	trigdata.parsetree	= ev_ctx->parsetree;
-	trigdata.when       = pstrdup(event_to_string(tev));
+	trigdata.parsetree = ev_ctx->parsetree;
+	trigdata.when = pstrdup(event_to_string(tev));
 
 	/*
 	 * Call the function, passing no arguments but setting a context.
@@ -448,12 +453,6 @@ InitEventContext(EventContext evt, const Node *parsetree)
 	evt->objectname = NULL;
 	evt->schemaname = NULL;
 
-	/*
-	 * Fill in the event command, which is an enum constant to match against
-	 * what's stored into catalogs. As we are storing that on disk, we need the
-	 * enum values to be stable, see src/include/catalog/pg_event_trigger.h for
-	 * details.
-	 */
 	switch (nodeTag(parsetree))
 	{
 		case T_CreateSchemaStmt:

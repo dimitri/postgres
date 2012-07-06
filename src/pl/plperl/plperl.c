@@ -1571,7 +1571,7 @@ plperl_trigger_build_args(FunctionCallInfo fcinfo)
 }
 
 
-/* Set up the arguments for a command trigger call. */
+/* Set up the arguments for an event trigger call. */
 static SV  *
 plperl_event_trigger_build_args(FunctionCallInfo fcinfo)
 {

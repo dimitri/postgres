@@ -214,7 +214,7 @@ static void processCASbits(int cas_bits, int location, const char *constrType,
 		CreateUserStmt CreateUserMappingStmt CreateRoleStmt
 		CreatedbStmt DeclareCursorStmt DefineStmt DeleteStmt DiscardStmt DoStmt
 		DropGroupStmt DropOpClassStmt DropOpFamilyStmt DropPLangStmt DropStmt
-		DropAssertStmt DropTrigStmt DropEventTrigStmt DropRuleStmt DropCastStmt
+		DropAssertStmt DropTrigStmt DropRuleStmt DropCastStmt
 		DropRoleStmt DropUserStmt DropdbStmt DropTableSpaceStmt DropFdwStmt
 		DropForeignServerStmt DropUserMappingStmt ExplainStmt FetchStmt
 		GrantStmt GrantRoleStmt IndexStmt InsertStmt ListenStmt LoadStmt
@@ -755,7 +755,6 @@ stmt :
 			| DropStmt
 			| DropTableSpaceStmt
 			| DropTrigStmt
-			| DropEventTrigStmt
 			| DropRoleStmt
 			| DropUserStmt
 			| DropUserMappingStmt
@@ -4378,27 +4377,6 @@ trigger_command:
 		;
 
 
-DropEventTrigStmt:
-			DROP EVENT TRIGGER name opt_drop_behavior
-				{
-					DropStmt *n = makeNode(DropStmt);
-					n->removeType = OBJECT_EVENT_TRIGGER;
-					n->objects = list_make1(list_make1(makeString($4)));
-					n->behavior = $5;
-					n->missing_ok = false;
-					$$ = (Node *) n;
-				}
-			| DROP EVENT TRIGGER IF_P EXISTS name opt_drop_behavior
-				{
-					DropStmt *n = makeNode(DropStmt);
-					n->removeType = OBJECT_EVENT_TRIGGER;
-					n->objects = list_make1(list_make1(makeString($6)));
-					n->behavior = $7;
-					n->missing_ok = true;
-					$$ = (Node *) n;
-				}
-		;
-
 AlterEventTrigStmt:
 			ALTER EVENT TRIGGER name enable_trigger
 				{
@@ -5002,6 +4980,7 @@ drop_type:	TABLE									{ $$ = OBJECT_TABLE; }
 			| VIEW									{ $$ = OBJECT_VIEW; }
 			| INDEX									{ $$ = OBJECT_INDEX; }
 			| FOREIGN TABLE							{ $$ = OBJECT_FOREIGN_TABLE; }
+			| EVENT TRIGGER 						{ $$ = OBJECT_EVENT_TRIGGER; }
 			| TYPE_P								{ $$ = OBJECT_TYPE; }
 			| DOMAIN_P								{ $$ = OBJECT_DOMAIN; }
 			| COLLATION								{ $$ = OBJECT_COLLATION; }

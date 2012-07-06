@@ -11,10 +11,6 @@ begin
 end;
 $$;
 
---
--- TODO: REASSIGN OWNED and DROP OWNED
---
-
 create event trigger any_t on command_start
    execute procedure snitch();
 
@@ -68,9 +64,11 @@ alter event trigger foo_t rename to snitch;
 
 create schema cmd;
 create schema cmd2;
-create role regbob;
 
-alter event trigger snitch owner to regbob;
+create role regression_bob;
+alter event trigger snitch owner to regression_bob;
+alter role regression_bob superuser;
+alter event trigger snitch owner to regression_bob;
 
 create table cmd.foo(id bigserial primary key);
 create view cmd.v as select * from cmd.foo;
@@ -103,7 +101,7 @@ alter table cmd.test set with oids;
 alter table cmd.test set without oids;
 
 create sequence test_seq_;
-alter sequence test_seq_ owner to regbob;
+alter sequence test_seq_ owner to regression_bob;
 alter sequence test_seq_ rename to test_seq;
 alter sequence test_seq set schema cmd;
 alter sequence cmd.test_seq start with 3;
@@ -117,7 +115,7 @@ alter sequence cmd.test_seq cycle;
 alter sequence cmd.test_seq no cycle;
 
 create view view_test as select id, things from cmd.test;
-alter view view_test owner to regbob;
+alter view view_test owner to regression_bob;
 alter view view_test rename to view_test2;
 alter view view_test2 set schema cmd;
 alter view cmd.view_test2 alter column id set default 9;
@@ -142,7 +140,7 @@ as $$ select t from cmd.foo where id = $1; $$;
 alter function fun(int) strict;
 alter function fun(int) rename to notfun;
 alter function notfun(int) set schema cmd;
-alter function cmd.notfun(int) owner to regbob;
+alter function cmd.notfun(int) owner to regression_bob;
 alter function cmd.notfun(int) cost 77;
 drop function cmd.notfun(int);
 
@@ -170,7 +168,7 @@ create type cmd.compfoo AS (f1 int, f2 text);
 alter type cmd.compfoo add attribute f3 text;
 
 create type cmd.type_test AS (a integer, b integer, c text);
-alter type cmd.type_test owner to regbob;
+alter type cmd.type_test owner to regression_bob;
 alter type cmd.type_test rename to type_test2;
 alter type cmd.type_test2 set schema public;
 alter type public.type_test2 rename attribute a to z;
@@ -191,7 +189,7 @@ alter domain cmd.us_postal_code drop default;
 alter domain cmd.us_postal_code drop not null;
 alter domain cmd.us_postal_code add constraint dummy_constraint check (value ~ '^\d{8}$');
 alter domain cmd.us_postal_code drop constraint dummy_constraint;
-alter domain cmd.us_postal_code owner to regbob;
+alter domain cmd.us_postal_code owner to regression_bob;
 alter domain cmd.us_postal_code set schema cmd2;
 drop domain cmd2.us_postal_code;
 
@@ -248,11 +246,12 @@ drop schema cmd1 cascade;
 drop schema cmd2 cascade;
 
 -- fail because owning event trigger snitch
-drop role regbob;
+drop role regression_bob;
 
 drop event trigger any_t;
-drop event trigger snitch;
-drop role regbob;
+drop event trigger if exists snitch;
+drop event trigger if exists snitch;
+drop role regression_bob;
 
 create table onerow(id integer);
 

@@ -10,9 +10,6 @@ begin
   raise notice 'snitch: % % %.%', tg_when, tg_tag, tg_schemaname, tg_objectname;
 end;
 $$;
---
--- TODO: REASSIGN OWNED and DROP OWNED
---
 create event trigger any_t on command_start
    execute procedure snitch();
 create event trigger foo_t on command_start
@@ -67,8 +64,12 @@ NOTICE:  snitch: command_start CREATE SCHEMA <NULL>.<NULL>
 create schema cmd2;
 NOTICE:  snitch: command_start CREATE SCHEMA <NULL>.<NULL>
 NOTICE:  snitch: command_start CREATE SCHEMA <NULL>.<NULL>
-create role regbob;
-alter event trigger snitch owner to regbob;
+create role regression_bob;
+alter event trigger snitch owner to regression_bob;
+ERROR:  permission denied to change owner of event trigger "snitch"
+HINT:  The owner of an event trigger must be a superuser.
+alter role regression_bob superuser;
+alter event trigger snitch owner to regression_bob;
 create table cmd.foo(id bigserial primary key);
 NOTICE:  snitch: command_start CREATE TABLE <NULL>.<NULL>
 NOTICE:  snitch: command_start CREATE TABLE <NULL>.<NULL>
@@ -158,7 +159,7 @@ NOTICE:  snitch: command_start ALTER TABLE <NULL>.<NULL>
 create sequence test_seq_;
 NOTICE:  snitch: command_start CREATE SEQUENCE <NULL>.<NULL>
 NOTICE:  snitch: command_start CREATE SEQUENCE <NULL>.<NULL>
-alter sequence test_seq_ owner to regbob;
+alter sequence test_seq_ owner to regression_bob;
 NOTICE:  snitch: command_start ALTER SEQUENCE <NULL>.<NULL>
 NOTICE:  snitch: command_start ALTER SEQUENCE <NULL>.<NULL>
 alter sequence test_seq_ rename to test_seq;
@@ -197,7 +198,7 @@ NOTICE:  snitch: command_start ALTER SEQUENCE <NULL>.<NULL>
 create view view_test as select id, things from cmd.test;
 NOTICE:  snitch: command_start CREATE VIEW <NULL>.<NULL>
 NOTICE:  snitch: command_start CREATE VIEW <NULL>.<NULL>
-alter view view_test owner to regbob;
+alter view view_test owner to regression_bob;
 NOTICE:  snitch: command_start ALTER VIEW <NULL>.<NULL>
 NOTICE:  snitch: command_start ALTER VIEW <NULL>.<NULL>
 alter view view_test rename to view_test2;
@@ -248,7 +249,7 @@ NOTICE:  snitch: command_start ALTER FUNCTION <NULL>.<NULL>
 alter function notfun(int) set schema cmd;
 NOTICE:  snitch: command_start ALTER FUNCTION <NULL>.<NULL>
 NOTICE:  snitch: command_start ALTER FUNCTION <NULL>.<NULL>
-alter function cmd.notfun(int) owner to regbob;
+alter function cmd.notfun(int) owner to regression_bob;
 NOTICE:  snitch: command_start ALTER FUNCTION <NULL>.<NULL>
 NOTICE:  snitch: command_start ALTER FUNCTION <NULL>.<NULL>
 alter function cmd.notfun(int) cost 77;
@@ -297,7 +298,7 @@ NOTICE:  snitch: command_start ALTER TYPE <NULL>.<NULL>
 create type cmd.type_test AS (a integer, b integer, c text);
 NOTICE:  snitch: command_start CREATE TYPE <NULL>.<NULL>
 NOTICE:  snitch: command_start CREATE TYPE <NULL>.<NULL>
-alter type cmd.type_test owner to regbob;
+alter type cmd.type_test owner to regression_bob;
 NOTICE:  snitch: command_start ALTER TYPE <NULL>.<NULL>
 NOTICE:  snitch: command_start ALTER TYPE <NULL>.<NULL>
 alter type cmd.type_test rename to type_test2;
@@ -349,7 +350,7 @@ NOTICE:  snitch: command_start ALTER DOMAIN <NULL>.<NULL>
 alter domain cmd.us_postal_code drop constraint dummy_constraint;
 NOTICE:  snitch: command_start ALTER DOMAIN <NULL>.<NULL>
 NOTICE:  snitch: command_start ALTER DOMAIN <NULL>.<NULL>
-alter domain cmd.us_postal_code owner to regbob;
+alter domain cmd.us_postal_code owner to regression_bob;
 NOTICE:  snitch: command_start ALTER DOMAIN <NULL>.<NULL>
 NOTICE:  snitch: command_start ALTER DOMAIN <NULL>.<NULL>
 alter domain cmd.us_postal_code set schema cmd2;
@@ -455,12 +456,14 @@ drop schema cmd2 cascade;
 NOTICE:  snitch: command_start DROP SCHEMA <NULL>.<NULL>
 NOTICE:  snitch: command_start DROP SCHEMA <NULL>.<NULL>
 -- fail because owning event trigger snitch
-drop role regbob;
-ERROR:  role "regbob" cannot be dropped because some objects depend on it
+drop role regression_bob;
+ERROR:  role "regression_bob" cannot be dropped because some objects depend on it
 DETAIL:  owner of event trigger snitch
 drop event trigger any_t;
-drop event trigger snitch;
-drop role regbob;
+drop event trigger if exists snitch;
+drop event trigger if exists snitch;
+NOTICE:  event trigger "snitch" does not exist, skipping
+drop role regression_bob;
 create table onerow(id integer);
 create or replace function insert_one_row()
  returns event_trigger

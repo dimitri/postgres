@@ -356,7 +356,7 @@ standard_ProcessUtility(Node *parsetree,
 		completionTag[0] = '\0';
 
 	/* Event Trigger support for command_start */
-	InitEventContext(&evt, (Node *)parsetree);
+	InitEventContext(&evt, parsetree);
 	if (CommandFiresTriggersForEvent(&evt, E_CommandStart))
 		ExecEventTriggers(&evt, E_CommandStart);
 

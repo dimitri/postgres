@@ -5313,7 +5313,7 @@ getEventTriggers(Archive *fout, int *numEventTriggers)
 				i_oid,
 				i_evtname,
 				i_evtevent,
-                i_evtowner,
+				i_evtowner,
 				i_evttags,
 				i_evtfname,
 				i_evtenabled;
@@ -5333,7 +5333,7 @@ getEventTriggers(Archive *fout, int *numEventTriggers)
 					  "SELECT e.tableoid, e.oid, evtname, evtenabled, "
 					  "evtevent, (%s evtowner) AS evtowner, "
 					  "array_to_string(array("
-					  "select '''' || x || '''' "
+					  "select quote_literal(x) "
 					  " from unnest(evttags) as t(x)), ', ') as evttags, "
 					  "e.evtfoid::regproc as evtfname "
 					  "FROM pg_event_trigger e "
@@ -13756,7 +13756,7 @@ dumpEventTrigger(Archive *fout, EventTriggerInfo *evtinfo)
 	appendPQExpBuffer(query, "CREATE EVENT TRIGGER ");
 	appendPQExpBufferStr(query, fmtId(evtinfo->dobj.name));
 	appendPQExpBuffer(query, " ON ");
-	appendPQExpBufferStr(query, evtinfo->evtevent);
+	appendPQExpBufferStr(query, fmtId(evtinfo->evtevent));
 	appendPQExpBufferStr(query, " ");
 
 	if (strcmp("", evtinfo->evttags) != 0)
@@ -13768,7 +13768,7 @@ dumpEventTrigger(Archive *fout, EventTriggerInfo *evtinfo)
 
 	appendPQExpBuffer(query, "\n   EXECUTE PROCEDURE ");
 	appendPQExpBufferStr(query, evtinfo->evtfname);
-	appendPQExpBuffer(query, " ();\n");
+	appendPQExpBuffer(query, "();\n");
 
 	if (evtinfo->evtenabled != 'O')
 	{

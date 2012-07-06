@@ -536,7 +536,7 @@ do_compile(FunctionCallInfo fcinfo,
 				if (rettypeid == VOIDOID ||
 					rettypeid == RECORDOID)
 					 /* okay */ ;
-				else if (rettypeid == TRIGGEROID)
+				else if (rettypeid == TRIGGEROID || rettypeid == EVTTRIGGEROID)
 					ereport(ERROR,
 							(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 							 errmsg("trigger functions can only be called as triggers")));
@@ -689,7 +689,7 @@ do_compile(FunctionCallInfo fcinfo,
 			if (procStruct->pronargs != 0)
 				ereport(ERROR,
 						(errcode(ERRCODE_INVALID_FUNCTION_DEFINITION),
-						 errmsg("command trigger functions cannot have declared arguments")));
+						 errmsg("event trigger functions cannot have declared arguments")));
 
 			/* Add the variable tg_when */
 			var = plpgsql_build_variable("tg_when", 0,
