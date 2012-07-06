@@ -116,7 +116,7 @@ add_funcall_to_command_event(TrigEvent event,
  *  foreach(cell, EventCommandTriggerCache[TrigEventCommand][TrigEvent])
  */
 static void
-BuildEventTriggerCache()
+BuildEventTriggerCache(void)
 {
 	HASHCTL		info;
 	Relation	rel, irel;
@@ -144,8 +144,9 @@ BuildEventTriggerCache()
 	indexScan = index_beginscan(rel, irel, SnapshotNow, 0, 0);
 	index_rescan(indexScan, NULL, 0, NULL, 0);
 
-	/* we use a full indexscan to guarantee that we see event triggers ordered
-	 * by name, this way we only even have to append the trigger's function Oid
+	/*
+	 * We use a full indexscan to guarantee that we see event triggers ordered
+	 * by name. This way, we only even have to append the trigger's function Oid
 	 * to the target cache Oid list.
 	 */
 	while (HeapTupleIsValid(tuple = index_getnext(indexScan, ForwardScanDirection)))
@@ -327,7 +328,8 @@ get_event_triggers(TrigEvent event, TrigEventCommand command)
 				lc_any_procs = lnext(lc_any_procs);
 			}
 
-			/* now append as many elements from CMD list named before next ANY
+			/*
+			 * now append as many elements from CMD list named before next ANY
 			 * entry
 			 */
 			do

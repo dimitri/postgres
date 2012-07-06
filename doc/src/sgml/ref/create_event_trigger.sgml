@@ -12,7 +12,7 @@ PostgreSQL documentation
 
  <refnamediv>
   <refname>CREATE EVENT TRIGGER</refname>
-  <refpurpose>define a new trigger</refpurpose>
+  <refpurpose>define a new event trigger</refpurpose>
  </refnamediv>
 
  <indexterm zone="sql-createeventtrigger">
@@ -128,13 +128,13 @@ CREATE EVENT TRIGGER <replaceable class="PARAMETER">name</replaceable>
    The trigger will be associated with the specified event and will
    execute the specified
    function <replaceable class="parameter">function_name</replaceable> when
-   that event is run.
+   that event occurs.
   </para>
 
   <para>
-   The command trigger gives a procedure to fire before the event is
+   The event trigger gives a procedure to fire before the event is
    executed. In some cases the procedure can be fired instead of the event
-   code PostgreSQL would run itself. A command trigger's function must
+   code PostgreSQL would run itself. A event trigger's function must
    return <literal>event_trigger</literal> data type. It can then only
    abort the execution of the command by raising an exception.
   </para>
@@ -186,7 +186,7 @@ CREATE EVENT TRIGGER <replaceable class="PARAMETER">name</replaceable>
      </para>
      <para>
       The command <literal>ALTER TYPE ... ADD VALUE ...</literal> prevents
-      transaction control entirely, thus no command trigger will get fired
+      transaction control entirely, thus no event trigger will get fired
       when it's used.
      </para>
      <para>

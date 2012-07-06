@@ -170,7 +170,7 @@ $$ LANGUAGE plperl;
 
 SELECT direct_trigger();
 
--- test plperl command triggers
+-- test plperl event triggers
 create or replace function perlsnitch() returns event_trigger language plperl as $$
   elog(NOTICE, "perlsnitch: "
                . $_TD->{when} . " "

@@ -309,7 +309,7 @@ $$ LANGUAGE plperl;
 SELECT direct_trigger();
 ERROR:  trigger functions can only be called as triggers
 CONTEXT:  compilation of PL/Perl function "direct_trigger"
--- test plperl command triggers
+-- test plperl event triggers
 create or replace function perlsnitch() returns event_trigger language plperl as $$
   elog(NOTICE, "perlsnitch: "
                . $_TD->{when} . " "

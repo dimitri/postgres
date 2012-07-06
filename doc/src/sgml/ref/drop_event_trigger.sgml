@@ -12,7 +12,7 @@ PostgreSQL documentation
 
  <refnamediv>
   <refname>DROP EVENT TRIGGER</refname>
-  <refpurpose>remove a event trigger</refpurpose>
+  <refpurpose>remove an event trigger</refpurpose>
  </refnamediv>
 
  <indexterm zone="sql-dropeventtrigger">

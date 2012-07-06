@@ -5300,7 +5300,7 @@ getTriggers(Archive *fout, TableInfo tblinfo[], int numTables)
 
 /*
  * getEvtTriggers
- *	  get information about every command trigger on a dumpable table
+ *	  get information about event triggers
  */
 EvtTriggerInfo *
 getEvtTriggers(Archive *fout, int *numEvtTriggers)

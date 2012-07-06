@@ -63,6 +63,7 @@
 #include "utils/lsyscache.h"
 #include "utils/syscache.h"
 
+
 /* Hook for plugins to get control in ProcessUtility() */
 ProcessUtility_hook_type ProcessUtility_hook = NULL;
 
@@ -356,11 +357,8 @@ standard_ProcessUtility(Node *parsetree,
 
 	/* Event Trigger support for command_start */
 	InitEventContext(&evt, (Node *)parsetree);
-
 	if (CommandFiresTriggersForEvent(&evt, E_CommandStart))
-	{
 		ExecEventTriggers(&evt, E_CommandStart);
-	}
 
 	switch (nodeTag(parsetree))
 	{

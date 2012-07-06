@@ -242,7 +242,7 @@ getSchemaData(Archive *fout, int *numTablesPtr)
 	getTriggers(fout, tblinfo, numTables);
 
 	if (g_verbose)
-		write_msg(NULL, "reading command triggers\n");
+		write_msg(NULL, "reading event triggers\n");
 	getEvtTriggers(fout, &numEvtTriggers);
 
 	*numTablesPtr = numTables;

@@ -49,7 +49,7 @@ static void AlterEventTriggerOwner_internal(Relation rel,
 											Oid newOwnerId);
 
 /*
- * Check permission: command triggers are only available for superusers. Raise
+ * Check permission: event triggers are only available for superusers. Raise
  * an exception when requirements are not fullfilled.
  *
  * It's not clear how to accept that database owners be able to create command
@@ -62,7 +62,7 @@ CheckEventTriggerPrivileges()
 	if (!superuser())
 		ereport(ERROR,
 				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
-				 (errmsg("must be superuser to use command triggers"))));
+				 (errmsg("must be superuser to use event triggers"))));
 }
 
 /*
@@ -214,7 +214,7 @@ RemoveEventTriggerById(Oid trigOid)
 }
 
 /*
- * ALTER EVENT TRIGGER foo ON COMMAND ... ENABLE|DISABLE|ENABLE ALWAYS|REPLICA
+ * ALTER EVENT TRIGGER foo ENABLE|DISABLE|ENABLE ALWAYS|REPLICA
  */
 void
 AlterEventTrigger(AlterEventTrigStmt *stmt)
@@ -248,7 +248,7 @@ AlterEventTrigger(AlterEventTrigStmt *stmt)
 
 
 /*
- * Rename command trigger
+ * Rename event trigger
  */
 void
 RenameEventTrigger(const char *trigname, const char *newname)
@@ -382,9 +382,9 @@ get_event_trigger_oid(const char *trigname, bool missing_ok)
 }
 
 /*
- * Functions to execute the command triggers.
+ * Functions to execute the event triggers.
  *
- * We call the functions that matches the command triggers definitions in
+ * We call the functions that matches the event triggers definitions in
  * alphabetical order, and give them those arguments:
  *
  *   toplevel command tag, text
@@ -394,7 +394,7 @@ get_event_trigger_oid(const char *trigname, bool missing_ok)
  *   objectname, text
  *
  * Those are passed down as special "context" magic variables and need specific
- * support in each PL that wants to support command triggers. All core PL do.
+ * support in each PL that wants to support event triggers. All core PL do.
  */
 
 static void
@@ -409,7 +409,7 @@ call_event_trigger_procedure(EventContext ev_ctx, TrigEvent tev,
 	fmgr_info(proc, &flinfo);
 
 	/*
-	 * Prepare the command trigger function context from the Command Context.
+	 * Prepare the event trigger function context from the Command Context.
 	 * We prepare a dedicated Node here so as not to publish internal data.
 	 */
 	trigdata.type		= T_EventTriggerData;
@@ -440,11 +440,11 @@ call_event_trigger_procedure(EventContext ev_ctx, TrigEvent tev,
 void
 InitEventContext(EventContext evt, const Node *parsetree)
 {
-	evt->command	= E_UNKNOWN;
-	evt->toplevel	= NULL;
-	evt->tag		= (char *) CreateCommandTag((Node *)parsetree);
-	evt->parsetree  = (Node *)parsetree;
-	evt->objectId   = InvalidOid;
+	evt->command = E_UNKNOWN;
+	evt->toplevel = NULL;
+	evt->tag = (char *) CreateCommandTag((Node *)parsetree);
+	evt->parsetree = (Node *)parsetree;
+	evt->objectId = InvalidOid;
 	evt->objectname = NULL;
 	evt->schemaname = NULL;
 
@@ -1010,8 +1010,9 @@ InitEventContext(EventContext evt, const Node *parsetree)
 			break;
 
 		default:
-			/* reaching that part of the code only means that we are not
-			 * supporting command triggers for the given command, which still
+			/*
+			 * reaching that part of the code only means that we are not
+			 * supporting event triggers for the given command, which still
 			 * needs to execute.
 			 */
 			break;
@@ -1037,7 +1038,7 @@ CommandFiresTriggersForEvent(EventContext ev_ctx, TrigEvent tev)
 }
 
 /*
- * Actually run command triggers of a specific command. We first run ANY
+ * Actually run event triggers for a specific command. We first run ANY
  * command triggers.
  */
 void

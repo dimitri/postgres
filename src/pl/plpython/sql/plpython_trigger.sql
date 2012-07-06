@@ -388,7 +388,7 @@ INSERT INTO composite_trigger_nested_test VALUES (ROW(ROW(1, 'f'), NULL, 3));
 INSERT INTO composite_trigger_nested_test VALUES (ROW(ROW(NULL, 't'), ROW(1, 'f'), NULL));
 SELECT * FROM composite_trigger_nested_test;
 
--- test plpython command triggers
+-- test plpython event triggers
 create or replace function pysnitch() returns event_trigger language plpythonu as $$
   plpy.notice("  pysnitch: %s %s %s.%s" %
               (TD["when"], TD["tag"], TD["schemaname"], TD["objectname"]));

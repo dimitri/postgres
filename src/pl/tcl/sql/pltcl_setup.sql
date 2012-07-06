@@ -560,7 +560,7 @@ $$ language pltcl immutable;
 select tcl_date_week(2010,1,24);
 select tcl_date_week(2001,10,24);
 
--- test pltcl command triggers
+-- test pltcl event triggers
 create or replace function tclsnitch() returns event_trigger language pltcl as $$
   elog NOTICE " tclsnitch: $TG_when $TG_tag $TG_schemaname $TG_objectname"
 $$;

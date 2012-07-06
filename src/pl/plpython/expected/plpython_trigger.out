@@ -610,7 +610,7 @@ SELECT * FROM composite_trigger_nested_test;
  ("(,t)","(1,f)",)
 (3 rows)
 
--- test plpython command triggers
+-- test plpython event triggers
 create or replace function pysnitch() returns event_trigger language plpythonu as $$
   plpy.notice("  pysnitch: %s %s %s.%s" %
               (TD["when"], TD["tag"], TD["schemaname"], TD["objectname"]));

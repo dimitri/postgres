@@ -12,7 +12,7 @@ PostgreSQL documentation
 
  <refnamediv>
   <refname>ALTER EVENT TRIGGER</refname>
-  <refpurpose>change the definition of a trigger</refpurpose>
+  <refpurpose>change the definition of an event trigger</refpurpose>
  </refnamediv>
 
  <indexterm zone="sql-altereventtrigger">
@@ -46,7 +46,7 @@ ALTER EVENT TRIGGER <replaceable class="PARAMETER">name</replaceable> RENAME TO 
   </para>
 
   <para>
-   You must be superuser to alter a event trigger.
+   You must be superuser to alter an event trigger.
   </para>
  </refsect1>
 
