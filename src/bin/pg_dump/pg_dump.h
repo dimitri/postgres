@@ -363,7 +363,7 @@ typedef struct _evttriggerInfo
 	char	   *evtfname;
 	char		evttype;
 	char		evtenabled;
-} EvtTriggerInfo;
+} EventTriggerInfo;
 
 /*
  * struct ConstraintInfo is used for all constraint types.	However we
@@ -575,6 +575,6 @@ extern ForeignServerInfo *getForeignServers(Archive *fout,
 extern DefaultACLInfo *getDefaultACLs(Archive *fout, int *numDefaultACLs);
 extern void getExtensionMembership(Archive *fout, ExtensionInfo extinfo[],
 					   int numExtensions);
-extern EvtTriggerInfo *getEvtTriggers(Archive *fout, int *numEvtTriggers);
+extern EventTriggerInfo *getEventTriggers(Archive *fout, int *numEventTriggers);
 
 #endif   /* PG_DUMP_H */

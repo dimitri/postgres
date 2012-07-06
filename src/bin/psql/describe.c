@@ -2958,7 +2958,7 @@ listConversions(const char *pattern, bool verbose, bool showSystem)
  * Describes Event Triggers.
  */
 bool
-listEvtTriggers(const char *pattern, bool verbose)
+listEventTriggers(const char *pattern, bool verbose)
 {
 	PQExpBufferData buf;
 	PGresult   *res;
@@ -2971,15 +2971,14 @@ listEvtTriggers(const char *pattern, bool verbose)
 					  "select evtname as \"%s\", "
 					  "evtevent as  \"%s\", "
 					  "pg_catalog.pg_get_userbyid(e.evtowner) AS \"%s\", "
-					  " case evtenabled when 'O' then 'enabled' "
+					  "case evtenabled when 'O' then 'enabled' "
 					  "  when 'R' then 'replica' "
 					  "  when 'A' then 'always' "
 					  "  when 'D' then 'disabled' end as  \"%s\", "
-					  "n.nspname || '.' || p.proname || '()' as \"%s\", "
-					  " array_to_string(array(select x "
+					  "e.evtfoid::regproc as \"%s\", "
+					  "array_to_string(array(select x "
 					  "      from unnest(evttags) as t(x)), ', ') as  \"%s\" "
-					  "FROM pg_event_trigger e JOIN pg_proc p on e.evtfoid = p.oid "
-					  "JOIN pg_namespace n ON p.pronamespace = n.oid ",
+					  "FROM pg_event_trigger e ",
 					  gettext_noop("Name"),
 					  gettext_noop("Event"),
 					  gettext_noop("Owner"),

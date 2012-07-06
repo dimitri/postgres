@@ -491,7 +491,7 @@ exec_command(const char *cmd,
 					success = listExtensions(pattern);
 				break;
 			case 'y':			/* Event Triggers */
-				success = listEvtTriggers(pattern, show_verbose);
+				success = listEventTriggers(pattern, show_verbose);
 				break;
 			default:
 				status = PSQL_CMD_UNKNOWN;

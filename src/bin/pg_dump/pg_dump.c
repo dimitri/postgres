@@ -187,7 +187,7 @@ static void dumpConversion(Archive *fout, ConvInfo *convinfo);
 static void dumpRule(Archive *fout, RuleInfo *rinfo);
 static void dumpAgg(Archive *fout, AggInfo *agginfo);
 static void dumpTrigger(Archive *fout, TriggerInfo *tginfo);
-static void dumpEvtTrigger(Archive *fout, EvtTriggerInfo *evtinfo);
+static void dumpEventTrigger(Archive *fout, EventTriggerInfo *evtinfo);
 static void dumpTable(Archive *fout, TableInfo *tbinfo);
 static void dumpTableSchema(Archive *fout, TableInfo *tbinfo);
 static void dumpAttrDef(Archive *fout, AttrDefInfo *adinfo);
@@ -5299,16 +5299,16 @@ getTriggers(Archive *fout, TableInfo tblinfo[], int numTables)
 }
 
 /*
- * getEvtTriggers
+ * getEventTriggers
  *	  get information about event triggers
  */
-EvtTriggerInfo *
-getEvtTriggers(Archive *fout, int *numEvtTriggers)
+EventTriggerInfo *
+getEventTriggers(Archive *fout, int *numEventTriggers)
 {
 	int			i;
 	PQExpBuffer query = createPQExpBuffer();
 	PGresult   *res;
-	EvtTriggerInfo *evtinfo;
+	EventTriggerInfo *evtinfo;
 	int			i_tableoid,
 				i_oid,
 				i_evtname,
@@ -5319,32 +5319,34 @@ getEvtTriggers(Archive *fout, int *numEvtTriggers)
 				i_evtenabled;
 	int			ntups;
 
+	/* Before 9.3, there are no event triggers */
+	if (fout->remoteVersion < 90300)
+	{
+		*numEventTriggers = 0;
+		return NULL;
+	}
+
 	/* Make sure we are in proper schema */
 	selectSourceSchema(fout, "pg_catalog");
 
-	if (fout->remoteVersion >= 90200)
-	{
-		appendPQExpBuffer(query,
-						  "SELECT e.tableoid, e.oid, evtname, evtenabled, "
-						  "evtevent, (%s evtowner) AS evtowner, "
-						  "array_to_string(array("
-						  "select '''' || x || '''' "
-						  " from unnest(evttags) as t(x)), ', ') as evttags, "
-						  "n.nspname || '.' || p.proname as evtfname "
-						  "FROM pg_event_trigger e "
-						  "JOIN pg_proc p on e.evtfoid = p.oid "
-						  "JOIN pg_namespace n ON p.pronamespace = n.oid "
-						  "ORDER BY e.oid",
-						  username_subquery);
-	}
+	appendPQExpBuffer(query,
+					  "SELECT e.tableoid, e.oid, evtname, evtenabled, "
+					  "evtevent, (%s evtowner) AS evtowner, "
+					  "array_to_string(array("
+					  "select '''' || x || '''' "
+					  " from unnest(evttags) as t(x)), ', ') as evttags, "
+					  "e.evtfoid::regproc as evtfname "
+					  "FROM pg_event_trigger e "
+					  "ORDER BY e.oid",
+					  username_subquery);
 
 	res = ExecuteSqlQuery(fout, query->data, PGRES_TUPLES_OK);
 
 	ntups = PQntuples(res);
 
-	*numEvtTriggers = ntups;
+	*numEventTriggers = ntups;
 
-	evtinfo = (EvtTriggerInfo *) pg_malloc(ntups * sizeof(EvtTriggerInfo));
+	evtinfo = (EventTriggerInfo *) pg_malloc(ntups * sizeof(EventTriggerInfo));
 
 	i_tableoid = PQfnumber(res, "tableoid");
 	i_oid = PQfnumber(res, "oid");
@@ -7248,7 +7250,7 @@ dumpDumpableObject(Archive *fout, DumpableObject *dobj)
 			dumpTrigger(fout, (TriggerInfo *) dobj);
 			break;
 		case DO_EVENT_TRIGGER:
-			dumpEvtTrigger(fout, (EvtTriggerInfo *) dobj);
+			dumpEventTrigger(fout, (EventTriggerInfo *) dobj);
 			break;
 		case DO_CONSTRAINT:
 			dumpConstraint(fout, (ConstraintInfo *) dobj);
@@ -13743,7 +13745,7 @@ dumpTrigger(Archive *fout, TriggerInfo *tginfo)
 }
 
 static void
-dumpEvtTrigger(Archive *fout, EvtTriggerInfo *evtinfo)
+dumpEventTrigger(Archive *fout, EventTriggerInfo *evtinfo)
 {
 	PQExpBuffer query;
 	PQExpBuffer labelq;
@@ -13759,12 +13761,12 @@ dumpEvtTrigger(Archive *fout, EvtTriggerInfo *evtinfo)
 
 	if (strcmp("", evtinfo->evttags) != 0)
 	{
-		appendPQExpBufferStr(query, "when tag in (");
+		appendPQExpBufferStr(query, "\n         WHEN TAG IN (");
 		appendPQExpBufferStr(query, evtinfo->evttags);
 		appendPQExpBufferStr(query, ") ");
 	}
 
-	appendPQExpBuffer(query, "EXECUTE PROCEDURE ");
+	appendPQExpBuffer(query, "\n   EXECUTE PROCEDURE ");
 	appendPQExpBufferStr(query, evtinfo->evtfname);
 	appendPQExpBuffer(query, " ();\n");
 
