@@ -1,0 +1,466 @@
+<!-- doc/src/sgml/event-trigger.sgml -->
+
+ <chapter id="event-triggers">
+  <title>Event Triggers</title>
+
+  <indexterm zone="event-triggers">
+   <primary>event trigger</primary>
+  </indexterm>
+
+  <para>
+   To supplement the trigger mechanism discussed in <xref linkend="triggers">,
+   <productname>PostgreSQL</> also provides event triggers.  Unlike regular
+   triggers, which are attached to a single table and capture only DML events,
+   event triggers are global to a particular database and are capable of
+   capturing DDL events.
+  </para>
+
+  <para>
+   Like regular triggers, event triggers can be written in any procedural
+   language that includes event trigger support, or in C, but not in plain
+   SQL.
+  </para>
+
+  <sect1 id="event-trigger-definition">
+   <title>Overview of Event Trigger Behavior</title>
+
+   <para>
+     An event trigger fires whenever the event with which it is
+     associated occurs in the database in which it is defined.  Currently,
+     the only supported event is <literal>command_start</>.  Support for
+     additional events may be added in future releases.
+   </para>
+
+   <para>
+     The <literal>command_start</> event occurs just before the execution of
+     many SQL commands, most of which can be broadly described as
+     <link linkend="ddl">DDL</link>.  There are a number of commands that,
+     for various reasons, are specifically excluded from the event trigger
+     system:
+
+    <itemizedlist>
+     <listitem>
+      <para>
+       The <literal>command_start</> event does not occur for commands that
+       access or modify data within a particular table, such
+       <xref linkend="sql-select">, <xref linkend="sql-insert">, 
+       <xref linkend="sql-update">, <xref linkend="sql-delete">, and
+       <xref linkend="sql-truncate">.  This also includes commands related
+       to prepared plans, such as <xref linkend="sql-prepare">,
+       <xref linkend="sql-deallocate">, <xref linkend="sql-declare">,
+       and <xref linkend="sql-fetch">.  Ordinary triggers or rules should
+       be used in these cases.
+      </para>
+     </listitem>
+     <listitem>
+      <para>
+       The <literal>command_start</> event does not occur for commands that
+       create, alter, or drop global objects.  Unlike the event trigger, these
+       objects are not part of the current database; they are accessible from
+       all databases in the cluster, and are therefore unaffected by event
+       triggers.  Such objects include databases, tablespaces, and roles.
+      </para>
+     </listitem>
+     <listitem>
+      <para>
+       The <literal>command_start</> event does not occur for commands where
+       firing a trigger might result either result in system instability or
+       interfere with the administrator's ability to regain control of the
+       database.  These include transaction control commands, such as
+       <xref linkend="sql-begin"> or <xref linkend="sql-commit">; configuration
+       commands, such as <xref linkend="sql-set"> or <xref linkend="sql-show">;
+       and commands related to the event trigger mechanism itself, such as
+       <xref linkend="sql-createeventtrigger">,
+       <xref linkend="sql-altereventtrigger">, and
+       <xref linkend="sql-dropeventtrigger">.
+      </para>
+     </listitem>
+    </itemizedlist>
+   </para>
+
+   <para>
+     For a complete list of commands supported by the event trigger mechanism,
+     see <xref linkend="event-trigger-matrix">.
+   </para>
+
+   <para>
+     In order to create an event trigger, you must first create a function with
+     the special return type <literal>event_trigger</literal>.  This function
+     need not (and may not) return a value; the return type serves merely as
+     a signal that the function is to be invoked as an event trigger.
+   </para>
+
+   <para>
+     If more than one event trigger is defined for a particular event, they will
+     fire in alphabetical order by trigger name.
+   </para>
+
+   <para>
+     A trigger definition can also specify a <literal>WHEN</literal>
+     condition so that, for example, a <literal>command_start</literal>
+     trigger can be fired only for particular commands which the user wishes
+     to intercept. A common use of such triggers is to restrict the range of
+     DDL operations which users may perform.
+   </para>
+  </sect1>
+
+  <sect1 id="event-trigger-matrix">
+   <title>Event Trigger Firing Matrix</title>
+
+   <para>
+     <xref linkend="event-trigger-by-command-tag"> lists all commands
+     for which event triggers are supported.
+   </para>
+
+   <table id="event-trigger-by-command-tag">
+     <title>Event Trigger Support by Command Tag</title>
+     <tgroup cols="2">
+      <thead>
+       <row>
+        <entry>command tag</entry>
+        <entry><literal>command_start</literal></entry>
+       </row>
+      </thead>
+      <tbody>
+       <row>
+        <entry align="left"><literal>ALTER AGGREGATE</literal></entry>
+        <entry align="center"><literal>X</literal></entry>
+       </row>
+       <row>
+        <entry align="left"><literal>ALTER COLLATION</literal></entry>
+        <entry align="center"><literal>X</literal></entry>
+       </row>
+       <row>
+        <entry align="left"><literal>ALTER CONVERSION</literal></entry>
+        <entry align="center"><literal>X</literal></entry>
+       </row>
+       <row>
+        <entry align="left"><literal>ALTER DOMAIN</literal></entry>
+        <entry align="center"><literal>X</literal></entry>
+       </row>
+       <row>
+        <entry align="left"><literal>ALTER EXTENSION</literal></entry>
+        <entry align="center"><literal>X</literal></entry>
+       </row>
+       <row>
+        <entry align="left"><literal>ALTER FOREIGN DATA WRAPPER</literal></entry>
+        <entry align="center"><literal>X</literal></entry>
+       </row>
+       <row>
+        <entry align="left"><literal>ALTER FOREIGN TABLE</literal></entry>
+        <entry align="center"><literal>X</literal></entry>
+       </row>
+       <row>
+        <entry align="left"><literal>ALTER FUNCTION</literal></entry>
+        <entry align="center"><literal>X</literal></entry>
+       </row>
+       <row>
+        <entry align="left"><literal>ALTER LANGUAGE</literal></entry>
+        <entry align="center"><literal>X</literal></entry>
+       </row>
+       <row>
+        <entry align="left"><literal>ALTER OPERATOR</literal></entry>
+        <entry align="center"><literal>X</literal></entry>
+       </row>
+       <row>
+        <entry align="left"><literal>ALTER OPERATOR CLASS</literal></entry>
+        <entry align="center"><literal>X</literal></entry>
+       </row>
+       <row>
+        <entry align="left"><literal>ALTER OPERATOR FAMILY</literal></entry>
+        <entry align="center"><literal>X</literal></entry>
+       </row>
+       <row>
+        <entry align="left"><literal>ALTER SCHEMA</literal></entry>
+        <entry align="center"><literal>X</literal></entry>
+       </row>
+       <row>
+        <entry align="left"><literal>ALTER SEQUENCE</literal></entry>
+        <entry align="center"><literal>X</literal></entry>
+       </row>
+       <row>
+        <entry align="left"><literal>ALTER SERVER</literal></entry>
+        <entry align="center"><literal>X</literal></entry>
+       </row>
+       <row>
+        <entry align="left"><literal>ALTER TABLE</literal></entry>
+        <entry align="center"><literal>X</literal></entry>
+       </row>
+       <row>
+        <entry align="left"><literal>ALTER TEXT SEARCH CONFIGURATION</literal></entry>
+        <entry align="center"><literal>X</literal></entry>
+       </row>
+       <row>
+        <entry align="left"><literal>ALTER TEXT SEARCH DICTIONARY</literal></entry>
+        <entry align="center"><literal>X</literal></entry>
+       </row>
+       <row>
+        <entry align="left"><literal>ALTER TEXT SEARCH PARSER</literal></entry>
+        <entry align="center"><literal>X</literal></entry>
+       </row>
+       <row>
+        <entry align="left"><literal>ALTER TEXT SEARCH TEMPLATE</literal></entry>
+        <entry align="center"><literal>X</literal></entry>
+       </row>
+       <row>
+        <entry align="left"><literal>ALTER TRIGGER</literal></entry>
+        <entry align="center"><literal>X</literal></entry>
+       </row>
+       <row>
+        <entry align="left"><literal>ALTER TYPE</literal></entry>
+        <entry align="center"><literal>X</literal></entry>
+       </row>
+       <row>
+        <entry align="left"><literal>ALTER USER MAPPING</literal></entry>
+        <entry align="center"><literal>X</literal></entry>
+       </row>
+       <row>
+        <entry align="left"><literal>ALTER VIEW</literal></entry>
+        <entry align="center"><literal>X</literal></entry>
+       </row>
+       <row>
+        <entry align="left"><literal>CLUSTER</literal></entry>
+        <entry align="center"><literal>X</literal></entry>
+       </row>
+       <row>
+        <entry align="left"><literal>CREATE AGGREGATE</literal></entry>
+        <entry align="center"><literal>X</literal></entry>
+       </row>
+       <row>
+        <entry align="left"><literal>CREATE CAST</literal></entry>
+        <entry align="center"><literal>X</literal></entry>
+       </row>
+       <row>
+        <entry align="left"><literal>CREATE COLLATION</literal></entry>
+        <entry align="center"><literal>X</literal></entry>
+       </row>
+       <row>
+        <entry align="left"><literal>CREATE CONVERSION</literal></entry>
+        <entry align="center"><literal>X</literal></entry>
+       </row>
+       <row>
+        <entry align="left"><literal>CREATE DOMAIN</literal></entry>
+        <entry align="center"><literal>X</literal></entry>
+       </row>
+       <row>
+        <entry align="left"><literal>CREATE EXTENSION</literal></entry>
+        <entry align="center"><literal>X</literal></entry>
+       </row>
+       <row>
+        <entry align="left"><literal>CREATE FOREIGN DATA WRAPPER</literal></entry>
+        <entry align="center"><literal>X</literal></entry>
+       </row>
+       <row>
+        <entry align="left"><literal>CREATE FOREIGN TABLE</literal></entry>
+        <entry align="center"><literal>X</literal></entry>
+       </row>
+       <row>
+        <entry align="left"><literal>CREATE FUNCTION</literal></entry>
+        <entry align="center"><literal>X</literal></entry>
+       </row>
+       <row>
+        <entry align="left"><literal>CREATE INDEX</literal></entry>
+        <entry align="center"><literal>X</literal></entry>
+       </row>
+       <row>
+        <entry align="left"><literal>CREATE LANGUAGE</literal></entry>
+        <entry align="center"><literal>X</literal></entry>
+       </row>
+       <row>
+        <entry align="left"><literal>CREATE OPERATOR</literal></entry>
+        <entry align="center"><literal>X</literal></entry>
+       </row>
+       <row>
+        <entry align="left"><literal>CREATE OPERATOR CLASS</literal></entry>
+        <entry align="center"><literal>X</literal></entry>
+       </row>
+       <row>
+        <entry align="left"><literal>CREATE OPERATOR FAMILY</literal></entry>
+        <entry align="center"><literal>X</literal></entry>
+       </row>
+       <row>
+        <entry align="left"><literal>CREATE RULE</literal></entry>
+        <entry align="center"><literal>X</literal></entry>
+       </row>
+       <row>
+        <entry align="left"><literal>CREATE SCHEMA</literal></entry>
+        <entry align="center"><literal>X</literal></entry>
+       </row>
+       <row>
+        <entry align="left"><literal>CREATE SEQUENCE</literal></entry>
+        <entry align="center"><literal>X</literal></entry>
+       </row>
+       <row>
+        <entry align="left"><literal>CREATE SERVER</literal></entry>
+        <entry align="center"><literal>X</literal></entry>
+       </row>
+       <row>
+        <entry align="left"><literal>CREATE TABLE</literal></entry>
+        <entry align="center"><literal>X</literal></entry>
+       </row>
+       <row>
+        <entry align="left"><literal>CREATE TABLE AS</literal></entry>
+        <entry align="center"><literal>X</literal></entry>
+       </row>
+       <row>
+        <entry align="left"><literal>CREATE TEXT SEARCH CONFIGURATION</literal></entry>
+        <entry align="center"><literal>X</literal></entry>
+       </row>
+       <row>
+        <entry align="left"><literal>CREATE TEXT SEARCH DICTIONARY</literal></entry>
+        <entry align="center"><literal>X</literal></entry>
+       </row>
+       <row>
+        <entry align="left"><literal>CREATE TEXT SEARCH PARSER</literal></entry>
+        <entry align="center"><literal>X</literal></entry>
+       </row>
+       <row>
+        <entry align="left"><literal>CREATE TEXT SEARCH TEMPLATE</literal></entry>
+        <entry align="center"><literal>X</literal></entry>
+       </row>
+       <row>
+        <entry align="left"><literal>CREATE TRIGGER</literal></entry>
+        <entry align="center"><literal>X</literal></entry>
+       </row>
+       <row>
+        <entry align="left"><literal>CREATE TYPE</literal></entry>
+        <entry align="center"><literal>X</literal></entry>
+       </row>
+       <row>
+        <entry align="left"><literal>CREATE USER MAPPING</literal></entry>
+        <entry align="center"><literal>X</literal></entry>
+       </row>
+       <row>
+        <entry align="left"><literal>CREATE VIEW</literal></entry>
+        <entry align="center"><literal>X</literal></entry>
+       </row>
+       <row>
+        <entry align="left"><literal>DROP AGGREGATE</literal></entry>
+        <entry align="center"><literal>X</literal></entry>
+       </row>
+       <row>
+        <entry align="left"><literal>DROP CAST</literal></entry>
+        <entry align="center"><literal>X</literal></entry>
+       </row>
+       <row>
+        <entry align="left"><literal>DROP COLLATION</literal></entry>
+        <entry align="center"><literal>X</literal></entry>
+       </row>
+       <row>
+        <entry align="left"><literal>DROP CONVERSION</literal></entry>
+        <entry align="center"><literal>X</literal></entry>
+       </row>
+       <row>
+        <entry align="left"><literal>DROP DOMAIN</literal></entry>
+        <entry align="center"><literal>X</literal></entry>
+       </row>
+       <row>
+        <entry align="left"><literal>DROP EXTENSION</literal></entry>
+        <entry align="center"><literal>X</literal></entry>
+       </row>
+       <row>
+        <entry align="left"><literal>DROP FOREIGN DATA WRAPPER</literal></entry>
+        <entry align="center"><literal>X</literal></entry>
+       </row>
+       <row>
+        <entry align="left"><literal>DROP FOREIGN TABLE</literal></entry>
+        <entry align="center"><literal>X</literal></entry>
+       </row>
+       <row>
+        <entry align="left"><literal>DROP FUNCTION</literal></entry>
+        <entry align="center"><literal>X</literal></entry>
+       </row>
+       <row>
+        <entry align="left"><literal>DROP INDEX</literal></entry>
+        <entry align="center"><literal>X</literal></entry>
+       </row>
+       <row>
+        <entry align="left"><literal>DROP LANGUAGE</literal></entry>
+        <entry align="center"><literal>X</literal></entry>
+       </row>
+       <row>
+        <entry align="left"><literal>DROP OPERATOR</literal></entry>
+        <entry align="center"><literal>X</literal></entry>
+       </row>
+       <row>
+        <entry align="left"><literal>DROP OPERATOR CLASS</literal></entry>
+        <entry align="center"><literal>X</literal></entry>
+       </row>
+       <row>
+        <entry align="left"><literal>DROP OPERATOR FAMILY</literal></entry>
+        <entry align="center"><literal>X</literal></entry>
+       </row>
+       <row>
+        <entry align="left"><literal>DROP RULE</literal></entry>
+        <entry align="center"><literal>X</literal></entry>
+       </row>
+       <row>
+        <entry align="left"><literal>DROP SCHEMA</literal></entry>
+        <entry align="center"><literal>X</literal></entry>
+       </row>
+       <row>
+        <entry align="left"><literal>DROP SEQUENCE</literal></entry>
+        <entry align="center"><literal>X</literal></entry>
+       </row>
+       <row>
+        <entry align="left"><literal>DROP SERVER</literal></entry>
+        <entry align="center"><literal>X</literal></entry>
+       </row>
+       <row>
+        <entry align="left"><literal>DROP TABLE</literal></entry>
+        <entry align="center"><literal>X</literal></entry>
+       </row>
+       <row>
+        <entry align="left"><literal>DROP TEXT SEARCH CONFIGURATION</literal></entry>
+        <entry align="center"><literal>X</literal></entry>
+       </row>
+       <row>
+        <entry align="left"><literal>DROP TEXT SEARCH DICTIONARY</literal></entry>
+        <entry align="center"><literal>X</literal></entry>
+       </row>
+       <row>
+        <entry align="left"><literal>DROP TEXT SEARCH PARSER</literal></entry>
+        <entry align="center"><literal>X</literal></entry>
+       </row>
+       <row>
+        <entry align="left"><literal>DROP TEXT SEARCH TEMPLATE</literal></entry>
+        <entry align="center"><literal>X</literal></entry>
+       </row>
+       <row>
+        <entry align="left"><literal>DROP TRIGGER</literal></entry>
+        <entry align="center"><literal>X</literal></entry>
+       </row>
+       <row>
+        <entry align="left"><literal>DROP TYPE</literal></entry>
+        <entry align="center"><literal>X</literal></entry>
+       </row>
+       <row>
+        <entry align="left"><literal>DROP USER MAPPING</literal></entry>
+        <entry align="center"><literal>X</literal></entry>
+       </row>
+       <row>
+        <entry align="left"><literal>DROP VIEW</literal></entry>
+        <entry align="center"><literal>X</literal></entry>
+       </row>
+       <row>
+        <entry align="left"><literal>LOAD</literal></entry>
+        <entry align="center"><literal>X</literal></entry>
+       </row>
+       <row>
+        <entry align="left"><literal>REINDEX</literal></entry>
+        <entry align="center"><literal>X</literal></entry>
+       </row>
+       <row>
+        <entry align="left"><literal>SELECT INTO</literal></entry>
+        <entry align="center"><literal>X</literal></entry>
+       </row>
+       <row>
+        <entry align="left"><literal>VACUUM</literal></entry>
+        <entry align="center"><literal>X</literal></entry>
+       </row>
+      </tbody>
+     </tgroup>
+   </table>
+  </sect1>
+
+</chapter>
