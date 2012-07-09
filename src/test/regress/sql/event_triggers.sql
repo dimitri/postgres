@@ -7,7 +7,7 @@ create or replace function snitch()
 as $$
 begin
   -- can't output tg_objectid here that would break pg_regress
-  raise notice 'snitch: % % %.%', tg_when, tg_tag, tg_schemaname, tg_objectname;
+  raise notice 'snitch: % % [% - %]', tg_event, tg_tag, tg_operation, tg_objecttype;
 end;
 $$;
 

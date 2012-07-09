@@ -805,14 +805,40 @@ plpgsql_exec_event_trigger(PLpgSQL_function *func, EventTriggerData *trigdata)
 	/*
 	 * Assign the special tg_ variables
 	 */
-	var = (PLpgSQL_var *) (estate.datums[func->tg_when_varno]);
-	var->value = CStringGetTextDatum(trigdata->when);
+	var = (PLpgSQL_var *) (estate.datums[func->tg_event_varno]);
+	var->value = CStringGetTextDatum(trigdata->event);
 	var->isnull = false;
 	var->freeval = true;
 
 	var = (PLpgSQL_var *) (estate.datums[func->tg_tag_varno]);
 	var->value = CStringGetTextDatum(trigdata->tag);
 	var->isnull = false;
+	var->freeval = true;
+
+	var = (PLpgSQL_var *) (estate.datums[func->tg_operation_varno]);
+	if (trigdata->operation == NULL)
+	{
+		var->isnull = true;
+	}
+	else
+	{
+		var->value = DirectFunctionCall1(namein,
+										 CStringGetDatum(trigdata->operation));
+		var->isnull = false;
+	}
+	var->freeval = true;
+
+	var = (PLpgSQL_var *) (estate.datums[func->tg_objecttype_varno]);
+	if (trigdata->objecttype == NULL)
+	{
+		var->isnull = true;
+	}
+	else
+	{
+		var->value = DirectFunctionCall1(namein,
+										 CStringGetDatum(trigdata->objecttype));
+		var->isnull = false;
+	}
 	var->freeval = true;
 
 	var = (PLpgSQL_var *) (estate.datums[func->tg_objectid_varno]);

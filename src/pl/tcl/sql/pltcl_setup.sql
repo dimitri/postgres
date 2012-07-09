@@ -562,7 +562,7 @@ select tcl_date_week(2001,10,24);
 
 -- test pltcl event triggers
 create or replace function tclsnitch() returns event_trigger language pltcl as $$
-  elog NOTICE " tclsnitch: $TG_when $TG_tag $TG_schemaname $TG_objectname"
+  elog NOTICE " tclsnitch: $TG_event $TG_tag $TG_schemaname $TG_objectname"
 $$;
 
 create event trigger tcl_snitch on command_start execute procedure tclsnitch();

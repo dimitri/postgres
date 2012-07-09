@@ -159,4 +159,6 @@ TrigEventCommand get_command_from_nodetag(NodeTag node,
 										  ObjectType type,
 										  bool noerror);
 
+char * objecttype_to_string(ObjectType type);
+
 #endif   /* EVTCACHE_H */

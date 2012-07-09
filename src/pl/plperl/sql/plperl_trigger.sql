@@ -173,7 +173,7 @@ SELECT direct_trigger();
 -- test plperl event triggers
 create or replace function perlsnitch() returns event_trigger language plperl as $$
   elog(NOTICE, "perlsnitch: "
-               . $_TD->{when} . " "
+               . $_TD->{event} . " "
                . $_TD->{tag} . " "
                . $_TD->{schemaname} . " "
                . $_TD->{objectname});

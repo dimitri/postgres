@@ -721,6 +721,9 @@ typedef struct PLpgSQL_function
 	int			tg_argv_varno;
 
 	int			tg_tag_varno;
+	int			tg_event_varno;
+	int			tg_operation_varno;
+	int			tg_objecttype_varno;
 	int			tg_objectid_varno;
 	int			tg_schemaname_varno;
 	int			tg_objectname_varno;

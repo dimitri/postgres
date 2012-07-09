@@ -1166,7 +1166,7 @@ pltcl_event_trigger_handler(PG_FUNCTION_ARGS, bool pltrusted)
 	Tcl_DStringAppendElement(&tcl_cmd, prodesc->internal_proname);
 	PG_TRY();
 	{
-		Tcl_DStringAppendElement(&tcl_cmd, tdata->when);
+		Tcl_DStringAppendElement(&tcl_cmd, tdata->event);
 		Tcl_DStringAppendElement(&tcl_cmd, tdata->tag);
 
 		if (tdata->objectId == InvalidOid)
@@ -1177,6 +1177,8 @@ pltcl_event_trigger_handler(PG_FUNCTION_ARGS, bool pltrusted)
 		Tcl_DStringAppendElement(&tcl_cmd, stroid);
 		pfree(stroid);
 
+		Tcl_DStringAppendElement(&tcl_cmd, tdata->operation);
+		Tcl_DStringAppendElement(&tcl_cmd, tdata->objecttype);
 		Tcl_DStringAppendElement(&tcl_cmd, tdata->schemaname);
 		Tcl_DStringAppendElement(&tcl_cmd, tdata->objectname);
 	}
@@ -1488,7 +1490,7 @@ compile_pltcl_function(Oid fn_oid, Oid tgreloid,
 		{
 			/* event trigger procedure has fixed args */
 			strcpy(proc_internal_args,
-				   "TG_when TG_tag TG_objectid TG_schemaname TG_objectname");
+				   "TG_event TG_tag TG_objectid TG_operation TG_objecttype TG_schemaname TG_objectname");
 		}
 
 		/************************************************************

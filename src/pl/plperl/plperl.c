@@ -1584,7 +1584,7 @@ plperl_event_trigger_build_args(FunctionCallInfo fcinfo)
 
 	tdata = (EventTriggerData *) fcinfo->context;
 
-	hv_store_string(hv, "when", cstr2sv(tdata->when));
+	hv_store_string(hv, "event", cstr2sv(tdata->event));
 	hv_store_string(hv, "tag", cstr2sv(tdata->tag));
 
 	if (tdata->objectId == InvalidOid)
@@ -1594,8 +1594,14 @@ plperl_event_trigger_build_args(FunctionCallInfo fcinfo)
 			DirectFunctionCall1(oidout, ObjectIdGetDatum(tdata->objectId)));
 	hv_store_string(hv, "objectid", cstr2sv(objectid));
 
-	hv_store_string(hv, "objectname", cstr2sv(tdata->objectname == NULL ? "NULL" : tdata->objectname));
-	hv_store_string(hv, "schemaname", cstr2sv(tdata->schemaname == NULL ? "NULL" : tdata->schemaname));
+	hv_store_string(hv, "operation",
+					cstr2sv(tdata->operation == NULL ? "NULL" : tdata->operation));
+	hv_store_string(hv, "objecttype",
+					cstr2sv(tdata->objecttype == NULL ? "NULL" : tdata->objecttype));
+	hv_store_string(hv, "objectname",
+					cstr2sv(tdata->objectname == NULL ? "NULL" : tdata->objectname));
+	hv_store_string(hv, "schemaname",
+					cstr2sv(tdata->schemaname == NULL ? "NULL" : tdata->schemaname));
 
 	return newRV_noinc((SV *) hv);
 }

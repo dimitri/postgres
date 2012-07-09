@@ -425,6 +425,16 @@ call_event_trigger_procedure(EventContext ev_ctx, TrigEvent tev,
 	trigdata.objectname = ev_ctx->objectname;
 	trigdata.parsetree = ev_ctx->parsetree;
 
+	if (ev_ctx->operation == NULL)
+		trigdata.operation = NULL;
+	else
+		trigdata.operation = pstrdup(ev_ctx->operation);
+
+	if (ev_ctx->objecttype == -1)
+		trigdata.objecttype = NULL;
+	else
+		trigdata.objecttype = pstrdup(objecttype_to_string(ev_ctx->objecttype));
+
 	/*
 	 * Call the function, passing no arguments but setting a context.
 	 */
@@ -460,11 +470,11 @@ InitEventContext(EventContext evt, const Node *parsetree)
 
 	/* guess the ongoing operation from the command tag */
 	if (strncmp(evt->tag, "CREATE ", 7) == 0)
-		evt->operation = "CREATE";
+		evt->operation = pstrdup("CREATE");
 	else if (strncmp(evt->tag, "DROP ", 5) == 0)
-		evt->operation = "DROP";
+		evt->operation = pstrdup("DROP");
 	else if (strncmp(evt->tag, "ALTER ", 6) == 0)
-		evt->operation = "ALTER";
+		evt->operation = pstrdup("ALTER");
 }
 
 /*

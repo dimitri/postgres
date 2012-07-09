@@ -348,8 +348,10 @@ PLy_exec_event_trigger(FunctionCallInfo fcinfo, PLyProcedure *proc)
 	PG_TRY();
 	{
 		/* build command trigger args */
-		PyObject   *pltwhen,
+		PyObject   *pltevent,
 			*plttag,
+			*pltoperation,
+			*pltobjecttype,
 			*pltschemaname,
 			*pltobjectname;
 		char	   *stroid;
@@ -358,13 +360,31 @@ PLy_exec_event_trigger(FunctionCallInfo fcinfo, PLyProcedure *proc)
 		if (!pltdata)
 			PLy_elog(ERROR, "could not create new dictionary while building command trigger arguments");
 
-		pltwhen = PyString_FromString(tdata->when);
-		PyDict_SetItemString(pltdata, "when", pltwhen);
-		Py_DECREF(pltwhen);
+		pltevent = PyString_FromString(tdata->event);
+		PyDict_SetItemString(pltdata, "event", pltevent);
+		Py_DECREF(pltevent);
 
 		plttag = PyString_FromString(tdata->tag);
 		PyDict_SetItemString(pltdata, "tag", plttag);
 		Py_DECREF(plttag);
+
+		if (tdata->operation == NULL)
+			PyDict_SetItemString(pltdata, "operation", Py_None);
+		else
+		{
+			pltoperation = PyString_FromString(tdata->operation);
+			PyDict_SetItemString(pltdata, "operation", pltoperation);
+			Py_DECREF(pltoperation);
+		}
+
+		if (tdata->objecttype == NULL)
+			PyDict_SetItemString(pltdata, "objecttype", Py_None);
+		else
+		{
+			pltobjecttype = PyString_FromString(tdata->objecttype);
+			PyDict_SetItemString(pltdata, "objecttype", pltobjecttype);
+			Py_DECREF(pltobjecttype);
+		}
 
 		if (tdata->objectId == InvalidOid)
 			PyDict_SetItemString(pltdata, "objectId", Py_None);

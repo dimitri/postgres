@@ -692,12 +692,12 @@ do_compile(FunctionCallInfo fcinfo,
 						 errmsg("event trigger functions cannot have declared arguments")));
 
 			/* Add the variable tg_when */
-			var = plpgsql_build_variable("tg_when", 0,
+			var = plpgsql_build_variable("tg_event", 0,
 										 plpgsql_build_datatype(TEXTOID,
 																-1,
 											   function->fn_input_collation),
 										 true);
-			function->tg_when_varno = var->dno;
+			function->tg_event_varno = var->dno;
 
 			/* Add the variable tg_tag */
 			var = plpgsql_build_variable("tg_tag", 0,
@@ -706,6 +706,22 @@ do_compile(FunctionCallInfo fcinfo,
 											   function->fn_input_collation),
 										 true);
 			function->tg_tag_varno = var->dno;
+
+			/* Add the variable tg_operation */
+			var = plpgsql_build_variable("tg_operation", 0,
+										 plpgsql_build_datatype(TEXTOID,
+																-1,
+											   function->fn_input_collation),
+										 true);
+			function->tg_operation_varno = var->dno;
+
+			/* Add the variable tg_objecttype */
+			var = plpgsql_build_variable("tg_objecttype", 0,
+										 plpgsql_build_datatype(TEXTOID,
+																-1,
+											   function->fn_input_collation),
+										 true);
+			function->tg_objecttype_varno = var->dno;
 
 			/* Add the variable tg_objectid */
 			var = plpgsql_build_variable("tg_objectid", 0,
