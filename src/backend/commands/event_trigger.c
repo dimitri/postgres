@@ -32,7 +32,6 @@
 #include "miscadmin.h"
 #include "utils/acl.h"
 #include "utils/builtins.h"
-#include "utils/evtcache.h"
 #include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
@@ -94,7 +93,7 @@ InsertEventTriggerTuple(char *trigname, TrigEvent event, Oid evtOwner,
 		{
 			TrigEventCommand cmd = lfirst_int(lc);
 			char *cmdstr = command_to_string(cmd);
-			if (cmd == E_UNKNOWN || cmdstr == NULL)
+			if (cmd == ETC_UNKNOWN || cmdstr == NULL)
 				elog(ERROR, "Unknown command %d", cmd);
 			tags[i++] = PointerGetDatum(cstring_to_text(cmdstr));
 		}
@@ -418,13 +417,13 @@ call_event_trigger_procedure(EventContext ev_ctx, TrigEvent tev,
 	 * We prepare a dedicated Node here so as not to publish internal data.
 	 */
 	trigdata.type = T_EventTriggerData;
+	trigdata.event = pstrdup(event_to_string(tev));
 	trigdata.toplevel = ev_ctx->toplevel;
 	trigdata.tag = ev_ctx->tag;
 	trigdata.objectId = ev_ctx->objectId;
 	trigdata.schemaname = ev_ctx->schemaname;
 	trigdata.objectname = ev_ctx->objectname;
 	trigdata.parsetree = ev_ctx->parsetree;
-	trigdata.when = pstrdup(event_to_string(tev));
 
 	/*
 	 * Call the function, passing no arguments but setting a context.
@@ -441,594 +440,55 @@ call_event_trigger_procedure(EventContext ev_ctx, TrigEvent tev,
 
 /*
  * Routine to call to setup a EventContextData evt.
+ *
+ * The fields 'objecttype' must be set before calling other entry points. The
+ * fields 'operation', 'objectId', 'objectname' and 'schemaname' might be set
+ * to interesting values.
  */
 void
 InitEventContext(EventContext evt, const Node *parsetree)
 {
-	evt->command = E_UNKNOWN;
+	evt->command = ETC_UNSET;
 	evt->toplevel = NULL;
 	evt->tag = (char *) CreateCommandTag((Node *)parsetree);
 	evt->parsetree = (Node *)parsetree;
+	evt->operation = NULL;
+	evt->objecttype = -1;
 	evt->objectId = InvalidOid;
 	evt->objectname = NULL;
 	evt->schemaname = NULL;
 
-	switch (nodeTag(parsetree))
-	{
-		case T_CreateSchemaStmt:
-			evt->command = E_CreateSchema;
-			break;
-
-		case T_CreateStmt:
-			evt->command = E_CreateTable;
-			break;
-
-		case T_CreateForeignTableStmt:
-			evt->command = E_CreateForeignTable;
-			break;
-
-		case T_CreateExtensionStmt:
-			evt->command = E_CreateExtension;
-			break;
-
-		case T_AlterExtensionStmt:
-		case T_AlterExtensionContentsStmt:
-			evt->command = E_AlterExtension;
-			break;
-
-		case T_CreateFdwStmt:
-			evt->command = E_CreateForeignDataWrapper;
-			break;
-
-		case T_AlterFdwStmt:
-			evt->command = E_AlterForeignDataWrapper;
-			break;
-
-		case T_CreateForeignServerStmt:
-			evt->command = E_CreateServer;
-			break;
-
-		case T_AlterForeignServerStmt:
-			evt->command = E_AlterServer;
-			break;
-
-		case T_CreateUserMappingStmt:
-			evt->command = E_CreateUserMapping;
-			break;
-
-		case T_AlterUserMappingStmt:
-			evt->command = E_AlterUserMapping;
-			break;
-
-		case T_DropUserMappingStmt:
-			evt->command = E_DropUserMapping;
-			break;
-
-		case T_DropStmt:
-			switch (((DropStmt *) parsetree)->removeType)
-			{
-				case OBJECT_AGGREGATE:
-					evt->command = E_DropAggregate;
-					break;
-				case OBJECT_CAST:
-					evt->command = E_DropCast;
-					break;
-				case OBJECT_COLLATION:
-					evt->command = E_DropCollation;
-					break;
-				case OBJECT_CONVERSION:
-					evt->command = E_DropConversion;
-					break;
-				case OBJECT_DOMAIN:
-					evt->command = E_DropDomain;
-					break;
-				case OBJECT_EXTENSION:
-					evt->command = E_DropExtension;
-					break;
-				case OBJECT_FDW:
-					evt->command = E_DropForeignDataWrapper;
-					break;
-				case OBJECT_FOREIGN_SERVER:
-					evt->command = E_DropServer;
-					break;
-				case OBJECT_FOREIGN_TABLE:
-					evt->command = E_DropForeignTable;
-					break;
-				case OBJECT_FUNCTION:
-					evt->command = E_DropFunction;
-					break;
-				case OBJECT_INDEX:
-					evt->command = E_DropIndex;
-					break;
-				case OBJECT_LANGUAGE:
-					evt->command = E_DropLanguage;
-					break;
-				case OBJECT_OPCLASS:
-					evt->command = E_DropOperatorClass;
-					break;
-				case OBJECT_OPERATOR:
-					evt->command = E_DropOperator;
-					break;
-				case OBJECT_OPFAMILY:
-					evt->command = E_DropOperatorFamily;
-					break;
-				case OBJECT_SCHEMA:
-					evt->command = E_DropSchema;
-					break;
-				case OBJECT_SEQUENCE:
-					evt->command = E_DropSequence;
-					break;
-				case OBJECT_TABLE:
-					evt->command = E_DropTable;
-					break;
-				case OBJECT_TRIGGER:
-					evt->command = E_DropTrigger;
-					break;
-				case OBJECT_TSCONFIGURATION:
-					evt->command = E_DropTextSearchConfiguration;
-					break;
-				case OBJECT_TSDICTIONARY:
-					evt->command = E_DropTextSearchDictionary;
-					break;
-				case OBJECT_TSPARSER:
-					evt->command = E_DropTextSearchParser;
-					break;
-				case OBJECT_TSTEMPLATE:
-					evt->command = E_DropTextSearchTemplate;
-					break;
-				case OBJECT_TYPE:
-					evt->command = E_DropType;
-					break;
-				case OBJECT_VIEW:
-					evt->command = E_DropView;
-					break;
-				case OBJECT_ROLE:
-				case OBJECT_EVENT_TRIGGER:
-				case OBJECT_ATTRIBUTE:
-				case OBJECT_COLUMN:
-				case OBJECT_CONSTRAINT:
-				case OBJECT_DATABASE:
-				case OBJECT_LARGEOBJECT:
-				case OBJECT_RULE:
-				case OBJECT_TABLESPACE:
-					/* no support for specific command triggers */
-					break;
-			}
-			break;
-
-		case T_RenameStmt:
-			switch (((RenameStmt *) parsetree)->renameType)
-			{
-				case OBJECT_ATTRIBUTE:
-					evt->command = E_AlterType;
-					break;
-				case OBJECT_AGGREGATE:
-					evt->command = E_AlterAggregate;
-					break;
-				case OBJECT_CAST:
-					evt->command = E_AlterCast;
-					break;
-				case OBJECT_COLLATION:
-					evt->command = E_AlterCollation;
-					break;
-				case OBJECT_COLUMN:
-					evt->command = E_AlterTable;
-					break;
-				case OBJECT_CONVERSION:
-					evt->command = E_AlterConversion;
-					break;
-				case OBJECT_DOMAIN:
-					evt->command = E_AlterDomain;
-					break;
-				case OBJECT_EXTENSION:
-					evt->command = E_AlterExtension;
-					break;
-				case OBJECT_FDW:
-					evt->command = E_AlterForeignDataWrapper;
-					break;
-				case OBJECT_FOREIGN_SERVER:
-					evt->command = E_AlterServer;
-					break;
-				case OBJECT_FOREIGN_TABLE:
-					evt->command = E_AlterForeignTable;
-					break;
-				case OBJECT_FUNCTION:
-					evt->command = E_AlterFunction;
-					break;
-				case OBJECT_INDEX:
-					evt->command = E_AlterIndex;
-					break;
-				case OBJECT_LANGUAGE:
-					evt->command = E_AlterLanguage;
-					break;
-				case OBJECT_OPCLASS:
-					evt->command = E_AlterOperatorClass;
-					break;
-				case OBJECT_OPERATOR:
-					evt->command = E_AlterOperator;
-					break;
-				case OBJECT_OPFAMILY:
-					evt->command = E_AlterOperatorFamily;
-					break;
-				case OBJECT_SCHEMA:
-					evt->command = E_AlterSchema;
-					break;
-				case OBJECT_SEQUENCE:
-					evt->command = E_AlterSequence;
-					break;
-				case OBJECT_TABLE:
-					evt->command = E_AlterTable;
-					break;
-				case OBJECT_TRIGGER:
-					evt->command = E_AlterTrigger;
-					break;
-				case OBJECT_TSCONFIGURATION:
-					evt->command = E_AlterTextSearchConfiguration;
-					break;
-				case OBJECT_TSDICTIONARY:
-					evt->command = E_AlterTextSearchDictionary;
-					break;
-				case OBJECT_TSPARSER:
-					evt->command = E_AlterTextSearchParser;
-					break;
-				case OBJECT_TSTEMPLATE:
-					evt->command = E_AlterTextSearchTemplate;
-					break;
-				case OBJECT_TYPE:
-					evt->command = E_AlterType;
-					break;
-				case OBJECT_VIEW:
-					evt->command = E_AlterView;
-					break;
-				case OBJECT_ROLE:
-				case OBJECT_EVENT_TRIGGER:
-				case OBJECT_CONSTRAINT:
-				case OBJECT_DATABASE:
-				case OBJECT_LARGEOBJECT:
-				case OBJECT_RULE:
-				case OBJECT_TABLESPACE:
-					/* no support for specific command triggers */
-					break;
-			}
-			break;
-
-		case T_AlterObjectSchemaStmt:
-			switch (((AlterObjectSchemaStmt *) parsetree)->objectType)
-			{
-				case OBJECT_AGGREGATE:
-					evt->command = E_AlterAggregate;
-					break;
-				case OBJECT_CAST:
-					evt->command = E_AlterCast;
-					break;
-				case OBJECT_COLLATION:
-					evt->command = E_AlterCollation;
-					break;
-				case OBJECT_CONVERSION:
-					evt->command = E_AlterConversion;
-					break;
-				case OBJECT_DOMAIN:
-					evt->command = E_AlterDomain;
-					break;
-				case OBJECT_EXTENSION:
-					evt->command = E_AlterExtension;
-					break;
-				case OBJECT_FDW:
-					evt->command = E_AlterForeignDataWrapper;
-					break;
-				case OBJECT_FOREIGN_SERVER:
-					evt->command = E_AlterServer;
-					break;
-				case OBJECT_FOREIGN_TABLE:
-					evt->command = E_AlterForeignTable;
-					break;
-				case OBJECT_FUNCTION:
-					evt->command = E_AlterFunction;
-					break;
-				case OBJECT_INDEX:
-					evt->command = E_AlterIndex;
-					break;
-				case OBJECT_LANGUAGE:
-					evt->command = E_AlterLanguage;
-					break;
-				case OBJECT_OPCLASS:
-					evt->command = E_AlterOperatorClass;
-					break;
-				case OBJECT_OPERATOR:
-					evt->command = E_AlterOperator;
-					break;
-				case OBJECT_OPFAMILY:
-					evt->command = E_AlterOperatorFamily;
-					break;
-				case OBJECT_SCHEMA:
-					evt->command = E_AlterSchema;
-					break;
-				case OBJECT_SEQUENCE:
-					evt->command = E_AlterSequence;
-					break;
-				case OBJECT_TABLE:
-					evt->command = E_AlterTable;
-					break;
-				case OBJECT_TRIGGER:
-					evt->command = E_AlterTrigger;
-					break;
-				case OBJECT_TSCONFIGURATION:
-					evt->command = E_AlterTextSearchConfiguration;
-					break;
-				case OBJECT_TSDICTIONARY:
-					evt->command = E_AlterTextSearchDictionary;
-					break;
-				case OBJECT_TSPARSER:
-					evt->command = E_AlterTextSearchParser;
-					break;
-				case OBJECT_TSTEMPLATE:
-					evt->command = E_AlterTextSearchTemplate;
-					break;
-				case OBJECT_TYPE:
-					evt->command = E_AlterType;
-					break;
-				case OBJECT_VIEW:
-					evt->command = E_AlterView;
-					break;
-				case OBJECT_ROLE:
-				case OBJECT_EVENT_TRIGGER:
-				case OBJECT_ATTRIBUTE:
-				case OBJECT_COLUMN:
-				case OBJECT_CONSTRAINT:
-				case OBJECT_DATABASE:
-				case OBJECT_LARGEOBJECT:
-				case OBJECT_RULE:
-				case OBJECT_TABLESPACE:
-					/* no support for specific command triggers */
-					break;
-			}
-			break;
-
-		case T_AlterOwnerStmt:
-			switch (((AlterOwnerStmt *) parsetree)->objectType)
-			{
-				case OBJECT_AGGREGATE:
-					evt->command = E_AlterAggregate;
-					break;
-				case OBJECT_CAST:
-					evt->command = E_AlterCast;
-					break;
-				case OBJECT_COLLATION:
-					evt->command = E_AlterCollation;
-					break;
-				case OBJECT_CONVERSION:
-					evt->command = E_AlterConversion;
-					break;
-				case OBJECT_DOMAIN:
-					evt->command = E_AlterDomain;
-					break;
-				case OBJECT_EXTENSION:
-					evt->command = E_AlterExtension;
-					break;
-				case OBJECT_FDW:
-					evt->command = E_AlterForeignDataWrapper;
-					break;
-				case OBJECT_FOREIGN_SERVER:
-					evt->command = E_AlterServer;
-					break;
-				case OBJECT_FOREIGN_TABLE:
-					evt->command = E_AlterForeignTable;
-					break;
-				case OBJECT_FUNCTION:
-					evt->command = E_AlterFunction;
-					break;
-				case OBJECT_INDEX:
-					evt->command = E_AlterIndex;
-					break;
-				case OBJECT_LANGUAGE:
-					evt->command = E_AlterLanguage;
-					break;
-				case OBJECT_OPCLASS:
-					evt->command = E_AlterOperatorClass;
-					break;
-				case OBJECT_OPERATOR:
-					evt->command = E_AlterOperator;
-					break;
-				case OBJECT_OPFAMILY:
-					evt->command = E_AlterOperatorFamily;
-					break;
-				case OBJECT_SCHEMA:
-					evt->command = E_AlterSchema;
-					break;
-				case OBJECT_SEQUENCE:
-					evt->command = E_AlterSequence;
-					break;
-				case OBJECT_TABLE:
-					evt->command = E_AlterTable;
-					break;
-				case OBJECT_TRIGGER:
-					evt->command = E_AlterTrigger;
-					break;
-				case OBJECT_TSCONFIGURATION:
-					evt->command = E_AlterTextSearchConfiguration;
-					break;
-				case OBJECT_TSDICTIONARY:
-					evt->command = E_AlterTextSearchDictionary;
-					break;
-				case OBJECT_TSPARSER:
-					evt->command = E_AlterTextSearchParser;
-					break;
-				case OBJECT_TSTEMPLATE:
-					evt->command = E_AlterTextSearchTemplate;
-					break;
-				case OBJECT_TYPE:
-					evt->command = E_AlterType;
-					break;
-				case OBJECT_VIEW:
-					evt->command = E_AlterView;
-					break;
-				case OBJECT_ROLE:
-				case OBJECT_EVENT_TRIGGER:
-				case OBJECT_ATTRIBUTE:
-				case OBJECT_COLUMN:
-				case OBJECT_CONSTRAINT:
-				case OBJECT_DATABASE:
-				case OBJECT_LARGEOBJECT:
-				case OBJECT_RULE:
-				case OBJECT_TABLESPACE:
-					/* no support for specific command triggers */
-					break;
-			}
-			break;
-
-		case T_AlterTableStmt:
-			evt->command = E_AlterTable;
-			break;
-
-		case T_AlterDomainStmt:
-			evt->command = E_AlterDomain;
-			break;
-
-		case T_DefineStmt:
-			switch (((DefineStmt *) parsetree)->kind)
-			{
-				case OBJECT_AGGREGATE:
-					evt->command = E_CreateAggregate;
-					break;
-				case OBJECT_OPERATOR:
-					evt->command = E_CreateOperator;
-					break;
-				case OBJECT_TYPE:
-					evt->command = E_CreateType;
-					break;
-				case OBJECT_TSPARSER:
-					evt->command = E_CreateTextSearchParser;
-					break;
-				case OBJECT_TSDICTIONARY:
-					evt->command = E_CreateTextSearchDictionary;;
-					break;
-				case OBJECT_TSTEMPLATE:
-					evt->command = E_CreateTextSearchTemplate;
-					break;
-				case OBJECT_TSCONFIGURATION:
-					evt->command = E_CreateTextSearchConfiguration;
-					break;
-				case OBJECT_COLLATION:
-					evt->command = E_CreateCollation;
-					break;
-				default:
-					elog(ERROR, "unrecognized define stmt type: %d",
-						 (int) ((DefineStmt *) parsetree)->kind);
-					break;
-			}
-			break;
-
-		case T_CompositeTypeStmt:		/* CREATE TYPE (composite) */
-		case T_CreateEnumStmt:	/* CREATE TYPE AS ENUM */
-		case T_CreateRangeStmt:	/* CREATE TYPE AS RANGE */
-			evt->command = E_CreateType;
-			break;
-
-		case T_AlterEnumStmt:	/* ALTER TYPE (enum) */
-			evt->command = E_AlterType;
-			break;
-
-		case T_ViewStmt:		/* CREATE VIEW */
-			evt->command = E_CreateView;
-			break;
-
-		case T_CreateFunctionStmt:		/* CREATE FUNCTION */
-			evt->command = E_CreateFunction;
-			break;
-
-		case T_AlterFunctionStmt:		/* ALTER FUNCTION */
-			evt->command = E_AlterFunction;
-			break;
-
-		case T_IndexStmt:		/* CREATE INDEX */
-			evt->command = E_CreateIndex;
-			break;
-
-		case T_CreateSeqStmt:
-			evt->command = E_CreateSequence;
-			break;
-
-		case T_AlterSeqStmt:
-			evt->command = E_AlterSequence;
-			break;
-
-		case T_LoadStmt:
-			evt->command = E_Load;
-			break;
-
-		case T_ClusterStmt:
-			evt->command = E_Cluster;
-			break;
-
-		case T_VacuumStmt:
-			evt->command = E_Vacuum;
-			break;
-
-		case T_CreateTableAsStmt:
-			evt->command = E_CreateTableAs;
-			break;
-
-		case T_CreateTrigStmt:
-			evt->command = E_CreateTrigger;
-			break;
-
-		case T_CreateDomainStmt:
-			evt->command = E_CreateDomain;
-			break;
-
-		case T_ReindexStmt:
-			evt->command = E_Reindex;
-			break;
-
-		case T_CreateConversionStmt:
-			evt->command = E_CreateConversion;
-			break;
-
-		case T_CreateCastStmt:
-			evt->command = E_CreateCast;
-			break;
-
-		case T_CreateOpClassStmt:
-			evt->command = E_CreateOperatorClass;
-			break;
-
-		case T_CreateOpFamilyStmt:
-			evt->command = E_CreateOperatorFamily;
-			break;
-
-		case T_AlterOpFamilyStmt:
-			evt->command = E_AlterOperatorFamily;
-			break;
-
-		case T_AlterTSDictionaryStmt:
-			evt->command = E_AlterTextSearchDictionary;
-			break;
-
-		case T_AlterTSConfigurationStmt:
-			evt->command = E_AlterTextSearchConfiguration;
-			break;
-
-		default:
-			/*
-			 * reaching that part of the code only means that we are not
-			 * supporting event triggers for the given command, which still
-			 * needs to execute.
-			 */
-			break;
-	}
+	/* guess the ongoing operation from the command tag */
+	if (strncmp(evt->tag, "CREATE ", 7) == 0)
+		evt->operation = "CREATE";
+	else if (strncmp(evt->tag, "DROP ", 5) == 0)
+		evt->operation = "DROP";
+	else if (strncmp(evt->tag, "ALTER ", 6) == 0)
+		evt->operation = "ALTER";
 }
 
 /*
- * InitEventContext() must have been called first. When
- * CommandFiresTriggersForEvent() returns false, the EventContext structure
- * needs not be initialized further.
+ * InitEventContext() must have been called first, then the event context field
+ * 'objectype' must have been "manually" for command tags supporting several
+ * kinds of object, such as T_DropStmt, T_RenameStmt, T_AlterObjectSchemaStmt,
+ * T_AlterOwnerStmt or T_DefineStmt.
+ *
+ * When CommandFiresTriggersForEvent() returns false, the EventContext
+ * structure needs not be initialized further.
  */
 bool
 CommandFiresTriggersForEvent(EventContext ev_ctx, TrigEvent tev)
 {
 	EventCommandTriggers *triggers;
 
-	if (ev_ctx == NULL || ev_ctx->command == E_UNKNOWN)
+	if (ev_ctx == NULL)
+		return false;
+
+	if (ev_ctx->command == ETC_UNSET)
+		ev_ctx->command = get_command_from_nodetag(nodeTag(ev_ctx->parsetree),
+												   ev_ctx->objecttype, true);
+
+	if (ev_ctx->command == ETC_UNKNOWN)
 		return false;
 
 	triggers = get_event_triggers(tev, ev_ctx->command);
@@ -1046,7 +506,14 @@ ExecEventTriggers(EventContext ev_ctx, TrigEvent tev)
 	EventCommandTriggers *triggers;
 	ListCell *lc;
 
-	if (ev_ctx == NULL || ev_ctx->command == E_UNKNOWN)
+	if (ev_ctx == NULL)
+		return;
+
+	if (ev_ctx->command == ETC_UNSET)
+		ev_ctx->command = get_command_from_nodetag(nodeTag(ev_ctx->parsetree),
+												   ev_ctx->objecttype, true);
+
+	if (ev_ctx->command == ETC_UNKNOWN)
 		return;
 
 	triggers = get_event_triggers(tev, ev_ctx->command);

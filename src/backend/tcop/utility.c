@@ -357,8 +357,6 @@ standard_ProcessUtility(Node *parsetree,
 
 	/* Event Trigger support for command_start */
 	InitEventContext(&evt, parsetree);
-	if (CommandFiresTriggersForEvent(&evt, E_CommandStart))
-		ExecEventTriggers(&evt, E_CommandStart);
 
 	switch (nodeTag(parsetree))
 	{
@@ -511,6 +509,7 @@ standard_ProcessUtility(Node *parsetree,
 			 * relation and attribute manipulation
 			 */
 		case T_CreateSchemaStmt:
+			ExecEventTriggers(&evt, EVT_CommandStart);
 			CreateSchemaCommand((CreateSchemaStmt *) parsetree,
 								queryString);
 			break;
@@ -522,6 +521,9 @@ standard_ProcessUtility(Node *parsetree,
 				ListCell   *l;
 				Oid			relOid = InvalidOid;
 				CreateStmt *stmt = (CreateStmt *) parsetree;
+
+				/* possibly run event triggers */
+				ExecEventTriggers(&evt, EVT_CommandStart);
 
 				/* Run parse analysis ... */
 				stmts = transformCreateStmt(stmt, queryString);
@@ -587,59 +589,75 @@ standard_ProcessUtility(Node *parsetree,
 
 		case T_CreateTableSpaceStmt:
 			PreventTransactionChain(isTopLevel, "CREATE TABLESPACE");
+			ExecEventTriggers(&evt, EVT_CommandStart);
 			CreateTableSpace((CreateTableSpaceStmt *) parsetree);
 			break;
 
 		case T_DropTableSpaceStmt:
 			PreventTransactionChain(isTopLevel, "DROP TABLESPACE");
+			ExecEventTriggers(&evt, EVT_CommandStart);
 			DropTableSpace((DropTableSpaceStmt *) parsetree);
 			break;
 
 		case T_AlterTableSpaceOptionsStmt:
+			ExecEventTriggers(&evt, EVT_CommandStart);
 			AlterTableSpaceOptions((AlterTableSpaceOptionsStmt *) parsetree);
 			break;
 
 		case T_CreateExtensionStmt:
+			ExecEventTriggers(&evt, EVT_CommandStart);
 			CreateExtension((CreateExtensionStmt *) parsetree);
 			break;
 
 		case T_AlterExtensionStmt:
+			ExecEventTriggers(&evt, EVT_CommandStart);
 			ExecAlterExtensionStmt((AlterExtensionStmt *) parsetree);
 			break;
 
 		case T_AlterExtensionContentsStmt:
+			ExecEventTriggers(&evt, EVT_CommandStart);
 			ExecAlterExtensionContentsStmt((AlterExtensionContentsStmt *) parsetree);
 			break;
 
 		case T_CreateFdwStmt:
+			ExecEventTriggers(&evt, EVT_CommandStart);
 			CreateForeignDataWrapper((CreateFdwStmt *) parsetree);
 			break;
 
 		case T_AlterFdwStmt:
+			ExecEventTriggers(&evt, EVT_CommandStart);
 			AlterForeignDataWrapper((AlterFdwStmt *) parsetree);
 			break;
 
 		case T_CreateForeignServerStmt:
+			ExecEventTriggers(&evt, EVT_CommandStart);
 			CreateForeignServer((CreateForeignServerStmt *) parsetree);
 			break;
 
 		case T_AlterForeignServerStmt:
+			ExecEventTriggers(&evt, EVT_CommandStart);
 			AlterForeignServer((AlterForeignServerStmt *) parsetree);
 			break;
 
 		case T_CreateUserMappingStmt:
+			ExecEventTriggers(&evt, EVT_CommandStart);
 			CreateUserMapping((CreateUserMappingStmt *) parsetree);
 			break;
 
 		case T_AlterUserMappingStmt:
+			ExecEventTriggers(&evt, EVT_CommandStart);
 			AlterUserMapping((AlterUserMappingStmt *) parsetree);
 			break;
 
 		case T_DropUserMappingStmt:
+			ExecEventTriggers(&evt, EVT_CommandStart);
 			RemoveUserMapping((DropUserMappingStmt *) parsetree);
 			break;
 
 		case T_DropStmt:
+			evt.objecttype = ((DropStmt *) parsetree)->removeType;
+			ExecEventTriggers(&evt, EVT_CommandStart);
+
 			switch (((DropStmt *) parsetree)->removeType)
 			{
 				case OBJECT_INDEX:
@@ -703,14 +721,20 @@ standard_ProcessUtility(Node *parsetree,
 			 * schema
 			 */
 		case T_RenameStmt:
+			evt.objecttype = ((RenameStmt *) parsetree)->renameType;
+			ExecEventTriggers(&evt, EVT_CommandStart);
 			ExecRenameStmt((RenameStmt *) parsetree);
 			break;
 
 		case T_AlterObjectSchemaStmt:
+			evt.objecttype = ((AlterObjectSchemaStmt *) parsetree)->objectType;
+			ExecEventTriggers(&evt, EVT_CommandStart);
 			ExecAlterObjectSchemaStmt((AlterObjectSchemaStmt *) parsetree);
 			break;
 
 		case T_AlterOwnerStmt:
+			evt.objecttype = ((AlterOwnerStmt *) parsetree)->objectType;
+			ExecEventTriggers(&evt, EVT_CommandStart);
 			ExecAlterOwnerStmt((AlterOwnerStmt *) parsetree);
 			break;
 
@@ -721,6 +745,9 @@ standard_ProcessUtility(Node *parsetree,
 				List	   *stmts;
 				ListCell   *l;
 				LOCKMODE	lockmode;
+
+				/* run command_start event triggers, if any */
+				ExecEventTriggers(&evt, EVT_CommandStart);
 
 				/*
 				 * Figure out lock mode, and acquire lock.	This also does
@@ -772,6 +799,9 @@ standard_ProcessUtility(Node *parsetree,
 		case T_AlterDomainStmt:
 			{
 				AlterDomainStmt *stmt = (AlterDomainStmt *) parsetree;
+
+				/* run command_start event triggers, if any */
+				ExecEventTriggers(&evt, EVT_CommandStart);
 
 				/*
 				 * Some or all of these functions are recursive to cover
@@ -837,6 +867,9 @@ standard_ProcessUtility(Node *parsetree,
 			{
 				DefineStmt *stmt = (DefineStmt *) parsetree;
 
+				evt.objecttype = stmt->kind;
+				ExecEventTriggers(&evt, EVT_CommandStart);
+
 				switch (stmt->kind)
 				{
 					case OBJECT_AGGREGATE:
@@ -883,15 +916,18 @@ standard_ProcessUtility(Node *parsetree,
 			{
 				CompositeTypeStmt *stmt = (CompositeTypeStmt *) parsetree;
 
+				ExecEventTriggers(&evt, EVT_CommandStart);
 				DefineCompositeType(stmt->typevar, stmt->coldeflist);
 			}
 			break;
 
 		case T_CreateEnumStmt:	/* CREATE TYPE AS ENUM */
+			ExecEventTriggers(&evt, EVT_CommandStart);
 			DefineEnum((CreateEnumStmt *) parsetree);
 			break;
 
 		case T_CreateRangeStmt:	/* CREATE TYPE AS RANGE */
+			ExecEventTriggers(&evt, EVT_CommandStart);
 			DefineRange((CreateRangeStmt *) parsetree);
 			break;
 
@@ -903,24 +939,30 @@ standard_ProcessUtility(Node *parsetree,
 			 * defining pg_enum entries go away.
 			 */
 			PreventTransactionChain(isTopLevel, "ALTER TYPE ... ADD");
+			ExecEventTriggers(&evt, EVT_CommandStart);
 			AlterEnum((AlterEnumStmt *) parsetree);
 			break;
 
 		case T_ViewStmt:		/* CREATE VIEW */
+			ExecEventTriggers(&evt, EVT_CommandStart);
 			DefineView((ViewStmt *) parsetree, queryString);
 			break;
 
 		case T_CreateFunctionStmt:		/* CREATE FUNCTION */
+			ExecEventTriggers(&evt, EVT_CommandStart);
 			CreateFunction((CreateFunctionStmt *) parsetree, queryString);
 			break;
 
 		case T_AlterFunctionStmt:		/* ALTER FUNCTION */
+			ExecEventTriggers(&evt, EVT_CommandStart);
 			AlterFunction((AlterFunctionStmt *) parsetree);
 			break;
 
 		case T_IndexStmt:		/* CREATE INDEX */
 			{
 				IndexStmt  *stmt = (IndexStmt *) parsetree;
+
+				ExecEventTriggers(&evt, EVT_CommandStart);
 
 				if (stmt->concurrent)
 					PreventTransactionChain(isTopLevel,
@@ -956,14 +998,17 @@ standard_ProcessUtility(Node *parsetree,
 			break;
 
 		case T_RuleStmt:		/* CREATE RULE */
+			ExecEventTriggers(&evt, EVT_CommandStart);
 			DefineRule((RuleStmt *) parsetree, queryString);
 			break;
 
 		case T_CreateSeqStmt:
+			ExecEventTriggers(&evt, EVT_CommandStart);
 			DefineSequence((CreateSeqStmt *) parsetree);
 			break;
 
 		case T_AlterSeqStmt:
+			ExecEventTriggers(&evt, EVT_CommandStart);
 			AlterSequence((AlterSeqStmt *) parsetree);
 			break;
 
@@ -1030,6 +1075,8 @@ standard_ProcessUtility(Node *parsetree,
 			{
 				LoadStmt   *stmt = (LoadStmt *) parsetree;
 
+				ExecEventTriggers(&evt, EVT_CommandStart);
+
 				closeAllVfds(); /* probably not necessary... */
 				/* Allowed names are restricted if you're not superuser */
 				load_file(stmt->filename, !superuser());
@@ -1039,12 +1086,14 @@ standard_ProcessUtility(Node *parsetree,
 		case T_ClusterStmt:
 			/* we choose to allow this during "read only" transactions */
 			PreventCommandDuringRecovery("CLUSTER");
+			ExecEventTriggers(&evt, EVT_CommandStart);
 			cluster((ClusterStmt *) parsetree, isTopLevel);
 			break;
 
 		case T_VacuumStmt:
 			/* we choose to allow this during "read only" transactions */
 			PreventCommandDuringRecovery("VACUUM");
+			ExecEventTriggers(&evt, EVT_CommandStart);
 			vacuum((VacuumStmt *) parsetree, InvalidOid, true, NULL, false,
 				   isTopLevel);
 			break;
@@ -1054,6 +1103,7 @@ standard_ProcessUtility(Node *parsetree,
 			break;
 
 		case T_CreateTableAsStmt:
+			ExecEventTriggers(&evt, EVT_CommandStart);
 			ExecCreateTableAs((CreateTableAsStmt *) parsetree,
 							  queryString, params, completionTag);
 			break;
@@ -1077,6 +1127,7 @@ standard_ProcessUtility(Node *parsetree,
 			break;
 
 		case T_CreateTrigStmt:
+			ExecEventTriggers(&evt, EVT_CommandStart);
 			(void) CreateTrigger((CreateTrigStmt *) parsetree, queryString,
 								 InvalidOid, InvalidOid, false);
 			break;
@@ -1090,6 +1141,7 @@ standard_ProcessUtility(Node *parsetree,
 			break;
 
 		case T_CreatePLangStmt:
+			ExecEventTriggers(&evt, EVT_CommandStart);
 			CreateProceduralLanguage((CreatePLangStmt *) parsetree);
 			break;
 
@@ -1097,6 +1149,7 @@ standard_ProcessUtility(Node *parsetree,
 			 * ******************************** DOMAIN statements ****
 			 */
 		case T_CreateDomainStmt:
+			ExecEventTriggers(&evt, EVT_CommandStart);
 			DefineDomain((CreateDomainStmt *) parsetree);
 			break;
 
@@ -1162,6 +1215,8 @@ standard_ProcessUtility(Node *parsetree,
 			{
 				ReindexStmt *stmt = (ReindexStmt *) parsetree;
 
+				ExecEventTriggers(&evt, EVT_CommandStart);
+
 				/* we choose to allow this during "read only" transactions */
 				PreventCommandDuringRecovery("REINDEX");
 				switch (stmt->kind)
@@ -1195,30 +1250,37 @@ standard_ProcessUtility(Node *parsetree,
 			break;
 
 		case T_CreateConversionStmt:
+			ExecEventTriggers(&evt, EVT_CommandStart);
 			CreateConversionCommand((CreateConversionStmt *) parsetree);
 			break;
 
 		case T_CreateCastStmt:
+			ExecEventTriggers(&evt, EVT_CommandStart);
 			CreateCast((CreateCastStmt *) parsetree);
 			break;
 
 		case T_CreateOpClassStmt:
+			ExecEventTriggers(&evt, EVT_CommandStart);
 			DefineOpClass((CreateOpClassStmt *) parsetree);
 			break;
 
 		case T_CreateOpFamilyStmt:
+			ExecEventTriggers(&evt, EVT_CommandStart);
 			DefineOpFamily((CreateOpFamilyStmt *) parsetree);
 			break;
 
 		case T_AlterOpFamilyStmt:
+			ExecEventTriggers(&evt, EVT_CommandStart);
 			AlterOpFamily((AlterOpFamilyStmt *) parsetree);
 			break;
 
 		case T_AlterTSDictionaryStmt:
+			ExecEventTriggers(&evt, EVT_CommandStart);
 			AlterTSDictionary((AlterTSDictionaryStmt *) parsetree);
 			break;
 
 		case T_AlterTSConfigurationStmt:
+			ExecEventTriggers(&evt, EVT_CommandStart);
 			AlterTSConfiguration((AlterTSConfigurationStmt *) parsetree);
 			break;
 

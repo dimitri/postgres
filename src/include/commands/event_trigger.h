@@ -15,6 +15,7 @@
 
 #include "catalog/pg_event_trigger.h"
 #include "nodes/parsenodes.h"
+#include "utils/evtcache.h"
 
 /*
  * To be able to call user defined function on event triggers, the places in
@@ -30,6 +31,8 @@ typedef struct EventContextData
 	TrigEventCommand command;	/* For command triggers */
 	char		*toplevel;		/* TopLevel Command Tag */
 	char		*tag;			/* Command Tag */
+	char		*operation;		/* CREATE / ALTER / DROP, or NULL */
+	ObjectType	 objecttype;	/* TABLE, FUNCTION, CAST, etc, or NULL */
 	Oid			 objectId;		/* oid of the existing object, if any */
 	char		*schemaname;	/* schemaname or NULL if not relevant */
 	char		*objectname;	/* objectname */
@@ -48,7 +51,7 @@ typedef struct EventContextData *EventContext;
 typedef struct EventTriggerData
 {
 	NodeTag		 type;
-	char        *when;			/* Either BEFORE or AFTER */
+	char        *event;			/* command_start, etc */
 	char		*toplevel;		/* TopLevel Command Tag */
 	char		*tag;			/* Command Tag */
 	Oid			 objectId;		/* oid of the existing object, if any */
