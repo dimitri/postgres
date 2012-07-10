@@ -1085,15 +1085,15 @@ standard_ProcessUtility(Node *parsetree,
 
 		case T_ClusterStmt:
 			/* we choose to allow this during "read only" transactions */
-			PreventCommandDuringRecovery("CLUSTER");
 			ExecEventTriggers(&evt, EVT_CommandStart);
+			PreventCommandDuringRecovery("CLUSTER");
 			cluster((ClusterStmt *) parsetree, isTopLevel);
 			break;
 
 		case T_VacuumStmt:
 			/* we choose to allow this during "read only" transactions */
-			PreventCommandDuringRecovery("VACUUM");
 			ExecEventTriggers(&evt, EVT_CommandStart);
+			PreventCommandDuringRecovery("VACUUM");
 			vacuum((VacuumStmt *) parsetree, InvalidOid, true, NULL, false,
 				   isTopLevel);
 			break;
