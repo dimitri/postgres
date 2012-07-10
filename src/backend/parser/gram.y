@@ -4367,7 +4367,7 @@ trigger_command:
 			SCONST
 				{
 					TrigEventCommand cmdtag = parse_event_tag($1, true);
-					if (cmdtag == E_UNKNOWN)
+					if (cmdtag == ETC_UNKNOWN)
 						ereport(ERROR,
 								(errcode(ERRCODE_SYNTAX_ERROR),
 								 errmsg("unrecognized command \"%s\"", $1),
