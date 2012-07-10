@@ -822,11 +822,10 @@ plpgsql_exec_event_trigger(PLpgSQL_function *func, EventTriggerData *trigdata)
 	}
 	else
 	{
-		var->value = DirectFunctionCall1(namein,
-										 CStringGetDatum(trigdata->operation));
+		var->value = CStringGetTextDatum(trigdata->operation);
 		var->isnull = false;
 	}
-	var->freeval = true;
+	var->freeval = false;
 
 	var = (PLpgSQL_var *) (estate.datums[func->tg_objecttype_varno]);
 	if (trigdata->objecttype == NULL)
@@ -835,11 +834,10 @@ plpgsql_exec_event_trigger(PLpgSQL_function *func, EventTriggerData *trigdata)
 	}
 	else
 	{
-		var->value = DirectFunctionCall1(namein,
-										 CStringGetDatum(trigdata->objecttype));
+		var->value = CStringGetTextDatum(trigdata->objecttype);
 		var->isnull = false;
 	}
-	var->freeval = true;
+	var->freeval = false;
 
 	var = (PLpgSQL_var *) (estate.datums[func->tg_objectid_varno]);
 	if (trigdata->objectId == InvalidOid)
