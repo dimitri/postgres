@@ -179,7 +179,9 @@ create or replace function perlsnitch() returns event_trigger language plperl as
                . $_TD->{objectname});
 $$;
 
-create event trigger perl_snitch on command_start execute procedure perlsnitch();
+create event trigger perl_snitch
+                  on ddl_command_start
+   execute procedure perlsnitch();
 
 create or replace function foobar() returns int language sql as $$select 1;$$;
 alter function foobar() cost 77;

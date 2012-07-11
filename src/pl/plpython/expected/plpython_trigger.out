@@ -615,20 +615,22 @@ create or replace function pysnitch() returns event_trigger language plpythonu a
   plpy.notice("  pysnitch: %s %s %s.%s" %
               (TD["event"], TD["tag"], TD["schemaname"], TD["objectname"]));
 $$;
-create event trigger py_snitch on command_start execute procedure pysnitch();
+create event trigger py_snitch
+                  on ddl_command_start
+   execute procedure pysnitch();
 create or replace function foobar() returns int language sql as $$select 1;$$;
-NOTICE:    pysnitch: command_start CREATE FUNCTION None.None
+NOTICE:    pysnitch: ddl_command_start CREATE FUNCTION None.None
 CONTEXT:  PL/Python function "pysnitch"
 alter function foobar() cost 77;
-NOTICE:    pysnitch: command_start ALTER FUNCTION None.None
+NOTICE:    pysnitch: ddl_command_start ALTER FUNCTION None.None
 CONTEXT:  PL/Python function "pysnitch"
 drop function foobar();
-NOTICE:    pysnitch: command_start DROP FUNCTION None.None
+NOTICE:    pysnitch: ddl_command_start DROP FUNCTION None.None
 CONTEXT:  PL/Python function "pysnitch"
 create table foo();
-NOTICE:    pysnitch: command_start CREATE TABLE None.None
+NOTICE:    pysnitch: ddl_command_start CREATE TABLE None.None
 CONTEXT:  PL/Python function "pysnitch"
 drop table foo;
-NOTICE:    pysnitch: command_start DROP TABLE None.None
+NOTICE:    pysnitch: ddl_command_start DROP TABLE None.None
 CONTEXT:  PL/Python function "pysnitch"
 drop event trigger py_snitch;

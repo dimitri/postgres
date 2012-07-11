@@ -51,7 +51,7 @@ typedef struct EventContextData *EventContext;
 typedef struct EventTriggerData
 {
 	NodeTag		 type;
-	char        *event;			/* command_start, etc */
+	char        *event;			/* ddl_command_start, etc */
 	char		*toplevel;		/* TopLevel Command Tag */
 	char		*tag;			/* Command Tag */
 	char		*operation;		/* CREATE / ALTER / DROP, or NULL */

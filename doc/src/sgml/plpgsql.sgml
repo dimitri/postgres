@@ -4020,7 +4020,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE EVENT TRIGGER snitch ON command_start EXECUTE PROCEDURE snitch();
+CREATE EVENT TRIGGER snitch ON ddl_command_start EXECUTE PROCEDURE snitch();
 </programlisting>
    </example>
   </sect2>

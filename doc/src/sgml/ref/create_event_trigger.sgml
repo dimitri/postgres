@@ -122,8 +122,7 @@ CREATE EVENT TRIGGER <replaceable class="PARAMETER">name</replaceable>
   <title>Examples</title>
 
   <para>
-   Forbid the execution of any command supported by the event trigger
-   mechanism:
+   Forbid the execution of any <link linkend="ddl">ddl</link> command:
 
 <programlisting>
 CREATE OR REPLACE FUNCTION abort_any_command()
@@ -135,7 +134,7 @@ BEGIN
 END;
 $$;
 
-CREATE EVENT TRIGGER abort_ddl ON command_start
+CREATE EVENT TRIGGER abort_ddl ON ddl_command_start
    EXECUTE PROCEDURE abort_any_command();
 </programlisting>
 
@@ -156,8 +155,8 @@ END;
 $$;
 
   CREATE EVENT TRIGGER check_style
-            ON command_start
-          WHEN tag IN (CREATE TABLE)
+            ON ddl_command_start
+          WHEN tag IN ('CREATE TABLE', 'CREATE TABLE AS', 'SELECT INTO')
        EXECUTE PROCEDURE enforce_local_style();
 </programlisting>
   </para>

@@ -11,10 +11,12 @@ begin
 end;
 $$;
 
-create event trigger any_t on command_start
+create event trigger any_t
+                  on ddl_command_start
    execute procedure snitch();
 
-create event trigger foo_t on command_start
+create event trigger foo_t
+                  on ddl_command_start
                 when tag in ('alter collation',
                              'alter conversion',
                              'alter domain',
@@ -53,9 +55,7 @@ create event trigger foo_t on command_start
                              'drop text search parser',
                              'drop text search template',
                              'drop trigger',
-                             'reindex',
-                             'select into',
-                             'vacuum')
+                             'select into')
    execute procedure snitch();
 
 alter event trigger foo_t disable;
@@ -277,11 +277,13 @@ begin
 end;
 $$;
 
-create event trigger a_insert_one_row on command_start
+create event trigger a_insert_one_row
+                 on ddl_command_start
         when tag in ('alter table')
    execute procedure insert_one_row();
 
-create event trigger b_check_one_row on command_start
+create event trigger b_check_one_row
+                  on ddl_command_start
          when tag in ('alter table')
    execute procedure check_one_row();
 

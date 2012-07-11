@@ -355,7 +355,7 @@ standard_ProcessUtility(Node *parsetree,
 	if (completionTag)
 		completionTag[0] = '\0';
 
-	/* Event Trigger support for command_start */
+	/* Event Trigger support for ddl_command_start */
 	InitEventContext(&evt, parsetree);
 
 	switch (nodeTag(parsetree))
@@ -509,7 +509,8 @@ standard_ProcessUtility(Node *parsetree,
 			 * relation and attribute manipulation
 			 */
 		case T_CreateSchemaStmt:
-			ExecEventTriggers(&evt, EVT_CommandStart);
+			evt.objecttype = OBJECT_SCHEMA;
+			ExecEventTriggers(&evt, EVT_DDLCommandStart);
 			CreateSchemaCommand((CreateSchemaStmt *) parsetree,
 								queryString);
 			break;
@@ -523,7 +524,11 @@ standard_ProcessUtility(Node *parsetree,
 				CreateStmt *stmt = (CreateStmt *) parsetree;
 
 				/* possibly run event triggers */
-				ExecEventTriggers(&evt, EVT_CommandStart);
+				if (nodeTag(parsetree) == T_CreateStmt)
+					evt.objecttype = OBJECT_TABLE;
+				else
+					evt.objecttype = OBJECT_FOREIGN_TABLE;
+				ExecEventTriggers(&evt, EVT_DDLCommandStart);
 
 				/* Run parse analysis ... */
 				stmts = transformCreateStmt(stmt, queryString);
@@ -589,74 +594,81 @@ standard_ProcessUtility(Node *parsetree,
 
 		case T_CreateTableSpaceStmt:
 			PreventTransactionChain(isTopLevel, "CREATE TABLESPACE");
-			ExecEventTriggers(&evt, EVT_CommandStart);
 			CreateTableSpace((CreateTableSpaceStmt *) parsetree);
 			break;
 
 		case T_DropTableSpaceStmt:
 			PreventTransactionChain(isTopLevel, "DROP TABLESPACE");
-			ExecEventTriggers(&evt, EVT_CommandStart);
 			DropTableSpace((DropTableSpaceStmt *) parsetree);
 			break;
 
 		case T_AlterTableSpaceOptionsStmt:
-			ExecEventTriggers(&evt, EVT_CommandStart);
 			AlterTableSpaceOptions((AlterTableSpaceOptionsStmt *) parsetree);
 			break;
 
 		case T_CreateExtensionStmt:
-			ExecEventTriggers(&evt, EVT_CommandStart);
+			evt.objecttype = OBJECT_EXTENSION;
+			ExecEventTriggers(&evt, EVT_DDLCommandStart);
 			CreateExtension((CreateExtensionStmt *) parsetree);
 			break;
 
 		case T_AlterExtensionStmt:
-			ExecEventTriggers(&evt, EVT_CommandStart);
+			evt.objecttype = OBJECT_EXTENSION;
+			ExecEventTriggers(&evt, EVT_DDLCommandStart);
 			ExecAlterExtensionStmt((AlterExtensionStmt *) parsetree);
 			break;
 
 		case T_AlterExtensionContentsStmt:
-			ExecEventTriggers(&evt, EVT_CommandStart);
+			evt.objecttype = OBJECT_EXTENSION;
+			ExecEventTriggers(&evt, EVT_DDLCommandStart);
 			ExecAlterExtensionContentsStmt((AlterExtensionContentsStmt *) parsetree);
 			break;
 
 		case T_CreateFdwStmt:
-			ExecEventTriggers(&evt, EVT_CommandStart);
+			evt.objecttype = OBJECT_FDW;
+			ExecEventTriggers(&evt, EVT_DDLCommandStart);
 			CreateForeignDataWrapper((CreateFdwStmt *) parsetree);
 			break;
 
 		case T_AlterFdwStmt:
-			ExecEventTriggers(&evt, EVT_CommandStart);
+			evt.objecttype = OBJECT_FDW;
+			ExecEventTriggers(&evt, EVT_DDLCommandStart);
 			AlterForeignDataWrapper((AlterFdwStmt *) parsetree);
 			break;
 
 		case T_CreateForeignServerStmt:
-			ExecEventTriggers(&evt, EVT_CommandStart);
+			evt.objecttype = OBJECT_FOREIGN_SERVER;
+			ExecEventTriggers(&evt, EVT_DDLCommandStart);
 			CreateForeignServer((CreateForeignServerStmt *) parsetree);
 			break;
 
 		case T_AlterForeignServerStmt:
-			ExecEventTriggers(&evt, EVT_CommandStart);
+			evt.objecttype = OBJECT_FOREIGN_SERVER;
+			ExecEventTriggers(&evt, EVT_DDLCommandStart);
 			AlterForeignServer((AlterForeignServerStmt *) parsetree);
 			break;
 
 		case T_CreateUserMappingStmt:
-			ExecEventTriggers(&evt, EVT_CommandStart);
+			/* there's no OBJECT_ for user mappings */
+			ExecEventTriggers(&evt, EVT_DDLCommandStart);
 			CreateUserMapping((CreateUserMappingStmt *) parsetree);
 			break;
 
 		case T_AlterUserMappingStmt:
-			ExecEventTriggers(&evt, EVT_CommandStart);
+			/* there's no OBJECT_ for user mappings */
+			ExecEventTriggers(&evt, EVT_DDLCommandStart);
 			AlterUserMapping((AlterUserMappingStmt *) parsetree);
 			break;
 
 		case T_DropUserMappingStmt:
-			ExecEventTriggers(&evt, EVT_CommandStart);
+			/* there's no OBJECT_ for user mappings */
+			ExecEventTriggers(&evt, EVT_DDLCommandStart);
 			RemoveUserMapping((DropUserMappingStmt *) parsetree);
 			break;
 
 		case T_DropStmt:
 			evt.objecttype = ((DropStmt *) parsetree)->removeType;
-			ExecEventTriggers(&evt, EVT_CommandStart);
+			ExecEventTriggers(&evt, EVT_DDLCommandStart);
 
 			switch (((DropStmt *) parsetree)->removeType)
 			{
@@ -722,19 +734,19 @@ standard_ProcessUtility(Node *parsetree,
 			 */
 		case T_RenameStmt:
 			evt.objecttype = ((RenameStmt *) parsetree)->renameType;
-			ExecEventTriggers(&evt, EVT_CommandStart);
+			ExecEventTriggers(&evt, EVT_DDLCommandStart);
 			ExecRenameStmt((RenameStmt *) parsetree);
 			break;
 
 		case T_AlterObjectSchemaStmt:
 			evt.objecttype = ((AlterObjectSchemaStmt *) parsetree)->objectType;
-			ExecEventTriggers(&evt, EVT_CommandStart);
+			ExecEventTriggers(&evt, EVT_DDLCommandStart);
 			ExecAlterObjectSchemaStmt((AlterObjectSchemaStmt *) parsetree);
 			break;
 
 		case T_AlterOwnerStmt:
 			evt.objecttype = ((AlterOwnerStmt *) parsetree)->objectType;
-			ExecEventTriggers(&evt, EVT_CommandStart);
+			ExecEventTriggers(&evt, EVT_DDLCommandStart);
 			ExecAlterOwnerStmt((AlterOwnerStmt *) parsetree);
 			break;
 
@@ -746,8 +758,9 @@ standard_ProcessUtility(Node *parsetree,
 				ListCell   *l;
 				LOCKMODE	lockmode;
 
-				/* run command_start event triggers, if any */
-				ExecEventTriggers(&evt, EVT_CommandStart);
+				/* run ddl_command_start event triggers, if any */
+				evt.objecttype = OBJECT_TABLE;
+				ExecEventTriggers(&evt, EVT_DDLCommandStart);
 
 				/*
 				 * Figure out lock mode, and acquire lock.	This also does
@@ -800,8 +813,9 @@ standard_ProcessUtility(Node *parsetree,
 			{
 				AlterDomainStmt *stmt = (AlterDomainStmt *) parsetree;
 
-				/* run command_start event triggers, if any */
-				ExecEventTriggers(&evt, EVT_CommandStart);
+				/* run ddl_command_start event triggers, if any */
+				evt.objecttype = OBJECT_DOMAIN;
+				ExecEventTriggers(&evt, EVT_DDLCommandStart);
 
 				/*
 				 * Some or all of these functions are recursive to cover
@@ -868,7 +882,7 @@ standard_ProcessUtility(Node *parsetree,
 				DefineStmt *stmt = (DefineStmt *) parsetree;
 
 				evt.objecttype = stmt->kind;
-				ExecEventTriggers(&evt, EVT_CommandStart);
+				ExecEventTriggers(&evt, EVT_DDLCommandStart);
 
 				switch (stmt->kind)
 				{
@@ -916,18 +930,21 @@ standard_ProcessUtility(Node *parsetree,
 			{
 				CompositeTypeStmt *stmt = (CompositeTypeStmt *) parsetree;
 
-				ExecEventTriggers(&evt, EVT_CommandStart);
+				evt.objecttype = OBJECT_TYPE;
+				ExecEventTriggers(&evt, EVT_DDLCommandStart);
 				DefineCompositeType(stmt->typevar, stmt->coldeflist);
 			}
 			break;
 
 		case T_CreateEnumStmt:	/* CREATE TYPE AS ENUM */
-			ExecEventTriggers(&evt, EVT_CommandStart);
+			evt.objecttype = OBJECT_TYPE;
+			ExecEventTriggers(&evt, EVT_DDLCommandStart);
 			DefineEnum((CreateEnumStmt *) parsetree);
 			break;
 
 		case T_CreateRangeStmt:	/* CREATE TYPE AS RANGE */
-			ExecEventTriggers(&evt, EVT_CommandStart);
+			evt.objecttype = OBJECT_TYPE;
+			ExecEventTriggers(&evt, EVT_DDLCommandStart);
 			DefineRange((CreateRangeStmt *) parsetree);
 			break;
 
@@ -938,23 +955,27 @@ standard_ProcessUtility(Node *parsetree,
 			 * with enum OID values getting into indexes and then having their
 			 * defining pg_enum entries go away.
 			 */
+			evt.objecttype = OBJECT_TYPE;
+			ExecEventTriggers(&evt, EVT_DDLCommandStart);
 			PreventTransactionChain(isTopLevel, "ALTER TYPE ... ADD");
-			ExecEventTriggers(&evt, EVT_CommandStart);
 			AlterEnum((AlterEnumStmt *) parsetree);
 			break;
 
 		case T_ViewStmt:		/* CREATE VIEW */
-			ExecEventTriggers(&evt, EVT_CommandStart);
+			evt.objecttype = OBJECT_VIEW;
+			ExecEventTriggers(&evt, EVT_DDLCommandStart);
 			DefineView((ViewStmt *) parsetree, queryString);
 			break;
 
 		case T_CreateFunctionStmt:		/* CREATE FUNCTION */
-			ExecEventTriggers(&evt, EVT_CommandStart);
+			evt.objecttype = OBJECT_FUNCTION;
+			ExecEventTriggers(&evt, EVT_DDLCommandStart);
 			CreateFunction((CreateFunctionStmt *) parsetree, queryString);
 			break;
 
 		case T_AlterFunctionStmt:		/* ALTER FUNCTION */
-			ExecEventTriggers(&evt, EVT_CommandStart);
+			evt.objecttype = OBJECT_FUNCTION;
+			ExecEventTriggers(&evt, EVT_DDLCommandStart);
 			AlterFunction((AlterFunctionStmt *) parsetree);
 			break;
 
@@ -962,7 +983,8 @@ standard_ProcessUtility(Node *parsetree,
 			{
 				IndexStmt  *stmt = (IndexStmt *) parsetree;
 
-				ExecEventTriggers(&evt, EVT_CommandStart);
+				evt.objecttype = OBJECT_INDEX;
+				ExecEventTriggers(&evt, EVT_DDLCommandStart);
 
 				if (stmt->concurrent)
 					PreventTransactionChain(isTopLevel,
@@ -998,17 +1020,20 @@ standard_ProcessUtility(Node *parsetree,
 			break;
 
 		case T_RuleStmt:		/* CREATE RULE */
-			ExecEventTriggers(&evt, EVT_CommandStart);
+			evt.objecttype = OBJECT_RULE;
+			ExecEventTriggers(&evt, EVT_DDLCommandStart);
 			DefineRule((RuleStmt *) parsetree, queryString);
 			break;
 
 		case T_CreateSeqStmt:
-			ExecEventTriggers(&evt, EVT_CommandStart);
+			evt.objecttype = OBJECT_SEQUENCE;
+			ExecEventTriggers(&evt, EVT_DDLCommandStart);
 			DefineSequence((CreateSeqStmt *) parsetree);
 			break;
 
 		case T_AlterSeqStmt:
-			ExecEventTriggers(&evt, EVT_CommandStart);
+			evt.objecttype = OBJECT_SEQUENCE;
+			ExecEventTriggers(&evt, EVT_DDLCommandStart);
 			AlterSequence((AlterSeqStmt *) parsetree);
 			break;
 
@@ -1075,8 +1100,6 @@ standard_ProcessUtility(Node *parsetree,
 			{
 				LoadStmt   *stmt = (LoadStmt *) parsetree;
 
-				ExecEventTriggers(&evt, EVT_CommandStart);
-
 				closeAllVfds(); /* probably not necessary... */
 				/* Allowed names are restricted if you're not superuser */
 				load_file(stmt->filename, !superuser());
@@ -1085,14 +1108,12 @@ standard_ProcessUtility(Node *parsetree,
 
 		case T_ClusterStmt:
 			/* we choose to allow this during "read only" transactions */
-			ExecEventTriggers(&evt, EVT_CommandStart);
 			PreventCommandDuringRecovery("CLUSTER");
 			cluster((ClusterStmt *) parsetree, isTopLevel);
 			break;
 
 		case T_VacuumStmt:
 			/* we choose to allow this during "read only" transactions */
-			ExecEventTriggers(&evt, EVT_CommandStart);
 			PreventCommandDuringRecovery("VACUUM");
 			vacuum((VacuumStmt *) parsetree, InvalidOid, true, NULL, false,
 				   isTopLevel);
@@ -1103,7 +1124,10 @@ standard_ProcessUtility(Node *parsetree,
 			break;
 
 		case T_CreateTableAsStmt:
-			ExecEventTriggers(&evt, EVT_CommandStart);
+			evt.objecttype = OBJECT_TABLE;
+			if (((CreateTableAsStmt *) parsetree)->is_select_into)
+				evt.operation = "CREATE";
+			ExecEventTriggers(&evt, EVT_DDLCommandStart);
 			ExecCreateTableAs((CreateTableAsStmt *) parsetree,
 							  queryString, params, completionTag);
 			break;
@@ -1127,7 +1151,8 @@ standard_ProcessUtility(Node *parsetree,
 			break;
 
 		case T_CreateTrigStmt:
-			ExecEventTriggers(&evt, EVT_CommandStart);
+			evt.objecttype = OBJECT_TRIGGER;
+			ExecEventTriggers(&evt, EVT_DDLCommandStart);
 			(void) CreateTrigger((CreateTrigStmt *) parsetree, queryString,
 								 InvalidOid, InvalidOid, false);
 			break;
@@ -1141,7 +1166,8 @@ standard_ProcessUtility(Node *parsetree,
 			break;
 
 		case T_CreatePLangStmt:
-			ExecEventTriggers(&evt, EVT_CommandStart);
+			evt.objecttype = OBJECT_LANGUAGE;
+			ExecEventTriggers(&evt, EVT_DDLCommandStart);
 			CreateProceduralLanguage((CreatePLangStmt *) parsetree);
 			break;
 
@@ -1149,7 +1175,8 @@ standard_ProcessUtility(Node *parsetree,
 			 * ******************************** DOMAIN statements ****
 			 */
 		case T_CreateDomainStmt:
-			ExecEventTriggers(&evt, EVT_CommandStart);
+			evt.objecttype = OBJECT_DOMAIN;
+			ExecEventTriggers(&evt, EVT_DDLCommandStart);
 			DefineDomain((CreateDomainStmt *) parsetree);
 			break;
 
@@ -1215,8 +1242,6 @@ standard_ProcessUtility(Node *parsetree,
 			{
 				ReindexStmt *stmt = (ReindexStmt *) parsetree;
 
-				ExecEventTriggers(&evt, EVT_CommandStart);
-
 				/* we choose to allow this during "read only" transactions */
 				PreventCommandDuringRecovery("REINDEX");
 				switch (stmt->kind)
@@ -1250,37 +1275,44 @@ standard_ProcessUtility(Node *parsetree,
 			break;
 
 		case T_CreateConversionStmt:
-			ExecEventTriggers(&evt, EVT_CommandStart);
+			evt.objecttype = OBJECT_CONVERSION;
+			ExecEventTriggers(&evt, EVT_DDLCommandStart);
 			CreateConversionCommand((CreateConversionStmt *) parsetree);
 			break;
 
 		case T_CreateCastStmt:
-			ExecEventTriggers(&evt, EVT_CommandStart);
+			evt.objecttype = OBJECT_CAST;
+			ExecEventTriggers(&evt, EVT_DDLCommandStart);
 			CreateCast((CreateCastStmt *) parsetree);
 			break;
 
 		case T_CreateOpClassStmt:
-			ExecEventTriggers(&evt, EVT_CommandStart);
+			evt.objecttype = OBJECT_OPCLASS;
+			ExecEventTriggers(&evt, EVT_DDLCommandStart);
 			DefineOpClass((CreateOpClassStmt *) parsetree);
 			break;
 
 		case T_CreateOpFamilyStmt:
-			ExecEventTriggers(&evt, EVT_CommandStart);
+			evt.objecttype = OBJECT_OPFAMILY;
+			ExecEventTriggers(&evt, EVT_DDLCommandStart);
 			DefineOpFamily((CreateOpFamilyStmt *) parsetree);
 			break;
 
 		case T_AlterOpFamilyStmt:
-			ExecEventTriggers(&evt, EVT_CommandStart);
+			evt.objecttype = OBJECT_OPFAMILY;
+			ExecEventTriggers(&evt, EVT_DDLCommandStart);
 			AlterOpFamily((AlterOpFamilyStmt *) parsetree);
 			break;
 
 		case T_AlterTSDictionaryStmt:
-			ExecEventTriggers(&evt, EVT_CommandStart);
+			evt.objecttype = OBJECT_TSDICTIONARY;
+			ExecEventTriggers(&evt, EVT_DDLCommandStart);
 			AlterTSDictionary((AlterTSDictionaryStmt *) parsetree);
 			break;
 
 		case T_AlterTSConfigurationStmt:
-			ExecEventTriggers(&evt, EVT_CommandStart);
+			evt.objecttype = OBJECT_TSCONFIGURATION;
+			ExecEventTriggers(&evt, EVT_DDLCommandStart);
 			AlterTSConfiguration((AlterTSConfigurationStmt *) parsetree);
 			break;
 

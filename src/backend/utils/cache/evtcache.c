@@ -102,7 +102,7 @@ static EventTriggerCommandTagsType EventTriggerCommandTags[] =
 		ETC_CreateCast,
 		"CREATE CAST",
 		T_CreateCastStmt,
-		-1
+		OBJECT_CAST
 	},
 	{
 		ETC_CreateCollation,
@@ -114,49 +114,49 @@ static EventTriggerCommandTagsType EventTriggerCommandTags[] =
 		ETC_CreateConversion,
 		"CREATE CONVERSION",
 		T_CreateConversionStmt,
-		-1
+		OBJECT_CONVERSION
 	},
 	{
 		ETC_CreateDomain,
 		"CREATE DOMAIN",
 		T_CreateDomainStmt,
-		-1
+		OBJECT_DOMAIN
 	},
 	{
 		ETC_CreateExtension,
 		"CREATE EXTENSION",
 		T_CreateExtensionStmt,
-		-1
+		OBJECT_EXTENSION
 	},
 	{
 		ETC_CreateForeignDataWrapper,
 		"CREATE FOREIGN DATA WRAPPER",
 		T_CreateFdwStmt,
-		-1
+		OBJECT_FDW
 	},
 	{
 		ETC_CreateForeignTable,
 		"CREATE FOREIGN TABLE",
 		T_CreateForeignTableStmt,
-		-1
+		OBJECT_FOREIGN_TABLE
 	},
 	{
 		ETC_CreateFunction,
 		"CREATE FUNCTION",
 		T_CreateFunctionStmt,
-		-1
+		OBJECT_FUNCTION
 	},
 	{
 		ETC_CreateIndex,
 		"CREATE INDEX",
 		T_IndexStmt,
-		-1
+		OBJECT_INDEX
 	},
 	{
 		ETC_CreateLanguage,
 		"CREATE LANGUAGE",
 		T_CreatePLangStmt,
-		-1
+		OBJECT_LANGUAGE
 	},
 	{
 		ETC_CreateOperator,
@@ -168,13 +168,13 @@ static EventTriggerCommandTagsType EventTriggerCommandTags[] =
 		ETC_CreateOperatorClass,
 		"CREATE OPERATOR CLASS",
 		T_CreateOpClassStmt,
-		-1
+		OBJECT_OPCLASS
 	},
 	{
 		ETC_CreateOperatorFamily,
 		"CREATE OPERATOR FAMILY",
 		T_CreateOpFamilyStmt,
-		-1
+		OBJECT_OPFAMILY
 	},
 	{
 		ETC_CreateRule,
@@ -186,37 +186,37 @@ static EventTriggerCommandTagsType EventTriggerCommandTags[] =
 		ETC_CreateSchema,
 		"CREATE SCHEMA",
 		T_CreateSchemaStmt,
-		-1
+		OBJECT_SCHEMA
 	},
 	{
 		ETC_CreateSequence,
 		"CREATE SEQUENCE",
 		T_CreateSeqStmt,
-		-1
+		OBJECT_SEQUENCE
 	},
 	{
 		ETC_CreateServer,
 		"CREATE SERVER",
 		T_CreateForeignServerStmt,
-		-1
+		OBJECT_FOREIGN_SERVER
 	},
 	{
 		ETC_CreateTable,
 		"CREATE TABLE",
 		T_CreateStmt,
-		-1
+		OBJECT_TABLE
 	},
 	{
 		ETC_CreateTableAs,
 		"CREATE TABLE AS",
 		T_CreateTableAsStmt,
-		-1
+		OBJECT_TABLE
 	},
 	{
 		ETC_SelectInto,
 		"SELECT INTO",
 		T_CreateTableAsStmt,
-		-1
+		OBJECT_TABLE
 	},
 	{
 		ETC_CreateTextSearchParser,
@@ -246,7 +246,7 @@ static EventTriggerCommandTagsType EventTriggerCommandTags[] =
 		ETC_CreateTrigger,
 		"CREATE TRIGGER",
 		T_CreateTrigStmt,
-		-1
+		OBJECT_TRIGGER
 	},
 	{
 		ETC_CreateType,
@@ -258,19 +258,19 @@ static EventTriggerCommandTagsType EventTriggerCommandTags[] =
 		ETC_CreateType,
 		"CREATE TYPE",
 		T_CompositeTypeStmt,
-		-1
+		OBJECT_TYPE
 	},
 	{
 		ETC_CreateType,
 		"CREATE TYPE",
 		T_CreateEnumStmt,
-		-1
+		OBJECT_TYPE
 	},
 	{
 		ETC_CreateType,
 		"CREATE TYPE",
 		T_CreateRangeStmt,
-		-1
+		OBJECT_TYPE
 	},
 	{
 		ETC_CreateUserMapping,
@@ -282,13 +282,13 @@ static EventTriggerCommandTagsType EventTriggerCommandTags[] =
 		ETC_CreateView,
 		"CREATE VIEW",
 		T_ViewStmt,
-		-1
+		OBJECT_VIEW
 	},
 	{
 		ETC_AlterTable,
 		"ALTER TABLE",
 		T_AlterTableStmt,
-		-1
+		OBJECT_TABLE
 	},
 	{
 		ETC_DropAggregate,
@@ -453,34 +453,10 @@ static EventTriggerCommandTagsType EventTriggerCommandTags[] =
 		OBJECT_VIEW
 	},
 	{
-		ETC_Vacuum,
-		"VACUUM",
-		T_VacuumStmt,
-		-1
-	},
-	{
-		ETC_Cluster,
-		"CLUSTER",
-		T_ClusterStmt,
-		-1
-	},
-	{
-		ETC_Load,
-		"LOAD",
-		T_LoadStmt,
-		-1
-	},
-	{
-		ETC_Reindex,
-		"REINDEX",
-		T_ReindexStmt,
-		-1
-	},
-	{
 		ETC_AlterSequence,
 		"ALTER SEQUENCE",
 		T_AlterSeqStmt,
-		-1
+		OBJECT_SEQUENCE
 	},
 	{
 		ETC_AlterUserMapping,
@@ -492,13 +468,13 @@ static EventTriggerCommandTagsType EventTriggerCommandTags[] =
 		ETC_AlterFunction,
 		"ALTER FUNCTION",
 		T_AlterFunctionStmt,
-		-1
+		OBJECT_FUNCTION
 	},
 	{
 		ETC_AlterDomain,
 		"ALTER DOMAIN",
 		T_AlterDomainStmt,
-		-1
+		OBJECT_DOMAIN
 	},
 	/* ALTER <OBJECT> name RENAME TO */
 	{
@@ -818,7 +794,7 @@ static EventTriggerCommandTagsType EventTriggerCommandTags[] =
 		ETC_AlterType,
 		"ALTER TYPE",
 		T_AlterEnumStmt,
-		-1
+		OBJECT_TYPE
 	},
 	{
 		ETC_AlterType,
@@ -842,7 +818,7 @@ static EventTriggerCommandTagsType EventTriggerCommandTags[] =
 		ETC_AlterTextSearchDictionary,
 		"ALTER TEXT SEARCH DICTIONARY",
 		T_AlterTSDictionaryStmt,
-		-1
+		OBJECT_TSDICTIONARY
 	},
 	/* ALTER <OBJECT> name OWNER TO */
 	{
@@ -1319,8 +1295,8 @@ event_to_string(TrigEvent event)
 {
 	switch (event)
 	{
-		case EVT_CommandStart:
-			return "command_start";
+		case EVT_DDLCommandStart:
+			return "ddl_command_start";
 	}
 	return NULL;
 }
@@ -1328,8 +1304,8 @@ event_to_string(TrigEvent event)
 TrigEvent
 parse_event_name(char *event)
 {
-	if (pg_strcasecmp(event, "command_start") == 0)
-		return EVT_CommandStart;
+	if (pg_strcasecmp(event, "ddl_command_start") == 0)
+		return EVT_DDLCommandStart;
 	else
 		ereport(ERROR,
 				(errcode(ERRCODE_SYNTAX_ERROR),

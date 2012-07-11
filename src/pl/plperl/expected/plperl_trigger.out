@@ -317,20 +317,22 @@ create or replace function perlsnitch() returns event_trigger language plperl as
                . $_TD->{schemaname} . " "
                . $_TD->{objectname});
 $$;
-create event trigger perl_snitch on command_start execute procedure perlsnitch();
+create event trigger perl_snitch
+                  on ddl_command_start
+   execute procedure perlsnitch();
 create or replace function foobar() returns int language sql as $$select 1;$$;
-NOTICE:  perlsnitch: command_start CREATE FUNCTION NULL NULL
+NOTICE:  perlsnitch: ddl_command_start CREATE FUNCTION NULL NULL
 CONTEXT:  PL/Perl function "perlsnitch"
 alter function foobar() cost 77;
-NOTICE:  perlsnitch: command_start ALTER FUNCTION NULL NULL
+NOTICE:  perlsnitch: ddl_command_start ALTER FUNCTION NULL NULL
 CONTEXT:  PL/Perl function "perlsnitch"
 drop function foobar();
-NOTICE:  perlsnitch: command_start DROP FUNCTION NULL NULL
+NOTICE:  perlsnitch: ddl_command_start DROP FUNCTION NULL NULL
 CONTEXT:  PL/Perl function "perlsnitch"
 create table foo();
-NOTICE:  perlsnitch: command_start CREATE TABLE NULL NULL
+NOTICE:  perlsnitch: ddl_command_start CREATE TABLE NULL NULL
 CONTEXT:  PL/Perl function "perlsnitch"
 drop table foo;
-NOTICE:  perlsnitch: command_start DROP TABLE NULL NULL
+NOTICE:  perlsnitch: ddl_command_start DROP TABLE NULL NULL
 CONTEXT:  PL/Perl function "perlsnitch"
 drop event trigger perl_snitch;

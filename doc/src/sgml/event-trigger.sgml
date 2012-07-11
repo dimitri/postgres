@@ -25,24 +25,25 @@
    <title>Overview of Event Trigger Behavior</title>
 
    <para>
-     An event trigger fires whenever the event with which it is
-     associated occurs in the database in which it is defined.  Currently,
-     the only supported event is <literal>command_start</>.  Support for
+     An event trigger fires whenever the event with which it is associated
+     occurs in the database in which it is defined. Currently, the only
+     supported event is <literal>ddl_command_start</>. Support for
      additional events may be added in future releases.
    </para>
 
    <para>
-     The <literal>command_start</> event occurs just before the execution of
-     many SQL commands, most of which can be broadly described as
-     <link linkend="ddl">DDL</link>.  There are a number of commands that,
+     The <literal>ddl_command_start</> event occurs just before the
+     execution of many SQL commands, most of which can be broadly described
+     as
+     <link linkend="ddl">DDL</link>. There are a number of commands that,
      for various reasons, are specifically excluded from the event trigger
      system:
 
     <itemizedlist>
      <listitem>
       <para>
-       The <literal>command_start</> event does not occur for commands that
-       access or modify data within a particular table, such
+       The <literal>ddl_command_start</> event does not occur for commands
+       that access or modify data within a particular table, such
        <xref linkend="sql-select">, <xref linkend="sql-insert">, 
        <xref linkend="sql-update">, <xref linkend="sql-delete">, and
        <xref linkend="sql-truncate">.  This also includes commands related
@@ -54,19 +55,21 @@
      </listitem>
      <listitem>
       <para>
-       The <literal>command_start</> event does not occur for commands that
-       create, alter, or drop global objects.  Unlike the event trigger, these
-       objects are not part of the current database; they are accessible from
-       all databases in the cluster, and are therefore unaffected by event
-       triggers.  Such objects include databases, tablespaces, and roles.
+       The <literal>ddl_command_start</> event does not occur for commands
+       that create, alter, or drop global objects. Unlike the event trigger,
+       these objects are not part of the current database; they are
+       accessible from all databases in the cluster, and are therefore
+       unaffected by event triggers. Such objects include databases,
+       tablespaces, and roles.
       </para>
      </listitem>
      <listitem>
       <para>
-       The <literal>command_start</> event does not occur for commands where
-       firing a trigger might result either result in system instability or
-       interfere with the administrator's ability to regain control of the
-       database.  These include transaction control commands, such as
+       The <literal>ddl_command_start</> event does not occur for commands
+       where firing a trigger might result either result in system
+       instability or interfere with the administrator's ability to regain
+       control of the database. These include transaction control commands,
+       such as
        <xref linkend="sql-begin"> or <xref linkend="sql-commit">; configuration
        commands, such as <xref linkend="sql-set"> or <xref linkend="sql-show">;
        and commands related to the event trigger mechanism itself, such as
@@ -97,7 +100,7 @@
 
    <para>
      A trigger definition can also specify a <literal>WHEN</literal>
-     condition so that, for example, a <literal>command_start</literal>
+     condition so that, for example, a <literal>ddl_command_start</literal>
      trigger can be fired only for particular commands which the user wishes
      to intercept. A common use of such triggers is to restrict the range of
      DDL operations which users may perform.
@@ -118,7 +121,7 @@
       <thead>
        <row>
         <entry>command tag</entry>
-        <entry><literal>command_start</literal></entry>
+        <entry><literal>ddl_command_start</literal></entry>
        </row>
       </thead>
       <tbody>

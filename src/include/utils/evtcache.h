@@ -20,12 +20,12 @@
  * Times at which an event trigger can be fired. These are the
  * possible values for pg_event_trigger.evtevent.
  *
- * As of now we only implement the command_start firing point, we intend on
+ * As of now we only implement the ddl_command_start firing point, we intend on
  * adding more firing points later.
  */
 typedef enum TrigEvent
 {
-	EVT_CommandStart       = 1,
+	EVT_DDLCommandStart       = 1,
 } TrigEvent;
 
 /*
@@ -70,12 +70,6 @@ typedef enum TrigEventCommand
 	ETC_AlterUserMapping,
 	ETC_AlterView,
 
-	ETC_Cluster = 300,
-	ETC_Load,
-	ETC_Reindex,
-	ETC_SelectInto,
-	ETC_Vacuum,
-
 	ETC_CreateAggregate = 400,
 	ETC_CreateCast,
 	ETC_CreateCollation,
@@ -96,6 +90,7 @@ typedef enum TrigEventCommand
 	ETC_CreateServer,
 	ETC_CreateTable,
 	ETC_CreateTableAs,
+	ETC_SelectInto,
 	ETC_CreateTextSearchParser,
 	ETC_CreateTextSearchConfiguration,
 	ETC_CreateTextSearchDictionary,

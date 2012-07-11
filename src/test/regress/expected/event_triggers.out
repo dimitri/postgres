@@ -10,9 +10,11 @@ begin
   raise notice 'snitch: % % [% - %]', tg_event, tg_tag, tg_operation, tg_objecttype;
 end;
 $$;
-create event trigger any_t on command_start
+create event trigger any_t
+                  on ddl_command_start
    execute procedure snitch();
-create event trigger foo_t on command_start
+create event trigger foo_t
+                  on ddl_command_start
                 when tag in ('alter collation',
                              'alter conversion',
                              'alter domain',
@@ -51,19 +53,17 @@ create event trigger foo_t on command_start
                              'drop text search parser',
                              'drop text search template',
                              'drop trigger',
-                             'reindex',
-                             'select into',
-                             'vacuum')
+                             'select into')
    execute procedure snitch();
 alter event trigger foo_t disable;
 alter event trigger foo_t enable;
 alter event trigger foo_t rename to snitch;
 create schema cmd;
-NOTICE:  snitch: command_start CREATE SCHEMA [CREATE - <NULL>]
-NOTICE:  snitch: command_start CREATE SCHEMA [CREATE - <NULL>]
+NOTICE:  snitch: ddl_command_start CREATE SCHEMA [CREATE - SCHEMA]
+NOTICE:  snitch: ddl_command_start CREATE SCHEMA [CREATE - SCHEMA]
 create schema cmd2;
-NOTICE:  snitch: command_start CREATE SCHEMA [CREATE - <NULL>]
-NOTICE:  snitch: command_start CREATE SCHEMA [CREATE - <NULL>]
+NOTICE:  snitch: ddl_command_start CREATE SCHEMA [CREATE - SCHEMA]
+NOTICE:  snitch: ddl_command_start CREATE SCHEMA [CREATE - SCHEMA]
 create role regression_bob;
 alter event trigger snitch owner to regression_bob;
 ERROR:  permission denied to change owner of event trigger "snitch"
@@ -71,204 +71,195 @@ HINT:  The owner of an event trigger must be a superuser.
 alter role regression_bob superuser;
 alter event trigger snitch owner to regression_bob;
 create table cmd.foo(id bigserial primary key);
-NOTICE:  snitch: command_start CREATE TABLE [CREATE - <NULL>]
-NOTICE:  snitch: command_start CREATE TABLE [CREATE - <NULL>]
-NOTICE:  snitch: command_start CREATE SEQUENCE [CREATE - <NULL>]
-NOTICE:  snitch: command_start CREATE SEQUENCE [CREATE - <NULL>]
-NOTICE:  snitch: command_start CREATE INDEX [CREATE - <NULL>]
-NOTICE:  snitch: command_start ALTER SEQUENCE [ALTER - <NULL>]
-NOTICE:  snitch: command_start ALTER SEQUENCE [ALTER - <NULL>]
+NOTICE:  snitch: ddl_command_start CREATE TABLE [CREATE - TABLE]
+NOTICE:  snitch: ddl_command_start CREATE TABLE [CREATE - TABLE]
+NOTICE:  snitch: ddl_command_start CREATE SEQUENCE [CREATE - SEQUENCE]
+NOTICE:  snitch: ddl_command_start CREATE SEQUENCE [CREATE - SEQUENCE]
+NOTICE:  snitch: ddl_command_start CREATE INDEX [CREATE - INDEX]
+NOTICE:  snitch: ddl_command_start ALTER SEQUENCE [ALTER - SEQUENCE]
+NOTICE:  snitch: ddl_command_start ALTER SEQUENCE [ALTER - SEQUENCE]
 create view cmd.v as select * from cmd.foo;
-NOTICE:  snitch: command_start CREATE VIEW [CREATE - <NULL>]
-NOTICE:  snitch: command_start CREATE VIEW [CREATE - <NULL>]
+NOTICE:  snitch: ddl_command_start CREATE VIEW [CREATE - VIEW]
+NOTICE:  snitch: ddl_command_start CREATE VIEW [CREATE - VIEW]
 alter table cmd.foo add column t text;
-NOTICE:  snitch: command_start ALTER TABLE [ALTER - <NULL>]
-NOTICE:  snitch: command_start ALTER TABLE [ALTER - <NULL>]
+NOTICE:  snitch: ddl_command_start ALTER TABLE [ALTER - TABLE]
+NOTICE:  snitch: ddl_command_start ALTER TABLE [ALTER - TABLE]
 create table cmd.bar as select 1;
-NOTICE:  snitch: command_start CREATE TABLE AS [CREATE - <NULL>]
-NOTICE:  snitch: command_start CREATE TABLE AS [CREATE - <NULL>]
+NOTICE:  snitch: ddl_command_start CREATE TABLE AS [CREATE - TABLE]
+NOTICE:  snitch: ddl_command_start CREATE TABLE AS [CREATE - TABLE]
 drop table cmd.bar;
-NOTICE:  snitch: command_start DROP TABLE [DROP - TABLE]
-NOTICE:  snitch: command_start DROP TABLE [DROP - TABLE]
+NOTICE:  snitch: ddl_command_start DROP TABLE [DROP - TABLE]
+NOTICE:  snitch: ddl_command_start DROP TABLE [DROP - TABLE]
 select 1 into cmd.bar;
-NOTICE:  snitch: command_start SELECT INTO [<NULL> - <NULL>]
-NOTICE:  snitch: command_start SELECT INTO [<NULL> - <NULL>]
+NOTICE:  snitch: ddl_command_start SELECT INTO [CREATE - TABLE]
+NOTICE:  snitch: ddl_command_start SELECT INTO [CREATE - TABLE]
 drop table cmd.bar;
-NOTICE:  snitch: command_start DROP TABLE [DROP - TABLE]
-NOTICE:  snitch: command_start DROP TABLE [DROP - TABLE]
+NOTICE:  snitch: ddl_command_start DROP TABLE [DROP - TABLE]
+NOTICE:  snitch: ddl_command_start DROP TABLE [DROP - TABLE]
 create table test9 (id int, stuff text);
-NOTICE:  snitch: command_start CREATE TABLE [CREATE - <NULL>]
-NOTICE:  snitch: command_start CREATE TABLE [CREATE - <NULL>]
+NOTICE:  snitch: ddl_command_start CREATE TABLE [CREATE - TABLE]
+NOTICE:  snitch: ddl_command_start CREATE TABLE [CREATE - TABLE]
 alter table test9 rename to test;
-NOTICE:  snitch: command_start ALTER TABLE [ALTER - TABLE]
-NOTICE:  snitch: command_start ALTER TABLE [ALTER - TABLE]
+NOTICE:  snitch: ddl_command_start ALTER TABLE [ALTER - TABLE]
+NOTICE:  snitch: ddl_command_start ALTER TABLE [ALTER - TABLE]
 alter table test set schema cmd;
-NOTICE:  snitch: command_start ALTER TABLE [ALTER - TABLE]
-NOTICE:  snitch: command_start ALTER TABLE [ALTER - TABLE]
+NOTICE:  snitch: ddl_command_start ALTER TABLE [ALTER - TABLE]
+NOTICE:  snitch: ddl_command_start ALTER TABLE [ALTER - TABLE]
 alter table cmd.test rename column stuff to things;
-NOTICE:  snitch: command_start ALTER TABLE [ALTER - COLUMN]
-NOTICE:  snitch: command_start ALTER TABLE [ALTER - COLUMN]
+NOTICE:  snitch: ddl_command_start ALTER TABLE [ALTER - COLUMN]
+NOTICE:  snitch: ddl_command_start ALTER TABLE [ALTER - COLUMN]
 alter table cmd.test add column alpha text;
-NOTICE:  snitch: command_start ALTER TABLE [ALTER - <NULL>]
-NOTICE:  snitch: command_start ALTER TABLE [ALTER - <NULL>]
+NOTICE:  snitch: ddl_command_start ALTER TABLE [ALTER - TABLE]
+NOTICE:  snitch: ddl_command_start ALTER TABLE [ALTER - TABLE]
 alter table cmd.test alter column alpha set data type varchar(300);
-NOTICE:  snitch: command_start ALTER TABLE [ALTER - <NULL>]
-NOTICE:  snitch: command_start ALTER TABLE [ALTER - <NULL>]
+NOTICE:  snitch: ddl_command_start ALTER TABLE [ALTER - TABLE]
+NOTICE:  snitch: ddl_command_start ALTER TABLE [ALTER - TABLE]
 alter table cmd.test alter column alpha set default 'test';
-NOTICE:  snitch: command_start ALTER TABLE [ALTER - <NULL>]
-NOTICE:  snitch: command_start ALTER TABLE [ALTER - <NULL>]
+NOTICE:  snitch: ddl_command_start ALTER TABLE [ALTER - TABLE]
+NOTICE:  snitch: ddl_command_start ALTER TABLE [ALTER - TABLE]
 alter table cmd.test alter column alpha drop default;
-NOTICE:  snitch: command_start ALTER TABLE [ALTER - <NULL>]
-NOTICE:  snitch: command_start ALTER TABLE [ALTER - <NULL>]
+NOTICE:  snitch: ddl_command_start ALTER TABLE [ALTER - TABLE]
+NOTICE:  snitch: ddl_command_start ALTER TABLE [ALTER - TABLE]
 alter table cmd.test alter column alpha set statistics 78;
-NOTICE:  snitch: command_start ALTER TABLE [ALTER - <NULL>]
-NOTICE:  snitch: command_start ALTER TABLE [ALTER - <NULL>]
+NOTICE:  snitch: ddl_command_start ALTER TABLE [ALTER - TABLE]
+NOTICE:  snitch: ddl_command_start ALTER TABLE [ALTER - TABLE]
 alter table cmd.test alter column alpha set storage plain;
-NOTICE:  snitch: command_start ALTER TABLE [ALTER - <NULL>]
-NOTICE:  snitch: command_start ALTER TABLE [ALTER - <NULL>]
+NOTICE:  snitch: ddl_command_start ALTER TABLE [ALTER - TABLE]
+NOTICE:  snitch: ddl_command_start ALTER TABLE [ALTER - TABLE]
 alter table cmd.test alter column alpha set not null;
-NOTICE:  snitch: command_start ALTER TABLE [ALTER - <NULL>]
-NOTICE:  snitch: command_start ALTER TABLE [ALTER - <NULL>]
+NOTICE:  snitch: ddl_command_start ALTER TABLE [ALTER - TABLE]
+NOTICE:  snitch: ddl_command_start ALTER TABLE [ALTER - TABLE]
 alter table cmd.test alter column alpha drop not null;
-NOTICE:  snitch: command_start ALTER TABLE [ALTER - <NULL>]
-NOTICE:  snitch: command_start ALTER TABLE [ALTER - <NULL>]
+NOTICE:  snitch: ddl_command_start ALTER TABLE [ALTER - TABLE]
+NOTICE:  snitch: ddl_command_start ALTER TABLE [ALTER - TABLE]
 alter table cmd.test alter column alpha set (n_distinct = -0.78);
-NOTICE:  snitch: command_start ALTER TABLE [ALTER - <NULL>]
-NOTICE:  snitch: command_start ALTER TABLE [ALTER - <NULL>]
+NOTICE:  snitch: ddl_command_start ALTER TABLE [ALTER - TABLE]
+NOTICE:  snitch: ddl_command_start ALTER TABLE [ALTER - TABLE]
 alter table cmd.test alter column alpha reset (n_distinct);
-NOTICE:  snitch: command_start ALTER TABLE [ALTER - <NULL>]
-NOTICE:  snitch: command_start ALTER TABLE [ALTER - <NULL>]
+NOTICE:  snitch: ddl_command_start ALTER TABLE [ALTER - TABLE]
+NOTICE:  snitch: ddl_command_start ALTER TABLE [ALTER - TABLE]
 alter table cmd.test drop column alpha;
-NOTICE:  snitch: command_start ALTER TABLE [ALTER - <NULL>]
-NOTICE:  snitch: command_start ALTER TABLE [ALTER - <NULL>]
+NOTICE:  snitch: ddl_command_start ALTER TABLE [ALTER - TABLE]
+NOTICE:  snitch: ddl_command_start ALTER TABLE [ALTER - TABLE]
 alter table cmd.test add check (id > 2) not valid;
-NOTICE:  snitch: command_start ALTER TABLE [ALTER - <NULL>]
-NOTICE:  snitch: command_start ALTER TABLE [ALTER - <NULL>]
+NOTICE:  snitch: ddl_command_start ALTER TABLE [ALTER - TABLE]
+NOTICE:  snitch: ddl_command_start ALTER TABLE [ALTER - TABLE]
 alter table cmd.test add check (id < 800000);
-NOTICE:  snitch: command_start ALTER TABLE [ALTER - <NULL>]
-NOTICE:  snitch: command_start ALTER TABLE [ALTER - <NULL>]
+NOTICE:  snitch: ddl_command_start ALTER TABLE [ALTER - TABLE]
+NOTICE:  snitch: ddl_command_start ALTER TABLE [ALTER - TABLE]
 alter table cmd.test set without cluster;
-NOTICE:  snitch: command_start ALTER TABLE [ALTER - <NULL>]
-NOTICE:  snitch: command_start ALTER TABLE [ALTER - <NULL>]
+NOTICE:  snitch: ddl_command_start ALTER TABLE [ALTER - TABLE]
+NOTICE:  snitch: ddl_command_start ALTER TABLE [ALTER - TABLE]
 alter table cmd.test set with oids;
-NOTICE:  snitch: command_start ALTER TABLE [ALTER - <NULL>]
-NOTICE:  snitch: command_start ALTER TABLE [ALTER - <NULL>]
+NOTICE:  snitch: ddl_command_start ALTER TABLE [ALTER - TABLE]
+NOTICE:  snitch: ddl_command_start ALTER TABLE [ALTER - TABLE]
 alter table cmd.test set without oids;
-NOTICE:  snitch: command_start ALTER TABLE [ALTER - <NULL>]
-NOTICE:  snitch: command_start ALTER TABLE [ALTER - <NULL>]
+NOTICE:  snitch: ddl_command_start ALTER TABLE [ALTER - TABLE]
+NOTICE:  snitch: ddl_command_start ALTER TABLE [ALTER - TABLE]
 create sequence test_seq_;
-NOTICE:  snitch: command_start CREATE SEQUENCE [CREATE - <NULL>]
-NOTICE:  snitch: command_start CREATE SEQUENCE [CREATE - <NULL>]
+NOTICE:  snitch: ddl_command_start CREATE SEQUENCE [CREATE - SEQUENCE]
+NOTICE:  snitch: ddl_command_start CREATE SEQUENCE [CREATE - SEQUENCE]
 alter sequence test_seq_ owner to regression_bob;
-NOTICE:  snitch: command_start ALTER SEQUENCE [ALTER - <NULL>]
-NOTICE:  snitch: command_start ALTER SEQUENCE [ALTER - <NULL>]
+NOTICE:  snitch: ddl_command_start ALTER SEQUENCE [ALTER - TABLE]
+NOTICE:  snitch: ddl_command_start ALTER SEQUENCE [ALTER - TABLE]
 alter sequence test_seq_ rename to test_seq;
-NOTICE:  snitch: command_start ALTER SEQUENCE [ALTER - SEQUENCE]
-NOTICE:  snitch: command_start ALTER SEQUENCE [ALTER - SEQUENCE]
+NOTICE:  snitch: ddl_command_start ALTER SEQUENCE [ALTER - SEQUENCE]
+NOTICE:  snitch: ddl_command_start ALTER SEQUENCE [ALTER - SEQUENCE]
 alter sequence test_seq set schema cmd;
-NOTICE:  snitch: command_start ALTER SEQUENCE [ALTER - SEQUENCE]
-NOTICE:  snitch: command_start ALTER SEQUENCE [ALTER - SEQUENCE]
+NOTICE:  snitch: ddl_command_start ALTER SEQUENCE [ALTER - SEQUENCE]
+NOTICE:  snitch: ddl_command_start ALTER SEQUENCE [ALTER - SEQUENCE]
 alter sequence cmd.test_seq start with 3;
-NOTICE:  snitch: command_start ALTER SEQUENCE [ALTER - <NULL>]
-NOTICE:  snitch: command_start ALTER SEQUENCE [ALTER - <NULL>]
+NOTICE:  snitch: ddl_command_start ALTER SEQUENCE [ALTER - SEQUENCE]
+NOTICE:  snitch: ddl_command_start ALTER SEQUENCE [ALTER - SEQUENCE]
 alter sequence cmd.test_seq restart with 4;
-NOTICE:  snitch: command_start ALTER SEQUENCE [ALTER - <NULL>]
-NOTICE:  snitch: command_start ALTER SEQUENCE [ALTER - <NULL>]
+NOTICE:  snitch: ddl_command_start ALTER SEQUENCE [ALTER - SEQUENCE]
+NOTICE:  snitch: ddl_command_start ALTER SEQUENCE [ALTER - SEQUENCE]
 alter sequence cmd.test_seq minvalue 3;
-NOTICE:  snitch: command_start ALTER SEQUENCE [ALTER - <NULL>]
-NOTICE:  snitch: command_start ALTER SEQUENCE [ALTER - <NULL>]
+NOTICE:  snitch: ddl_command_start ALTER SEQUENCE [ALTER - SEQUENCE]
+NOTICE:  snitch: ddl_command_start ALTER SEQUENCE [ALTER - SEQUENCE]
 alter sequence cmd.test_seq no minvalue;
-NOTICE:  snitch: command_start ALTER SEQUENCE [ALTER - <NULL>]
-NOTICE:  snitch: command_start ALTER SEQUENCE [ALTER - <NULL>]
+NOTICE:  snitch: ddl_command_start ALTER SEQUENCE [ALTER - SEQUENCE]
+NOTICE:  snitch: ddl_command_start ALTER SEQUENCE [ALTER - SEQUENCE]
 alter sequence cmd.test_seq maxvalue 900000;
-NOTICE:  snitch: command_start ALTER SEQUENCE [ALTER - <NULL>]
-NOTICE:  snitch: command_start ALTER SEQUENCE [ALTER - <NULL>]
+NOTICE:  snitch: ddl_command_start ALTER SEQUENCE [ALTER - SEQUENCE]
+NOTICE:  snitch: ddl_command_start ALTER SEQUENCE [ALTER - SEQUENCE]
 alter sequence cmd.test_seq no maxvalue;
-NOTICE:  snitch: command_start ALTER SEQUENCE [ALTER - <NULL>]
-NOTICE:  snitch: command_start ALTER SEQUENCE [ALTER - <NULL>]
+NOTICE:  snitch: ddl_command_start ALTER SEQUENCE [ALTER - SEQUENCE]
+NOTICE:  snitch: ddl_command_start ALTER SEQUENCE [ALTER - SEQUENCE]
 alter sequence cmd.test_seq cache 876;
-NOTICE:  snitch: command_start ALTER SEQUENCE [ALTER - <NULL>]
-NOTICE:  snitch: command_start ALTER SEQUENCE [ALTER - <NULL>]
+NOTICE:  snitch: ddl_command_start ALTER SEQUENCE [ALTER - SEQUENCE]
+NOTICE:  snitch: ddl_command_start ALTER SEQUENCE [ALTER - SEQUENCE]
 alter sequence cmd.test_seq cycle;
-NOTICE:  snitch: command_start ALTER SEQUENCE [ALTER - <NULL>]
-NOTICE:  snitch: command_start ALTER SEQUENCE [ALTER - <NULL>]
+NOTICE:  snitch: ddl_command_start ALTER SEQUENCE [ALTER - SEQUENCE]
+NOTICE:  snitch: ddl_command_start ALTER SEQUENCE [ALTER - SEQUENCE]
 alter sequence cmd.test_seq no cycle;
-NOTICE:  snitch: command_start ALTER SEQUENCE [ALTER - <NULL>]
-NOTICE:  snitch: command_start ALTER SEQUENCE [ALTER - <NULL>]
+NOTICE:  snitch: ddl_command_start ALTER SEQUENCE [ALTER - SEQUENCE]
+NOTICE:  snitch: ddl_command_start ALTER SEQUENCE [ALTER - SEQUENCE]
 create view view_test as select id, things from cmd.test;
-NOTICE:  snitch: command_start CREATE VIEW [CREATE - <NULL>]
-NOTICE:  snitch: command_start CREATE VIEW [CREATE - <NULL>]
+NOTICE:  snitch: ddl_command_start CREATE VIEW [CREATE - VIEW]
+NOTICE:  snitch: ddl_command_start CREATE VIEW [CREATE - VIEW]
 alter view view_test owner to regression_bob;
-NOTICE:  snitch: command_start ALTER VIEW [ALTER - <NULL>]
-NOTICE:  snitch: command_start ALTER VIEW [ALTER - <NULL>]
+NOTICE:  snitch: ddl_command_start ALTER VIEW [ALTER - TABLE]
+NOTICE:  snitch: ddl_command_start ALTER VIEW [ALTER - TABLE]
 alter view view_test rename to view_test2;
-NOTICE:  snitch: command_start ALTER VIEW [ALTER - VIEW]
-NOTICE:  snitch: command_start ALTER VIEW [ALTER - VIEW]
+NOTICE:  snitch: ddl_command_start ALTER VIEW [ALTER - VIEW]
+NOTICE:  snitch: ddl_command_start ALTER VIEW [ALTER - VIEW]
 alter view view_test2 set schema cmd;
-NOTICE:  snitch: command_start ALTER VIEW [ALTER - VIEW]
-NOTICE:  snitch: command_start ALTER VIEW [ALTER - VIEW]
+NOTICE:  snitch: ddl_command_start ALTER VIEW [ALTER - VIEW]
+NOTICE:  snitch: ddl_command_start ALTER VIEW [ALTER - VIEW]
 alter view cmd.view_test2 alter column id set default 9;
-NOTICE:  snitch: command_start ALTER VIEW [ALTER - <NULL>]
-NOTICE:  snitch: command_start ALTER VIEW [ALTER - <NULL>]
+NOTICE:  snitch: ddl_command_start ALTER VIEW [ALTER - TABLE]
+NOTICE:  snitch: ddl_command_start ALTER VIEW [ALTER - TABLE]
 alter view cmd.view_test2 alter column id drop default;
-NOTICE:  snitch: command_start ALTER VIEW [ALTER - <NULL>]
-NOTICE:  snitch: command_start ALTER VIEW [ALTER - <NULL>]
+NOTICE:  snitch: ddl_command_start ALTER VIEW [ALTER - TABLE]
+NOTICE:  snitch: ddl_command_start ALTER VIEW [ALTER - TABLE]
 cluster cmd.foo using foo_pkey;
-NOTICE:  snitch: command_start CLUSTER [<NULL> - <NULL>]
 vacuum cmd.foo;
-NOTICE:  snitch: command_start VACUUM [<NULL> - <NULL>]
-NOTICE:  snitch: command_start VACUUM [<NULL> - <NULL>]
 vacuum;
-NOTICE:  snitch: command_start VACUUM [<NULL> - <NULL>]
-NOTICE:  snitch: command_start VACUUM [<NULL> - <NULL>]
 reindex table cmd.foo;
-NOTICE:  snitch: command_start REINDEX [<NULL> - <NULL>]
-NOTICE:  snitch: command_start REINDEX [<NULL> - <NULL>]
 set session_replication_role to replica;
 create table cmd.bar();
-NOTICE:  snitch: command_start CREATE TABLE [CREATE - <NULL>]
-NOTICE:  snitch: command_start CREATE TABLE [CREATE - <NULL>]
+NOTICE:  snitch: ddl_command_start CREATE TABLE [CREATE - TABLE]
+NOTICE:  snitch: ddl_command_start CREATE TABLE [CREATE - TABLE]
 reset session_replication_role;
 create index idx_foo on cmd.foo(t);
-NOTICE:  snitch: command_start CREATE INDEX [CREATE - <NULL>]
+NOTICE:  snitch: ddl_command_start CREATE INDEX [CREATE - INDEX]
 reindex index cmd.idx_foo;
-NOTICE:  snitch: command_start REINDEX [<NULL> - <NULL>]
-NOTICE:  snitch: command_start REINDEX [<NULL> - <NULL>]
 drop index cmd.idx_foo;
-NOTICE:  snitch: command_start DROP INDEX [DROP - INDEX]
+NOTICE:  snitch: ddl_command_start DROP INDEX [DROP - INDEX]
 create function fun(int) returns text language sql
 as $$ select t from cmd.foo where id = $1; $$;
-NOTICE:  snitch: command_start CREATE FUNCTION [CREATE - <NULL>]
-NOTICE:  snitch: command_start CREATE FUNCTION [CREATE - <NULL>]
+NOTICE:  snitch: ddl_command_start CREATE FUNCTION [CREATE - FUNCTION]
+NOTICE:  snitch: ddl_command_start CREATE FUNCTION [CREATE - FUNCTION]
 alter function fun(int) strict;
-NOTICE:  snitch: command_start ALTER FUNCTION [ALTER - <NULL>]
-NOTICE:  snitch: command_start ALTER FUNCTION [ALTER - <NULL>]
+NOTICE:  snitch: ddl_command_start ALTER FUNCTION [ALTER - FUNCTION]
+NOTICE:  snitch: ddl_command_start ALTER FUNCTION [ALTER - FUNCTION]
 alter function fun(int) rename to notfun;
-NOTICE:  snitch: command_start ALTER FUNCTION [ALTER - FUNCTION]
-NOTICE:  snitch: command_start ALTER FUNCTION [ALTER - FUNCTION]
+NOTICE:  snitch: ddl_command_start ALTER FUNCTION [ALTER - FUNCTION]
+NOTICE:  snitch: ddl_command_start ALTER FUNCTION [ALTER - FUNCTION]
 alter function notfun(int) set schema cmd;
-NOTICE:  snitch: command_start ALTER FUNCTION [ALTER - FUNCTION]
-NOTICE:  snitch: command_start ALTER FUNCTION [ALTER - FUNCTION]
+NOTICE:  snitch: ddl_command_start ALTER FUNCTION [ALTER - FUNCTION]
+NOTICE:  snitch: ddl_command_start ALTER FUNCTION [ALTER - FUNCTION]
 alter function cmd.notfun(int) owner to regression_bob;
-NOTICE:  snitch: command_start ALTER FUNCTION [ALTER - FUNCTION]
-NOTICE:  snitch: command_start ALTER FUNCTION [ALTER - FUNCTION]
+NOTICE:  snitch: ddl_command_start ALTER FUNCTION [ALTER - FUNCTION]
+NOTICE:  snitch: ddl_command_start ALTER FUNCTION [ALTER - FUNCTION]
 alter function cmd.notfun(int) cost 77;
-NOTICE:  snitch: command_start ALTER FUNCTION [ALTER - <NULL>]
-NOTICE:  snitch: command_start ALTER FUNCTION [ALTER - <NULL>]
+NOTICE:  snitch: ddl_command_start ALTER FUNCTION [ALTER - FUNCTION]
+NOTICE:  snitch: ddl_command_start ALTER FUNCTION [ALTER - FUNCTION]
 drop function cmd.notfun(int);
-NOTICE:  snitch: command_start DROP FUNCTION [DROP - FUNCTION]
+NOTICE:  snitch: ddl_command_start DROP FUNCTION [DROP - FUNCTION]
 create function cmd.plus1(int) returns bigint language sql
 as $$ select $1::bigint + 1; $$;
-NOTICE:  snitch: command_start CREATE FUNCTION [CREATE - <NULL>]
-NOTICE:  snitch: command_start CREATE FUNCTION [CREATE - <NULL>]
+NOTICE:  snitch: ddl_command_start CREATE FUNCTION [CREATE - FUNCTION]
+NOTICE:  snitch: ddl_command_start CREATE FUNCTION [CREATE - FUNCTION]
 create operator cmd.+!(procedure = cmd.plus1, leftarg = int);
-NOTICE:  snitch: command_start CREATE OPERATOR [CREATE - OPERATOR]
-NOTICE:  snitch: command_start CREATE OPERATOR [CREATE - OPERATOR]
+NOTICE:  snitch: ddl_command_start CREATE OPERATOR [CREATE - OPERATOR]
+NOTICE:  snitch: ddl_command_start CREATE OPERATOR [CREATE - OPERATOR]
 alter operator cmd.+!(int, NONE) set schema public;
-NOTICE:  snitch: command_start ALTER OPERATOR [ALTER - OPERATOR]
-NOTICE:  snitch: command_start ALTER OPERATOR [ALTER - OPERATOR]
+NOTICE:  snitch: ddl_command_start ALTER OPERATOR [ALTER - OPERATOR]
+NOTICE:  snitch: ddl_command_start ALTER OPERATOR [ALTER - OPERATOR]
 drop operator public.+!(int, NONE);
-NOTICE:  snitch: command_start DROP OPERATOR [DROP - OPERATOR]
+NOTICE:  snitch: ddl_command_start DROP OPERATOR [DROP - OPERATOR]
 create aggregate cmd.avg (float8)
 (
     sfunc = float8_accum,
@@ -276,130 +267,130 @@ create aggregate cmd.avg (float8)
     finalfunc = float8_avg,
     initcond = '{0,0,0}'
 );
-NOTICE:  snitch: command_start CREATE AGGREGATE [CREATE - AGGREGATE]
-NOTICE:  snitch: command_start CREATE AGGREGATE [CREATE - AGGREGATE]
+NOTICE:  snitch: ddl_command_start CREATE AGGREGATE [CREATE - AGGREGATE]
+NOTICE:  snitch: ddl_command_start CREATE AGGREGATE [CREATE - AGGREGATE]
 alter aggregate cmd.avg(float8) set schema public;
-NOTICE:  snitch: command_start ALTER AGGREGATE [ALTER - AGGREGATE]
+NOTICE:  snitch: ddl_command_start ALTER AGGREGATE [ALTER - AGGREGATE]
 drop aggregate public.avg(float8);
-NOTICE:  snitch: command_start DROP AGGREGATE [DROP - AGGREGATE]
-NOTICE:  snitch: command_start DROP AGGREGATE [DROP - AGGREGATE]
+NOTICE:  snitch: ddl_command_start DROP AGGREGATE [DROP - AGGREGATE]
+NOTICE:  snitch: ddl_command_start DROP AGGREGATE [DROP - AGGREGATE]
 create collation cmd.french (LOCALE = 'fr_FR');
-NOTICE:  snitch: command_start CREATE COLLATION [CREATE - COLLATION]
-NOTICE:  snitch: command_start CREATE COLLATION [CREATE - COLLATION]
+NOTICE:  snitch: ddl_command_start CREATE COLLATION [CREATE - COLLATION]
+NOTICE:  snitch: ddl_command_start CREATE COLLATION [CREATE - COLLATION]
 alter collation cmd.french rename to francais;
-NOTICE:  snitch: command_start ALTER COLLATION [ALTER - COLLATION]
-NOTICE:  snitch: command_start ALTER COLLATION [ALTER - COLLATION]
+NOTICE:  snitch: ddl_command_start ALTER COLLATION [ALTER - COLLATION]
+NOTICE:  snitch: ddl_command_start ALTER COLLATION [ALTER - COLLATION]
 create type cmd.compfoo AS (f1 int, f2 text);
-NOTICE:  snitch: command_start CREATE TYPE [CREATE - <NULL>]
-NOTICE:  snitch: command_start CREATE TYPE [CREATE - <NULL>]
+NOTICE:  snitch: ddl_command_start CREATE TYPE [CREATE - TYPE]
+NOTICE:  snitch: ddl_command_start CREATE TYPE [CREATE - TYPE]
 alter type cmd.compfoo add attribute f3 text;
-NOTICE:  snitch: command_start ALTER TYPE [ALTER - <NULL>]
-NOTICE:  snitch: command_start ALTER TYPE [ALTER - <NULL>]
+NOTICE:  snitch: ddl_command_start ALTER TYPE [ALTER - TABLE]
+NOTICE:  snitch: ddl_command_start ALTER TYPE [ALTER - TABLE]
 create type cmd.type_test AS (a integer, b integer, c text);
-NOTICE:  snitch: command_start CREATE TYPE [CREATE - <NULL>]
-NOTICE:  snitch: command_start CREATE TYPE [CREATE - <NULL>]
+NOTICE:  snitch: ddl_command_start CREATE TYPE [CREATE - TYPE]
+NOTICE:  snitch: ddl_command_start CREATE TYPE [CREATE - TYPE]
 alter type cmd.type_test owner to regression_bob;
-NOTICE:  snitch: command_start ALTER TYPE [ALTER - TYPE]
-NOTICE:  snitch: command_start ALTER TYPE [ALTER - TYPE]
+NOTICE:  snitch: ddl_command_start ALTER TYPE [ALTER - TYPE]
+NOTICE:  snitch: ddl_command_start ALTER TYPE [ALTER - TYPE]
 alter type cmd.type_test rename to type_test2;
-NOTICE:  snitch: command_start ALTER TYPE [ALTER - TYPE]
-NOTICE:  snitch: command_start ALTER TYPE [ALTER - TYPE]
+NOTICE:  snitch: ddl_command_start ALTER TYPE [ALTER - TYPE]
+NOTICE:  snitch: ddl_command_start ALTER TYPE [ALTER - TYPE]
 alter type cmd.type_test2 set schema public;
-NOTICE:  snitch: command_start ALTER TYPE [ALTER - TYPE]
-NOTICE:  snitch: command_start ALTER TYPE [ALTER - TYPE]
+NOTICE:  snitch: ddl_command_start ALTER TYPE [ALTER - TYPE]
+NOTICE:  snitch: ddl_command_start ALTER TYPE [ALTER - TYPE]
 alter type public.type_test2 rename attribute a to z;
-NOTICE:  snitch: command_start ALTER TYPE [ALTER - ATTRIBUTE]
-NOTICE:  snitch: command_start ALTER TYPE [ALTER - ATTRIBUTE]
+NOTICE:  snitch: ddl_command_start ALTER TYPE [ALTER - ATTRIBUTE]
+NOTICE:  snitch: ddl_command_start ALTER TYPE [ALTER - ATTRIBUTE]
 alter type public.type_test2 add attribute alpha text;
-NOTICE:  snitch: command_start ALTER TYPE [ALTER - <NULL>]
-NOTICE:  snitch: command_start ALTER TYPE [ALTER - <NULL>]
+NOTICE:  snitch: ddl_command_start ALTER TYPE [ALTER - TABLE]
+NOTICE:  snitch: ddl_command_start ALTER TYPE [ALTER - TABLE]
 alter type public.type_test2 alter attribute alpha set data type char(90);
-NOTICE:  snitch: command_start ALTER TYPE [ALTER - <NULL>]
-NOTICE:  snitch: command_start ALTER TYPE [ALTER - <NULL>]
+NOTICE:  snitch: ddl_command_start ALTER TYPE [ALTER - TABLE]
+NOTICE:  snitch: ddl_command_start ALTER TYPE [ALTER - TABLE]
 alter type public.type_test2 drop attribute alpha;
-NOTICE:  snitch: command_start ALTER TYPE [ALTER - <NULL>]
-NOTICE:  snitch: command_start ALTER TYPE [ALTER - <NULL>]
+NOTICE:  snitch: ddl_command_start ALTER TYPE [ALTER - TABLE]
+NOTICE:  snitch: ddl_command_start ALTER TYPE [ALTER - TABLE]
 drop type cmd.compfoo;
-NOTICE:  snitch: command_start DROP TYPE [DROP - TYPE]
+NOTICE:  snitch: ddl_command_start DROP TYPE [DROP - TYPE]
 drop type public.type_test2;
-NOTICE:  snitch: command_start DROP TYPE [DROP - TYPE]
+NOTICE:  snitch: ddl_command_start DROP TYPE [DROP - TYPE]
 create type cmd.bug_status as enum ('new', 'open', 'closed');
-NOTICE:  snitch: command_start CREATE TYPE [CREATE - <NULL>]
-NOTICE:  snitch: command_start CREATE TYPE [CREATE - <NULL>]
+NOTICE:  snitch: ddl_command_start CREATE TYPE [CREATE - TYPE]
+NOTICE:  snitch: ddl_command_start CREATE TYPE [CREATE - TYPE]
 alter type cmd.bug_status add value 'wontfix';
-NOTICE:  snitch: command_start ALTER TYPE [ALTER - <NULL>]
-NOTICE:  snitch: command_start ALTER TYPE [ALTER - <NULL>]
+NOTICE:  snitch: ddl_command_start ALTER TYPE [ALTER - TYPE]
+NOTICE:  snitch: ddl_command_start ALTER TYPE [ALTER - TYPE]
 create domain cmd.us_postal_code as text check(value ~ '^\d{5}$' or value ~ '^\d{5}-\d{4}$');
-NOTICE:  snitch: command_start CREATE DOMAIN [CREATE - <NULL>]
-NOTICE:  snitch: command_start CREATE DOMAIN [CREATE - <NULL>]
+NOTICE:  snitch: ddl_command_start CREATE DOMAIN [CREATE - DOMAIN]
+NOTICE:  snitch: ddl_command_start CREATE DOMAIN [CREATE - DOMAIN]
 alter domain cmd.us_postal_code set not null;
-NOTICE:  snitch: command_start ALTER DOMAIN [ALTER - <NULL>]
-NOTICE:  snitch: command_start ALTER DOMAIN [ALTER - <NULL>]
+NOTICE:  snitch: ddl_command_start ALTER DOMAIN [ALTER - DOMAIN]
+NOTICE:  snitch: ddl_command_start ALTER DOMAIN [ALTER - DOMAIN]
 alter domain cmd.us_postal_code set default 90210;
-NOTICE:  snitch: command_start ALTER DOMAIN [ALTER - <NULL>]
-NOTICE:  snitch: command_start ALTER DOMAIN [ALTER - <NULL>]
+NOTICE:  snitch: ddl_command_start ALTER DOMAIN [ALTER - DOMAIN]
+NOTICE:  snitch: ddl_command_start ALTER DOMAIN [ALTER - DOMAIN]
 alter domain cmd.us_postal_code drop default;
-NOTICE:  snitch: command_start ALTER DOMAIN [ALTER - <NULL>]
-NOTICE:  snitch: command_start ALTER DOMAIN [ALTER - <NULL>]
+NOTICE:  snitch: ddl_command_start ALTER DOMAIN [ALTER - DOMAIN]
+NOTICE:  snitch: ddl_command_start ALTER DOMAIN [ALTER - DOMAIN]
 alter domain cmd.us_postal_code drop not null;
-NOTICE:  snitch: command_start ALTER DOMAIN [ALTER - <NULL>]
-NOTICE:  snitch: command_start ALTER DOMAIN [ALTER - <NULL>]
+NOTICE:  snitch: ddl_command_start ALTER DOMAIN [ALTER - DOMAIN]
+NOTICE:  snitch: ddl_command_start ALTER DOMAIN [ALTER - DOMAIN]
 alter domain cmd.us_postal_code add constraint dummy_constraint check (value ~ '^\d{8}$');
-NOTICE:  snitch: command_start ALTER DOMAIN [ALTER - <NULL>]
-NOTICE:  snitch: command_start ALTER DOMAIN [ALTER - <NULL>]
+NOTICE:  snitch: ddl_command_start ALTER DOMAIN [ALTER - DOMAIN]
+NOTICE:  snitch: ddl_command_start ALTER DOMAIN [ALTER - DOMAIN]
 alter domain cmd.us_postal_code drop constraint dummy_constraint;
-NOTICE:  snitch: command_start ALTER DOMAIN [ALTER - <NULL>]
-NOTICE:  snitch: command_start ALTER DOMAIN [ALTER - <NULL>]
+NOTICE:  snitch: ddl_command_start ALTER DOMAIN [ALTER - DOMAIN]
+NOTICE:  snitch: ddl_command_start ALTER DOMAIN [ALTER - DOMAIN]
 alter domain cmd.us_postal_code owner to regression_bob;
-NOTICE:  snitch: command_start ALTER DOMAIN [ALTER - DOMAIN]
-NOTICE:  snitch: command_start ALTER DOMAIN [ALTER - DOMAIN]
+NOTICE:  snitch: ddl_command_start ALTER DOMAIN [ALTER - DOMAIN]
+NOTICE:  snitch: ddl_command_start ALTER DOMAIN [ALTER - DOMAIN]
 alter domain cmd.us_postal_code set schema cmd2;
-NOTICE:  snitch: command_start ALTER DOMAIN [ALTER - DOMAIN]
-NOTICE:  snitch: command_start ALTER DOMAIN [ALTER - DOMAIN]
+NOTICE:  snitch: ddl_command_start ALTER DOMAIN [ALTER - DOMAIN]
+NOTICE:  snitch: ddl_command_start ALTER DOMAIN [ALTER - DOMAIN]
 drop domain cmd2.us_postal_code;
-NOTICE:  snitch: command_start DROP DOMAIN [DROP - DOMAIN]
-NOTICE:  snitch: command_start DROP DOMAIN [DROP - DOMAIN]
+NOTICE:  snitch: ddl_command_start DROP DOMAIN [DROP - DOMAIN]
+NOTICE:  snitch: ddl_command_start DROP DOMAIN [DROP - DOMAIN]
 create function cmd.trigfunc() returns trigger language plpgsql as
 $$ begin raise notice 'trigfunc';  end;$$;
-NOTICE:  snitch: command_start CREATE FUNCTION [CREATE - <NULL>]
-NOTICE:  snitch: command_start CREATE FUNCTION [CREATE - <NULL>]
+NOTICE:  snitch: ddl_command_start CREATE FUNCTION [CREATE - FUNCTION]
+NOTICE:  snitch: ddl_command_start CREATE FUNCTION [CREATE - FUNCTION]
 create trigger footg before update on cmd.foo for each row execute procedure cmd.trigfunc();
-NOTICE:  snitch: command_start CREATE TRIGGER [CREATE - <NULL>]
-NOTICE:  snitch: command_start CREATE TRIGGER [CREATE - <NULL>]
+NOTICE:  snitch: ddl_command_start CREATE TRIGGER [CREATE - TRIGGER]
+NOTICE:  snitch: ddl_command_start CREATE TRIGGER [CREATE - TRIGGER]
 alter trigger footg on cmd.foo rename to foo_trigger;
-NOTICE:  snitch: command_start ALTER TRIGGER [ALTER - TRIGGER]
-NOTICE:  snitch: command_start ALTER TRIGGER [ALTER - TRIGGER]
+NOTICE:  snitch: ddl_command_start ALTER TRIGGER [ALTER - TRIGGER]
+NOTICE:  snitch: ddl_command_start ALTER TRIGGER [ALTER - TRIGGER]
 drop trigger foo_trigger on cmd.foo;
-NOTICE:  snitch: command_start DROP TRIGGER [DROP - TRIGGER]
-NOTICE:  snitch: command_start DROP TRIGGER [DROP - TRIGGER]
+NOTICE:  snitch: ddl_command_start DROP TRIGGER [DROP - TRIGGER]
+NOTICE:  snitch: ddl_command_start DROP TRIGGER [DROP - TRIGGER]
 create conversion test for 'utf8' to 'sjis' from utf8_to_sjis;
-NOTICE:  snitch: command_start CREATE CONVERSION [CREATE - <NULL>]
+NOTICE:  snitch: ddl_command_start CREATE CONVERSION [CREATE - CONVERSION]
 create default conversion test2 for 'utf8' to 'sjis' from utf8_to_sjis;
-NOTICE:  snitch: command_start CREATE CONVERSION [CREATE - <NULL>]
+NOTICE:  snitch: ddl_command_start CREATE CONVERSION [CREATE - CONVERSION]
 alter conversion test2 rename to test3;
-NOTICE:  snitch: command_start ALTER CONVERSION [ALTER - CONVERSION]
-NOTICE:  snitch: command_start ALTER CONVERSION [ALTER - CONVERSION]
+NOTICE:  snitch: ddl_command_start ALTER CONVERSION [ALTER - CONVERSION]
+NOTICE:  snitch: ddl_command_start ALTER CONVERSION [ALTER - CONVERSION]
 drop conversion test3;
-NOTICE:  snitch: command_start DROP CONVERSION [DROP - CONVERSION]
+NOTICE:  snitch: ddl_command_start DROP CONVERSION [DROP - CONVERSION]
 drop conversion test;
-NOTICE:  snitch: command_start DROP CONVERSION [DROP - CONVERSION]
+NOTICE:  snitch: ddl_command_start DROP CONVERSION [DROP - CONVERSION]
 create operator class test_op_class
    for type anyenum using hash as
    operator 1  =,
    function 1  hashenum(anyenum);
-NOTICE:  snitch: command_start CREATE OPERATOR CLASS [CREATE - <NULL>]
-NOTICE:  snitch: command_start CREATE OPERATOR CLASS [CREATE - <NULL>]
+NOTICE:  snitch: ddl_command_start CREATE OPERATOR CLASS [CREATE - OPERATOR CLASS]
+NOTICE:  snitch: ddl_command_start CREATE OPERATOR CLASS [CREATE - OPERATOR CLASS]
 create text search configuration test (parser = "default");
-NOTICE:  snitch: command_start CREATE TEXT SEARCH CONFIGURATION [CREATE - TEXT SEARCH CONFIGURATION]
-NOTICE:  snitch: command_start CREATE TEXT SEARCH CONFIGURATION [CREATE - TEXT SEARCH CONFIGURATION]
+NOTICE:  snitch: ddl_command_start CREATE TEXT SEARCH CONFIGURATION [CREATE - TEXT SEARCH CONFIGURATION]
+NOTICE:  snitch: ddl_command_start CREATE TEXT SEARCH CONFIGURATION [CREATE - TEXT SEARCH CONFIGURATION]
 create text search dictionary test_stem (
    template = snowball,
    language = 'english', stopwords = 'english'
 );
-NOTICE:  snitch: command_start CREATE TEXT SEARCH DICTIONARY [CREATE - TEXT SEARCH DICTIONARY]
-NOTICE:  snitch: command_start CREATE TEXT SEARCH DICTIONARY [CREATE - TEXT SEARCH DICTIONARY]
+NOTICE:  snitch: ddl_command_start CREATE TEXT SEARCH DICTIONARY [CREATE - TEXT SEARCH DICTIONARY]
+NOTICE:  snitch: ddl_command_start CREATE TEXT SEARCH DICTIONARY [CREATE - TEXT SEARCH DICTIONARY]
 alter text search dictionary test_stem (StopWords = dutch );
-NOTICE:  snitch: command_start ALTER TEXT SEARCH DICTIONARY [ALTER - <NULL>]
+NOTICE:  snitch: ddl_command_start ALTER TEXT SEARCH DICTIONARY [ALTER - TEXT SEARCH DICTIONARY]
 create text search parser test_parser (
   start = prsd_start,
   gettoken = prsd_nexttoken,
@@ -407,38 +398,38 @@ create text search parser test_parser (
   lextypes = prsd_lextype,
   headline = prsd_headline
 );
-NOTICE:  snitch: command_start CREATE TEXT SEARCH PARSER [CREATE - TEXT SEARCH PARSER]
-NOTICE:  snitch: command_start CREATE TEXT SEARCH PARSER [CREATE - TEXT SEARCH PARSER]
+NOTICE:  snitch: ddl_command_start CREATE TEXT SEARCH PARSER [CREATE - TEXT SEARCH PARSER]
+NOTICE:  snitch: ddl_command_start CREATE TEXT SEARCH PARSER [CREATE - TEXT SEARCH PARSER]
 create text search template test_template (
   init = dsimple_init,
   lexize = dsimple_lexize
 );
-NOTICE:  snitch: command_start CREATE TEXT SEARCH TEMPLATE [CREATE - TEXT SEARCH TEMPLATE]
-NOTICE:  snitch: command_start CREATE TEXT SEARCH TEMPLATE [CREATE - TEXT SEARCH TEMPLATE]
+NOTICE:  snitch: ddl_command_start CREATE TEXT SEARCH TEMPLATE [CREATE - TEXT SEARCH TEMPLATE]
+NOTICE:  snitch: ddl_command_start CREATE TEXT SEARCH TEMPLATE [CREATE - TEXT SEARCH TEMPLATE]
 drop text search configuration test;
-NOTICE:  snitch: command_start DROP TEXT SEARCH CONFIGURATION [DROP - TEXT SEARCH CONFIGURATION]
-NOTICE:  snitch: command_start DROP TEXT SEARCH CONFIGURATION [DROP - TEXT SEARCH CONFIGURATION]
+NOTICE:  snitch: ddl_command_start DROP TEXT SEARCH CONFIGURATION [DROP - TEXT SEARCH CONFIGURATION]
+NOTICE:  snitch: ddl_command_start DROP TEXT SEARCH CONFIGURATION [DROP - TEXT SEARCH CONFIGURATION]
 drop text search dictionary test_stem;
-NOTICE:  snitch: command_start DROP TEXT SEARCH DICTIONARY [DROP - TEXT SEARCH DICTIONARY]
-NOTICE:  snitch: command_start DROP TEXT SEARCH DICTIONARY [DROP - TEXT SEARCH DICTIONARY]
+NOTICE:  snitch: ddl_command_start DROP TEXT SEARCH DICTIONARY [DROP - TEXT SEARCH DICTIONARY]
+NOTICE:  snitch: ddl_command_start DROP TEXT SEARCH DICTIONARY [DROP - TEXT SEARCH DICTIONARY]
 drop text search parser test_parser;
-NOTICE:  snitch: command_start DROP TEXT SEARCH PARSER [DROP - TEXT SEARCH PARSER]
-NOTICE:  snitch: command_start DROP TEXT SEARCH PARSER [DROP - TEXT SEARCH PARSER]
+NOTICE:  snitch: ddl_command_start DROP TEXT SEARCH PARSER [DROP - TEXT SEARCH PARSER]
+NOTICE:  snitch: ddl_command_start DROP TEXT SEARCH PARSER [DROP - TEXT SEARCH PARSER]
 drop text search template test_template;
-NOTICE:  snitch: command_start DROP TEXT SEARCH TEMPLATE [DROP - TEXT SEARCH TEMPLATE]
-NOTICE:  snitch: command_start DROP TEXT SEARCH TEMPLATE [DROP - TEXT SEARCH TEMPLATE]
+NOTICE:  snitch: ddl_command_start DROP TEXT SEARCH TEMPLATE [DROP - TEXT SEARCH TEMPLATE]
+NOTICE:  snitch: ddl_command_start DROP TEXT SEARCH TEMPLATE [DROP - TEXT SEARCH TEMPLATE]
 create function cmd.testcast(text) returns int4  language plpgsql as $$begin return 4::int4;end;$$;
-NOTICE:  snitch: command_start CREATE FUNCTION [CREATE - <NULL>]
-NOTICE:  snitch: command_start CREATE FUNCTION [CREATE - <NULL>]
+NOTICE:  snitch: ddl_command_start CREATE FUNCTION [CREATE - FUNCTION]
+NOTICE:  snitch: ddl_command_start CREATE FUNCTION [CREATE - FUNCTION]
 create cast (text as int4) with function cmd.testcast(text) as assignment;
-NOTICE:  snitch: command_start CREATE CAST [CREATE - <NULL>]
-NOTICE:  snitch: command_start CREATE CAST [CREATE - <NULL>]
+NOTICE:  snitch: ddl_command_start CREATE CAST [CREATE - CAST]
+NOTICE:  snitch: ddl_command_start CREATE CAST [CREATE - CAST]
 alter schema cmd rename to cmd1;
-NOTICE:  snitch: command_start ALTER SCHEMA [ALTER - SCHEMA]
-NOTICE:  snitch: command_start ALTER SCHEMA [ALTER - SCHEMA]
+NOTICE:  snitch: ddl_command_start ALTER SCHEMA [ALTER - SCHEMA]
+NOTICE:  snitch: ddl_command_start ALTER SCHEMA [ALTER - SCHEMA]
 drop schema cmd1 cascade;
-NOTICE:  snitch: command_start DROP SCHEMA [DROP - SCHEMA]
-NOTICE:  snitch: command_start DROP SCHEMA [DROP - SCHEMA]
+NOTICE:  snitch: ddl_command_start DROP SCHEMA [DROP - SCHEMA]
+NOTICE:  snitch: ddl_command_start DROP SCHEMA [DROP - SCHEMA]
 NOTICE:  drop cascades to 12 other objects
 DETAIL:  drop cascades to table cmd1.foo
 drop cascades to view cmd1.v
@@ -453,8 +444,8 @@ drop cascades to function cmd1.trigfunc()
 drop cascades to function cmd1.testcast(text)
 drop cascades to cast from text to integer
 drop schema cmd2 cascade;
-NOTICE:  snitch: command_start DROP SCHEMA [DROP - SCHEMA]
-NOTICE:  snitch: command_start DROP SCHEMA [DROP - SCHEMA]
+NOTICE:  snitch: ddl_command_start DROP SCHEMA [DROP - SCHEMA]
+NOTICE:  snitch: ddl_command_start DROP SCHEMA [DROP - SCHEMA]
 -- fail because owning event trigger snitch
 drop role regression_bob;
 ERROR:  role "regression_bob" cannot be dropped because some objects depend on it
@@ -485,10 +476,12 @@ begin
   raise notice 'check_one_row: %', c;
 end;
 $$;
-create event trigger a_insert_one_row on command_start
+create event trigger a_insert_one_row
+                 on ddl_command_start
         when tag in ('alter table')
    execute procedure insert_one_row();
-create event trigger b_check_one_row on command_start
+create event trigger b_check_one_row
+                  on ddl_command_start
          when tag in ('alter table')
    execute procedure check_one_row();
 alter table onerow alter column id type bigint;

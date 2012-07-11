@@ -394,7 +394,9 @@ create or replace function pysnitch() returns event_trigger language plpythonu a
               (TD["event"], TD["tag"], TD["schemaname"], TD["objectname"]));
 $$;
 
-create event trigger py_snitch on command_start execute procedure pysnitch();
+create event trigger py_snitch
+                  on ddl_command_start
+   execute procedure pysnitch();
 
 create or replace function foobar() returns int language sql as $$select 1;$$;
 alter function foobar() cost 77;
