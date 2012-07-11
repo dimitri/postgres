@@ -907,7 +907,7 @@ static EventTriggerCommandTagsType EventTriggerCommandTags[] =
 	},
 	{
 		ETC_AlterLanguage,
-		"command_start",
+		"ALTER LANGUAGE",
 		T_AlterOwnerStmt,
 		OBJECT_LANGUAGE
 	},
