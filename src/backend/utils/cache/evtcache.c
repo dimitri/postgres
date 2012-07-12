@@ -73,7 +73,7 @@ static HTAB *EventTriggerCommandNodeCache = NULL;
 /* entry for the Tags cache (key is NameData of NAMEDATALEN) */
 typedef struct
 {
-	NameData			tag;
+	char			    tag[NAMEDATALEN];
 	TrigEventCommand	command;
 } EventTriggerCommandTagsEntry;
 
@@ -1319,7 +1319,6 @@ TrigEventCommand
 parse_event_tag(char *cmdtag, bool noerror)
 {
 	char *uctag;
-	NameData key;
 	EventTriggerCommandTagsEntry *entry;
 
 	if (EventTriggerCommandTagsCache == NULL)
@@ -1330,9 +1329,12 @@ parse_event_tag(char *cmdtag, bool noerror)
 
 		/* build the new hash table */
 		MemSet(&info, 0, sizeof(info));
+
+		/* the longest command tag is "CREATE TEXT SEARCH CONFIGURATION" and
+		 * that's only 32 chars */
 		info.keysize = NAMEDATALEN;
 		info.entrysize = sizeof(EventTriggerCommandTagsEntry);
-		info.hash = tag_hash;
+		info.hash = string_hash;
 		info.hcxt = CacheMemoryContext;
 
 		/* Create the hash table holding our cache */
@@ -1346,30 +1348,22 @@ parse_event_tag(char *cmdtag, bool noerror)
 		{
 			bool found;
 			char *tag = EventTriggerCommandTags[index].tag;
-			NameData key;
 			EventTriggerCommandTagsEntry *hresult;
-
-			memset(&key, 0, NAMEDATALEN);
-			key = *(DatumGetName(DirectFunctionCall1(namein,
-													 CStringGetDatum(tag))));
 
 			hresult = (EventTriggerCommandTagsEntry *)
 				hash_search(EventTriggerCommandTagsCache,
-							(void *)&key, HASH_ENTER, &found);
+							(void *)tag, HASH_ENTER, &found);
 
 			hresult->command = EventTriggerCommandTags[index].command;
 		}
 		MemoryContextSwitchTo(old);
 	}
 
-	memset(&key, 0, NAMEDATALEN);
 	uctag = str_toupper(cmdtag, strlen(cmdtag), DEFAULT_COLLATION_OID);
-	key = *(DatumGetName(
-				DirectFunctionCall1(namein, CStringGetDatum(uctag))));
 
 	entry = (EventTriggerCommandTagsEntry *)
 		hash_search(EventTriggerCommandTagsCache,
-					(void *)&key, HASH_FIND, NULL);
+					(void *)uctag, HASH_FIND, NULL);
 
 	if (entry == NULL)
 	{
