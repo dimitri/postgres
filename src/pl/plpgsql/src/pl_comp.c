@@ -708,6 +708,46 @@ do_compile(FunctionCallInfo fcinfo,
 										 true);
 			function->tg_tag_varno = var->dno;
 
+			/* Add the variable tg_schemaname */
+			var = plpgsql_build_variable("tg_schemaname", 0,
+										 plpgsql_build_datatype(TEXTOID,
+																-1,
+											   function->fn_input_collation),
+										 true);
+			function->tg_schemaname_varno = var->dno;
+
+			/* Add the variable tg_objectname */
+			var = plpgsql_build_variable("tg_objectname", 0,
+										 plpgsql_build_datatype(TEXTOID,
+																-1,
+											   function->fn_input_collation),
+										 true);
+			function->tg_objectname_varno = var->dno;
+
+			/* Add the variable tg_kind */
+			var = plpgsql_build_variable("tg_kind", 0,
+										 plpgsql_build_datatype(TEXTOID,
+																-1,
+											   function->fn_input_collation),
+										 true);
+			function->tg_kind_varno = var->dno;
+
+			/* Add the variable tg_operation */
+			var = plpgsql_build_variable("tg_operation", 0,
+										 plpgsql_build_datatype(TEXTOID,
+																-1,
+											   function->fn_input_collation),
+										 true);
+			function->tg_operation_varno = var->dno;
+
+			/* Add the variable tg_command */
+			var = plpgsql_build_variable("tg_command", 0,
+										 plpgsql_build_datatype(TEXTOID,
+																-1,
+											   function->fn_input_collation),
+										 true);
+			function->tg_command_varno = var->dno;
+
 			break;
 
 		default:

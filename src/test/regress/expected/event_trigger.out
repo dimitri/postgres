@@ -7,6 +7,8 @@ ERROR:  function "pg_backend_pid" must return type "event_trigger"
 create function test_event_trigger() returns event_trigger as $$
 BEGIN
     RAISE NOTICE 'test_event_trigger: % %', tg_event, tg_tag;
+    RAISE NOTICE 'test_event_trigger: %, %', tg_operation, tg_kind;
+    RAISE NOTICE 'test_event_trigger: %', tg_command;
 END
 $$ language plpgsql;
 -- should fail, no elephant_bootstrap entry point
@@ -66,6 +68,8 @@ alter event trigger regress_event_trigger disable;
 -- regress_event_trigger2 should fire, but not regress_event_trigger
 create table event_trigger_fire1 (a int);
 NOTICE:  test_event_trigger: ddl_command_start CREATE TABLE
+NOTICE:  test_event_trigger: CREATE, TABLE
+NOTICE:  test_event_trigger: CREATE TABLE public.event_trigger_fire1 (a pg_catalog.int4);
 -- but nothing should fire here
 drop table event_trigger_fire1;
 -- alter owner to non-superuser should fail
