@@ -675,6 +675,13 @@ EventTriggerDDLCommandStart(Node *parsetree)
 	trigdata.parsetree = parsetree;
 	trigdata.tag = tag;
 
+	/*
+	 * Get some more context data, such as the kind of object which is the
+	 * target of the command, the operation we're running and the command
+	 * string.
+	 */
+	get_event_trigger_data(&trigdata);
+
 	/* Run the triggers. */
 	EventTriggerInvoke(runlist, &trigdata);
 

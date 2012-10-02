@@ -14,6 +14,9 @@
 #ifndef BUILTINS_H
 #define BUILTINS_H
 
+#include "access/htup_details.h"
+#include "lib/stringinfo.h"
+#include "commands/event_trigger.h"
 #include "fmgr.h"
 #include "nodes/parsenodes.h"
 
@@ -144,6 +147,10 @@ extern Datum char_text(PG_FUNCTION_ARGS);
 extern Datum domain_in(PG_FUNCTION_ARGS);
 extern Datum domain_recv(PG_FUNCTION_ARGS);
 extern void domain_check(Datum value, bool isnull, Oid domainType, void **extra, MemoryContext mcxt);
+
+/* ddl_rewrite.c */
+extern void get_event_trigger_data(EventTriggerData *trigdata);
+
 
 /* encode.c */
 extern Datum binary_encode(PG_FUNCTION_ARGS);
@@ -664,6 +671,12 @@ extern char *quote_qualified_identifier(const char *qualifier,
 						   const char *ident);
 extern char *generate_collation_name(Oid collid);
 
+extern char *deparse_expression_pretty(Node *expr, List *dpcontext,
+									   bool forceprefix, bool showimplicit,
+									   int prettyFlags, int startIndent);
+extern void get_query_def(Query *query, StringInfo buf, List *parentnamespace,
+						  TupleDesc resultDesc,
+						  int prettyFlags, int wrapColumn, int startIndent);
 
 /* tid.c */
 extern Datum tidin(PG_FUNCTION_ARGS);
