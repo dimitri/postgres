@@ -22,6 +22,11 @@ typedef struct EventTriggerData
 	char	   *event;				/* event name */
 	Node	   *parsetree;			/* parse tree */
 	const char *tag;				/* command tag */
+	char	   *schemaname;			/* schema name of the object */
+	char	   *objectname;			/* object name */
+	char	   *command;			/* deparsed command string */
+	char	   *operation;			/* CREATE, ALTER or DROP */
+	char	   *objectkind;			/* TABLE, FUNCTION, ... */
 } EventTriggerData;
 
 /*

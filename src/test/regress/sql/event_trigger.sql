@@ -7,6 +7,8 @@ create event trigger regress_event_trigger
 create function test_event_trigger() returns event_trigger as $$
 BEGIN
     RAISE NOTICE 'test_event_trigger: % %', tg_event, tg_tag;
+    RAISE NOTICE 'test_event_trigger: %, %', tg_operation, tg_kind;
+    RAISE NOTICE 'test_event_trigger: %', tg_command;
 END
 $$ language plpgsql;
 
