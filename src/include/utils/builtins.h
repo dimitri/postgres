@@ -15,9 +15,9 @@
 #define BUILTINS_H
 
 #include "access/htup_details.h"
-#include "lib/stringinfo.h"
 #include "commands/event_trigger.h"
 #include "fmgr.h"
+#include "lib/stringinfo.h"
 #include "nodes/parsenodes.h"
 
 /*

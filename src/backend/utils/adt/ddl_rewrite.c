@@ -47,6 +47,13 @@
  * Given a RangeVar, return the namespace name to use as schemaname. When
  * r->schemaname is NULL, returns the first schema name of the current
  * search_path.
+ *
+ * It can be so that the resulting object (schema.name) does not exists, that
+ * check didn't happen yet when at the "ddl_command_start" event. All we ca do
+ * is play by the system's rule. The other option would be to capture and
+ * expose the search_path to the event trigger functions. Then any trigger
+ * function would have to duplicate the code here to extract the first schema
+ * in the search_path anyway.
  */
 static char *
 RangeVarGetNamespace(RangeVar *r)
@@ -261,8 +268,158 @@ _rwViewStmt(EventTriggerData *trigdata)
 	trigdata->objectname = node->view->relname;
 }
 
+/*
+ * Rewrite a OptConsTableSpace: grammar production
+ */
 static void
-_rwColQualList(StringInfo buf, List *constraints, const char *relname)
+_rwOptConsTableSpace(StringInfo buf, char *name)
+{
+	if (name != NULL)
+		appendStringInfo(buf, " USING INDEX TABLESPACE %s", name);
+}
+
+/*
+ * Rewrite a generic def_arg: grammar production
+ */
+static void
+_rwDefArg(StringInfo buf, Node *arg)
+{
+	appendStringInfoChar(buf, '?');
+}
+
+/*
+ * Rewrite a generic definition: grammar production
+ */
+static void
+_rwDefinition(StringInfo buf, List *definitions)
+{
+	/* FIXME: needs an option to print () when empty? */
+	if (definitions != NULL)
+	{
+		ListCell *k;
+		bool first = true;
+
+		appendStringInfoChar(buf, '(');
+		foreach(k, definitions)
+		{
+			List *def = (List *) lfirst(k);
+			_maybeAddSeparator(buf, ",", &first);
+
+			if (lsecond(def) == NULL)
+			{
+				/* ColLabel */
+				appendStringInfo(buf, "%s", strVal(linitial(def)));
+			}
+			else
+			{
+				/* ColLabel '=' def_arg */
+				appendStringInfo(buf, "%s = ", strVal(linitial(def)));
+				_rwDefArg(buf, lsecond(def));
+			}
+		}
+		appendStringInfoChar(buf, ')');
+	}
+}
+
+/*
+ * Rewrite the opt_column_list: grammar production
+ */
+static void
+_rwOptColumnList(StringInfo buf, List *clist)
+{
+	if (clist == NULL)
+		appendStringInfo(buf, "()");
+	else
+	{
+		ListCell *c;
+		bool first = true;
+
+		appendStringInfoChar(buf, '(');
+		foreach(c, clist)
+		{
+			_maybeAddSeparator(buf, ",", &first);
+			appendStringInfo(buf, "%s", strVal(lfirst(c)));
+		}
+		appendStringInfoChar(buf, ')');
+	}
+}
+
+/*
+ * Rewrite the key_match: grammar production
+ */
+static void
+_rwKeyMatch(StringInfo buf,  int matchtype)
+{
+	switch (matchtype)
+	{
+		case FKCONSTR_MATCH_FULL:
+			appendStringInfo(buf, "MATCH FULL");
+			break;
+
+		case FKCONSTR_MATCH_PARTIAL:
+			/* should not happen, not yet implemented */
+			appendStringInfo(buf, "MATCH PARTIAL");
+			break;
+
+		case FKCONSTR_MATCH_SIMPLE:
+		default:
+			appendStringInfo(buf, "MATCH SIMPLE");
+			break;
+	}
+}
+
+/*
+ * Rewrite the key_action: grammar production
+ */
+static void
+_rwKeyAction(StringInfo buf, int action)
+{
+	switch (action)
+	{
+		case FKCONSTR_ACTION_NOACTION:
+			appendStringInfo(buf, "NO ACTION");
+			break;
+
+		case FKCONSTR_ACTION_RESTRICT:
+			appendStringInfo(buf, "RESTRICT");
+			break;
+
+		case FKCONSTR_ACTION_CASCADE:
+			appendStringInfo(buf, "CASCADE");
+			break;
+
+		case FKCONSTR_ACTION_SETNULL:
+			appendStringInfo(buf, "SET NULL");
+			break;
+
+		case FKCONSTR_ACTION_SETDEFAULT:
+			appendStringInfo(buf, "SET DEFAULT");
+			break;
+
+		default:
+			elog(ERROR, "Unexpected Foreign Key Action: %d", action);
+			break;
+	}
+}
+
+static void
+_rwKeyActions(StringInfo buf, int upd_action, int del_action)
+{
+	appendStringInfo(buf, "ON UPDATE ");
+	_rwKeyAction(buf, upd_action);
+
+	appendStringInfo(buf, "ON DELETE ");
+	_rwKeyAction(buf, del_action);
+}
+
+/*
+ * rewrite the ColConstraintElem: grammar production
+ *
+ * Not all constraint type can be expected here, and some of them can be found
+ * with other grammars as table level constraint attributes.
+ */
+static void
+_rwColConstraintElem(StringInfo buf, List *constraints, RangeVar *relation)
 {
 	ListCell   *lc;
 
@@ -286,27 +443,13 @@ _rwColQualList(StringInfo buf, List *constraints, const char *relname)
 
 			case CONSTR_UNIQUE:
 				appendStringInfo(buf, " UNIQUE");
-				if (c->indexspace != NULL)
-					appendStringInfo(buf, " USING INDEX TABLESPACE %s", c->indexspace);
+				_rwOptConsTableSpace(buf, c->indexspace);
 				break;
 
 			case CONSTR_PRIMARY:
 				appendStringInfo(buf, " PRIMARY KEY");
-				if (c->keys != NULL)
-				{
-					ListCell *k;
-					bool first = true;
-
-					appendStringInfoChar(buf, '(');
-					foreach(k, c->keys)
-					{
-						_maybeAddSeparator(buf, ",", &first);
-						appendStringInfo(buf, "%s", strVal(lfirst(k)));
-					}
-					appendStringInfoChar(buf, ')');
-				}
-				if (c->indexspace != NULL)
-					appendStringInfo(buf, " USING INDEX TABLESPACE %s", c->indexspace);
+				_rwDefinition(buf, c->options);
+				_rwOptConsTableSpace(buf, c->indexspace);
 				break;
 
 			case CONSTR_CHECK:
@@ -325,14 +468,84 @@ _rwColQualList(StringInfo buf, List *constraints, const char *relname)
 				break;
 			}
 
-			case CONSTR_EXCLUSION:
-				appendStringInfo(buf, " EXCLUDE %s () ", c->access_method);
-				if (c->indexspace != NULL)
-					appendStringInfo(buf, " USING INDEX TABLESPACE %s", c->indexspace);
+			case CONSTR_FOREIGN:
+			{
+				appendStringInfo(buf, " REFERENCES %s",
+								 RangeVarToString(c->pktable));
+				_rwOptColumnList(buf, c->pk_attrs);
+				_rwKeyMatch(buf, c->fk_matchtype);
+				_rwKeyActions(buf, c->fk_upd_action, c->fk_del_action);
+				break;
+			}
+
+			default:
+				/* unexpected case, WARNING? */
+				elog(WARNING, "Constraint %d is not a column constraint",
+					 c->contype);
+				break;
+		}
+	}
+}
+
+static void
+_rwConstAttr(StringInfo buf, List *constraints, const char *relname)
+{
+	ListCell   *lc;
+
+	foreach(lc, constraints)
+	{
+		/* match against the ConstraintAttr: grammar production */
+		Constraint *c = (Constraint *) lfirst(lc);
+		Assert(IsA(c, Constraint));
+
+		if (c->conname != NULL)
+			appendStringInfo(buf, " CONSTRAINT %s", c->conname);
+
+		switch (c->contype)
+		{
+			case CONSTR_PRIMARY:
+				appendStringInfo(buf, " PRIMARY KEY");
+				if (c->keys != NULL)
+				{
+					ListCell *k;
+					bool first = true;
+
+					appendStringInfoChar(buf, '(');
+					foreach(k, c->keys)
+					{
+						_maybeAddSeparator(buf, ", ", &first);
+						appendStringInfo(buf, "%s", strVal(lfirst(k)));
+					}
+					appendStringInfoChar(buf, ')');
+				}
+				_rwOptConsTableSpace(buf, c->indexspace);
 				break;
 
-			case CONSTR_FOREIGN:
-				appendStringInfo(buf, " REFERENCES %s()", RangeVarToString(c->pktable));
+			case CONSTR_EXCLUSION:
+				appendStringInfo(buf, " EXCLUDE %s ", c->access_method);
+				if (c->exclusions != NULL)
+				{
+					ListCell *e;
+					bool first = true;
+
+					/* ExclustionConstraintList */
+					appendStringInfoChar(buf, '(');
+					foreach(e, c->exclusions)
+					{
+						List *ec = (List *)lfirst(e);
+
+						_maybeAddSeparator(buf, ",", &first);
+
+						/* ExclustionConstraintElem */
+						appendStringInfo(buf, "%s WITH OPERATOR(%s)",
+										 strVal(linitial(ec)),
+										 strVal(lsecond(ec)));
+					}
+					appendStringInfoChar(buf, ')');
+				}
+				else
+					appendStringInfo(buf, "()");
+				_rwOptConsTableSpace(buf, c->indexspace);
 				break;
 
 			case CONSTR_ATTR_DEFERRABLE:
@@ -350,7 +563,32 @@ _rwColQualList(StringInfo buf, List *constraints, const char *relname)
 			case CONSTR_ATTR_IMMEDIATE:
 				appendStringInfo(buf, " INITIALLY IMMEDIATE");
 				break;
+
+			default:
+				/* unexpected case, WARNING? */
+				elog(WARNING, "Constraint %d is not a column constraint",
+					 c->contype);
+				break;
 		}
+	}
+}
+
+static void
+_rwRelPersistence(StringInfo buf, int relpersistence)
+{
+	switch (relpersistence)
+	{
+		case RELPERSISTENCE_TEMP:
+			appendStringInfo(buf, " TEMPORARY");
+			break;
+
+		case RELPERSISTENCE_UNLOGGED:
+			appendStringInfo(buf, " UNLOGGED");
+			break;
+
+		case RELPERSISTENCE_PERMANENT:
+		default:
+			break;
 	}
 }
 
@@ -360,6 +598,7 @@ _rwCreateStmt(EventTriggerData *trigdata)
 	CreateStmt *node = (CreateStmt *)trigdata->parsetree;
 	ListCell   *lcmd;
 	StringInfoData buf;
+	bool first = true;
 
 	initStringInfo(&buf);
 	appendStringInfo(&buf, "CREATE TABLE %s %s",
@@ -372,6 +611,8 @@ _rwCreateStmt(EventTriggerData *trigdata)
 	{
 		Node *elmt = (Node *) lfirst(lcmd);
 
+		_maybeAddSeparator(&buf, ", ", &first);
+
 		switch (nodeTag(elmt))
 		{
 			case T_ColumnDef:
@@ -380,7 +621,7 @@ _rwCreateStmt(EventTriggerData *trigdata)
 				appendStringInfo(&buf, "%s %s",
 								 c->colname,
 								 TypeNameToString(c->typeName));
-				_rwColQualList(&buf, c->constraints, node->relation->relname);
+				_rwColConstraintElem(&buf, c->constraints, node->relation);
 				break;
 			}
 			case T_TableLikeClause:
@@ -392,7 +633,7 @@ _rwCreateStmt(EventTriggerData *trigdata)
 			case T_Constraint:
 			{
 				Constraint  *c = (Constraint *) elmt;
-				_rwColQualList(&buf, list_make1(c), node->relation->relname);
+				_rwConstAttr(&buf, list_make1(c), node->relation->relname);
 				break;
 			}
 			default:
@@ -401,8 +642,6 @@ _rwCreateStmt(EventTriggerData *trigdata)
 				 */
 				break;
 		}
-		if (lnext(lcmd) != NULL)
-			appendStringInfoChar(&buf, ',');
 	}
 	appendStringInfoChar(&buf, ')');
 	appendStringInfoChar(&buf, ';');
@@ -628,10 +867,114 @@ _rwAlterTableStmt(EventTriggerData *trigdata)
 	trigdata->objectname = node->relation->relname;
 }
 
+static void
+_rwCreateSeqStmt(EventTriggerData *trigdata)
+{
+	CreateSeqStmt *node = (CreateSeqStmt *)trigdata->parsetree;
+	StringInfoData buf;
+	ListCell *opt;
+
+	initStringInfo(&buf);
+	appendStringInfo(&buf, "CREATE ");
+	_rwRelPersistence(&buf, node->sequence->relpersistence);
+	appendStringInfo(&buf, " SEQUENCE");
+
+	/* OptSeqOptList */
+	foreach(opt, node->options)
+	{
+		DefElem    *defel = (DefElem *) lfirst(opt);
+
+		if (strcmp(defel->defname, "cache") == 0)
+		{
+			char		num[100];
+
+			snprintf(num, sizeof(num), INT64_FORMAT, defGetInt64(defel));
+			appendStringInfo(&buf, " CACHE %s", num);
+		}
+		else if (strcmp(defel->defname, "cycle") == 0)
+		{
+			if (intVal(defel))
+				appendStringInfo(&buf, " CYCLE");
+			else
+				appendStringInfo(&buf, " NO CYCLE");
+		}
+		else if (strcmp(defel->defname, "increment") == 0)
+		{
+			char		num[100];
+
+			snprintf(num, sizeof(num), INT64_FORMAT, defGetInt64(defel));
+			appendStringInfo(&buf, " INCREMENT BY %s", num);
+		}
+		else if (strcmp(defel->defname, "maxvalue") == 0)
+		{
+			if (defel->arg)
+			{
+				char		num[100];
+
+				snprintf(num, sizeof(num), INT64_FORMAT, defGetInt64(defel));
+				appendStringInfo(&buf, " MAXVALUE %s", num);
+			}
+			else
+				appendStringInfo(&buf, " NO MAXVALUE");
+		}
+		else if (strcmp(defel->defname, "minvalue") == 0)
+		{
+			if (defel->arg)
+			{
+				char		num[100];
+
+				snprintf(num, sizeof(num), INT64_FORMAT, defGetInt64(defel));
+				appendStringInfo(&buf, " MINVALUE %s", num);
+			}
+			else
+				appendStringInfo(&buf, " NO MINVALUE");
+		}
+		else if (strcmp(defel->defname, "owned_by") == 0)
+		{
+			List       *owned_by = defGetQualifiedName(defel);
+			int         nnames = list_length(owned_by);
+			List	   *relname;
+			char	   *attrname;
+			RangeVar   *rel;
+
+			relname = list_truncate(list_copy(owned_by), nnames - 1);
+			attrname = strVal(lfirst(list_tail(owned_by)));
+			rel = makeRangeVarFromNameList(relname);
+
+			appendStringInfo(&buf, " OWNED BY %s.%s",
+							 RangeVarToString(rel), attrname);
+		}
+		else if (strcmp(defel->defname, "start") == 0)
+		{
+			char		num[100];
+
+			snprintf(num, sizeof(num), INT64_FORMAT, defGetInt64(defel));
+			appendStringInfo(&buf, " START WITH %s", num);
+		}
+		else if (strcmp(defel->defname, "restart") == 0)
+		{
+			if (defel->arg)
+			{
+				char		num[100];
+
+				snprintf(num, sizeof(num), INT64_FORMAT, defGetInt64(defel));
+				appendStringInfo(&buf, " RESTART WITH %s", num);
+			}
+			else
+				appendStringInfo(&buf, " RESTART");
+		}
+	}
+	appendStringInfoChar(&buf, ';');
+
+	trigdata->command = buf.data;
+	trigdata->schemaname = RangeVarGetNamespace(node->sequence);
+	trigdata->objectname = node->sequence->relname;
+}
+
 /*
  * get_event_trigger_data
  *
- * Event Triggers de parse utility
+ * Event Triggers deparse utility
  *
  * Utility statements are not planned thus won't get into a Query *, we get to
  * work from the parsetree directly, that would be query->utilityStmt which is
@@ -651,9 +994,11 @@ get_event_trigger_data(EventTriggerData *trigdata)
 	 * firing, in that case we need to avoid trying to fill the CommandContext
 	 * for command we don't know how to back parse.
 	 */
-	trigdata->command = NULL;
-	trigdata->objectname = NULL;
+	trigdata->command	 = NULL;
 	trigdata->schemaname = NULL;
+	trigdata->objectname = NULL;
+	trigdata->objectkind = NULL;
+	trigdata->operation	 = NULL;
 
 	switch (nodeTag(trigdata->parsetree))
 	{
@@ -685,6 +1030,12 @@ get_event_trigger_data(EventTriggerData *trigdata)
 			trigdata->objectkind = "EXTENSION";
 			trigdata->operation = "CREATE";
 			_rwCreateExtensionStmt(trigdata);
+			break;
+
+		case T_CreateSeqStmt:
+			trigdata->objectkind = "SEQUENCE";
+			trigdata->operation = "CREATE";
+			_rwCreateSeqStmt(trigdata);
 			break;
 
 		default:
