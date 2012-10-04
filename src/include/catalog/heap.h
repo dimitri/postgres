@@ -99,6 +99,10 @@ extern List *AddRelationNewConstraints(Relation rel,
 
 extern void StoreAttrDefault(Relation rel, AttrNumber attnum, Node *expr);
 
+extern Node *cookConstraint(ParseState *pstate,
+							Node *raw_constraint,
+							char *relname);
+
 extern Node *cookDefault(ParseState *pstate,
 			Node *raw_default,
 			Oid atttypid,
