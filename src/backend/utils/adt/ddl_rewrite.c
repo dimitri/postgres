@@ -329,9 +329,7 @@ _rwDefinition(StringInfo buf, List *definitions)
 static void
 _rwOptColumnList(StringInfo buf, List *clist)
 {
-	if (clist == NULL)
-		appendStringInfo(buf, "()");
-	else
+	if (clist != NULL)
 	{
 		ListCell *c;
 		bool first = true;
@@ -344,6 +342,18 @@ _rwOptColumnList(StringInfo buf, List *clist)
 		}
 		appendStringInfoChar(buf, ')');
 	}
+}
+
+/*
+ * Rewrite the opt_column_list: grammar production
+ */
+static void
+_rwColumnList(StringInfo buf, List *clist)
+{
+	if (clist == NULL)
+		appendStringInfo(buf, "()");
+	else
+		_rwOptColumnList(buf, clist);
 }
 
 /*
@@ -412,6 +422,43 @@ _rwKeyActions(StringInfo buf, int upd_action, int del_action)
 
 	appendStringInfo(buf, "ON DELETE ");
 	_rwKeyAction(buf, del_action);
+}
+
+/*
+ * Rewrite the ConstraintAttributeSpec: parser production
+ */
+static void
+_rwConstraintAttributeSpec(StringInfo buf,
+						   bool deferrable, bool initdeferred)
+{
+	if (deferrable)
+		appendStringInfo(buf, " DEFERRABLE");
+	else
+		appendStringInfo(buf, " NOT DEFERRABLE");
+
+	if (initdeferred)
+		appendStringInfo(buf, " INITIALLY DEFERRED");
+	else
+		appendStringInfo(buf, " INITIALLY IMMEDIATE");
+}
+
+static void
+_rwRelPersistence(StringInfo buf, int relpersistence)
+{
+	switch (relpersistence)
+	{
+		case RELPERSISTENCE_TEMP:
+			appendStringInfo(buf, " TEMPORARY");
+			break;
+
+		case RELPERSISTENCE_UNLOGGED:
+			appendStringInfo(buf, " UNLOGGED");
+			break;
+
+		case RELPERSISTENCE_PERMANENT:
+		default:
+			break;
+	}
 }
 
 /*
@@ -548,32 +595,64 @@ _rwConstAttr(StringInfo buf, List *constraints, const char *relname)
 
 		switch (c->contype)
 		{
+			case CONSTR_CHECK:
+				/* see previous function's FIXME comment */
+				elog(WARNING, "Check is not supported yet");
+				break;
+
+			case CONSTR_UNIQUE:
+				appendStringInfo(buf, " UNIQUE");
+
+				if (c->keys)
+				{
+					/* unique (column, list) */
+					_rwColumnList(buf, c->keys);
+					_rwDefinition(buf, c->options);
+					_rwConstraintAttributeSpec(buf,
+											   c->deferrable, c->initdeferred);
+					_rwOptConsTableSpace(buf, c->indexspace);
+				}
+				else
+				{
+					/* unique using index */
+					appendStringInfo(buf, " USING INDEX %s", c->indexname);
+					_rwConstraintAttributeSpec(buf,
+											   c->deferrable, c->initdeferred);
+				}
+				break;
+
 			case CONSTR_PRIMARY:
 				appendStringInfo(buf, " PRIMARY KEY");
-				if (c->keys != NULL)
-				{
-					ListCell *k;
-					bool first = true;
 
-					appendStringInfoChar(buf, '(');
-					foreach(k, c->keys)
-					{
-						_maybeAddSeparator(buf, ", ", &first);
-						appendStringInfo(buf, "%s", strVal(lfirst(k)));
-					}
-					appendStringInfoChar(buf, ')');
+				if (c->keys)
+				{
+					/* primary key (column, list) */
+					_rwColumnList(buf, c->keys);
+					_rwDefinition(buf, c->options);
+					_rwOptConsTableSpace(buf, c->indexspace);
+					_rwConstraintAttributeSpec(buf,
+											   c->deferrable, c->initdeferred);
 				}
-				_rwOptConsTableSpace(buf, c->indexspace);
+				else
+				{
+					/* primary key using index */
+					appendStringInfo(buf, " USING INDEX %s", c->indexname);
+					_rwConstraintAttributeSpec(buf,
+											   c->deferrable, c->initdeferred);
+				}
 				break;
 
 			case CONSTR_EXCLUSION:
 				appendStringInfo(buf, " EXCLUDE %s ", c->access_method);
-				if (c->exclusions != NULL)
+
+				if (c->exclusions == NULL)
+					appendStringInfo(buf, "()");
+				else
 				{
+					/* ExclustionConstraintList */
 					ListCell *e;
 					bool first = true;
 
-					/* ExclustionConstraintList */
 					appendStringInfoChar(buf, '(');
 					foreach(e, c->exclusions)
 					{
@@ -588,25 +667,36 @@ _rwConstAttr(StringInfo buf, List *constraints, const char *relname)
 					}
 					appendStringInfoChar(buf, ')');
 				}
-				else
-					appendStringInfo(buf, "()");
+				_rwDefinition(buf, c->options);
 				_rwOptConsTableSpace(buf, c->indexspace);
+
+				/* ExclusionWhereClause: */
+				if (c->where_clause)
+					/* FIXME: Add support for raw expressions */
+					appendStringInfo(buf, " WHERE ( %s )", "?");
+
+				_rwConstraintAttributeSpec(buf,
+										   c->deferrable, c->initdeferred);
 				break;
 
-			case CONSTR_ATTR_DEFERRABLE:
-				appendStringInfo(buf, " DEFERRABLE");
-				break;
+			case CONSTR_FOREIGN:
+				appendStringInfo(buf, " FOREIGN KEY");
 
-			case CONSTR_ATTR_NOT_DEFERRABLE:
-				appendStringInfo(buf, " NOT DEFERRABLE");
-				break;
+				_rwColumnList(buf, c->fk_attrs);
 
-			case CONSTR_ATTR_DEFERRED:
-				appendStringInfo(buf, " INITIALLY DEFERRED");
-				break;
+				appendStringInfo(buf, " REFERENCES %s",
+								 RangeVarToString(c->pktable));
 
-			case CONSTR_ATTR_IMMEDIATE:
-				appendStringInfo(buf, " INITIALLY IMMEDIATE");
+				_rwOptColumnList(buf, c->pk_attrs);
+
+				_rwKeyMatch(buf, c->fk_matchtype);
+				_rwKeyActions(buf, c->fk_upd_action, c->fk_del_action);
+
+				_rwConstraintAttributeSpec(buf,
+										   c->deferrable, c->initdeferred);
+
+				if (c->skip_validation)
+					appendStringInfo(buf, " NOT VALID");
 				break;
 
 			default:
@@ -615,25 +705,6 @@ _rwConstAttr(StringInfo buf, List *constraints, const char *relname)
 					 c->contype);
 				break;
 		}
-	}
-}
-
-static void
-_rwRelPersistence(StringInfo buf, int relpersistence)
-{
-	switch (relpersistence)
-	{
-		case RELPERSISTENCE_TEMP:
-			appendStringInfo(buf, " TEMPORARY");
-			break;
-
-		case RELPERSISTENCE_UNLOGGED:
-			appendStringInfo(buf, " UNLOGGED");
-			break;
-
-		case RELPERSISTENCE_PERMANENT:
-		default:
-			break;
 	}
 }
 
