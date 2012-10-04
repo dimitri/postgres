@@ -101,9 +101,6 @@ static bool MergeWithExistingConstraint(Relation rel, char *ccname, Node *expr,
 							bool allow_merge, bool is_local,
 							bool is_no_inherit);
 static void SetRelationNumChecks(Relation rel, int numchecks);
-static Node *cookConstraint(ParseState *pstate,
-			   Node *raw_constraint,
-			   char *relname);
 static List *insert_ordered_unique_oid(List *list, Oid datum);
 
 
@@ -2528,7 +2525,7 @@ cookDefault(ParseState *pstate,
  * Parse state must be set up to recognize any vars that might appear
  * in the expression.
  */
-static Node *
+Node *
 cookConstraint(ParseState *pstate,
 			   Node *raw_constraint,
 			   char *relname)
