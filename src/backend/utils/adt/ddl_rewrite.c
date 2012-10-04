@@ -20,6 +20,7 @@
 #include "access/htup_details.h"
 #include "access/sysattr.h"
 #include "catalog/dependency.h"
+#include "catalog/heap.h"
 #include "commands/defrem.h"
 #include "commands/event_trigger.h"
 #include "funcapi.h"
@@ -33,6 +34,7 @@
 #include "parser/parse_type.h"
 #include "parser/parser.h"
 #include "parser/parsetree.h"
+#include "parser/parse_relation.h"
 #include "utils/array.h"
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
@@ -452,18 +454,61 @@ _rwColConstraintElem(StringInfo buf, List *constraints, RangeVar *relation)
 				_rwOptConsTableSpace(buf, c->indexspace);
 				break;
 
+				/* FIXME: transformExpr only works with already existing
+				 * relations, as explained in tablecmds.c DefineRelation().
+				 * Won't work for ddl_command_start event triggers on CREATE
+				 * TABLE.
+				 *
+				 * Do we need to add some transform support of the raw parse
+				 * tree for non existing relations?
+				 */
 			case CONSTR_CHECK:
 			{
+				/*
+				 * Create a dummy ParseState and insert the target relation as
+				 * its sole rangetable entry. We need a ParseState for
+				 * transformExpr.
+				 */
+				Node       *expr;
 				char	   *consrc;
-				consrc = deparse_expression(c->raw_expr, NIL, false, false);
+				ParseState *pstate = make_parsestate(NULL);
+				RangeTblEntry *rte = addRangeTableEntry(pstate,
+														relation,
+														NULL, false, true);
+
+				/* no to join list, yes to namespaces */
+				addRTEtoQuery(pstate, rte, false, true, true);
+
+				/* deparse the constraint expression */
+				expr = cookConstraint(pstate, c->raw_expr, relation->relname);
+				consrc = deparse_expression(expr, NIL, false, false);
+
 				appendStringInfo(buf, " CHECK (%s)", consrc);
 				break;
 			}
 
 			case CONSTR_DEFAULT:
 			{
+				/*
+				 * Create a dummy ParseState and insert the target relation as
+				 * its sole rangetable entry. We need a ParseState for
+				 * transformExpr.
+				 */
+				Node       *expr;
 				char	   *consrc;
+				ParseState *pstate = make_parsestate(NULL);
+				RangeTblEntry *rte = addRangeTableEntry(pstate,
+														relation,
+														NULL, false, true);
+
+				/* no to join list, yes to namespaces */
+				addRTEtoQuery(pstate, rte, false, true, true);
+
+				/* deparse the constraint expression */
+				expr = cookDefault(pstate, c->raw_expr,
+								   InvalidOid, -1, NULL);
 				consrc = deparse_expression(c->raw_expr, NIL, false, false);
+
 				appendStringInfo(buf, " DEFAULT %s", consrc);
 				break;
 			}
