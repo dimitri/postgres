@@ -708,58 +708,203 @@ _rwConstAttr(StringInfo buf, List *constraints, const char *relname)
 	}
 }
 
+/*
+ * rewrite OptTableElementList: parser production
+ */
 static void
-_rwCreateStmt(EventTriggerData *trigdata)
+_rwOptTableElementList(StringInfo buf, List *tableElts, RangeVar relation)
 {
-	CreateStmt *node = (CreateStmt *)trigdata->parsetree;
-	ListCell   *lcmd;
-	StringInfoData buf;
-	bool first = true;
+	bool        first = true;
+	ListCell   *e;
 
-	initStringInfo(&buf);
-	appendStringInfo(&buf, "CREATE TABLE %s %s",
-					 RangeVarToString(node->relation),
-					 node->if_not_exists ? " IF NOT EXISTS" : "");
+	appendStringInfoChar(buf, '(');
 
-	appendStringInfoChar(&buf, '(');
-
-	foreach(lcmd, node->tableElts)
+	foreach(e, tableElts)
 	{
-		Node *elmt = (Node *) lfirst(lcmd);
+		Node *elmt = (Node *) lfirst(e);
 
-		_maybeAddSeparator(&buf, ", ", &first);
+		_maybeAddSeparator(buf, ", ", &first);
 
 		switch (nodeTag(elmt))
 		{
 			case T_ColumnDef:
-			{
 				ColumnDef  *c = (ColumnDef *) elmt;
-				appendStringInfo(&buf, "%s %s",
+				appendStringInfo(buf, "%s %s",
 								 c->colname,
 								 TypeNameToString(c->typeName));
-				_rwColConstraintElem(&buf, c->constraints, node->relation);
+				_rwColConstraintElem(buf, c->constraints, relation);
 				break;
-			}
+
 			case T_TableLikeClause:
-			{
 				TableLikeClause *r = (TableLikeClause *) elmt;
-				appendStringInfo(&buf, "%s", RangeVarToString(r->relation));
+				appendStringInfo(buf, "%s", RangeVarToString(r->relation));
 				break;
-			}
+
 			case T_Constraint:
-			{
 				Constraint  *c = (Constraint *) elmt;
-				_rwConstAttr(&buf, list_make1(c), node->relation->relname);
+				_rwConstAttr(buf, list_make1(c), node->relation->relname);
 				break;
-			}
+
 			default:
-				/* Many nodeTags are not interesting as an
-				 * OptTableElementList
-				 */
+				/* Many nodeTags are not OptTableElementList */
 				break;
 		}
 	}
-	appendStringInfoChar(&buf, ')');
+	appendStringInfoChar(buf, ')');
+}
+
+/*
+ * rewrite OptTypedTableElementList: parser production
+ */
+static void
+_rwOptTypedTableElementList(StringInfo buf, List *tableElts)
+{
+	bool        first = true;
+	ListCell   *e;
+
+	foreach(e, node->tableElts)
+	{
+		Node *elmt = (Node *) lfirst(e);
+
+		_maybeAddSeparator(buf, ", ", &first);
+
+		switch (nodeTag(elmt))
+		{
+			case T_ColumnDef:
+				ColumnDef  *c = (ColumnDef *) elmt;
+				appendStringInfo(buf, "%s WITH OPTIONS", c->colname);
+				_rwColConstraintElem(buf, c->constraints, node->relation);
+				break;
+
+			case T_Constraint:
+				Constraint  *c = (Constraint *) elmt;
+				_rwConstAttr(buf, list_make1(c), node->relation->relname);
+				break;
+
+			default:
+				/* Many nodeTags are not OptTableElementList */
+				break;
+		}
+	}
+}
+
+/*
+ * rewrite qualified_name_list: parser production
+ */
+static void
+_rwQualifiedNameList(StringData buf, List *qualified_name_list)
+{
+	ListCell *c;
+	bool first = true;
+
+	appendStringInfoChar(buf, '(');
+	foreach(c, clist)
+	{
+		_maybeAddSeparator(buf, ",", &first);
+		appendStringInfo(buf, "%s", strVal(lfirst(c)));
+	}
+	appendStringInfoChar(buf, ')');
+}
+
+/*
+ * rewrite OptInherit: parser production
+ */
+static void
+_rwOptInherit(StringData buf, List *inhRelations)
+{
+	appendStringInfoChar(buf, '(');
+	_rwQualifiedNameList(buf, inhRelations);
+	appendStringInfoChar(buf, ')');
+}
+
+/*
+ * rewrite OptWith: parser production
+ */
+static void
+_rwOptWith(StringData buf, List *options)
+{
+	if (options)
+	{
+		ListCell   *lc;
+		appendStringInfo(buf, " WITH (");
+
+		foreach(lc, node->options)
+		{
+			DefElem    *defel = (DefElem *) lfirst(lc);
+			const char *value;
+
+			if (def->arg != NULL)
+				value = defGetString(def);
+			else
+				value = "true";
+
+			appendStringInfo(buf, " %s=%s", def->defname, value);
+		}
+		appendStringInfoChar(buf, " )");
+	}
+}
+
+/*
+ * rewrite OptCommitOption: parser production
+ */
+static void
+_rwOnCommitOption(StringData buf, int oncommit)
+{
+	switch (oncommit)
+	{
+		case ONCOMMIT_DROP:
+			appendStringInfo(buf, " ON COMMIT DROP");
+			break;
+
+		case ONCOMMIT_DELETE_ROWS:
+			appendStringInfo(buf, " ON COMMIT DELETE ROWS");
+			break;
+
+		case ONCOMMIT_PRESERVE_ROWS:
+			appendStringInfo(buf, " ON COMMIT PRESERVE ROWS");
+			break;
+
+		case ONCOMMIT_NOOP:
+			/* EMPTY */
+			break;
+
+	}
+}
+
+/*
+ * rewrite CreateStmt: parser production
+ */
+static void
+_rwCreateStmt(EventTriggerData *trigdata)
+{
+	CreateStmt *node = (CreateStmt *)trigdata->parsetree;
+	StringInfoData buf;
+	bool first = true;
+
+	initStringInfo(&buf);
+	appendStringInfo(&buf, "CREATE ");
+	_rwRelPersistence(&buf, node->relpersistence);
+	appendStringInfo(&buf, "TABLE %s %s",
+					 RangeVarToString(node->relation),
+					 node->if_not_exists ? " IF NOT EXISTS" : "");
+
+	if (node->ofTypename)
+	{
+		appendStringInfoString(&buf, "OF %s",
+							   TypeNameToString(node->ofTypename));
+		_rwOptTypedTableElementList(&buf, node->tableElts);
+		_rwOptWith(&buf, node->options);
+		_rwOnCommitOption(&buf, node->oncommit);
+		_rwOptTableSpace(buf, node->tablespacename);
+	}
+	else
+	{
+		_rwOptTableElementList(&buf, node->tableElts, node->relation);
+		_rwOptInherit(&buf, node->inhRelations);
+		_rwOptWith(&buf, node->options);
+		_rwOnCommitOption(&buf, node->oncommit);
+		_rwOptTableSpace(buf, node->tablespacename);
+	}
 	appendStringInfoChar(&buf, ';');
 
 	trigdata->command = buf.data;
@@ -767,6 +912,9 @@ _rwCreateStmt(EventTriggerData *trigdata)
 	trigdata->objectname = node->relation->relname;
 }
 
+/*
+ * rewrite AlterTableStmt: parser production
+ */
 static void
 _rwAlterTableStmt(EventTriggerData *trigdata)
 {
