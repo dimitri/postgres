@@ -803,7 +803,7 @@ plpgsql_exec_event_trigger(PLpgSQL_function *func, EventTriggerData *trigdata)
 	var->freeval = true;
 
 	var = (PLpgSQL_var *) (estate.datums[func->tg_tag_varno]);
-	var->value = CStringGetTextDatum(trigdata->tag);
+	var->value = CStringGetTextDatum(trigdata->ctag->tag);
 	var->isnull = false;
 	var->freeval = true;
 
@@ -828,9 +828,9 @@ plpgsql_exec_event_trigger(PLpgSQL_function *func, EventTriggerData *trigdata)
 		var->isnull = true;
 
 	var = (PLpgSQL_var *) (estate.datums[func->tg_kind_varno]);
-	if (trigdata->objectkind != NULL)
+	if (trigdata->ctag->obtypename != NULL)
 	{
-		var->value = CStringGetTextDatum(trigdata->objectkind);
+		var->value = CStringGetTextDatum(trigdata->ctag->obtypename);
 		var->isnull = false;
 		var->freeval = true;
 	}
@@ -838,9 +838,9 @@ plpgsql_exec_event_trigger(PLpgSQL_function *func, EventTriggerData *trigdata)
 		var->isnull = true;
 
 	var = (PLpgSQL_var *) (estate.datums[func->tg_operation_varno]);
-	if (trigdata->operation != NULL)
+	if (trigdata->ctag->operation != COMMAND_TAG_OTHER)
 	{
-		var->value = CStringGetTextDatum(trigdata->operation);
+		var->value = CStringGetTextDatum(trigdata->ctag->opname);
 		var->isnull = false;
 		var->freeval = true;
 	}

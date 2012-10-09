@@ -125,7 +125,9 @@ CreateEventTrigger(CreateEventTrigStmt *stmt)
 			 errhint("Must be superuser to create an event trigger.")));
 
 	/* Validate event name. */
-	if (strcmp(stmt->eventname, "ddl_command_start") != 0)
+	if (! (strcmp(stmt->eventname, "ddl_command_start") == 0
+		   || strcmp(stmt->eventname, "ddl_command_end") == 0
+		   || strcmp(stmt->eventname, "ddl_command_trace") == 0))
 		ereport(ERROR,
 			(errcode(ERRCODE_SYNTAX_ERROR),
 			 errmsg("unrecognized event name \"%s\"",
@@ -205,11 +207,55 @@ validate_ddl_tags(const char *filtervar, List *taglist)
 	}
 }
 
+/*
+ * Split the command tag into its parts, only for common tags.
+ */
+static CommandTag *
+split_command_tag(const char *tag)
+{
+	CommandTag *ctag = (CommandTag *)palloc(sizeof(CommandTag));
+	ctag->tag = tag;
+
+	/* for our purposes, those are CREATE events */
+	if (pg_strcasecmp(tag, "CREATE TABLE AS") == 0
+		|| pg_strcasecmp(tag, "SELECT INTO") == 0)
+	{
+		ctag->opname = "CREATE";
+		ctag->operation = COMMAND_TAG_CREATE;
+		ctag->obtypename = "TABLE";
+	}
+	else if (pg_strncasecmp(tag, "CREATE ", 7) == 0)
+	{
+		ctag->opname = "CREATE";
+		ctag->operation = COMMAND_TAG_CREATE;
+		ctag->obtypename = ctag->tag + 7;
+	}
+	else if (pg_strncasecmp(tag, "ALTER ", 6) == 0)
+	{
+		ctag->opname = "ALTER";
+		ctag->operation = COMMAND_TAG_ALTER;
+		ctag->obtypename = ctag->tag + 6;
+	}
+	else if (pg_strncasecmp(tag, "DROP ", 5) == 0)
+	{
+		ctag->opname = "DROP";
+		ctag->operation = COMMAND_TAG_DROP;
+		ctag->obtypename = ctag->tag + 5;
+	}
+	else
+	{
+		ctag->opname = NULL;
+		ctag->operation = COMMAND_TAG_OTHER;
+		ctag->obtypename = NULL;
+	}
+	return ctag;
+}
+
 static event_trigger_command_tag_check_result
 check_ddl_tag(const char *tag)
 {
-	const char *obtypename;
-	event_trigger_support_data	   *etsd;
+	event_trigger_support_data	*etsd;
+	CommandTag					*ctag;
 
 	/*
 	 * Handle some idiosyncratic special cases.
@@ -223,20 +269,15 @@ check_ddl_tag(const char *tag)
 	/*
 	 * Otherwise, command should be CREATE, ALTER, or DROP.
 	 */
-	if (pg_strncasecmp(tag, "CREATE ", 7) == 0)
-		obtypename = tag + 7;
-	else if (pg_strncasecmp(tag, "ALTER ", 6) == 0)
-		obtypename = tag + 6;
-	else if (pg_strncasecmp(tag, "DROP ", 5) == 0)
-		obtypename = tag + 5;
-	else
+	ctag = split_command_tag(tag);
+	if (ctag->operation == COMMAND_TAG_OTHER)
 		return EVENT_TRIGGER_COMMAND_TAG_NOT_RECOGNIZED;
 
 	/*
 	 * ...and the object type should be something recognizable.
 	 */
 	for (etsd = event_trigger_support; etsd->obtypename != NULL; etsd++)
-		if (pg_strcasecmp(etsd->obtypename, obtypename) == 0)
+		if (pg_strcasecmp(etsd->obtypename, ctag->obtypename) == 0)
 			break;
 	if (etsd->obtypename == NULL)
 		return EVENT_TRIGGER_COMMAND_TAG_NOT_RECOGNIZED;
@@ -565,15 +606,66 @@ get_event_trigger_oid(const char *trigname, bool missing_ok)
 }
 
 /*
+ * Return true when we want to fire given Event Trigger and false otherwise,
+ * filterting on the session replication role and the event trigger registered
+ * tags matching.
+ */
+static bool
+filter_event_trigger(const char **tag, EventTriggerCacheItem  *item)
+{
+	/*
+	 * Filter by session replication role, knowing that we never see disabled
+	 * items down here.
+	 */
+	if (SessionReplicationRole == SESSION_REPLICATION_ROLE_REPLICA)
+	{
+		if (item->enabled == TRIGGER_FIRES_ON_ORIGIN)
+			return false;
+	}
+	else
+	{
+		if (item->enabled == TRIGGER_FIRES_ON_REPLICA)
+			return false;
+	}
+
+	/* Filter by tags, if any were specified. */
+	if (item->ntags != 0
+		&& bsearch(tag, item->tag, item->ntags,
+				   sizeof(char *), pg_qsort_strcmp) == NULL)
+		return false;
+
+	/* if we reach that point, we're not filtering out this item */
+	return true;
+}
+
+/*
+ * Fill in the basic information about an event trigger we want to fire. It's
+ * better to have that as a separate function so that we get compiler help in
+ * fixing all the call sites when we expand the basic set of information to
+ * publish for all supported events.
+ */
+static void
+build_event_trigger_data(EventTriggerData *trigdata, const char *event,
+						 Node *parsetree, CommandTag *ctag)
+
+{
+	trigdata->type		= T_EventTriggerData;
+	trigdata->event		= (char *)event;
+	trigdata->parsetree = parsetree;
+	trigdata->ctag		= ctag;
+}
+
+/*
  * Fire ddl_command_start triggers.
  */
 void
-EventTriggerDDLCommandStart(Node *parsetree)
+EventTriggerDDLCommandStart(bool isCompleteQuery, Node *parsetree)
 {
-	List	   *cachelist;
+	List	   *cachelist, *trace_cachelist;
 	List	   *runlist = NIL;
 	ListCell   *lc;
 	const char *tag;
+	CommandTag *ctag;
 	EventTriggerData	trigdata;
 
 	/*
@@ -593,6 +685,14 @@ EventTriggerDDLCommandStart(Node *parsetree)
 	 * scenarios depend on code that's otherwise untested isn't appetizing.)
 	 */
 	if (!IsUnderPostmaster)
+		return;
+
+	/*
+	 * Current policy for Event Triggers is to only fire for complete Queries,
+	 * avoiding e.g. create sequence commands run as part of defining a serial
+	 * column.
+	 */
+	if (!isCompleteQuery)
 		return;
 
 	/*
@@ -622,11 +722,13 @@ EventTriggerDDLCommandStart(Node *parsetree)
 
 	/* Use cache to find triggers for this event; fast exit if none. */
 	cachelist = EventCacheLookup(EVT_DDLCommandStart);
-	if (cachelist == NULL)
+	trace_cachelist = EventCacheLookup(EVT_DDLCommandTrace);
+	if (cachelist == NULL && trace_cachelist == NULL)
 		return;
 
 	/* Get the command tag. */
 	tag = CreateCommandTag(parsetree);
+	ctag = split_command_tag(tag);
 
 	/*
 	 * Filter list of event triggers by command tag, and copy them into
@@ -639,39 +741,96 @@ EventTriggerDDLCommandStart(Node *parsetree)
 	{
 		EventTriggerCacheItem  *item = lfirst(lc);
 
-		/* Filter by session replication role. */
-		if (SessionReplicationRole == SESSION_REPLICATION_ROLE_REPLICA)
-		{
-			if (item->enabled == TRIGGER_FIRES_ON_ORIGIN)
-				continue;
-		}
-		else
-		{
-			if (item->enabled == TRIGGER_FIRES_ON_REPLICA)
-				continue;
-		}
+		if (filter_event_trigger(&tag, item))
+			runlist = lappend_oid(runlist, item->fnoid);
+	}
 
-		/* Filter by tags, if any were specified. */
-		if (item->ntags != 0 && bsearch(&tag, item->tag,
-										item->ntags, sizeof(char *),
-										pg_qsort_strcmp) == NULL)
-				continue;
+	/*
+	 * In the case of a DROP operation, the ddl_event_trace is an alias to
+	 * ddl_command_start.
+	 */
+	foreach (lc, trace_cachelist)
+	{
+		EventTriggerCacheItem  *item = lfirst(lc);
 
-		/* We must plan to fire this trigger. */
-		runlist = lappend_oid(runlist, item->fnoid);
+		if (ctag->operation == COMMAND_TAG_DROP
+			&& filter_event_trigger(&tag, item))
+
+			runlist = lappend_oid(runlist, item->fnoid);
 	}
 
 	/* Construct event trigger data. */
-	trigdata.type = T_EventTriggerData;
-	trigdata.event = "ddl_command_start";
-	trigdata.parsetree = parsetree;
-	trigdata.tag = tag;
+	build_event_trigger_data(&trigdata, "ddl_command_start", parsetree, ctag);
 
 	/*
 	 * Get some more context data, such as the kind of object which is the
 	 * target of the command, the operation we're running and the command
-	 * string.
+	 * string. Some of the specific information we get here are specific to the
+	 * event.
 	 */
+	get_event_trigger_data(&trigdata);
+
+	/* Run the triggers. */
+	EventTriggerInvoke(runlist, &trigdata);
+
+	/* Cleanup. */
+	list_free(runlist);
+}
+
+/*
+ * Fire ddl_command_end triggers.
+ */
+void
+EventTriggerDDLCommandEnd(bool isCompleteQuery, Node *parsetree)
+{
+	List	   *cachelist, *trace_cachelist;
+	List	   *runlist = NIL;
+	ListCell   *lc;
+	const char *tag;
+	CommandTag *ctag;
+	EventTriggerData	trigdata;
+
+	if (!isCompleteQuery)
+		return;
+
+	/* Use cache to find triggers for this event; fast exit if none. */
+	cachelist = EventCacheLookup(EVT_DDLCommandEnd);
+	trace_cachelist = EventCacheLookup(EVT_DDLCommandTrace);
+	if (cachelist == NULL && trace_cachelist == NULL)
+		return;
+
+	/* Get the command tag. */
+	tag = CreateCommandTag(parsetree);
+	ctag = split_command_tag(tag);
+
+	/* Filter list of event triggers by command tag. */
+	foreach (lc, cachelist)
+	{
+		EventTriggerCacheItem  *item = lfirst(lc);
+
+		if (filter_event_trigger(&tag, item))
+			runlist = lappend_oid(runlist, item->fnoid);
+	}
+
+	/*
+	 * In the case of an ALTER or a CREATE operation, the ddl_event_trace is an
+	 * alias to ddl_command_end.
+	 */
+	foreach (lc, trace_cachelist)
+	{
+		EventTriggerCacheItem  *item = lfirst(lc);
+
+		if ((ctag->operation == COMMAND_TAG_ALTER
+			 || ctag->operation == COMMAND_TAG_CREATE)
+			&& filter_event_trigger(&tag, item))
+
+			runlist = lappend_oid(runlist, item->fnoid);
+	}
+
+	/* Construct event trigger data. */
+	build_event_trigger_data(&trigdata, "ddl_command_end", parsetree, ctag);
+
+	/* Get some more context data, some specific to the event */
 	get_event_trigger_data(&trigdata);
 
 	/* Run the triggers. */

@@ -507,10 +507,10 @@ standard_ProcessUtility(Node *parsetree,
 			 * relation and attribute manipulation
 			 */
 		case T_CreateSchemaStmt:
-			if (isCompleteQuery)
-				EventTriggerDDLCommandStart(parsetree);
+			EventTriggerDDLCommandStart(isCompleteQuery, parsetree);
 			CreateSchemaCommand((CreateSchemaStmt *) parsetree,
 								queryString);
+			EventTriggerDDLCommandEnd(isCompleteQuery, parsetree);
 			break;
 
 		case T_CreateStmt:
@@ -520,8 +520,7 @@ standard_ProcessUtility(Node *parsetree,
 				ListCell   *l;
 				Oid			relOid;
 
-				if (isCompleteQuery)
-					EventTriggerDDLCommandStart(parsetree);
+				EventTriggerDDLCommandStart(isCompleteQuery, parsetree);
 
 				/* Run parse analysis ... */
 				stmts = transformCreateStmt((CreateStmt *) parsetree,
@@ -558,6 +557,8 @@ standard_ProcessUtility(Node *parsetree,
 											   true);
 
 						AlterTableCreateToastTable(relOid, toast_options);
+
+						EventTriggerDDLCommandEnd(isCompleteQuery, stmt);
 					}
 					else if (IsA(stmt, CreateForeignTableStmt))
 					{
@@ -567,6 +568,8 @@ standard_ProcessUtility(Node *parsetree,
 												InvalidOid);
 						CreateForeignTable((CreateForeignTableStmt *) stmt,
 										   relOid);
+
+						EventTriggerDDLCommandEnd(isCompleteQuery, stmt);
 					}
 					else
 					{
@@ -604,72 +607,72 @@ standard_ProcessUtility(Node *parsetree,
 			break;
 
 		case T_CreateExtensionStmt:
-			if (isCompleteQuery)
-				EventTriggerDDLCommandStart(parsetree);
+			EventTriggerDDLCommandStart(isCompleteQuery, parsetree);
 			CreateExtension((CreateExtensionStmt *) parsetree);
+			EventTriggerDDLCommandEnd(isCompleteQuery, parsetree);
 			break;
 
 		case T_AlterExtensionStmt:
-			if (isCompleteQuery)
-				EventTriggerDDLCommandStart(parsetree);
+			EventTriggerDDLCommandStart(isCompleteQuery, parsetree);
 			ExecAlterExtensionStmt((AlterExtensionStmt *) parsetree);
+			EventTriggerDDLCommandEnd(isCompleteQuery, parsetree);
 			break;
 
 		case T_AlterExtensionContentsStmt:
-			if (isCompleteQuery)
-				EventTriggerDDLCommandStart(parsetree);
+			EventTriggerDDLCommandStart(isCompleteQuery, parsetree);
 			ExecAlterExtensionContentsStmt((AlterExtensionContentsStmt *) parsetree);
+			EventTriggerDDLCommandEnd(isCompleteQuery, parsetree);
+
 			break;
 
 		case T_CreateFdwStmt:
-			if (isCompleteQuery)
-				EventTriggerDDLCommandStart(parsetree);
+			EventTriggerDDLCommandStart(isCompleteQuery, parsetree);
 			CreateForeignDataWrapper((CreateFdwStmt *) parsetree);
+			EventTriggerDDLCommandEnd(isCompleteQuery, parsetree);
 			break;
 
 		case T_AlterFdwStmt:
-			if (isCompleteQuery)
-				EventTriggerDDLCommandStart(parsetree);
+			EventTriggerDDLCommandStart(isCompleteQuery, parsetree);
 			AlterForeignDataWrapper((AlterFdwStmt *) parsetree);
+			EventTriggerDDLCommandEnd(isCompleteQuery, parsetree);
 			break;
 
 		case T_CreateForeignServerStmt:
-			if (isCompleteQuery)
-				EventTriggerDDLCommandStart(parsetree);
+			EventTriggerDDLCommandStart(isCompleteQuery, parsetree);
 			CreateForeignServer((CreateForeignServerStmt *) parsetree);
+			EventTriggerDDLCommandEnd(isCompleteQuery, parsetree);
 			break;
 
 		case T_AlterForeignServerStmt:
-			if (isCompleteQuery)
-				EventTriggerDDLCommandStart(parsetree);
+			EventTriggerDDLCommandStart(isCompleteQuery, parsetree);
 			AlterForeignServer((AlterForeignServerStmt *) parsetree);
+			EventTriggerDDLCommandEnd(isCompleteQuery, parsetree);
 			break;
 
 		case T_CreateUserMappingStmt:
-			if (isCompleteQuery)
-				EventTriggerDDLCommandStart(parsetree);
+			EventTriggerDDLCommandStart(isCompleteQuery, parsetree);
 			CreateUserMapping((CreateUserMappingStmt *) parsetree);
+			EventTriggerDDLCommandEnd(isCompleteQuery, parsetree);
 			break;
 
 		case T_AlterUserMappingStmt:
-			if (isCompleteQuery)
-				EventTriggerDDLCommandStart(parsetree);
+			EventTriggerDDLCommandStart(isCompleteQuery, parsetree);
 			AlterUserMapping((AlterUserMappingStmt *) parsetree);
+			EventTriggerDDLCommandEnd(isCompleteQuery, parsetree);
 			break;
 
 		case T_DropUserMappingStmt:
-			if (isCompleteQuery)
-				EventTriggerDDLCommandStart(parsetree);
+			EventTriggerDDLCommandStart(isCompleteQuery, parsetree);
 			RemoveUserMapping((DropUserMappingStmt *) parsetree);
+			EventTriggerDDLCommandEnd(isCompleteQuery, parsetree);
 			break;
 
 		case T_DropStmt:
 			{
 				DropStmt   *stmt = (DropStmt *) parsetree;
 
-				if (isCompleteQuery
-					&& EventTriggerSupportsObjectType(stmt->removeType))
-					EventTriggerDDLCommandStart(parsetree);
+				if (EventTriggerSupportsObjectType(stmt->removeType))
+					EventTriggerDDLCommandStart(isCompleteQuery, parsetree);
 
 				switch (stmt->removeType)
 				{
@@ -689,6 +692,8 @@ standard_ProcessUtility(Node *parsetree,
 						RemoveObjects((DropStmt *) parsetree);
 						break;
 				}
+				if (stmt->removeType != OBJECT_INDEX)
+					EventTriggerDDLCommandEnd(isCompleteQuery, parsetree);
 				break;
 			}
 
@@ -739,10 +744,11 @@ standard_ProcessUtility(Node *parsetree,
 				RenameStmt  *stmt;
 
 				stmt = (RenameStmt *) parsetree;
-				if (isCompleteQuery &&
-					EventTriggerSupportsObjectType(stmt->renameType))
-					EventTriggerDDLCommandStart(parsetree);
+				if (EventTriggerSupportsObjectType(stmt->renameType))
+					EventTriggerDDLCommandStart(isCompleteQuery, parsetree);
 				ExecRenameStmt(stmt);
+				if (EventTriggerSupportsObjectType(stmt->renameType))
+					EventTriggerDDLCommandEnd(isCompleteQuery, parsetree);
 				break;
 			}
 
@@ -751,10 +757,11 @@ standard_ProcessUtility(Node *parsetree,
 				AlterObjectSchemaStmt  *stmt;
 
 				stmt = (AlterObjectSchemaStmt *) parsetree;
-				if (isCompleteQuery &&
-					EventTriggerSupportsObjectType(stmt->objectType))
-					EventTriggerDDLCommandStart(parsetree);
+				if (EventTriggerSupportsObjectType(stmt->objectType))
+					EventTriggerDDLCommandStart(isCompleteQuery, parsetree);
 				ExecAlterObjectSchemaStmt(stmt);
+				if (EventTriggerSupportsObjectType(stmt->objectType))
+					EventTriggerDDLCommandEnd(isCompleteQuery, parsetree);
 				break;
 			}
 
@@ -763,10 +770,11 @@ standard_ProcessUtility(Node *parsetree,
 				AlterOwnerStmt  *stmt;
 
 				stmt = (AlterOwnerStmt *) parsetree;
-				if (isCompleteQuery &&
-					EventTriggerSupportsObjectType(stmt->objectType))
-					EventTriggerDDLCommandStart(parsetree);
+				if (EventTriggerSupportsObjectType(stmt->objectType))
+					EventTriggerDDLCommandStart(isCompleteQuery, parsetree);
 				ExecAlterOwnerStmt(stmt);
+				if (EventTriggerSupportsObjectType(stmt->objectType))
+					EventTriggerDDLCommandEnd(isCompleteQuery, parsetree);
 				break;
 			}
 
@@ -778,8 +786,7 @@ standard_ProcessUtility(Node *parsetree,
 				ListCell   *l;
 				LOCKMODE	lockmode;
 
-				if (isCompleteQuery)
-					EventTriggerDDLCommandStart(parsetree);
+				EventTriggerDDLCommandStart(isCompleteQuery, parsetree);
 
 				/*
 				 * Figure out lock mode, and acquire lock.	This also does
@@ -804,6 +811,7 @@ standard_ProcessUtility(Node *parsetree,
 						{
 							/* Do the table alteration proper */
 							AlterTable(relid, lockmode, (AlterTableStmt *) stmt);
+							EventTriggerDDLCommandEnd(isCompleteQuery, stmt);
 						}
 						else
 						{
@@ -832,8 +840,7 @@ standard_ProcessUtility(Node *parsetree,
 			{
 				AlterDomainStmt *stmt = (AlterDomainStmt *) parsetree;
 
-				if (isCompleteQuery)
-					EventTriggerDDLCommandStart(parsetree);
+				EventTriggerDDLCommandStart(isCompleteQuery, parsetree);
 
 				/*
 				 * Some or all of these functions are recursive to cover
@@ -877,6 +884,7 @@ standard_ProcessUtility(Node *parsetree,
 							 (int) stmt->subtype);
 						break;
 				}
+				EventTriggerDDLCommandEnd(isCompleteQuery, parsetree);
 			}
 			break;
 
@@ -889,9 +897,9 @@ standard_ProcessUtility(Node *parsetree,
 			break;
 
 		case T_AlterDefaultPrivilegesStmt:
-			if (isCompleteQuery)
-				EventTriggerDDLCommandStart(parsetree);
+			EventTriggerDDLCommandStart(isCompleteQuery, parsetree);
 			ExecAlterDefaultPrivilegesStmt((AlterDefaultPrivilegesStmt *) parsetree);
+			EventTriggerDDLCommandEnd(isCompleteQuery, parsetree);
 			break;
 
 			/*
@@ -901,8 +909,7 @@ standard_ProcessUtility(Node *parsetree,
 			{
 				DefineStmt *stmt = (DefineStmt *) parsetree;
 
-				if (isCompleteQuery)
-					EventTriggerDDLCommandStart(parsetree);
+				EventTriggerDDLCommandStart(isCompleteQuery, parsetree);
 
 				switch (stmt->kind)
 				{
@@ -943,6 +950,7 @@ standard_ProcessUtility(Node *parsetree,
 							 (int) stmt->kind);
 						break;
 				}
+				EventTriggerDDLCommandEnd(isCompleteQuery, parsetree);
 			}
 			break;
 
@@ -950,55 +958,53 @@ standard_ProcessUtility(Node *parsetree,
 			{
 				CompositeTypeStmt *stmt = (CompositeTypeStmt *) parsetree;
 
-				if (isCompleteQuery)
-					EventTriggerDDLCommandStart(parsetree);
-
+				EventTriggerDDLCommandStart(isCompleteQuery, parsetree);
 				DefineCompositeType(stmt->typevar, stmt->coldeflist);
+				EventTriggerDDLCommandEnd(isCompleteQuery, parsetree);
 			}
 			break;
 
 		case T_CreateEnumStmt:	/* CREATE TYPE AS ENUM */
-			if (isCompleteQuery)
-				EventTriggerDDLCommandStart(parsetree);
+			EventTriggerDDLCommandStart(isCompleteQuery, parsetree);
 			DefineEnum((CreateEnumStmt *) parsetree);
+			EventTriggerDDLCommandEnd(isCompleteQuery, parsetree);
 			break;
 
 		case T_CreateRangeStmt:	/* CREATE TYPE AS RANGE */
-			if (isCompleteQuery)
-				EventTriggerDDLCommandStart(parsetree);
+			EventTriggerDDLCommandStart(isCompleteQuery, parsetree);
 			DefineRange((CreateRangeStmt *) parsetree);
+			EventTriggerDDLCommandEnd(isCompleteQuery, parsetree);
 			break;
 
 		case T_AlterEnumStmt:	/* ALTER TYPE (enum) */
-			if (isCompleteQuery)
-				EventTriggerDDLCommandStart(parsetree);
+			EventTriggerDDLCommandStart(isCompleteQuery, parsetree);
 			AlterEnum((AlterEnumStmt *) parsetree, isTopLevel);
+			EventTriggerDDLCommandEnd(isCompleteQuery, parsetree);
 			break;
 
 		case T_ViewStmt:		/* CREATE VIEW */
-			if (isCompleteQuery)
-				EventTriggerDDLCommandStart(parsetree);
+			EventTriggerDDLCommandStart(isCompleteQuery, parsetree);
 			DefineView((ViewStmt *) parsetree, queryString);
+			EventTriggerDDLCommandEnd(isCompleteQuery, parsetree);
 			break;
 
 		case T_CreateFunctionStmt:		/* CREATE FUNCTION */
-			if (isCompleteQuery)
-				EventTriggerDDLCommandStart(parsetree);
+			EventTriggerDDLCommandStart(isCompleteQuery, parsetree);
 			CreateFunction((CreateFunctionStmt *) parsetree, queryString);
+			EventTriggerDDLCommandEnd(isCompleteQuery, parsetree);
 			break;
 
 		case T_AlterFunctionStmt:		/* ALTER FUNCTION */
-			if (isCompleteQuery)
-				EventTriggerDDLCommandStart(parsetree);
+			EventTriggerDDLCommandStart(isCompleteQuery, parsetree);
 			AlterFunction((AlterFunctionStmt *) parsetree);
+			EventTriggerDDLCommandEnd(isCompleteQuery, parsetree);
 			break;
 
 		case T_IndexStmt:		/* CREATE INDEX */
 			{
 				IndexStmt  *stmt = (IndexStmt *) parsetree;
 
-				if (isCompleteQuery)
-					EventTriggerDDLCommandStart(parsetree);
+				EventTriggerDDLCommandStart(isCompleteQuery, parsetree);
 				if (stmt->concurrent)
 					PreventTransactionChain(isTopLevel,
 											"CREATE INDEX CONCURRENTLY");
@@ -1015,25 +1021,28 @@ standard_ProcessUtility(Node *parsetree,
 							true,		/* check_rights */
 							false,		/* skip_build */
 							false);		/* quiet */
+
+				if (!stmt->concurrent)
+					EventTriggerDDLCommandEnd(isCompleteQuery, parsetree);
 			}
 			break;
 
 		case T_RuleStmt:		/* CREATE RULE */
-			if (isCompleteQuery)
-				EventTriggerDDLCommandStart(parsetree);
+			EventTriggerDDLCommandStart(isCompleteQuery, parsetree);
 			DefineRule((RuleStmt *) parsetree, queryString);
+			EventTriggerDDLCommandEnd(isCompleteQuery, parsetree);
 			break;
 
 		case T_CreateSeqStmt:
-			if (isCompleteQuery)
-				EventTriggerDDLCommandStart(parsetree);
+			EventTriggerDDLCommandStart(isCompleteQuery, parsetree);
 			DefineSequence((CreateSeqStmt *) parsetree);
+			EventTriggerDDLCommandEnd(isCompleteQuery, parsetree);
 			break;
 
 		case T_AlterSeqStmt:
-			if (isCompleteQuery)
-				EventTriggerDDLCommandStart(parsetree);
+			EventTriggerDDLCommandStart(isCompleteQuery, parsetree);
 			AlterSequence((AlterSeqStmt *) parsetree);
+			EventTriggerDDLCommandEnd(isCompleteQuery, parsetree);
 			break;
 
 		case T_DoStmt:
@@ -1131,10 +1140,10 @@ standard_ProcessUtility(Node *parsetree,
 			break;
 
 		case T_CreateTableAsStmt:
-			if (isCompleteQuery)
-				EventTriggerDDLCommandStart(parsetree);
+			EventTriggerDDLCommandStart(isCompleteQuery, parsetree);
 			ExecCreateTableAs((CreateTableAsStmt *) parsetree,
 							  queryString, params, completionTag);
+			EventTriggerDDLCommandEnd(isCompleteQuery, parsetree);
 			break;
 
 		case T_VariableSetStmt:
@@ -1156,10 +1165,10 @@ standard_ProcessUtility(Node *parsetree,
 			break;
 
 		case T_CreateTrigStmt:
-			if (isCompleteQuery)
-				EventTriggerDDLCommandStart(parsetree);
+			EventTriggerDDLCommandStart(isCompleteQuery, parsetree);
 			(void) CreateTrigger((CreateTrigStmt *) parsetree, queryString,
 								 InvalidOid, InvalidOid, false);
+			EventTriggerDDLCommandEnd(isCompleteQuery, parsetree);
 			break;
 
 		case T_CreateEventTrigStmt:
@@ -1173,18 +1182,18 @@ standard_ProcessUtility(Node *parsetree,
 			break;
 
 		case T_CreatePLangStmt:
-			if (isCompleteQuery)
-				EventTriggerDDLCommandStart(parsetree);
+			EventTriggerDDLCommandStart(isCompleteQuery, parsetree);
 			CreateProceduralLanguage((CreatePLangStmt *) parsetree);
+			EventTriggerDDLCommandEnd(isCompleteQuery, parsetree);
 			break;
 
 			/*
 			 * ******************************** DOMAIN statements ****
 			 */
 		case T_CreateDomainStmt:
-			if (isCompleteQuery)
-				EventTriggerDDLCommandStart(parsetree);
+			EventTriggerDDLCommandStart(isCompleteQuery, parsetree);
 			DefineDomain((CreateDomainStmt *) parsetree);
+			EventTriggerDDLCommandEnd(isCompleteQuery, parsetree);
 			break;
 
 			/*
@@ -1288,45 +1297,45 @@ standard_ProcessUtility(Node *parsetree,
 			break;
 
 		case T_CreateConversionStmt:
-			if (isCompleteQuery)
-				EventTriggerDDLCommandStart(parsetree);
+			EventTriggerDDLCommandStart(isCompleteQuery, parsetree);
 			CreateConversionCommand((CreateConversionStmt *) parsetree);
+			EventTriggerDDLCommandEnd(isCompleteQuery, parsetree);
 			break;
 
 		case T_CreateCastStmt:
-			if (isCompleteQuery)
-				EventTriggerDDLCommandStart(parsetree);
+			EventTriggerDDLCommandStart(isCompleteQuery, parsetree);
 			CreateCast((CreateCastStmt *) parsetree);
+			EventTriggerDDLCommandEnd(isCompleteQuery, parsetree);
 			break;
 
 		case T_CreateOpClassStmt:
-			if (isCompleteQuery)
-				EventTriggerDDLCommandStart(parsetree);
+			EventTriggerDDLCommandStart(isCompleteQuery, parsetree);
 			DefineOpClass((CreateOpClassStmt *) parsetree);
+			EventTriggerDDLCommandEnd(isCompleteQuery, parsetree);
 			break;
 
 		case T_CreateOpFamilyStmt:
-			if (isCompleteQuery)
-				EventTriggerDDLCommandStart(parsetree);
+			EventTriggerDDLCommandStart(isCompleteQuery, parsetree);
 			DefineOpFamily((CreateOpFamilyStmt *) parsetree);
+			EventTriggerDDLCommandEnd(isCompleteQuery, parsetree);
 			break;
 
 		case T_AlterOpFamilyStmt:
-			if (isCompleteQuery)
-				EventTriggerDDLCommandStart(parsetree);
+			EventTriggerDDLCommandStart(isCompleteQuery, parsetree);
 			AlterOpFamily((AlterOpFamilyStmt *) parsetree);
+			EventTriggerDDLCommandEnd(isCompleteQuery, parsetree);
 			break;
 
 		case T_AlterTSDictionaryStmt:
-			if (isCompleteQuery)
-				EventTriggerDDLCommandStart(parsetree);
+			EventTriggerDDLCommandStart(isCompleteQuery, parsetree);
 			AlterTSDictionary((AlterTSDictionaryStmt *) parsetree);
+			EventTriggerDDLCommandEnd(isCompleteQuery, parsetree);
 			break;
 
 		case T_AlterTSConfigurationStmt:
-			if (isCompleteQuery)
-				EventTriggerDDLCommandStart(parsetree);
+			EventTriggerDDLCommandStart(isCompleteQuery, parsetree);
 			AlterTSConfiguration((AlterTSConfigurationStmt *) parsetree);
+			EventTriggerDDLCommandEnd(isCompleteQuery, parsetree);
 			break;
 
 		default:

@@ -18,7 +18,9 @@
 
 typedef enum
 {
-	EVT_DDLCommandStart
+	EVT_DDLCommandStart,
+	EVT_DDLCommandEnd,
+	EVT_DDLCommandTrace
 } EventTriggerEvent;
 
 typedef struct

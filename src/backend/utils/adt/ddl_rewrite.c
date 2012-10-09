@@ -151,7 +151,7 @@ _rwDropStmt(EventTriggerData *trigdata)
 	bool first = true;
 
 	initStringInfo(&buf);
-	appendStringInfo(&buf, "%s ", trigdata->tag);
+	appendStringInfo(&buf, "%s ", trigdata->ctag->tag);
 
 	foreach(obj, node->objects)
 	{
@@ -511,14 +511,6 @@ _rwColConstraintElem(StringInfo buf, List *constraints, RangeVar *relation)
 				_rwOptConsTableSpace(buf, c->indexspace);
 				break;
 
-				/* FIXME: transformExpr only works with already existing
-				 * relations, as explained in tablecmds.c DefineRelation().
-				 * Won't work for ddl_command_start event triggers on CREATE
-				 * TABLE.
-				 *
-				 * Do we need to add some transform support of the raw parse
-				 * tree for non existing relations?
-				 */
 			case CONSTR_CHECK:
 			{
 				/*
@@ -1272,6 +1264,46 @@ _rwCreateSeqStmt(EventTriggerData *trigdata)
 	trigdata->objectname = node->sequence->relname;
 }
 
+/* get the work done */
+static void
+normalize_command_string(EventTriggerData *trigdata)
+{
+	/*
+	 * we need the big'o'switch here, and calling a specialized function per
+	 * utility statement nodetag.
+	 */
+	switch (nodeTag(trigdata->parsetree))
+	{
+		case T_DropStmt:
+			_rwDropStmt(trigdata);
+			break;
+
+		case T_CreateStmt:
+			_rwCreateStmt(trigdata);
+			break;
+
+		case T_AlterTableStmt:
+			_rwAlterTableStmt(trigdata);
+			break;
+
+		case T_ViewStmt:
+			_rwViewStmt(trigdata);
+			break;
+
+		case T_CreateExtensionStmt:
+			_rwCreateExtensionStmt(trigdata);
+			break;
+
+		case T_CreateSeqStmt:
+			_rwCreateSeqStmt(trigdata);
+			break;
+
+		default:
+			elog(DEBUG1, "unrecognized node type: %d",
+				 (int) nodeTag(trigdata->parsetree));
+	}
+}
+
 /*
  * get_event_trigger_data
  *
@@ -1282,65 +1314,36 @@ _rwCreateSeqStmt(EventTriggerData *trigdata)
  * of type Node *. We declare that a void * to avoid incompatible pointer type
  * warnings.
  *
- * This function sets the command context object id, name, type, the operation,
- * the schema name and the command string.
+ * This function sets the command context object name, type, the operation, the
+ * schema name and the command string.
  *
  */
 void
 get_event_trigger_data(EventTriggerData *trigdata)
 {
 	/*
-	 * we need the big'o'switch here, and calling a specialized function per
-	 * utility statement nodetag. Also, we could have a trigger on ANY command
-	 * firing, in that case we need to avoid trying to fill the CommandContext
-	 * for command we don't know how to back parse.
+	 * Only attempt to deparse the command string when we have enough context
+	 * to do so. That means ddl_command_start for DROP operations and
+	 * ddl_command_end for CREATE and ALTER operations.
 	 */
+	bool rewrite =
+		((trigdata->ctag->operation == COMMAND_TAG_CREATE
+		  || trigdata->ctag->operation == COMMAND_TAG_ALTER)
+		 && strcmp(trigdata->event, "ddl_command_end") == 0)
+		||
+		(trigdata->ctag->operation == COMMAND_TAG_DROP
+		 && strcmp(trigdata->event, "ddl_command_start") == 0);
+
+	/* initialize yet unknown pieces of information */
 	trigdata->command	 = NULL;
 	trigdata->schemaname = NULL;
 	trigdata->objectname = NULL;
-	trigdata->objectkind = NULL;
-	trigdata->operation	 = NULL;
 
-	switch (nodeTag(trigdata->parsetree))
+	/* TODO: add the main target object's OID */
+
+	if (rewrite)
 	{
-		case T_DropStmt:
-			trigdata->objectkind = "TABLE";
-			trigdata->operation = "DROP";
-			_rwDropStmt(trigdata);
-			break;
-
-		case T_CreateStmt:
-			trigdata->objectkind = "TABLE";
-			trigdata->operation = "CREATE";
-			_rwCreateStmt(trigdata);
-			break;
-
-		case T_AlterTableStmt:
-			trigdata->objectkind = "TABLE";
-			trigdata->operation = "ALTER";
-			_rwAlterTableStmt(trigdata);
-			break;
-
-		case T_ViewStmt:
-			trigdata->objectkind = "VIEW";
-			trigdata->operation = "CREATE";
-			_rwViewStmt(trigdata);
-			break;
-
-		case T_CreateExtensionStmt:
-			trigdata->objectkind = "EXTENSION";
-			trigdata->operation = "CREATE";
-			_rwCreateExtensionStmt(trigdata);
-			break;
-
-		case T_CreateSeqStmt:
-			trigdata->objectkind = "SEQUENCE";
-			trigdata->operation = "CREATE";
-			_rwCreateSeqStmt(trigdata);
-			break;
-
-		default:
-			elog(DEBUG1, "unrecognized node type: %d",
-				 (int) nodeTag(trigdata->parsetree));
+		/* that will also fill in schemaname and objectname */
+		normalize_command_string(trigdata);
 	}
 }

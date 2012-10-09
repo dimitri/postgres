@@ -7,7 +7,7 @@ ERROR:  function "pg_backend_pid" must return type "event_trigger"
 create function test_event_trigger() returns event_trigger as $$
 BEGIN
     RAISE NOTICE 'test_event_trigger: % %', tg_event, tg_tag;
-    RAISE NOTICE 'test_event_trigger: %, %', tg_operation, tg_kind;
+    RAISE NOTICE 'test_event_trigger: %, %', tg_operation, tg_obtypename;
     RAISE NOTICE 'test_event_trigger: %', tg_command;
 END
 $$ language plpgsql;
@@ -16,8 +16,16 @@ create event trigger regress_event_trigger on elephant_bootstrap
    execute procedure test_event_trigger();
 ERROR:  unrecognized event name "elephant_bootstrap"
 -- OK
-create event trigger regress_event_trigger on ddl_command_start
+create event trigger regress_event_trigger_start on ddl_command_start
    execute procedure test_event_trigger();
+create event trigger regress_event_trigger_trace on ddl_command_trace
+   when tag in ('create table')
+   execute procedure test_event_trigger();
+-- test creating an event trigger on ddl_command_end
+create event trigger regress_event_trigger_end on ddl_command_end
+   execute procedure test_event_trigger();
+-- but we won't actually use it
+drop event trigger regress_event_trigger_end;
 -- should fail, food is not a valid filter variable
 create event trigger regress_event_trigger2 on ddl_command_start
    when food in ('sandwhich')
@@ -48,9 +56,9 @@ create event trigger regress_event_trigger2 on ddl_command_start
    when tag in ('create table', 'CREATE FUNCTION')
    execute procedure test_event_trigger();
 -- OK
-comment on event trigger regress_event_trigger is 'test comment';
+comment on event trigger regress_event_trigger_start is 'test comment';
 -- should fail, event triggers are not schema objects
-comment on event trigger wrong.regress_event_trigger is 'test comment';
+comment on event trigger wrong.regress_event_trigger_start is 'test comment';
 ERROR:  event trigger name cannot be qualified
 -- drop as non-superuser should fail
 create role regression_bob;
@@ -61,29 +69,32 @@ ERROR:  permission denied to create event trigger "regress_event_trigger_noperms
 HINT:  Must be superuser to create an event trigger.
 reset role;
 -- all OK
-alter event trigger regress_event_trigger enable replica;
-alter event trigger regress_event_trigger enable always;
-alter event trigger regress_event_trigger enable;
-alter event trigger regress_event_trigger disable;
+alter event trigger regress_event_trigger_start enable replica;
+alter event trigger regress_event_trigger_start enable always;
+alter event trigger regress_event_trigger_start enable;
+alter event trigger regress_event_trigger_start disable;
 -- regress_event_trigger2 should fire, but not regress_event_trigger
 create table event_trigger_fire1 (a int);
 NOTICE:  test_event_trigger: ddl_command_start CREATE TABLE
+NOTICE:  test_event_trigger: CREATE, TABLE
+NOTICE:  test_event_trigger: <NULL>
+NOTICE:  test_event_trigger: ddl_command_end CREATE TABLE
 NOTICE:  test_event_trigger: CREATE, TABLE
 NOTICE:  test_event_trigger: CREATE TABLE public.event_trigger_fire1 (a pg_catalog.int4);
 -- but nothing should fire here
 drop table event_trigger_fire1;
 -- alter owner to non-superuser should fail
-alter event trigger regress_event_trigger owner to regression_bob;
-ERROR:  permission denied to change owner of event trigger "regress_event_trigger"
+alter event trigger regress_event_trigger_start owner to regression_bob;
+ERROR:  permission denied to change owner of event trigger "regress_event_trigger_start"
 HINT:  The owner of an event trigger must be a superuser.
 -- alter owner to superuser should work
 alter role regression_bob superuser;
-alter event trigger regress_event_trigger owner to regression_bob;
+alter event trigger regress_event_trigger_start owner to regression_bob;
 -- should fail, name collision
-alter event trigger regress_event_trigger rename to regress_event_trigger2;
+alter event trigger regress_event_trigger_start rename to regress_event_trigger2;
 ERROR:  event trigger "regress_event_trigger2" already exists
 -- OK
-alter event trigger regress_event_trigger rename to regress_event_trigger3;
+alter event trigger regress_event_trigger_start rename to regress_event_trigger3;
 -- should fail, doesn't exist any more
 drop event trigger regress_event_trigger;
 ERROR:  event trigger "regress_event_trigger" does not exist
@@ -96,5 +107,6 @@ drop event trigger if exists regress_event_trigger2;
 drop event trigger if exists regress_event_trigger2;
 NOTICE:  event trigger "regress_event_trigger2" does not exist, skipping
 drop event trigger regress_event_trigger3;
+drop event trigger regress_event_trigger_trace;
 drop function test_event_trigger();
 drop role regression_bob;
