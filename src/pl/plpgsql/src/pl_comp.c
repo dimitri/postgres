@@ -725,7 +725,7 @@ do_compile(FunctionCallInfo fcinfo,
 			function->tg_objectname_varno = var->dno;
 
 			/* Add the variable tg_kind */
-			var = plpgsql_build_variable("tg_kind", 0,
+			var = plpgsql_build_variable("tg_obtypename", 0,
 										 plpgsql_build_datatype(TEXTOID,
 																-1,
 											   function->fn_input_collation),
