@@ -558,6 +558,7 @@ standard_ProcessUtility(Node *parsetree,
 
 						AlterTableCreateToastTable(relOid, toast_options);
 
+						EventTriggerTargetOid = relOid;
 						EventTriggerDDLCommandEnd(isCompleteQuery, stmt);
 					}
 					else if (IsA(stmt, CreateForeignTableStmt))

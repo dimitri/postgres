@@ -514,23 +514,26 @@ _rwColConstraintElem(StringInfo buf, List *constraints, RangeVar *relation)
 			case CONSTR_CHECK:
 			{
 				/*
-				 * Create a dummy ParseState and insert the target relation as
-				 * its sole rangetable entry. We need a ParseState for
-				 * transformExpr.
+				 * as in AddRelationNewConstraints: Create a dummy ParseState
+				 * and insert the target relation as its sole rangetable entry.
+				 * We need a ParseState for transformExpr.
 				 */
-				Node       *expr;
-				char	   *consrc;
+				Node    *expr;
+				char	*consrc;
+				List	*dpcontext;
 				ParseState *pstate = make_parsestate(NULL);
 				RangeTblEntry *rte = addRangeTableEntry(pstate,
 														relation,
 														NULL, false, true);
 
-				/* no to join list, yes to namespaces */
-				addRTEtoQuery(pstate, rte, false, true, true);
+				addRTEtoQuery(pstate, rte, true, true, true);
 
 				/* deparse the constraint expression */
 				expr = cookConstraint(pstate, c->raw_expr, relation->relname);
-				consrc = deparse_expression(expr, NIL, false, false);
+
+				dpcontext = deparse_context_for(relation->relname,
+												EventTriggerTargetOid);
+				consrc = deparse_expression(expr, dpcontext, false, false);
 
 				appendStringInfo(buf, " CHECK (%s)", consrc);
 				break;
@@ -538,27 +541,40 @@ _rwColConstraintElem(StringInfo buf, List *constraints, RangeVar *relation)
 
 			case CONSTR_DEFAULT:
 			{
-				/*
-				 * Create a dummy ParseState and insert the target relation as
-				 * its sole rangetable entry. We need a ParseState for
-				 * transformExpr.
-				 */
-				Node       *expr;
-				char	   *consrc;
-				ParseState *pstate = make_parsestate(NULL);
-				RangeTblEntry *rte = addRangeTableEntry(pstate,
-														relation,
-														NULL, false, true);
+				/* SERIAL columns will fill in an empty default */
+				if (c->cooked_expr)
+				{
+					List		*dpcontext;
+					Node		*expr = (Node *)stringToNode(c->cooked_expr);
+					char		*consrc;
 
-				/* no to join list, yes to namespaces */
-				addRTEtoQuery(pstate, rte, false, true, true);
+					dpcontext = deparse_context_for(relation->relname,
+													EventTriggerTargetOid);
+					consrc = deparse_expression(expr, dpcontext, false, false);
 
-				/* deparse the constraint expression */
-				expr = cookDefault(pstate, c->raw_expr,
-								   InvalidOid, -1, NULL);
-				consrc = deparse_expression(c->raw_expr, NIL, false, false);
+					appendStringInfo(buf, " DEFAULT %s", consrc);
+				}
+				else if (c->raw_expr)
+				{
+					Node    *expr;
+					char	*consrc;
+					List	*dpcontext;
+					ParseState *pstate = make_parsestate(NULL);
+					RangeTblEntry *rte = addRangeTableEntry(pstate,
+															relation,
+															NULL, false, true);
 
-				appendStringInfo(buf, " DEFAULT %s", consrc);
+					addRTEtoQuery(pstate, rte, true, true, true);
+
+					/* deparse the constraint expression */
+					expr = cookDefault(pstate, c->raw_expr, InvalidOid, -1, NULL);
+
+					dpcontext = deparse_context_for(relation->relname,
+													EventTriggerTargetOid);
+					consrc = deparse_expression(expr, dpcontext, false, false);
+
+					appendStringInfo(buf, " DEFAULT %s", consrc);
+				}
 				break;
 			}
 

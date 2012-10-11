@@ -39,6 +39,9 @@
 #include "utils/syscache.h"
 #include "tcop/utility.h"
 
+/* Globally visible state variables */
+Oid	EventTriggerTargetOid = InvalidOid;
+
 typedef struct
 {
 	const char	   *obtypename;
