@@ -17,6 +17,14 @@
 #include "nodes/parsenodes.h"
 
 /*
+ * Deparsing CHECK and DEFAULT constraints on a relation need that the relation
+ * exists in the catalogs and that we have its Oid. We also want to be able to
+ * fill in the Oid of the main object target of a command, when it's relevant,
+ * to use in the Event Trigger user code.
+ */
+extern Oid	EventTriggerTargetOid;
+
+/*
  * Several steps of event trigger processing need to see through the command
  * tag in order to decide what to do next. The first part of the command tag is
  * CREATE, ALTER, DROP or some other specialized command, and the second part
