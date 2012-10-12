@@ -597,14 +597,16 @@ _rwColConstraintElem(StringInfo buf, List *constraints, RangeVar *relation)
 	}
 }
 
+/*
+ * rewrite a list of ConstraintAttr: grammar production
+ */
 static void
-_rwConstAttr(StringInfo buf, List *constraints, const char *relname)
+_rwConstAttr(StringInfo buf, List *constraints, RangeVar *relation)
 {
 	ListCell   *lc;
 
 	foreach(lc, constraints)
 	{
-		/* match against the ConstraintAttr: grammar production */
 		Constraint *c = (Constraint *) lfirst(lc);
 		Assert(IsA(c, Constraint));
 
@@ -614,9 +616,27 @@ _rwConstAttr(StringInfo buf, List *constraints, const char *relname)
 		switch (c->contype)
 		{
 			case CONSTR_CHECK:
-				/* see previous function's FIXME comment */
-				elog(WARNING, "Check is not supported yet");
+			{
+				Node    *expr;
+				char	*consrc;
+				List	*dpcontext;
+				ParseState *pstate = make_parsestate(NULL);
+				RangeTblEntry *rte = addRangeTableEntry(pstate,
+														relation,
+														NULL, false, true);
+
+				addRTEtoQuery(pstate, rte, true, true, true);
+
+				/* deparse the constraint expression */
+				expr = cookConstraint(pstate, c->raw_expr, relation->relname);
+
+				dpcontext = deparse_context_for(relation->relname,
+												EventTriggerTargetOid);
+				consrc = deparse_expression(expr, dpcontext, false, false);
+
+				appendStringInfo(buf, " CHECK (%s)", consrc);
 				break;
+			}
 
 			case CONSTR_UNIQUE:
 				appendStringInfo(buf, " UNIQUE");
@@ -792,7 +812,7 @@ _rwOptTableElementList(StringInfo buf, List *tableElts, RangeVar *relation)
 			case T_Constraint:
 			{
 				Constraint  *c = (Constraint *) elmt;
-				_rwConstAttr(buf, list_make1(c), relation->relname);
+				_rwConstAttr(buf, list_make1(c), relation);
 				break;
 			}
 			default:
@@ -830,7 +850,7 @@ _rwOptTypedTableElementList(StringInfo buf, List *tableElts, RangeVar *relation)
 			case T_Constraint:
 			{
 				Constraint  *c = (Constraint *) elmt;
-				_rwConstAttr(buf, list_make1(c), relation->relname);
+				_rwConstAttr(buf, list_make1(c), relation);
 				break;
 			}
 			default:
@@ -944,7 +964,8 @@ _rwCreateStmt(EventTriggerData *trigdata)
 	}
 	else
 	{
-		_rwOptTableElementList(&buf, node->tableElts, node->relation);
+		List *elts = list_concat(node->tableElts, node->constraints);
+		_rwOptTableElementList(&buf, elts, node->relation);
 		_rwOptInherit(&buf, node->inhRelations);
 		_rwOptWith(&buf, node->options);
 		_rwOnCommitOption(&buf, node->oncommit);
