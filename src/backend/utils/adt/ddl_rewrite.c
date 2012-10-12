@@ -884,6 +884,40 @@ _rwOptInherit(StringInfo buf, List *inhRelations)
 }
 
 /*
+ * rewrite reloptions: parser production
+ */
+static void
+_rwRelOptions(StringInfo buf, List *options, bool null_is_true)
+{
+	bool        first = true;
+	ListCell   *lc;
+
+	foreach(lc, options)
+	{
+		DefElem    *def = (DefElem *) lfirst(lc);
+		const char *value;
+
+		_maybeAddSeparator(buf, ", ", &first);
+
+		if (def->arg != NULL)
+		{
+			/* ALTER TABLE ... SET (defname = value) */
+			value = defGetString(def);
+			appendStringInfo(buf, "%s=%s", def->defname, value);
+		}
+		else
+		{
+			if (null_is_true)
+				/* ALTER TABLE ... SET (defname = true) */
+				appendStringInfo(buf, "%s=true", def->defname);
+			else
+				/* ALTER TABLE ... RESET (defname) */
+				appendStringInfo(buf, "%s", def->defname);
+		}
+	}
+}
+
+/*
  * rewrite OptWith: parser production
  */
 static void
@@ -891,21 +925,8 @@ _rwOptWith(StringInfo buf, List *options)
 {
 	if (options)
 	{
-		ListCell   *lc;
 		appendStringInfoString(buf, " WITH (");
-
-		foreach(lc, options)
-		{
-			DefElem    *def = (DefElem *) lfirst(lc);
-			const char *value;
-
-			if (def->arg != NULL)
-				value = defGetString(def);
-			else
-				value = "true";
-
-			appendStringInfo(buf, " %s=%s", def->defname, value);
-		}
+		_rwRelOptions(buf, options, true);
 		appendStringInfoString(buf, " )");
 	}
 }
@@ -1093,6 +1114,8 @@ _rwAlterTableStmt(EventTriggerData *trigdata)
 				break;
 
 			case AT_AlterColumnGenericOptions:	/* alter column OPTIONS (...) */
+				appendStringInfo(&buf, " OPTIONS (");
+				appendStringInfoChar(&buf, ')');
 				break;
 
 			case AT_ChangeOwner:			/* change owner */
@@ -1112,9 +1135,15 @@ _rwAlterTableStmt(EventTriggerData *trigdata)
 				break;
 
 			case AT_SetRelOptions:			/* SET (...) -- AM specific parameters */
+				appendStringInfo(&buf, " SET (");
+				_rwRelOptions(&buf, (List *)cmd->def, true);
+				appendStringInfoChar(&buf, ')');
 				break;
 
 			case AT_ResetRelOptions:		/* RESET (...) -- AM specific parameters */
+				appendStringInfo(&buf, " RESET (");
+				_rwRelOptions(&buf, (List *)cmd->def, false);
+				appendStringInfoChar(&buf, ')');
 				break;
 
 			case AT_EnableTrig:				/* ENABLE TRIGGER name */
