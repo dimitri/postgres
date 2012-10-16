@@ -98,8 +98,10 @@ static event_trigger_command_tag_check_result check_ddl_tag(const char *tag);
 static void error_duplicate_filter_variable(const char *defname);
 static Datum filter_list_to_array(List *filterlist);
 static Oid insert_event_trigger_tuple(char *trigname, char *eventname,
-									  Oid evtOwner, Oid funcoid, List *tags);
+									  Oid evtOwner, Oid funcoid,
+									   List *tags, List *contexts);
 static void validate_ddl_tags(const char *filtervar, List *taglist);
+static void validate_ddl_contexts(const char *filtervar, List *ctxlist);
 static void EventTriggerInvoke(List *fn_oid_list, EventTriggerData *trigdata);
 
 /*
@@ -114,6 +116,7 @@ CreateEventTrigger(CreateEventTrigStmt *stmt)
 	Oid			evtowner = GetUserId();
 	ListCell   *lc;
 	List	   *tags = NULL;
+	List	   *contexts = NULL;
 
 	/*
 	 * It would be nice to allow database owners or even regular users to do
@@ -147,6 +150,12 @@ CreateEventTrigger(CreateEventTrigStmt *stmt)
 				error_duplicate_filter_variable(def->defname);
 			tags = (List *) def->arg;
 		}
+		else if (strcmp(def->defname, "context") == 0)
+		{
+			if (contexts != NULL)
+				error_duplicate_filter_variable(def->defname);
+			contexts = (List *) def->arg;
+		}
 		else
 			ereport(ERROR,
 				(errcode(ERRCODE_SYNTAX_ERROR),
@@ -154,8 +163,11 @@ CreateEventTrigger(CreateEventTrigStmt *stmt)
 	}
 
 	/* Validate tag list, if any. */
-	if (strcmp(stmt->eventname, "ddl_command_start") == 0 && tags != NULL)
+	if (strncmp(stmt->eventname, "ddl_command_", 12) == 0 && tags != NULL)
 		validate_ddl_tags("tag", tags);
+
+	if (strncmp(stmt->eventname, "ddl_command_", 12) == 0 && contexts != NULL)
+		validate_ddl_contexts("context", contexts);
 
 	/*
 	 * Give user a nice error message if an event trigger of the same name
@@ -179,7 +191,7 @@ CreateEventTrigger(CreateEventTrigStmt *stmt)
 
 	/* Insert catalog entries. */
 	return insert_event_trigger_tuple(stmt->trigname, stmt->eventname,
-									  evtowner, funcoid, tags);
+									  evtowner, funcoid, tags, contexts);
 }
 
 /*
@@ -207,6 +219,30 @@ validate_ddl_tags(const char *filtervar, List *taglist)
 				 /* translator: %s represents an SQL statement name */
 				 errmsg("event triggers are not supported for \"%s\"",
 					tag)));
+	}
+}
+
+/*
+ * Validate DDL command contexts: there's no recognized but not supported
+ * values, so the implementation is straightforward.
+ */
+static void
+validate_ddl_contexts(const char *filtervar, List *ctxlist)
+{
+	ListCell   *lc;
+
+	foreach (lc, ctxlist)
+	{
+		const char *context = strVal(lfirst(lc));
+
+		if (!(pg_strcasecmp(context, "TOPLEVEL") == 0
+			  || pg_strcasecmp(context, "QUERY") == 0
+			  || pg_strcasecmp(context, "SUBCOMMAND") == 0
+			  || pg_strcasecmp(context, "GENERATED") == 0))
+			ereport(ERROR,
+					(errcode(ERRCODE_SYNTAX_ERROR),
+					 errmsg("filter value \"%s\" not recognized for filter variable \"%s\"",
+						context, filtervar)));
 	}
 }
 
@@ -306,7 +342,7 @@ error_duplicate_filter_variable(const char *defname)
  */
 static Oid
 insert_event_trigger_tuple(char *trigname, char *eventname, Oid evtOwner,
-						   Oid funcoid, List *taglist)
+						   Oid funcoid, List *taglist, List *contexts)
 {
 	Relation tgrel;
 	Oid         trigoid;
@@ -331,6 +367,16 @@ insert_event_trigger_tuple(char *trigname, char *eventname, Oid evtOwner,
 	else
 		values[Anum_pg_event_trigger_evttags - 1] =
 			filter_list_to_array(taglist);
+	if (contexts == NIL)
+	{
+		/* The default context is forced to TOPLEVEL */
+		contexts = list_make1(makeString(pstrdup("TOPLEVEL")));
+		values[Anum_pg_event_trigger_evtctxs - 1] =
+			filter_list_to_array(contexts);
+	}
+	else
+		values[Anum_pg_event_trigger_evtctxs - 1] =
+			filter_list_to_array(contexts);
 
 	/* Insert heap tuple. */
 	tuple = heap_form_tuple(tgrel->rd_att, values, nulls);
@@ -622,7 +668,9 @@ get_event_trigger_oid(const char *trigname, bool missing_ok)
  * tags matching.
  */
 static bool
-filter_event_trigger(const char **tag, EventTriggerCacheItem  *item)
+filter_event_trigger(ProcessUtilityContext context,
+					 const char **tag,
+					 EventTriggerCacheItem  *item)
 {
 	/*
 	 * Filter by session replication role, knowing that we never see disabled
@@ -645,6 +693,31 @@ filter_event_trigger(const char **tag, EventTriggerCacheItem  *item)
 				   sizeof(char *), pg_qsort_strcmp) == NULL)
 		return false;
 
+	/* Filter by context, if any were specified */
+	if (item->nctxs != 0)
+	{
+		char *ctxstr;
+
+		switch (context)
+		{
+			case PROCESS_UTILITY_TOPLEVEL:
+				ctxstr = "TOPLEVEL";
+				break;
+			case PROCESS_UTILITY_QUERY:
+				ctxstr = "QUERY";
+				break;
+			case PROCESS_UTILITY_SUBCOMMAND:
+				ctxstr = "SUBCOMMAND";
+				break;
+			case PROCESS_UTILITY_GENERATED:
+				ctxstr = "GENERATED";
+				break;
+		}
+		if (bsearch(&ctxstr, item->context, item->nctxs,
+					sizeof(char *), pg_qsort_strcmp) == NULL)
+			return false;
+	}
+
 	/* if we reach that point, we're not filtering out this item */
 	return true;
 }
@@ -656,21 +729,40 @@ filter_event_trigger(const char **tag, EventTriggerCacheItem  *item)
  * publish for all supported events.
  */
 static void
-build_event_trigger_data(EventTriggerData *trigdata, const char *event,
-						 Node *parsetree, CommandTag *ctag)
+build_event_trigger_data(EventTriggerData *trigdata,
+						 const char *event,
+						 Node *parsetree,
+						 CommandTag *ctag,
+						 ProcessUtilityContext context)
 
 {
 	trigdata->type		= T_EventTriggerData;
 	trigdata->event		= (char *)event;
 	trigdata->parsetree = parsetree;
 	trigdata->ctag		= ctag;
+
+	switch (context)
+	{
+		case PROCESS_UTILITY_TOPLEVEL:
+			trigdata->context = "TOPLEVEL";
+			break;
+		case PROCESS_UTILITY_QUERY:
+			trigdata->context = "QUERY";
+			break;
+		case PROCESS_UTILITY_SUBCOMMAND:
+			trigdata->context = "SUBCOMMAND";
+			break;
+		case PROCESS_UTILITY_GENERATED:
+			trigdata->context = "GENERATED";
+			break;
+	}
 }
 
 /*
  * Fire ddl_command_start triggers.
  */
 void
-EventTriggerDDLCommandStart(bool isCompleteQuery, Node *parsetree)
+EventTriggerDDLCommandStart(Node *parsetree, ProcessUtilityContext context)
 {
 	List	   *cachelist, *trace_cachelist;
 	List	   *runlist = NIL;
@@ -699,12 +791,16 @@ EventTriggerDDLCommandStart(bool isCompleteQuery, Node *parsetree)
 		return;
 
 	/*
-	 * Current policy for Event Triggers is to only fire for complete Queries,
-	 * avoiding e.g. create sequence commands run as part of defining a serial
-	 * column.
+	 * If we wanted to pre-filter event triggers based on context, we would do
+	 * it here. As of now, all contexts are interesting for different reasons:
+	 *
+	 *	PROCESS_UTILITY_TOPLEVEL   is the default
+	 *  PROCESS_UTILITY_QUERY      is used in extensions scripts
+	 *  PROCESS_UTILITY_SUBCOMMAND is used in CREATE SCHEMA ...
+	 * 	PROCESS_UTILITY_GENERATED  is used for serial and unique indexes etc
+	 *
+	 * So we let the user pick his own poison here.
 	 */
-	if (!isCompleteQuery)
-		return;
 
 	/*
 	 * We want the list of command tags for which this procedure is actually
@@ -752,7 +848,7 @@ EventTriggerDDLCommandStart(bool isCompleteQuery, Node *parsetree)
 	{
 		EventTriggerCacheItem  *item = lfirst(lc);
 
-		if (filter_event_trigger(&tag, item))
+		if (filter_event_trigger(context, &tag, item))
 			runlist = lappend_oid(runlist, item->fnoid);
 	}
 
@@ -765,13 +861,14 @@ EventTriggerDDLCommandStart(bool isCompleteQuery, Node *parsetree)
 		EventTriggerCacheItem  *item = lfirst(lc);
 
 		if (ctag->operation == COMMAND_TAG_DROP
-			&& filter_event_trigger(&tag, item))
+			&& filter_event_trigger(context, &tag, item))
 
 			runlist = lappend_oid(runlist, item->fnoid);
 	}
 
 	/* Construct event trigger data. */
-	build_event_trigger_data(&trigdata, "ddl_command_start", parsetree, ctag);
+	build_event_trigger_data(&trigdata, "ddl_command_start",
+							 parsetree, ctag, context);
 
 	/*
 	 * Get some more context data, such as the kind of object which is the
@@ -792,7 +889,7 @@ EventTriggerDDLCommandStart(bool isCompleteQuery, Node *parsetree)
  * Fire ddl_command_end triggers.
  */
 void
-EventTriggerDDLCommandEnd(bool isCompleteQuery, Node *parsetree)
+EventTriggerDDLCommandEnd(Node *parsetree, ProcessUtilityContext context)
 {
 	List	   *cachelist, *trace_cachelist;
 	List	   *runlist = NIL;
@@ -801,8 +898,10 @@ EventTriggerDDLCommandEnd(bool isCompleteQuery, Node *parsetree)
 	CommandTag *ctag;
 	EventTriggerData	trigdata;
 
-	if (!isCompleteQuery)
-		return;
+	/*
+	 * See EventTriggerDDLCommandStart for a discussion about filtering on
+	 * context before the user has a change to do so
+	 */
 
 	/* Use cache to find triggers for this event; fast exit if none. */
 	cachelist = EventCacheLookup(EVT_DDLCommandEnd);
@@ -819,7 +918,7 @@ EventTriggerDDLCommandEnd(bool isCompleteQuery, Node *parsetree)
 	{
 		EventTriggerCacheItem  *item = lfirst(lc);
 
-		if (filter_event_trigger(&tag, item))
+		if (filter_event_trigger(context, &tag, item))
 			runlist = lappend_oid(runlist, item->fnoid);
 	}
 
@@ -833,13 +932,14 @@ EventTriggerDDLCommandEnd(bool isCompleteQuery, Node *parsetree)
 
 		if ((ctag->operation == COMMAND_TAG_ALTER
 			 || ctag->operation == COMMAND_TAG_CREATE)
-			&& filter_event_trigger(&tag, item))
+			&& filter_event_trigger(context, &tag, item))
 
 			runlist = lappend_oid(runlist, item->fnoid);
 	}
 
 	/* Construct event trigger data. */
-	build_event_trigger_data(&trigdata, "ddl_command_end", parsetree, ctag);
+	build_event_trigger_data(&trigdata, "ddl_command_end",
+							 parsetree, ctag, context);
 
 	/* Get some more context data, some specific to the event */
 	get_event_trigger_data(&trigdata);

@@ -2972,7 +2972,7 @@ listEventTriggers(const char *pattern, bool verbose)
 	PGresult   *res;
 	printQueryOpt myopt = pset.popt;
 	static const bool translate_columns[] =
-		{false, false, false, true, false, false, false};
+		{false, false, false, true, false, false, false, false};
 
 	initPQExpBuffer(&buf);
 
@@ -2986,13 +2986,16 @@ listEventTriggers(const char *pattern, bool verbose)
 					  "  when 'D' then 'disabled' end as  \"%s\", "
 					  "e.evtfoid::regproc as \"%s\", "
 					  "array_to_string(array(select x "
-					  "      from unnest(evttags) as t(x)), ', ') as  \"%s\" ",
+					  "      from unnest(evttags) as t(x)), ', ') as  \"%s\", "
+					  "array_to_string(array(select x "
+					  "      from unnest(evtctxs) as t(x)), ', ') as  \"%s\" ",
 					  gettext_noop("Name"),
 					  gettext_noop("Event"),
 					  gettext_noop("Owner"),
 					  gettext_noop("Enabled"),
 					  gettext_noop("Procedure"),
-					  gettext_noop("Tags"));
+					  gettext_noop("Tags"),
+					  gettext_noop("Contexts"));
 	if (verbose)
 		appendPQExpBuffer(&buf,
 						  ",\npg_catalog.obj_description(e.oid, 'pg_event_trigger') as \"%s\"",
