@@ -1226,20 +1226,15 @@ _rwAlterTableStmt(EventTriggerData *trigdata)
 	trigdata->objectname = node->relation->relname;
 }
 
+/*
+ * rewrite OptSeqOptList: parser production
+ */
 static void
-_rwCreateSeqStmt(EventTriggerData *trigdata)
+_rwOptSeqOptList(StringInfo buf, List *options)
 {
-	CreateSeqStmt *node = (CreateSeqStmt *)trigdata->parsetree;
-	StringInfoData buf;
 	ListCell *opt;
 
-	initStringInfo(&buf);
-	appendStringInfo(&buf, "CREATE ");
-	_rwRelPersistence(&buf, node->sequence->relpersistence);
-	appendStringInfo(&buf, " SEQUENCE");
-
-	/* OptSeqOptList */
-	foreach(opt, node->options)
+	foreach(opt, options)
 	{
 		DefElem    *defel = (DefElem *) lfirst(opt);
 
@@ -1248,21 +1243,21 @@ _rwCreateSeqStmt(EventTriggerData *trigdata)
 			char		num[100];
 
 			snprintf(num, sizeof(num), INT64_FORMAT, defGetInt64(defel));
-			appendStringInfo(&buf, " CACHE %s", num);
+			appendStringInfo(buf, " CACHE %s", num);
 		}
 		else if (strcmp(defel->defname, "cycle") == 0)
 		{
 			if (intVal(defel))
-				appendStringInfo(&buf, " CYCLE");
+				appendStringInfo(buf, " CYCLE");
 			else
-				appendStringInfo(&buf, " NO CYCLE");
+				appendStringInfo(buf, " NO CYCLE");
 		}
 		else if (strcmp(defel->defname, "increment") == 0)
 		{
 			char		num[100];
 
 			snprintf(num, sizeof(num), INT64_FORMAT, defGetInt64(defel));
-			appendStringInfo(&buf, " INCREMENT BY %s", num);
+			appendStringInfo(buf, " INCREMENT BY %s", num);
 		}
 		else if (strcmp(defel->defname, "maxvalue") == 0)
 		{
@@ -1271,10 +1266,10 @@ _rwCreateSeqStmt(EventTriggerData *trigdata)
 				char		num[100];
 
 				snprintf(num, sizeof(num), INT64_FORMAT, defGetInt64(defel));
-				appendStringInfo(&buf, " MAXVALUE %s", num);
+				appendStringInfo(buf, " MAXVALUE %s", num);
 			}
 			else
-				appendStringInfo(&buf, " NO MAXVALUE");
+				appendStringInfo(buf, " NO MAXVALUE");
 		}
 		else if (strcmp(defel->defname, "minvalue") == 0)
 		{
@@ -1283,10 +1278,10 @@ _rwCreateSeqStmt(EventTriggerData *trigdata)
 				char		num[100];
 
 				snprintf(num, sizeof(num), INT64_FORMAT, defGetInt64(defel));
-				appendStringInfo(&buf, " MINVALUE %s", num);
+				appendStringInfo(buf, " MINVALUE %s", num);
 			}
 			else
-				appendStringInfo(&buf, " NO MINVALUE");
+				appendStringInfo(buf, " NO MINVALUE");
 		}
 		else if (strcmp(defel->defname, "owned_by") == 0)
 		{
@@ -1300,7 +1295,7 @@ _rwCreateSeqStmt(EventTriggerData *trigdata)
 			attrname = strVal(lfirst(list_tail(owned_by)));
 			rel = makeRangeVarFromNameList(relname);
 
-			appendStringInfo(&buf, " OWNED BY %s.%s",
+			appendStringInfo(buf, " OWNED BY %s.%s",
 							 RangeVarToString(rel), attrname);
 		}
 		else if (strcmp(defel->defname, "start") == 0)
@@ -1308,7 +1303,7 @@ _rwCreateSeqStmt(EventTriggerData *trigdata)
 			char		num[100];
 
 			snprintf(num, sizeof(num), INT64_FORMAT, defGetInt64(defel));
-			appendStringInfo(&buf, " START WITH %s", num);
+			appendStringInfo(buf, " START WITH %s", num);
 		}
 		else if (strcmp(defel->defname, "restart") == 0)
 		{
@@ -1317,12 +1312,49 @@ _rwCreateSeqStmt(EventTriggerData *trigdata)
 				char		num[100];
 
 				snprintf(num, sizeof(num), INT64_FORMAT, defGetInt64(defel));
-				appendStringInfo(&buf, " RESTART WITH %s", num);
+				appendStringInfo(buf, " RESTART WITH %s", num);
 			}
 			else
-				appendStringInfo(&buf, " RESTART");
+				appendStringInfo(buf, " RESTART");
 		}
 	}
+}
+
+/*
+ * rewrite CreateSeqStmt: parser production
+ */
+static void
+_rwCreateSeqStmt(EventTriggerData *trigdata)
+{
+	CreateSeqStmt *node = (CreateSeqStmt *)trigdata->parsetree;
+	StringInfoData buf;
+
+	initStringInfo(&buf);
+	appendStringInfo(&buf, "CREATE ");
+	_rwRelPersistence(&buf, node->sequence->relpersistence);
+	appendStringInfo(&buf, "SEQUENCE %s ", RangeVarToString(node->sequence));
+	_rwOptSeqOptList(&buf, node->options);
+	appendStringInfoChar(&buf, ';');
+
+	trigdata->command = buf.data;
+	trigdata->schemaname = RangeVarGetNamespace(node->sequence);
+	trigdata->objectname = node->sequence->relname;
+}
+
+/*
+ * rewrite AlterSeqStmt: parser production
+ */
+static void
+_rwAlterSeqStmt(EventTriggerData *trigdata)
+{
+	AlterSeqStmt *node = (AlterSeqStmt *)trigdata->parsetree;
+	StringInfoData buf;
+
+	initStringInfo(&buf);
+	appendStringInfo(&buf, "ALTER SEQUENCE%s %s",
+					 node->missing_ok? " IF EXISTS": "",
+					 RangeVarToString(node->sequence));
+	_rwOptSeqOptList(&buf, node->options);
 	appendStringInfoChar(&buf, ';');
 
 	trigdata->command = buf.data;
@@ -1350,6 +1382,10 @@ normalize_command_string(EventTriggerData *trigdata)
 
 		case T_AlterTableStmt:
 			_rwAlterTableStmt(trigdata);
+			break;
+
+		case T_AlterSeqStmt:
+			_rwAlterSeqStmt(trigdata);
 			break;
 
 		case T_ViewStmt:
