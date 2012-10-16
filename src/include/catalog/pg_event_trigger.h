@@ -38,6 +38,7 @@ CATALOG(pg_event_trigger,3466)
 								 * session_replication_role */
 #ifdef CATALOG_VARLEN
 	text        evttags[1];		/* command TAGs this event trigger targets */
+	text        evtctxs[1];		/* command CONTEXTs this event trigger targets */
 #endif
 } FormData_pg_event_trigger;
 
@@ -59,5 +60,6 @@ typedef FormData_pg_event_trigger *Form_pg_event_trigger;
 #define Anum_pg_event_trigger_evtfoid			4
 #define Anum_pg_event_trigger_evtenabled		5
 #define Anum_pg_event_trigger_evttags			6
+#define Anum_pg_event_trigger_evtctxs			7
 
 #endif   /* PG_EVENT_TRIGGER_H */

@@ -15,6 +15,7 @@
 
 #include "catalog/pg_event_trigger.h"
 #include "nodes/parsenodes.h"
+#include "tcop/utility.h"
 
 /*
  * Deparsing CHECK and DEFAULT constraints on a relation need that the relation
@@ -57,6 +58,7 @@ typedef struct EventTriggerData
 	char	   *event;				/* event name */
 	Node	   *parsetree;			/* parse tree */
 	CommandTag *ctag;				/* command tag */
+	char       *context;			/* ProcessUtilityContext */
 	char	   *schemaname;			/* schema name of the object */
 	char	   *objectname;			/* object name */
 	char	   *command;			/* deparsed command string */
@@ -79,7 +81,9 @@ extern Oid AlterEventTriggerOwner(const char *name, Oid newOwnerId);
 extern void AlterEventTriggerOwner_oid(Oid, Oid newOwnerId);
 
 extern bool EventTriggerSupportsObjectType(ObjectType obtype);
-extern void EventTriggerDDLCommandStart(bool isCompleteQuery, Node *parsetree);
-extern void EventTriggerDDLCommandEnd(bool isCompleteQuery, Node *parsetree);
+extern void EventTriggerDDLCommandStart(Node *parsetree,
+										ProcessUtilityContext context);
+extern void EventTriggerDDLCommandEnd(Node *parsetree,
+									  ProcessUtilityContext context);
 
 #endif   /* EVENT_TRIGGER_H */

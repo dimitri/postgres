@@ -708,6 +708,14 @@ do_compile(FunctionCallInfo fcinfo,
 										 true);
 			function->tg_tag_varno = var->dno;
 
+			/* Add the variable tg_context */
+			var = plpgsql_build_variable("tg_context", 0,
+										 plpgsql_build_datatype(TEXTOID,
+																-1,
+											   function->fn_input_collation),
+										 true);
+			function->tg_context_varno = var->dno;
+
 			/* Add the variable tg_schemaname */
 			var = plpgsql_build_variable("tg_schemaname", 0,
 										 plpgsql_build_datatype(TEXTOID,

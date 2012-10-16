@@ -6,7 +6,7 @@ create event trigger regress_event_trigger
 -- OK
 create function test_event_trigger() returns event_trigger as $$
 BEGIN
-    RAISE NOTICE 'test_event_trigger: % %', tg_event, tg_tag;
+    RAISE NOTICE 'test_event_trigger: % % %', tg_event, tg_context, tg_tag;
     RAISE NOTICE 'test_event_trigger: %, %', tg_operation, tg_obtypename;
     RAISE NOTICE 'test_event_trigger: %', tg_command;
 END
@@ -26,6 +26,7 @@ create event trigger regress_event_trigger_trace on ddl_command_trace
 
 -- test creating an event trigger on ddl_command_end
 create event trigger regress_event_trigger_end on ddl_command_end
+   when context in ('toplevel', 'generated')
    execute procedure test_event_trigger();
 
 -- but we won't actually use it
@@ -41,9 +42,19 @@ create event trigger regress_event_trigger2 on ddl_command_start
    when tag in ('sandwhich')
    execute procedure test_event_trigger();
 
+-- should fail, sandwhich is not a valid command context either
+create event trigger regress_event_trigger2 on ddl_command_start
+   when context in ('sandwhich')
+   execute procedure test_event_trigger();
+
 -- should fail, create skunkcabbage is not a valid comand tag
 create event trigger regress_event_trigger2 on ddl_command_start
    when tag in ('create table', 'create skunkcabbage')
+   execute procedure test_event_trigger();
+
+-- should fail, skunkcabbage is not a valid comand context
+create event trigger regress_event_trigger2 on ddl_command_start
+   when context in ('toplevel', 'skunkcabbage')
    execute procedure test_event_trigger();
 
 -- should fail, can't have event triggers on event triggers
@@ -59,6 +70,7 @@ create event trigger regress_event_trigger2 on ddl_command_start
 -- OK
 create event trigger regress_event_trigger2 on ddl_command_start
    when tag in ('create table', 'CREATE FUNCTION')
+    and context in ('toplevel', 'generated', 'query', 'subcommand')
    execute procedure test_event_trigger();
 
 -- OK
