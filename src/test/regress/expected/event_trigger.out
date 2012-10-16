@@ -6,7 +6,7 @@ ERROR:  function "pg_backend_pid" must return type "event_trigger"
 -- OK
 create function test_event_trigger() returns event_trigger as $$
 BEGIN
-    RAISE NOTICE 'test_event_trigger: % %', tg_event, tg_tag;
+    RAISE NOTICE 'test_event_trigger: % % %', tg_event, tg_context, tg_tag;
     RAISE NOTICE 'test_event_trigger: %, %', tg_operation, tg_obtypename;
     RAISE NOTICE 'test_event_trigger: %', tg_command;
 END
@@ -23,6 +23,7 @@ create event trigger regress_event_trigger_trace on ddl_command_trace
    execute procedure test_event_trigger();
 -- test creating an event trigger on ddl_command_end
 create event trigger regress_event_trigger_end on ddl_command_end
+   when context in ('toplevel', 'generated')
    execute procedure test_event_trigger();
 -- but we won't actually use it
 drop event trigger regress_event_trigger_end;
@@ -36,11 +37,21 @@ create event trigger regress_event_trigger2 on ddl_command_start
    when tag in ('sandwhich')
    execute procedure test_event_trigger();
 ERROR:  filter value "sandwhich" not recognized for filter variable "tag"
+-- should fail, sandwhich is not a valid command context either
+create event trigger regress_event_trigger2 on ddl_command_start
+   when context in ('sandwhich')
+   execute procedure test_event_trigger();
+ERROR:  filter value "sandwhich" not recognized for filter variable "context"
 -- should fail, create skunkcabbage is not a valid comand tag
 create event trigger regress_event_trigger2 on ddl_command_start
    when tag in ('create table', 'create skunkcabbage')
    execute procedure test_event_trigger();
 ERROR:  filter value "create skunkcabbage" not recognized for filter variable "tag"
+-- should fail, skunkcabbage is not a valid comand context
+create event trigger regress_event_trigger2 on ddl_command_start
+   when context in ('toplevel', 'skunkcabbage')
+   execute procedure test_event_trigger();
+ERROR:  filter value "skunkcabbage" not recognized for filter variable "context"
 -- should fail, can't have event triggers on event triggers
 create event trigger regress_event_trigger2 on ddl_command_start
    when tag in ('DROP EVENT TRIGGER')
@@ -54,6 +65,7 @@ ERROR:  filter variable "tag" specified more than once
 -- OK
 create event trigger regress_event_trigger2 on ddl_command_start
    when tag in ('create table', 'CREATE FUNCTION')
+    and context in ('toplevel', 'generated', 'query', 'subcommand')
    execute procedure test_event_trigger();
 -- OK
 comment on event trigger regress_event_trigger_start is 'test comment';
@@ -75,10 +87,10 @@ alter event trigger regress_event_trigger_start enable;
 alter event trigger regress_event_trigger_start disable;
 -- regress_event_trigger2 should fire, but not regress_event_trigger
 create table event_trigger_fire1 (a int);
-NOTICE:  test_event_trigger: ddl_command_start CREATE TABLE
+NOTICE:  test_event_trigger: ddl_command_start TOPLEVEL CREATE TABLE
 NOTICE:  test_event_trigger: CREATE, TABLE
 NOTICE:  test_event_trigger: <NULL>
-NOTICE:  test_event_trigger: ddl_command_end CREATE TABLE
+NOTICE:  test_event_trigger: ddl_command_end TOPLEVEL CREATE TABLE
 NOTICE:  test_event_trigger: CREATE, TABLE
 NOTICE:  test_event_trigger: CREATE TABLE public.event_trigger_fire1 (a pg_catalog.int4);
 -- but nothing should fire here
