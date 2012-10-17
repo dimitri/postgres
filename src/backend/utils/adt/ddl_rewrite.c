@@ -21,12 +21,14 @@
 #include "access/sysattr.h"
 #include "catalog/dependency.h"
 #include "catalog/heap.h"
+#include "catalog/index.h"
 #include "commands/defrem.h"
 #include "commands/event_trigger.h"
 #include "funcapi.h"
 #include "lib/stringinfo.h"
 #include "nodes/makefuncs.h"
 #include "nodes/pg_list.h"
+#include "optimizer/planner.h"
 #include "parser/analyze.h"
 #include "parser/keywords.h"
 #include "parser/parse_func.h"
@@ -134,6 +136,23 @@ _maybeAddSeparator(StringInfo buf, const char *sep, bool *first)
 {
 	if (*first) *first = false;
 	else        appendStringInfoString(buf, sep);
+}
+
+/*
+ * rewrite any_name: parser production
+ */
+static void _rwAnyName(StringInfo buf, List *name)
+{
+	bool first = true;
+	ListCell *lc;
+
+	foreach(lc, name)
+	{
+		char *member = (char *) lfirst(lc);
+
+		_maybeAddSeparator(buf, ".", &first);
+		appendStringInfo(buf, "%s", member);
+	}
 }
 
 /*
@@ -1332,7 +1351,7 @@ _rwCreateSeqStmt(EventTriggerData *trigdata)
 	initStringInfo(&buf);
 	appendStringInfo(&buf, "CREATE ");
 	_rwRelPersistence(&buf, node->sequence->relpersistence);
-	appendStringInfo(&buf, "SEQUENCE %s ", RangeVarToString(node->sequence));
+	appendStringInfo(&buf, "SEQUENCE %s", RangeVarToString(node->sequence));
 	_rwOptSeqOptList(&buf, node->options);
 	appendStringInfoChar(&buf, ';');
 
@@ -1360,6 +1379,136 @@ _rwAlterSeqStmt(EventTriggerData *trigdata)
 	trigdata->command = buf.data;
 	trigdata->schemaname = RangeVarGetNamespace(node->sequence);
 	trigdata->objectname = node->sequence->relname;
+}
+
+/*
+ * rewrite index_elem: parser production
+ */
+static void
+_rwIndexElem(StringInfo buf, IndexElem *e, List *context)
+{
+	if (e->name)
+		appendStringInfo(buf, "%s", e->name);
+	else
+	{
+		char *str =
+			deparse_expression_pretty(e->expr, context, false, false, false, 0);
+
+		/* Need parens if it's not a bare function call */
+		if (IsA(e->expr, FuncExpr) &&
+				 ((FuncExpr *) e->expr)->funcformat == COERCE_EXPLICIT_CALL)
+			appendStringInfo(buf, "%s", str);
+		else
+			appendStringInfo(buf, "(%s)", str);
+	}
+
+	if (e->collation)
+	{
+		appendStringInfo(buf, " COLLATE");
+		_rwAnyName(buf, e->collation);
+	}
+
+	if (e->opclass)
+	{
+		appendStringInfo(buf, " USING ");
+		_rwAnyName(buf, e->opclass);
+	}
+
+	/* defensive coding, so that the compiler hints us into updating those bits
+	 * if needs be */
+	switch (e->ordering)
+	{
+		/* using unexpected in create index */
+		case SORTBY_DEFAULT:
+		case SORTBY_USING:
+			break;
+
+		case SORTBY_ASC:
+			appendStringInfo(buf, " ASC");
+			break;
+
+		case SORTBY_DESC:
+			appendStringInfo(buf, " DESC");
+			break;
+	}
+	switch (e->nulls_ordering)
+	{
+		case SORTBY_NULLS_DEFAULT:
+			break;
+
+		case SORTBY_NULLS_FIRST:
+			appendStringInfo(buf, " NULLS FIRST");
+			break;
+
+		case SORTBY_NULLS_LAST:
+			appendStringInfo(buf, " NULLS LAST");
+			break;
+	}
+}
+
+/*
+ * rewrite IndexStmt: parser production
+ */
+static void
+_rwCreateIndexStmt(EventTriggerData *trigdata)
+{
+	IndexStmt			*node  = (IndexStmt *)trigdata->parsetree;
+	StringInfoData		 buf;
+	Oid					 relId;
+	bool				 first = true;
+	ListCell			*lc;
+	List				*context;
+
+	initStringInfo(&buf);
+	appendStringInfo(&buf, "CREATE%s INDEX", node->unique ? " UNIQUE" : "");
+
+	if (node->concurrent)
+		appendStringInfo(&buf, " CONCURRENTLY");
+
+	if (node->idxname)
+		appendStringInfo(&buf, " %s", node->idxname);
+
+	appendStringInfo(&buf, " ON %s USING %s (",
+					 RangeVarToString(node->relation),
+					 node->accessMethod);
+
+	/*
+	 * we could find a way to only do that when we know we have to deal with
+	 * column expressions, but it's simpler this way.
+	 *
+	 * We use get_rel_name() without checking the return value here, on the
+	 * grounds that it's safe to do so when still in the transaction that just
+	 * created the index.
+	 */
+	relId = IndexGetRelation(EventTriggerTargetOid, false);
+	context = deparse_context_for(get_rel_name(relId), relId);
+
+	foreach(lc, node->indexParams)
+	{
+		IndexElem *e = (IndexElem *) lfirst(lc);
+
+		_maybeAddSeparator(&buf, ", ", &first);
+		_rwIndexElem(&buf, e, context);
+	}
+	appendStringInfoChar(&buf, ')');
+
+	_rwOptWith(&buf, node->options);
+	_rwOptConsTableSpace(&buf, node->tableSpace);
+
+	/* FIXME: handle where_clause: production */
+	if (node->whereClause)
+	{
+		char *str =
+			deparse_expression_pretty(node->whereClause, context,
+									  false, false, false, 0);
+		appendStringInfo(&buf, " WHERE (%s)", str);
+	}
+
+	appendStringInfoChar(&buf, ';');
+
+	trigdata->command = buf.data;
+	trigdata->schemaname = RangeVarGetNamespace(node->relation);
+	trigdata->objectname = node->idxname;
 }
 
 /* get the work done */
@@ -1398,6 +1547,10 @@ normalize_command_string(EventTriggerData *trigdata)
 
 		case T_CreateSeqStmt:
 			_rwCreateSeqStmt(trigdata);
+			break;
+
+		case T_IndexStmt:
+			_rwCreateIndexStmt(trigdata);
 			break;
 
 		default:

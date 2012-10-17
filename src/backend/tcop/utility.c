@@ -1004,9 +1004,9 @@ standard_ProcessUtility(Node *parsetree,
 
 		case T_IndexStmt:		/* CREATE INDEX */
 			{
+				Oid			relOid;
 				IndexStmt  *stmt = (IndexStmt *) parsetree;
 
-				EventTriggerDDLCommandStart(parsetree, context);
 				if (stmt->concurrent)
 					PreventTransactionChain(isTopLevel,
 											"CREATE INDEX CONCURRENTLY");
@@ -1016,16 +1016,22 @@ standard_ProcessUtility(Node *parsetree,
 				/* Run parse analysis ... */
 				stmt = transformIndexStmt(stmt, queryString);
 
+				/* now call event triggers */
+				EventTriggerDDLCommandStart((Node *)stmt, context);
+
 				/* ... and do it */
-				DefineIndex(stmt,
-							InvalidOid, /* no predefined OID */
-							false,		/* is_alter_table */
-							true,		/* check_rights */
-							false,		/* skip_build */
-							false);		/* quiet */
+				relOid = DefineIndex(stmt,
+									 InvalidOid, /* no predefined OID */
+									 false,		/* is_alter_table */
+									 true,		/* check_rights */
+									 false,		/* skip_build */
+									 false);		/* quiet */
 
 				if (!stmt->concurrent)
-					EventTriggerDDLCommandEnd(parsetree, context);
+				{
+					EventTriggerTargetOid = relOid;
+					EventTriggerDDLCommandEnd((Node *)stmt, context);
+				}
 			}
 			break;
 
