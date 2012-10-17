@@ -812,8 +812,18 @@ plpgsql_exec_event_trigger(PLpgSQL_function *func, EventTriggerData *trigdata)
 	var->isnull = false;
 	var->freeval = true;
 
+	var = (PLpgSQL_var *) (estate.datums[func->tg_objectid_varno]);
+	if (trigdata->objectid != InvalidOid)
+	{
+		var->value = ObjectIdGetDatum(trigdata->objectid);
+		var->isnull = false;
+		var->freeval = true;
+	}
+	else
+		var->isnull = true;
+
 	var = (PLpgSQL_var *) (estate.datums[func->tg_schemaname_varno]);
-	if (trigdata->objectname != NULL)
+	if (trigdata->schemaname != NULL)
 	{
 		var->value = CStringGetTextDatum(trigdata->schemaname);
 		var->isnull = false;

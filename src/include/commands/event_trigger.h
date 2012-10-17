@@ -58,6 +58,7 @@ typedef struct EventTriggerData
 	char	   *event;				/* event name */
 	Node	   *parsetree;			/* parse tree */
 	CommandTag *ctag;				/* command tag */
+	Oid         objectid;			/* main target object's id */
 	char       *context;			/* ProcessUtilityContext */
 	char	   *schemaname;			/* schema name of the object */
 	char	   *objectname;			/* object name */

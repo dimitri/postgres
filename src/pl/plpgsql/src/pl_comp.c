@@ -716,6 +716,14 @@ do_compile(FunctionCallInfo fcinfo,
 										 true);
 			function->tg_context_varno = var->dno;
 
+			/* Add the variable tg_objectid */
+			var = plpgsql_build_variable("tg_objectid", 0,
+										 plpgsql_build_datatype(OIDOID,
+																-1,
+											   function->fn_input_collation),
+										 true);
+			function->tg_objectid_varno = var->dno;
+
 			/* Add the variable tg_schemaname */
 			var = plpgsql_build_variable("tg_schemaname", 0,
 										 plpgsql_build_datatype(TEXTOID,

@@ -174,15 +174,17 @@ _rwDropStmt(EventTriggerData *trigdata)
 
 	foreach(obj, node->objects)
 	{
+		List *objname = lfirst(obj);
+
 		switch (node->removeType)
 		{
-			case OBJECT_TABLE:
-			case OBJECT_SEQUENCE:
-			case OBJECT_VIEW:
 			case OBJECT_INDEX:
+			case OBJECT_SEQUENCE:
+			case OBJECT_TABLE:
+			case OBJECT_VIEW:
 			case OBJECT_FOREIGN_TABLE:
 			{
-				RangeVar *rel = makeRangeVarFromNameList((List *) lfirst(obj));
+				RangeVar *rel = makeRangeVarFromNameList(objname);
 				_maybeAddSeparator(&buf, ", ", &first);
 				appendStringInfoString(&buf, RangeVarToString(rel));
 
@@ -194,30 +196,38 @@ _rwDropStmt(EventTriggerData *trigdata)
 			case OBJECT_TYPE:
 			case OBJECT_DOMAIN:
 			{
-				TypeName *typename = makeTypeNameFromNameList((List *) obj);
+				char	   *schema;
+				char	   *typname;
+				TypeName   *typeName = makeTypeNameFromNameList(objname);
 				_maybeAddSeparator(&buf, ", ", &first);
-				appendStringInfoString(&buf, TypeNameToString(typename));
+				appendStringInfoString(&buf, TypeNameToString(typeName));
 
-				if (list_nth((List *) obj, 1) == NIL)
-				{
-					trigdata->schemaname = NULL;
-					trigdata->objectname = strVal(linitial((List *) obj));
-				}
-				else
-				{
-					trigdata->schemaname = strVal(list_nth((List *) obj, 0));
-					trigdata->objectname = strVal(list_nth((List *) obj, 1));
-				}
+				/* deconstruct the name list */
+				DeconstructQualifiedName(typeName->names, &schema, &typname);
+
+				trigdata->schemaname = schema;
+				trigdata->objectname = typname;
 				break;
 			}
 
-			/* case OBJECT_COLLATION: */
-			/* case OBJECT_CONVERSION: */
-			/* case OBJECT_SCHEMA: */
-			/* case OBJECT_EXTENSION: */
-			default:
+			case OBJECT_COLLATION:
+			case OBJECT_CONVERSION:
 			{
-				char *name = strVal(linitial((List *) obj));
+				char	   *schemaname;
+				char	   *name;
+
+				DeconstructQualifiedName(objname, &schemaname, &name);
+
+				trigdata->schemaname = schemaname;
+				trigdata->objectname = name;
+				break;
+			}
+
+			case OBJECT_SCHEMA:
+			case OBJECT_EXTENSION:
+			{
+				/* see get_object_address_unqualified() */
+				char *name = strVal(linitial(objname));
 				_maybeAddSeparator(&buf, ", ", &first);
 				appendStringInfoString(&buf, name);
 
@@ -225,6 +235,10 @@ _rwDropStmt(EventTriggerData *trigdata)
 				trigdata->objectname = name;
 				break;
 			}
+
+			default:
+				elog(ERROR, "unexpected object type: %d", node->removeType);
+				break;
 		}
 	}
 	appendStringInfo(&buf, "%s %s;",
@@ -1598,6 +1612,9 @@ get_event_trigger_data(EventTriggerData *trigdata)
 
 	if (rewrite)
 	{
+		/* only add the objectid when we have it */
+		trigdata->objectid  = EventTriggerTargetOid;
+
 		/* that will also fill in schemaname and objectname */
 		normalize_command_string(trigdata);
 	}
