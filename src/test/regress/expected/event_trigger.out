@@ -6,9 +6,11 @@ ERROR:  function "pg_backend_pid" must return type "event_trigger"
 -- OK
 create function test_event_trigger() returns event_trigger as $$
 BEGIN
-    RAISE NOTICE 'test_event_trigger: % % %', tg_event, tg_context, tg_tag;
-    RAISE NOTICE 'test_event_trigger: %, %', tg_operation, tg_obtypename;
-    RAISE NOTICE 'test_event_trigger: %', tg_command;
+    -- don't include tg_objectid for stable regression tests output
+    RAISE NOTICE 'event: %, context: %, tag: %, operation: %, type: %, schema: %, name: %',
+                 tg_event, tg_context, tg_tag, tg_operation, tg_obtypename,
+                 tg_schemaname, tg_objectname;
+    RAISE NOTICE 'command: %', tg_command;
 END
 $$ language plpgsql;
 -- should fail, no elephant_bootstrap entry point
@@ -87,12 +89,10 @@ alter event trigger regress_event_trigger_start enable;
 alter event trigger regress_event_trigger_start disable;
 -- regress_event_trigger2 should fire, but not regress_event_trigger
 create table event_trigger_fire1 (a int);
-NOTICE:  test_event_trigger: ddl_command_start TOPLEVEL CREATE TABLE
-NOTICE:  test_event_trigger: CREATE, TABLE
-NOTICE:  test_event_trigger: <NULL>
-NOTICE:  test_event_trigger: ddl_command_end TOPLEVEL CREATE TABLE
-NOTICE:  test_event_trigger: CREATE, TABLE
-NOTICE:  test_event_trigger: CREATE TABLE public.event_trigger_fire1 (a pg_catalog.int4);
+NOTICE:  event: ddl_command_start, context: TOPLEVEL, tag: CREATE TABLE, operation: CREATE, type: TABLE, schema: <NULL>, name: <NULL>
+NOTICE:  command: <NULL>
+NOTICE:  event: ddl_command_end, context: TOPLEVEL, tag: CREATE TABLE, operation: CREATE, type: TABLE, schema: public, name: event_trigger_fire1
+NOTICE:  command: CREATE TABLE public.event_trigger_fire1 (a pg_catalog.int4);
 -- but nothing should fire here
 drop table event_trigger_fire1;
 -- alter owner to non-superuser should fail

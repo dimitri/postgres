@@ -6,9 +6,11 @@ create event trigger regress_event_trigger
 -- OK
 create function test_event_trigger() returns event_trigger as $$
 BEGIN
-    RAISE NOTICE 'test_event_trigger: % % %', tg_event, tg_context, tg_tag;
-    RAISE NOTICE 'test_event_trigger: %, %', tg_operation, tg_obtypename;
-    RAISE NOTICE 'test_event_trigger: %', tg_command;
+    -- don't include tg_objectid for stable regression tests output
+    RAISE NOTICE 'event: %, context: %, tag: %, operation: %, type: %, schema: %, name: %',
+                 tg_event, tg_context, tg_tag, tg_operation, tg_obtypename,
+                 tg_schemaname, tg_objectname;
+    RAISE NOTICE 'command: %', tg_command;
 END
 $$ language plpgsql;
 
