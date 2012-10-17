@@ -610,7 +610,8 @@ standard_ProcessUtility(Node *parsetree,
 
 		case T_CreateExtensionStmt:
 			EventTriggerDDLCommandStart(parsetree, context);
-			CreateExtension((CreateExtensionStmt *) parsetree);
+			EventTriggerTargetOid =
+				CreateExtension((CreateExtensionStmt *) parsetree);
 			EventTriggerDDLCommandEnd(parsetree, context);
 			break;
 
@@ -813,6 +814,8 @@ standard_ProcessUtility(Node *parsetree,
 						{
 							/* Do the table alteration proper */
 							AlterTable(relid, lockmode, (AlterTableStmt *) stmt);
+
+							EventTriggerTargetOid = relid;
 							EventTriggerDDLCommandEnd(stmt, context);
 						}
 						else
@@ -986,7 +989,8 @@ standard_ProcessUtility(Node *parsetree,
 
 		case T_ViewStmt:		/* CREATE VIEW */
 			EventTriggerDDLCommandStart(parsetree, context);
-			DefineView((ViewStmt *) parsetree, queryString);
+			EventTriggerTargetOid =
+				DefineView((ViewStmt *) parsetree, queryString);
 			EventTriggerDDLCommandEnd(parsetree, context);
 			break;
 
@@ -1043,13 +1047,15 @@ standard_ProcessUtility(Node *parsetree,
 
 		case T_CreateSeqStmt:
 			EventTriggerDDLCommandStart(parsetree, context);
-			DefineSequence((CreateSeqStmt *) parsetree);
+			EventTriggerTargetOid =
+				DefineSequence((CreateSeqStmt *) parsetree);
 			EventTriggerDDLCommandEnd(parsetree, context);
-			break;
+		break;
 
 		case T_AlterSeqStmt:
 			EventTriggerDDLCommandStart(parsetree, context);
-			AlterSequence((AlterSeqStmt *) parsetree);
+			EventTriggerTargetOid =
+				AlterSequence((AlterSeqStmt *) parsetree);
 			EventTriggerDDLCommandEnd(parsetree, context);
 			break;
 
