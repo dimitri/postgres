@@ -151,6 +151,7 @@ typedef struct _extensionInfo
 	char	   *namespace;		/* schema containing extension's objects */
 	bool		relocatable;
 	char	   *extversion;
+	char	   *extrequires;
 	char	   *extconfig;		/* info about configuration tables */
 	char	   *extcondition;
 } ExtensionInfo;
@@ -487,6 +488,35 @@ typedef struct _blobInfo
 	char	   *blobacl;
 } BlobInfo;
 
+/*
+ * Data structure to track extension members when the -x --extension option is
+ * used. we track the Catalog
+ */
+typedef struct SimpleDOListCell
+{
+	struct SimpleDOListCell *next;
+	DumpableObject    *dobj;
+} SimpleDOListCell;
+
+typedef struct SimpleDOList
+{
+	SimpleDOListCell *head;
+	SimpleDOListCell *tail;
+} SimpleDOList;
+
+typedef struct ExtensionMembersListCell
+{
+	struct ExtensionMembersListCell *next;
+	Oid           extoid;
+	SimpleDOList *members;
+} ExtensionMembersListCell;
+
+typedef struct ExtensionMembersList
+{
+	ExtensionMembersListCell *head;
+	ExtensionMembersListCell *tail;
+} ExtensionMembersList;
+
 /* global decls */
 extern bool force_quotes;		/* double-quotes for identifiers flag */
 extern bool g_verbose;			/* verbose flag */
@@ -533,8 +563,17 @@ extern NamespaceInfo *findNamespaceByOid(Oid oid);
 
 extern void simple_oid_list_append(SimpleOidList *list, Oid val);
 extern void simple_string_list_append(SimpleStringList *list, const char *val);
+extern void simple_DO_list_append(SimpleDOList *list,
+								  const DumpableObject *dobj);
 extern bool simple_oid_list_member(SimpleOidList *list, Oid val);
 extern bool simple_string_list_member(SimpleStringList *list, const char *val);
+extern bool simple_DO_list_member(SimpleDOList *list,
+								  const DumpableObject *dobj);
+
+extern ExtensionMembersListCell *extmember_list_find(ExtensionMembersList *list,
+													 Oid val, bool append);
+extern void extmember_list_append_member(ExtensionMembersListCell *cell,
+										 const DumpableObject *member);
 
 extern void parseOidArray(const char *str, Oid *array, int arraysize);
 

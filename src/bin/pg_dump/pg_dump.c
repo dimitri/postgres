@@ -119,6 +119,10 @@ static SimpleOidList table_exclude_oids = {NULL, NULL};
 static SimpleStringList tabledata_exclude_patterns = {NULL, NULL};
 static SimpleOidList tabledata_exclude_oids = {NULL, NULL};
 
+static SimpleStringList extension_include_patterns = {NULL, NULL};
+static SimpleOidList extension_include_oids = {NULL, NULL};
+static ExtensionMembersList extensions_members = {NULL, NULL};
+
 /* default, if no "inclusion" switches appear, is to dump everything */
 static bool include_everything = true;
 
@@ -150,6 +154,9 @@ static void expand_schema_name_patterns(Archive *fout,
 static void expand_table_name_patterns(Archive *fout,
 						   SimpleStringList *patterns,
 						   SimpleOidList *oids);
+static void expand_extension_name_patterns(Archive *fout,
+										   SimpleStringList *patterns,
+										   SimpleOidList *oids);
 static NamespaceInfo *findNamespace(Archive *fout, Oid nsoid, Oid objoid);
 static void dumpTableData(Archive *fout, TableDataInfo *tdinfo);
 static void guessConstraintInheritance(TableInfo *tblinfo, int numTables);
@@ -322,6 +329,7 @@ main(int argc, char **argv)
 		{"superuser", required_argument, NULL, 'S'},
 		{"table", required_argument, NULL, 't'},
 		{"exclude-table", required_argument, NULL, 'T'},
+		{"extension-script", required_argument, NULL, 'X'},
 		{"no-password", no_argument, NULL, 'w'},
 		{"password", no_argument, NULL, 'W'},
 		{"username", required_argument, NULL, 'U'},
@@ -388,7 +396,7 @@ main(int argc, char **argv)
 		}
 	}
 
-	while ((c = getopt_long(argc, argv, "abcCE:f:F:h:in:N:oOp:RsS:t:T:U:vwWxZ:",
+	while ((c = getopt_long(argc, argv, "abcCE:f:F:h:in:N:oOp:RsS:t:T:U:vwWxX:Z:",
 							long_options, &optindex)) != -1)
 	{
 		switch (c)
@@ -469,6 +477,10 @@ main(int argc, char **argv)
 
 			case 'T':			/* exclude table(s) */
 				simple_string_list_append(&table_exclude_patterns, optarg);
+				break;
+
+			case 'X':			/* include extension(s) script */
+				simple_string_list_append(&extension_include_patterns, optarg);
 				break;
 
 			case 'U':
@@ -670,6 +682,10 @@ main(int argc, char **argv)
 	expand_table_name_patterns(fout, &tabledata_exclude_patterns,
 							   &tabledata_exclude_oids);
 
+	/* Expand extension selection patterns into OID lists */
+	expand_extension_name_patterns(fout, &extension_include_patterns,
+								   &extension_include_oids);
+
 	/* non-matching exclusion patterns aren't an error */
 
 	/*
@@ -830,6 +846,7 @@ help(const char *progname)
 	printf(_("  -S, --superuser=NAME         superuser user name to use in plain-text format\n"));
 	printf(_("  -t, --table=TABLE            dump the named table(s) only\n"));
 	printf(_("  -T, --exclude-table=TABLE    do NOT dump the named table(s)\n"));
+	printf(_("  -X, --extension-script       dunp named extension(s) scripts\n"));
 	printf(_("  -x, --no-privileges          do not dump privileges (grant/revoke)\n"));
 	printf(_("  --binary-upgrade             for use by upgrade utilities only\n"));
 	printf(_("  --column-inserts             dump data as INSERT commands with column names\n"));
@@ -1062,6 +1079,53 @@ expand_table_name_patterns(Archive *fout,
 }
 
 /*
+ * Find the OIDs of all extensions matching the given list of patterns,
+ * and append them to the given ExtensionMembers list.
+ */
+static void
+expand_extension_name_patterns(Archive *fout,
+							   SimpleStringList *patterns,
+							   SimpleOidList *oids)
+{
+	PQExpBuffer query;
+	PGresult   *res;
+	SimpleStringListCell *cell;
+	int			i;
+
+	if (patterns->head == NULL)
+		return;					/* nothing to do */
+
+	query = createPQExpBuffer();
+
+	/*
+	 * We use UNION ALL rather than UNION; this might sometimes result in
+	 * duplicate entries in the OID list, but we don't care.
+	 */
+
+	for (cell = patterns->head; cell; cell = cell->next)
+	{
+		if (cell != patterns->head)
+			appendPQExpBuffer(query, "UNION ALL\n");
+		appendPQExpBuffer(query,
+						  "SELECT e.oid"
+						  "\nFROM pg_catalog.pg_extension e\n");
+		processSQLNamePattern(GetConnection(fout), query,
+							  cell->val, false, false,
+							  NULL, "e.extname", NULL, NULL);
+	}
+
+	res = ExecuteSqlQuery(fout, query->data, PGRES_TUPLES_OK);
+
+	for (i = 0; i < PQntuples(res); i++)
+	{
+		simple_oid_list_append(oids, atooid(PQgetvalue(res, i, 0)));
+	}
+
+	PQclear(res);
+	destroyPQExpBuffer(query);
+}
+
+/*
  * selectDumpableNamespace: policy-setting subroutine
  *		Mark a namespace as to be dumped or not
  */
@@ -1208,6 +1272,14 @@ selectDumpableExtension(ExtensionInfo *extinfo)
 		extinfo->dobj.dump = false;
 	else
 		extinfo->dobj.dump = include_everything;
+
+	/*
+	 * In any case, an extension can be included an inclusion switch
+	 */
+	if (extension_include_oids.head &&
+		simple_oid_list_member(&extension_include_oids,
+							   extinfo->dobj.catId.oid))
+		extinfo->dobj.dump = true;
 }
 
 /*
@@ -2737,6 +2809,7 @@ getExtensions(Archive *fout, int *numExtensions)
 	int			i_extversion;
 	int			i_extconfig;
 	int			i_extcondition;
+	int         i_extrequires;
 
 	/*
 	 * Before 9.1, there are no extensions.
@@ -2752,10 +2825,17 @@ getExtensions(Archive *fout, int *numExtensions)
 	/* Make sure we are in proper schema */
 	selectSourceSchema(fout, "pg_catalog");
 
-	appendPQExpBuffer(query, "SELECT x.tableoid, x.oid, "
-					  "x.extname, n.nspname, x.extrelocatable, x.extversion, x.extconfig, x.extcondition "
-					  "FROM pg_extension x "
-					  "JOIN pg_namespace n ON n.oid = x.extnamespace");
+	/* Get the extension and its requirements: extensions it depends on */
+	appendPQExpBuffer(query,
+					  "SELECT x.tableoid, x.oid, x.extname, n.nspname, "
+					  "x.extrelocatable, x.extversion, x.extconfig, "
+					  "x.extcondition, "
+					  "array_to_string(array_agg(e.extname), ',') as extrequires "
+					  "FROM pg_extension x JOIN pg_namespace n ON n.oid = x.extnamespace "
+					  "LEFT JOIN pg_depend d on d.objid = x.oid "
+					  "and d.refclassid = 'pg_extension'::regclass "
+					  "LEFT JOIN pg_extension e ON e.oid = d.refobjid "
+					  "group by 1, 2, 3, 4, 5, 6, 7, 8");
 
 	res = ExecuteSqlQuery(fout, query->data, PGRES_TUPLES_OK);
 
@@ -2771,6 +2851,7 @@ getExtensions(Archive *fout, int *numExtensions)
 	i_extversion = PQfnumber(res, "extversion");
 	i_extconfig = PQfnumber(res, "extconfig");
 	i_extcondition = PQfnumber(res, "extcondition");
+	i_extrequires = PQfnumber(res, "extrequires");
 
 	for (i = 0; i < ntups; i++)
 	{
@@ -2784,6 +2865,7 @@ getExtensions(Archive *fout, int *numExtensions)
 		extinfo[i].extversion = pg_strdup(PQgetvalue(res, i, i_extversion));
 		extinfo[i].extconfig = pg_strdup(PQgetvalue(res, i, i_extconfig));
 		extinfo[i].extcondition = pg_strdup(PQgetvalue(res, i, i_extcondition));
+		extinfo[i].extrequires = pg_strdup(PQgetvalue(res, i, i_extrequires));
 
 		/* Decide whether we want to dump it */
 		selectDumpableExtension(&(extinfo[i]));
@@ -7437,8 +7519,8 @@ dumpExtension(Archive *fout, ExtensionInfo *extinfo)
 	PQExpBuffer delq;
 	PQExpBuffer labelq;
 	char	   *qextname;
+	bool        dumpIt;
 
-	/* Skip if not to be dumped */
 	if (!extinfo->dobj.dump || dataOnly)
 		return;
 
@@ -7450,7 +7532,77 @@ dumpExtension(Archive *fout, ExtensionInfo *extinfo)
 
 	appendPQExpBuffer(delq, "DROP EXTENSION %s;\n", qextname);
 
-	if (!binary_upgrade)
+	/* dump this extension's content */
+	if (extension_include_oids.head
+		&& simple_oid_list_member(&extension_include_oids,
+								  extinfo->dobj.catId.oid))
+	{
+		Archive       *eout;			/* the extension's script file */
+		ArchiveHandle *EH;
+		TocEntry      *te;
+		ExtensionMembersListCell *extcell =
+			extmember_list_find(&extensions_members,
+								extinfo->dobj.catId.oid, false);
+		SimpleDOListCell *cell;
+
+		if (extcell == NULL)
+			exit_horribly(NULL, "extension \"%s\" has no members\n",
+						  extinfo->dobj.name);
+
+		/* See comment for !binary_upgrade case for IF NOT EXISTS. */
+		appendPQExpBuffer(q,
+						  "CREATE EXTENSION IF NOT EXISTS %s\n"
+						  "  WITH SCHEMA %s\n"
+						  "       VERSION '%s'\n"
+						  "       %s\n"
+						  "       REQUIRES '%s'\n"
+						  "AS $%s$\n",
+						  qextname,
+						  fmtId(extinfo->namespace),
+						  extinfo->extversion,
+						  extinfo->relocatable ? "relocatable":"norelocatable",
+						  extinfo->extrequires,
+						  qextname);
+
+		/*
+		 * Have another archive for this extension: this allows us to simply
+		 * walk the extension's dependencies and use the existing pg_dump code
+		 * to get the object create statement to be added in the script.
+		 *
+		 */
+		eout = CreateArchive(NULL, archNull, 0, archModeAppend);
+
+		EH = (ArchiveHandle *) eout;
+
+		/* grab existing connection and remote version information */
+		EH->connection = ((ArchiveHandle *)fout)->connection;
+		eout->remoteVersion = fout->remoteVersion;
+
+		/* fill in our Extension's Archive */
+		for (cell = extcell->members->head; cell; cell = cell->next)
+		{
+			DumpableObject *dobj = cell->dobj;
+			bool dump = dobj->dump;
+
+			/* force the DumpableObject here to be dumped */
+			dobj->dump = true;
+			dumpDumpableObject(eout, dobj);
+
+			/* now restore its old dump flag value */
+			dobj->dump = dump;
+		}
+
+		/* restore the eout Archive into the local buffer */
+		for (te = EH->toc->next; te != EH->toc; te = te->next)
+		{
+			if (strlen(te->defn) > 0)
+				appendPQExpBuffer(q, "%s", te->defn);
+		}
+		CloseArchive(eout);
+
+		appendPQExpBuffer(q, "$%s$;\n", qextname);
+	}
+	else if (!binary_upgrade)
 	{
 		/*
 		 * In a regular dump, we use IF NOT EXISTS so that there isn't a
@@ -14024,6 +14176,8 @@ getExtensionMembership(Archive *fout, ExtensionInfo extinfo[],
 	DumpableObject *dobj,
 			   *refdobj;
 
+	ExtensionMembersListCell *curext = NULL;
+
 	/* Nothing to do if no extensions */
 	if (numExtensions == 0)
 		return;
@@ -14111,6 +14265,23 @@ getExtensionMembership(Archive *fout, ExtensionInfo extinfo[],
 			dobj->dump = false;
 		else
 			dobj->dump = refdobj->dump;
+
+		/*
+		 * If the -x (--extension-script) has been used, track extension's
+		 * members to be able to dump them later in a CREATE EXTENSION ... AS
+		 * $$ ... $$; command in the dump.
+		 */
+		if (extension_include_oids.head
+			&& simple_oid_list_member(&extension_include_oids, refobjId.oid))
+		{
+			/* update the cached pointer to current extension if needs be */
+			if (curext == NULL || curext->extoid != refobjId.oid)
+				curext =
+					extmember_list_find(&extensions_members, refobjId.oid, true);
+
+			/* now append the current member to the ExtensionMemberListCell */
+			extmember_list_append_member(curext, dobj);
+		}
 	}
 
 	PQclear(res);

@@ -916,6 +916,22 @@ simple_string_list_append(SimpleStringList *list, const char *val)
 	list->tail = cell;
 }
 
+void
+simple_DO_list_append(SimpleDOList *list, const DumpableObject *dobj)
+{
+	SimpleDOListCell *cell;
+
+	cell = (SimpleDOListCell *) pg_malloc(sizeof(SimpleDOListCell));
+	cell->next = NULL;
+	cell->dobj = (DumpableObject *)dobj;
+
+	if (list->tail)
+		list->tail->next = cell;
+	else
+		list->head = cell;
+	list->tail = cell;
+}
+
 bool
 simple_oid_list_member(SimpleOidList *list, Oid val)
 {
@@ -940,4 +956,60 @@ simple_string_list_member(SimpleStringList *list, const char *val)
 			return true;
 	}
 	return false;
+}
+
+bool
+simple_DO_list_member(SimpleDOList *list, const DumpableObject *dobj)
+{
+	SimpleDOListCell *cell;
+
+	for (cell = list->head; cell; cell = cell->next)
+	{
+		if (DOCatalogIdCompare(cell->dobj, dobj) == 0)
+			return true;
+	}
+	return false;
+}
+
+static ExtensionMembersListCell *
+extmember_list_append(ExtensionMembersList *list, Oid val)
+{
+	ExtensionMembersListCell *cell;
+
+	cell = (ExtensionMembersListCell *)
+		pg_malloc(sizeof(ExtensionMembersListCell));
+	cell->next = NULL;
+	cell->extoid = val;
+	cell->members = (SimpleDOList *) pg_malloc0(sizeof(SimpleDOList));
+
+	if (list->tail)
+		list->tail->next = cell;
+	else
+		list->head = cell;
+	list->tail = cell;
+
+	return cell;
+}
+
+ExtensionMembersListCell *
+extmember_list_find(ExtensionMembersList *list, Oid val, bool append)
+{
+	ExtensionMembersListCell *cell;
+
+	for (cell = list->head; cell; cell = cell->next)
+	{
+		if (cell->extoid == val)
+			return cell;
+	}
+	if (append)
+		return extmember_list_append(list, val);
+	else
+		return NULL;
+}
+
+void
+extmember_list_append_member(ExtensionMembersListCell *cell,
+							 const DumpableObject *member)
+{
+	simple_DO_list_append(cell->members, member);
 }
