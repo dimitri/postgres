@@ -3443,6 +3443,8 @@ DropTableSpaceStmt: DROP TABLESPACE name
  *             CREATE EXTENSION extension
  *             [ WITH ] [ SCHEMA schema ] [ VERSION version ] [ FROM oldversion ]
  *
+ *             CREATE EXTENSION extension ... AS $$ ... $$
+ *
  *****************************************************************************/
 
 CreateExtensionStmt: CREATE EXTENSION name opt_with create_extension_opt_list
@@ -3459,6 +3461,28 @@ CreateExtensionStmt: CREATE EXTENSION name opt_with create_extension_opt_list
 					n->extname = $6;
 					n->if_not_exists = true;
 					n->options = $8;
+					$$ = (Node *) n;
+				}
+				| CREATE EXTENSION name opt_with create_extension_opt_list
+                  AS Sconst
+				{
+					CreateExtensionStmt *n = makeNode(CreateExtensionStmt);
+					n->extname = $3;
+					n->if_not_exists = false;
+					n->options = lappend($5,
+										 makeDefElem("script",
+													 (Node *)makeString($7)));
+					$$ = (Node *) n;
+				}
+				| CREATE EXTENSION IF_P NOT EXISTS name
+                  opt_with create_extension_opt_list AS Sconst
+				{
+					CreateExtensionStmt *n = makeNode(CreateExtensionStmt);
+					n->extname = $6;
+					n->if_not_exists = false;
+					n->options = lappend($8,
+										 makeDefElem("script",
+													 (Node *)makeString($10)));
 					$$ = (Node *) n;
 				}
 		;
@@ -3482,6 +3506,33 @@ create_extension_opt_item:
 			| FROM ColId_or_Sconst
 				{
 					$$ = makeDefElem("old_version", (Node *)makeString($2));
+				}
+            | IDENT Sconst
+                /*
+                 * We handle identifiers that aren't parser keywords with
+                 * the following special-case codes, to avoid bloating the
+                 * size of the main parser.
+                 */
+                {
+					if (strcmp($1, "requires") == 0)
+						$$ = makeDefElem("requires", (Node *)makeString($2));
+					else
+						ereport(ERROR,
+								(errcode(ERRCODE_SYNTAX_ERROR),
+								 errmsg("unrecognized extension option \"%s\"", $1),
+									 parser_errposition(@1)));
+				}
+			| IDENT
+				{
+					if (strcmp($1, "relocatable") == 0)
+						$$ = makeDefElem("relocatable", (Node *)makeInteger(TRUE));
+					else if (strcmp($1, "norelocatable") == 0)
+						$$ = makeDefElem("relocatable", (Node *)makeInteger(FALSE));
+					else
+						ereport(ERROR,
+								(errcode(ERRCODE_SYNTAX_ERROR),
+								 errmsg("unrecognized extension option \"%s\"", $1),
+									 parser_errposition(@1)));
 				}
 		;
 

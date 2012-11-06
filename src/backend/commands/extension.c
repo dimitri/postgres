@@ -75,6 +75,7 @@ typedef struct ExtensionControlFile
 	bool		superuser;		/* must be superuser to install? */
 	int			encoding;		/* encoding of the script file, or -1 */
 	List	   *requires;		/* names of prerequisite extensions */
+	char       *script;
 } ExtensionControlFile;
 
 /*
@@ -577,10 +578,10 @@ parse_extension_control_file(ExtensionControlFile *control,
 }
 
 /*
- * Read the primary control file for the specified extension.
+ * Create an ExtensionControlFile with default values.
  */
 static ExtensionControlFile *
-read_extension_control_file(const char *extname)
+default_extension_control_file(const char *extname)
 {
 	ExtensionControlFile *control;
 
@@ -592,6 +593,17 @@ read_extension_control_file(const char *extname)
 	control->relocatable = false;
 	control->superuser = true;
 	control->encoding = -1;
+
+	return control;
+}
+
+/*
+ * Read the primary control file for the specified extension.
+ */
+static ExtensionControlFile *
+read_extension_control_file(const char *extname)
+{
+	ExtensionControlFile *control = default_extension_control_file(extname);
 
 	/*
 	 * Parse the primary control file.
@@ -858,8 +870,13 @@ execute_extension_script(Oid extensionOid, ExtensionControlFile *control,
 	CurrentExtensionObject = extensionOid;
 	PG_TRY();
 	{
-		char	   *c_sql = read_extension_script_file(control, filename);
+		char	   *c_sql;
 		Datum		t_sql;
+
+		if (control->script)
+			c_sql = control->script;
+		else
+			c_sql = read_extension_script_file(control, filename);
 
 		/* We use various functions that want to operate on text datums */
 		t_sql = CStringGetTextDatum(c_sql);
@@ -1178,6 +1195,9 @@ void
 CreateExtension(CreateExtensionStmt *stmt)
 {
 	DefElem    *d_schema = NULL;
+	DefElem    *d_script = NULL;
+	DefElem    *d_requires = NULL;
+	DefElem    *d_relocatable = NULL;
 	DefElem    *d_new_version = NULL;
 	DefElem    *d_old_version = NULL;
 	char	   *schemaName;
@@ -1229,20 +1249,40 @@ CreateExtension(CreateExtensionStmt *stmt)
 				 errmsg("nested CREATE EXTENSION is not supported")));
 
 	/*
-	 * Read the primary control file.  Note we assume that it does not contain
-	 * any non-ASCII data, so there is no need to worry about encoding at this
-	 * point.
-	 */
-	pcontrol = read_extension_control_file(stmt->extname);
-
-	/*
-	 * Read the statement option list
+	 * Read the statement option list.
+	 *
+	 * We need to read some of the options to know what to do next: if the
+	 * "script" one is in use, we don't want to read any control file.
 	 */
 	foreach(lc, stmt->options)
 	{
 		DefElem    *defel = (DefElem *) lfirst(lc);
 
-		if (strcmp(defel->defname, "schema") == 0)
+		if (strcmp(defel->defname, "script") == 0)
+		{
+			if (d_script)
+				ereport(ERROR,
+						(errcode(ERRCODE_SYNTAX_ERROR),
+						 errmsg("conflicting or redundant options")));
+			d_script = defel;
+		}
+		else if (strcmp(defel->defname, "relocatable") == 0)
+		{
+			if (d_relocatable)
+				ereport(ERROR,
+						(errcode(ERRCODE_SYNTAX_ERROR),
+						 errmsg("conflicting or redundant options")));
+			d_relocatable = defel;
+		}
+		else if (strcmp(defel->defname, "requires") == 0)
+		{
+			if (d_requires)
+				ereport(ERROR,
+						(errcode(ERRCODE_SYNTAX_ERROR),
+						 errmsg("conflicting or redundant options")));
+			d_requires = defel;
+		}
+		else if (strcmp(defel->defname, "schema") == 0)
 		{
 			if (d_schema)
 				ereport(ERROR,
@@ -1268,6 +1308,55 @@ CreateExtension(CreateExtensionStmt *stmt)
 		}
 		else
 			elog(ERROR, "unrecognized option: %s", defel->defname);
+	}
+
+	if (d_script)
+	{
+		/*
+		 * We are given the extension's script in the SQL command, so create a
+		 * control file structure in memory, we won't have a control file on
+		 * disk to use.
+		 */
+		pcontrol = default_extension_control_file(stmt->extname);
+		pcontrol->script = strVal(d_script->arg);
+
+		if (d_relocatable)
+			pcontrol->relocatable = intVal(d_relocatable->arg) != 0;
+
+		if (d_requires)
+		{
+			/* Need a modifiable copy of string */
+			char	   *rawnames = pstrdup(strVal(d_requires->arg));
+
+			/* Parse string into list of identifiers */
+			if (!SplitIdentifierString(rawnames, ',', &pcontrol->requires))
+			{
+				/* syntax error in name list */
+				ereport(ERROR,
+						(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+						 errmsg("parameter \"requires\" must be a list of extension names")));
+			}
+		}
+	}
+	else
+	{
+		/*
+		 * If the extension script is not in the command, then the user is not
+		 * the extension packager and we want to read about relocatable and
+		 * requires in the control file, not in the SQL command.
+		 */
+		if (d_relocatable || d_requires)
+			ereport(ERROR,
+					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+					 errmsg("parameter \"%s\" is only expected when using CREATE EXTENSION AS",
+							d_relocatable ? "relocatable" : "requires")));
+
+		/*
+		 * Read the primary control file. Note we assume that it does not
+		 * contain any non-ASCII data, so there is no need to worry about
+		 * encoding at this point.
+		 */
+		pcontrol = read_extension_control_file(stmt->extname);
 	}
 
 	/*
@@ -1332,9 +1421,13 @@ CreateExtension(CreateExtensionStmt *stmt)
 	}
 
 	/*
-	 * Fetch control parameters for installation target version
+	 * Fetch control parameters for installation target version. When the
+	 * script is given in the command string, no auxiliary file is expected.
 	 */
-	control = read_extension_aux_control_file(pcontrol, versionName);
+	if (pcontrol->script == NULL)
+		control = read_extension_aux_control_file(pcontrol, versionName);
+	else
+		control = pcontrol;
 
 	/*
 	 * Determine the target schema to install the extension into
