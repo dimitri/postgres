@@ -121,7 +121,6 @@ static SimpleOidList tabledata_exclude_oids = {NULL, NULL};
 
 static SimpleStringList extension_include_patterns = {NULL, NULL};
 static SimpleOidList extension_include_oids = {NULL, NULL};
-static ExtensionMembersList extensions_members = {NULL, NULL};
 
 /* default, if no "inclusion" switches appear, is to dump everything */
 static bool include_everything = true;
@@ -172,9 +171,11 @@ static void dumpSecLabel(Archive *fout, const char *target,
 static int findSecLabels(Archive *fout, Oid classoid, Oid objoid,
 			  SecLabelItem **items);
 static int	collectSecLabels(Archive *fout, SecLabelItem **items);
-static void dumpDumpableObject(Archive *fout, DumpableObject *dobj);
+static void dumpDumpableObject(Archive *fout, DumpableObject *dobj,
+							   DumpableObject **dobjs, int numObjs);
 static void dumpNamespace(Archive *fout, NamespaceInfo *nspinfo);
-static void dumpExtension(Archive *fout, ExtensionInfo *extinfo);
+static void dumpExtension(Archive *fout, ExtensionInfo *extinfo,
+						  DumpableObject **dobjs, int numObjs);
 static void dumpType(Archive *fout, TypeInfo *tyinfo);
 static void dumpBaseType(Archive *fout, TypeInfo *tyinfo);
 static void dumpEnumType(Archive *fout, TypeInfo *tyinfo);
@@ -762,7 +763,7 @@ main(int argc, char **argv)
 
 	/* Now the rearrangeable objects. */
 	for (i = 0; i < numObjs; i++)
-		dumpDumpableObject(fout, dobjs[i]);
+		dumpDumpableObject(fout, dobjs[i], dobjs, numObjs);
 
 	/*
 	 * Set up options info to ensure we dump what we want.
@@ -7330,7 +7331,8 @@ collectComments(Archive *fout, CommentItem **items)
  * ArchiveEntries (TOC objects) for each object to be dumped.
  */
 static void
-dumpDumpableObject(Archive *fout, DumpableObject *dobj)
+dumpDumpableObject(Archive *fout, DumpableObject *dobj,
+				   DumpableObject **dobjs, int numObjs)
 {
 	switch (dobj->objType)
 	{
@@ -7338,7 +7340,7 @@ dumpDumpableObject(Archive *fout, DumpableObject *dobj)
 			dumpNamespace(fout, (NamespaceInfo *) dobj);
 			break;
 		case DO_EXTENSION:
-			dumpExtension(fout, (ExtensionInfo *) dobj);
+			dumpExtension(fout, (ExtensionInfo *) dobj, dobjs, numObjs);
 			break;
 		case DO_TYPE:
 			dumpType(fout, (TypeInfo *) dobj);
@@ -7513,13 +7515,13 @@ dumpNamespace(Archive *fout, NamespaceInfo *nspinfo)
  *	  writes out to fout the queries to recreate an extension
  */
 static void
-dumpExtension(Archive *fout, ExtensionInfo *extinfo)
+dumpExtension(Archive *fout, ExtensionInfo *extinfo,
+			  DumpableObject **dobjs, int numObjs)
 {
 	PQExpBuffer q;
 	PQExpBuffer delq;
 	PQExpBuffer labelq;
 	char	   *qextname;
-	bool        dumpIt;
 
 	if (!extinfo->dobj.dump || dataOnly)
 		return;
@@ -7540,14 +7542,7 @@ dumpExtension(Archive *fout, ExtensionInfo *extinfo)
 		Archive       *eout;			/* the extension's script file */
 		ArchiveHandle *EH;
 		TocEntry      *te;
-		ExtensionMembersListCell *extcell =
-			extmember_list_find(&extensions_members,
-								extinfo->dobj.catId.oid, false);
-		SimpleDOListCell *cell;
-
-		if (extcell == NULL)
-			exit_horribly(NULL, "extension \"%s\" has no members\n",
-						  extinfo->dobj.name);
+		int i;
 
 		/* See comment for !binary_upgrade case for IF NOT EXISTS. */
 		appendPQExpBuffer(q,
@@ -7578,18 +7573,26 @@ dumpExtension(Archive *fout, ExtensionInfo *extinfo)
 		EH->connection = ((ArchiveHandle *)fout)->connection;
 		eout->remoteVersion = fout->remoteVersion;
 
-		/* fill in our Extension's Archive */
-		for (cell = extcell->members->head; cell; cell = cell->next)
+		/* dump all objects for this extension, that have been sorted out in
+		 * the right order following dependencies etc */
+		for (i = 0; i < numObjs; i++)
 		{
-			DumpableObject *dobj = cell->dobj;
-			bool dump = dobj->dump;
+			DumpableObject *dobj = dobjs[i];
 
-			/* force the DumpableObject here to be dumped */
-			dobj->dump = true;
-			dumpDumpableObject(eout, dobj);
+			if (dobj->ext_member
+				&& dobj->extension_oid == extinfo->dobj.catId.oid)
+			{
+				bool dump = dobj->dump;
 
-			/* now restore its old dump flag value */
-			dobj->dump = dump;
+				/* force the DumpableObject here to be dumped */
+				dobj->dump = true;
+
+				/* Dump the Object */
+				dumpDumpableObject(eout, dobj, dobjs, numObjs);
+
+				/* now restore its old dump flag value */
+				dobj->dump = dump;
+			}
 		}
 
 		/* restore the eout Archive into the local buffer */
@@ -14176,8 +14179,6 @@ getExtensionMembership(Archive *fout, ExtensionInfo extinfo[],
 	DumpableObject *dobj,
 			   *refdobj;
 
-	ExtensionMembersListCell *curext = NULL;
-
 	/* Nothing to do if no extensions */
 	if (numExtensions == 0)
 		return;
@@ -14255,6 +14256,25 @@ getExtensionMembership(Archive *fout, ExtensionInfo extinfo[],
 
 		dobj->ext_member = true;
 
+		/* track the extension Oid in the object for later processing */
+		if (extension_include_oids.head
+			&& simple_oid_list_member(&extension_include_oids, refobjId.oid))
+		{
+			dobj->extension_oid = refobjId.oid;
+		}
+
+		/* The Shell Type needs to be in the --extension-script */
+		if (dobj->objType == DO_TYPE)
+		{
+			TypeInfo   *typeInfo = (TypeInfo *) dobj;
+
+			if (typeInfo->shellType)
+			{
+				typeInfo->shellType->dobj.ext_member = true;
+				typeInfo->shellType->dobj.extension_oid = dobj->extension_oid;
+			}
+		}
+
 		/*
 		 * Normally, mark the member object as not to be dumped.  But in
 		 * binary upgrades, we still dump the members individually, since the
@@ -14265,23 +14285,6 @@ getExtensionMembership(Archive *fout, ExtensionInfo extinfo[],
 			dobj->dump = false;
 		else
 			dobj->dump = refdobj->dump;
-
-		/*
-		 * If the -x (--extension-script) has been used, track extension's
-		 * members to be able to dump them later in a CREATE EXTENSION ... AS
-		 * $$ ... $$; command in the dump.
-		 */
-		if (extension_include_oids.head
-			&& simple_oid_list_member(&extension_include_oids, refobjId.oid))
-		{
-			/* update the cached pointer to current extension if needs be */
-			if (curext == NULL || curext->extoid != refobjId.oid)
-				curext =
-					extmember_list_find(&extensions_members, refobjId.oid, true);
-
-			/* now append the current member to the ExtensionMemberListCell */
-			extmember_list_append_member(curext, dobj);
-		}
 	}
 
 	PQclear(res);
