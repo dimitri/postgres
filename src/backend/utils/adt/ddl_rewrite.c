@@ -1117,6 +1117,8 @@ _rwAlterTableStmt(EventTriggerData *trigdata)
 				break;
 
 			case AT_AddConstraint:			/* add constraint */
+				appendStringInfo(&buf, " ADD");
+				_rwTableConstraint(&buf, list_make1(cmd->def), node->relation);
 				break;
 
 			case AT_ValidateConstraint:		/* validate constraint */
