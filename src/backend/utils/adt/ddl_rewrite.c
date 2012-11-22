@@ -631,10 +631,10 @@ _rwColConstraintElem(StringInfo buf, List *constraints, RangeVar *relation)
 }
 
 /*
- * rewrite a list of ConstraintAttr: grammar production
+ * rewrite a list of TableConstraint: grammar production
  */
 static void
-_rwConstAttr(StringInfo buf, List *constraints, RangeVar *relation)
+_rwTableConstraint(StringInfo buf, List *constraints, RangeVar *relation)
 {
 	ListCell   *lc;
 
@@ -845,7 +845,7 @@ _rwOptTableElementList(StringInfo buf, List *tableElts, RangeVar *relation)
 			case T_Constraint:
 			{
 				Constraint  *c = (Constraint *) elmt;
-				_rwConstAttr(buf, list_make1(c), relation);
+				_rwTableConstraint(buf, list_make1(c), relation);
 				break;
 			}
 			default:
@@ -883,7 +883,7 @@ _rwOptTypedTableElementList(StringInfo buf, List *tableElts, RangeVar *relation)
 			case T_Constraint:
 			{
 				Constraint  *c = (Constraint *) elmt;
-				_rwConstAttr(buf, list_make1(c), relation);
+				_rwTableConstraint(buf, list_make1(c), relation);
 				break;
 			}
 			default:
