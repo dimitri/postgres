@@ -24,6 +24,7 @@
 #include "catalog/index.h"
 #include "commands/defrem.h"
 #include "commands/event_trigger.h"
+#include "commands/tablecmds.h"
 #include "funcapi.h"
 #include "lib/stringinfo.h"
 #include "nodes/makefuncs.h"
@@ -1033,225 +1034,306 @@ _rwCreateStmt(EventTriggerData *trigdata)
 }
 
 /*
+ * rewrite AlterTableCmd as produced by the AlterTable implementation in the
+ * preparation step.
+ */
+static void
+_rwAlterTableCmd(StringInfo buf, AlterTableCmd *cmd, RangeVar *relation)
+{
+	switch (cmd->subtype)
+	{
+		case AT_AddColumn:				/* add column */
+		case AT_AddColumnToView:
+		case AT_AddColumnRecurse:
+		{
+			ColumnDef  *def = (ColumnDef *) cmd->def;
+
+			appendStringInfo(buf, " ADD COLUMN %s %s",
+							 def->colname,
+							 TypeNameToString(def->typeName));
+
+			if (def->is_not_null)
+				appendStringInfoString(buf, " NOT NULL");
+			break;
+		}
+
+		case AT_ColumnDefault:			/* alter column default */
+		{
+			ColumnDef  *def = (ColumnDef *) cmd->def;
+
+			if (def == NULL)
+				appendStringInfo(buf, " ALTER %s DROP DEFAULT",
+								 cmd->name);
+			else
+			{
+				char *str =
+					deparse_expression_pretty(cmd->def, NIL, false, false, 0, 0);
+
+				appendStringInfo(buf, " ALTER %s SET DEFAULT %s",
+								 cmd->name, str);
+			}
+			break;
+		}
+
+		case AT_DropNotNull:			/* alter column drop not null */
+			appendStringInfo(buf, " ALTER %s DROP NOT NULL", cmd->name);
+			break;
+
+		case AT_SetNotNull:				/* alter column set not null */
+			appendStringInfo(buf, " ALTER %s SET NOT NULL", cmd->name);
+			break;
+
+		case AT_SetStatistics:			/* alter column set statistics */
+			appendStringInfo(buf, " ALTER %s SET STATISTICS %ld",
+							 cmd->name,
+							 (long) intVal((Value *)(cmd->def)));
+			break;
+
+		case AT_SetOptions:				/* alter column set ( options ) */
+			_rwRelOptions(buf, (List *)cmd->def, true);
+			break;
+
+		case AT_ResetOptions:			/* alter column reset ( options ) */
+			_rwRelOptions(buf, (List *)cmd->def, true);
+			break;
+
+		case AT_SetStorage:				/* alter column set storage */
+			appendStringInfo(buf, " ALTER %s SET STORAGE %s",
+							 cmd->name,
+							 strVal((Value *)(cmd->def)));
+			break;
+
+		case AT_DropColumn:				/* drop column */
+		case AT_DropColumnRecurse:
+			appendStringInfo(buf, " %s %s%s",
+							 cmd->missing_ok? "DROP IF EXISTS": "DROP",
+							 cmd->name,
+							 cmd->behavior == DROP_CASCADE? " CASCADE": "");
+			break;
+
+		case AT_AddIndex:				/* add index */
+		case AT_ReAddIndex:
+			/* can not be parsed by gram.y, apparently */
+			break;
+
+		case AT_AddConstraint:			/* add constraint */
+		case AT_AddConstraintRecurse:
+		case AT_ReAddConstraint:
+		{
+			Constraint  *constraint = (Constraint *) cmd->def;
+
+			elog(NOTICE, "AT_AddConstraint: %s", constraint->conname);
+
+			appendStringInfo(buf, " ADD");
+			_rwTableConstraint(buf, list_make1(constraint), relation);
+			break;
+		}
+
+		case AT_ValidateConstraint:		/* validate constraint */
+			appendStringInfo(buf, " VALIDATE CONSTRAINT %s", cmd->name);
+			break;
+
+		case AT_AddIndexConstraint:		/* add constraint using existing index */
+		{
+			Constraint  *constraint = (Constraint *) cmd->def;
+
+			elog(NOTICE, "AT_AddIndexConstraint: %s", constraint->conname);
+
+			appendStringInfo(buf, " ADD ");
+			_rwTableConstraint(buf, list_make1(constraint), relation);
+			break;
+		}
+			break;
+
+		case AT_DropConstraint:			/* drop constraint */
+		case AT_DropConstraintRecurse:
+			appendStringInfo(buf, " DROP CONSTRAINT%s %s %s",
+							 cmd->missing_ok? " IF EXISTS": "",
+							 cmd->name,
+							 cmd->behavior == DROP_CASCADE? " CASCADE": "");
+			break;
+
+		case AT_AlterColumnType:		/* alter column type */
+		{
+			ColumnDef  *def = (ColumnDef *) cmd->def;
+
+			appendStringInfo(buf, " ALTER %s TYPE %s",
+							 cmd->name,
+							 TypeNameToString(def->typeName));
+			if (def->raw_default != NULL)
+			{
+				char *str =
+					deparse_expression_pretty(def->raw_default,
+											  NIL, false, false, 0, 0);
+				appendStringInfo(buf, " USING %s", str);
+			}
+			break;
+		}
+
+		case AT_AlterColumnGenericOptions:	/* alter column OPTIONS (...) */
+			/* FIXME */
+			appendStringInfo(buf, " OPTIONS (");
+			appendStringInfoChar(buf, ')');
+			break;
+
+		case AT_ChangeOwner:			/* change owner */
+			appendStringInfo(buf, " OWNER TO %s", cmd->name);
+			break;
+
+		case AT_ClusterOn:				/* CLUSTER ON */
+			appendStringInfo(buf, " CLUSTER ON %s", cmd->name);
+			break;
+
+		case AT_DropCluster:			/* SET WITHOUT CLUSTER */
+			appendStringInfo(buf, " SET WITHOUT CLUSTER");
+			break;
+
+		case AT_AddOids:			/* SET WITH OIDS */
+		case AT_AddOidsRecurse:
+			appendStringInfo(buf, " SET WITH OIDS");
+			break;
+
+		case AT_DropOids:			/* SET WITHOUT OIDS */
+			appendStringInfo(buf, " SET WITHOUT OIDS");
+			break;
+
+		case AT_SetTableSpace:			/* SET TABLESPACE */
+			appendStringInfo(buf, " SET TABLESPACE %s", cmd->name);
+			break;
+
+		case AT_SetRelOptions:			/* SET (...) -- AM specific parameters */
+			appendStringInfo(buf, " SET (");
+			_rwRelOptions(buf, (List *)cmd->def, true);
+			appendStringInfoChar(buf, ')');
+			break;
+
+		case AT_ResetRelOptions:		/* RESET (...) -- AM specific parameters */
+			appendStringInfo(buf, " RESET (");
+			_rwRelOptions(buf, (List *)cmd->def, false);
+			appendStringInfoChar(buf, ')');
+			break;
+
+		case AT_EnableTrig:				/* ENABLE TRIGGER name */
+			appendStringInfo(buf, " ENABLE TRIGGER %s", cmd->name);
+			break;
+
+		case AT_EnableAlwaysTrig:		/* ENABLE ALWAYS TRIGGER name */
+			appendStringInfo(buf, " ENABLE ALWAYS TRIGGER %s", cmd->name);
+			break;
+
+		case AT_EnableReplicaTrig:		/* ENABLE REPLICA TRIGGER name */
+			appendStringInfo(buf, " ENABLE REPLICA TRIGGER %s", cmd->name);
+			break;
+
+		case AT_DisableTrig:			/* DISABLE TRIGGER name */
+			appendStringInfo(buf, " DISABLE TRIGGER %s", cmd->name);
+			break;
+
+		case AT_EnableTrigAll:			/* ENABLE TRIGGER ALL */
+			appendStringInfo(buf, " ENABLE TRIGGER ALL");
+			break;
+
+		case AT_DisableTrigAll:			/* DISABLE TRIGGER ALL */
+			appendStringInfo(buf, " DISABLE TRIGGER ALL");
+			break;
+
+		case AT_EnableTrigUser:			/* ENABLE TRIGGER USER */
+			appendStringInfo(buf, " ENABLE TRIGGER USER");
+			break;
+
+		case AT_DisableTrigUser:		/* DISABLE TRIGGER USER */
+			appendStringInfo(buf, " DISABLE TRIGGER USER");
+			break;
+
+		case AT_EnableRule:				/* ENABLE RULE name */
+			appendStringInfo(buf, " ENABLE RULE %s", cmd->name);
+			break;
+
+		case AT_EnableAlwaysRule:		/* ENABLE ALWAYS RULE name */
+			appendStringInfo(buf, " ENABLE ALWAYS RULE %s", cmd->name);
+			break;
+
+		case AT_EnableReplicaRule:		/* ENABLE REPLICA RULE name */
+			appendStringInfo(buf, " ENABLE REPLICA RULE %s", cmd->name);
+			break;
+
+		case AT_DisableRule:			/* DISABLE RULE name */
+			appendStringInfo(buf, " DISABLE RULE %s", cmd->name);
+			break;
+
+		case AT_AddInherit:				/* INHERIT parent */
+			appendStringInfo(buf, " INHERIT %s",
+							 RangeVarToString((RangeVar *) cmd->def));
+			break;
+
+		case AT_DropInherit:			/* NO INHERIT parent */
+			appendStringInfo(buf, " NO INHERIT %s",
+							 RangeVarToString((RangeVar *) cmd->def));
+			break;
+
+		case AT_AddOf:					/* OF <type_name> */
+		{
+			ColumnDef  *def = (ColumnDef *) cmd->def;
+
+			appendStringInfo(buf, " OF %s", TypeNameToString(def->typeName));
+			break;
+		}
+
+		case AT_DropOf:					/* NOT OF */
+			appendStringInfo(buf, " NOT OF");
+			break;
+
+		case AT_GenericOptions:			/* OPTIONS (...) */
+			/* FIXME */
+			break;
+
+		default:
+			break;
+	}
+}
+
+/*
  * rewrite AlterTableStmt: parser production
  */
 static void
 _rwAlterTableStmt(EventTriggerData *trigdata)
 {
-	AlterTableStmt *node = (AlterTableStmt *)trigdata->parsetree;
-	StringInfoData buf;
-	ListCell   *lcmd;
-	bool        first = true;
+	AlterTableStmt		*node = (AlterTableStmt *)trigdata->parsetree;
+	StringInfoData		 buf;
+
+	/*
+	 * in ProcessUtility we trick the first entry of the cmds to be an
+	 * AlterTable work queue.
+	 */
+	List		*wqueue = node->cmds;
+	ListCell	*ltab;
+	bool		 first	= true;
+	int			 pass;
 
 	initStringInfo(&buf);
 	appendStringInfo(&buf, "ALTER %s %s",
 					 relobjectkindToString(node->relkind),
 					 RangeVarToString(node->relation));
 
-	foreach(lcmd, node->cmds)
+	for (pass = 0; pass < AT_NUM_PASSES; pass++)
 	{
-		AlterTableCmd *cmd = (AlterTableCmd *) lfirst(lcmd);
-		ColumnDef  *def = (ColumnDef *) cmd->def;
-
-		_maybeAddSeparator(&buf, ", ", &first);
-
-		switch (cmd->subtype)
+		/* Go through each table that needs to be processed */
+		foreach(ltab, wqueue)
 		{
-			case AT_AddColumn:				/* add column */
-				appendStringInfo(&buf, " ADD COLUMN %s %s",
-								 def->colname,
-								 TypeNameToString(def->typeName));
+			AlteredTableInfo *tab = (AlteredTableInfo *) lfirst(ltab);
+			List	   *subcmds = tab->subcmds[pass];
+			ListCell   *lcmd;
 
-				if (def->is_not_null)
-					appendStringInfoString(&buf, " NOT NULL");
-				break;
+			if (subcmds == NIL)
+				continue;
 
-			case AT_ColumnDefault:			/* alter column default */
-				if (def == NULL)
-					appendStringInfo(&buf, " ALTER %s DROP DEFAULT",
-									 cmd->name);
-				else
-				{
-					char *str =
-						deparse_expression_pretty(cmd->def, NIL, false, false, 0, 0);
-
-					appendStringInfo(&buf, " ALTER %s SET DEFAULT %s",
-									 cmd->name, str);
-				}
-				break;
-
-			case AT_DropNotNull:			/* alter column drop not null */
-				appendStringInfo(&buf, " ALTER %s DROP NOT NULL", cmd->name);
-				break;
-
-			case AT_SetNotNull:				/* alter column set not null */
-				appendStringInfo(&buf, " ALTER %s SET NOT NULL", cmd->name);
-				break;
-
-			case AT_SetStatistics:			/* alter column set statistics */
-				appendStringInfo(&buf, " ALTER %s SET STATISTICS %ld",
-								 cmd->name,
-								 (long) intVal((Value *)(cmd->def)));
-				break;
-
-			case AT_SetOptions:				/* alter column set ( options ) */
-				break;
-
-			case AT_ResetOptions:			/* alter column reset ( options ) */
-				break;
-
-			case AT_SetStorage:				/* alter column set storage */
-				appendStringInfo(&buf, " ALTER %s SET STORAGE %s",
-								 cmd->name,
-								 strVal((Value *)(cmd->def)));
-				break;
-
-			case AT_DropColumn:				/* drop column */
-				appendStringInfo(&buf, " %s %s%s",
-								 cmd->missing_ok? "DROP IF EXISTS": "DROP",
-								 cmd->name,
-								 cmd->behavior == DROP_CASCADE? " CASCADE": "");
-				break;
-
-			case AT_AddIndex:				/* add index */
-				break;
-
-			case AT_AddConstraint:			/* add constraint */
-				appendStringInfo(&buf, " ADD");
-				_rwTableConstraint(&buf, list_make1(cmd->def), node->relation);
-				break;
-
-			case AT_ValidateConstraint:		/* validate constraint */
-				appendStringInfo(&buf, " VALIDATE CONSTRAINT %s", cmd->name);
-				break;
-
-			case AT_AddIndexConstraint:		/* add constraint using existing index */
-				break;
-
-			case AT_DropConstraint:			/* drop constraint */
-				appendStringInfo(&buf, " DROP CONSTRAINT%s %s %s",
-								 cmd->missing_ok? " IF EXISTS": "",
-								 cmd->name,
-								 cmd->behavior == DROP_CASCADE? " CASCADE": "");
-				break;
-
-			case AT_AlterColumnType:		/* alter column type */
-				appendStringInfo(&buf, " ALTER %s TYPE %s",
-								 cmd->name,
-								 TypeNameToString(def->typeName));
-				if (def->raw_default != NULL)
-				{
-					char *str =
-						deparse_expression_pretty(def->raw_default,
-												  NIL, false, false, 0, 0);
-					appendStringInfo(&buf, " USING %s", str);
-				}
-				break;
-
-			case AT_AlterColumnGenericOptions:	/* alter column OPTIONS (...) */
-				appendStringInfo(&buf, " OPTIONS (");
-				appendStringInfoChar(&buf, ')');
-				break;
-
-			case AT_ChangeOwner:			/* change owner */
-				appendStringInfo(&buf, " OWNER TO %s", cmd->name);
-				break;
-
-			case AT_ClusterOn:				/* CLUSTER ON */
-				appendStringInfo(&buf, " CLUSTER ON %s", cmd->name);
-				break;
-
-			case AT_DropCluster:			/* SET WITHOUT CLUSTER */
-				appendStringInfo(&buf, " SET WITHOUT CLUSTER");
-				break;
-
-			case AT_SetTableSpace:			/* SET TABLESPACE */
-				appendStringInfo(&buf, " SET TABLESPACE %s", cmd->name);
-				break;
-
-			case AT_SetRelOptions:			/* SET (...) -- AM specific parameters */
-				appendStringInfo(&buf, " SET (");
-				_rwRelOptions(&buf, (List *)cmd->def, true);
-				appendStringInfoChar(&buf, ')');
-				break;
-
-			case AT_ResetRelOptions:		/* RESET (...) -- AM specific parameters */
-				appendStringInfo(&buf, " RESET (");
-				_rwRelOptions(&buf, (List *)cmd->def, false);
-				appendStringInfoChar(&buf, ')');
-				break;
-
-			case AT_EnableTrig:				/* ENABLE TRIGGER name */
-				appendStringInfo(&buf, " ENABLE TRIGGER %s", cmd->name);
-				break;
-
-			case AT_EnableAlwaysTrig:		/* ENABLE ALWAYS TRIGGER name */
-				appendStringInfo(&buf, " ENABLE ALWAYS TRIGGER %s", cmd->name);
-				break;
-
-			case AT_EnableReplicaTrig:		/* ENABLE REPLICA TRIGGER name */
-				appendStringInfo(&buf, " ENABLE REPLICA TRIGGER %s", cmd->name);
-				break;
-
-			case AT_DisableTrig:			/* DISABLE TRIGGER name */
-				appendStringInfo(&buf, " DISABLE TRIGGER %s", cmd->name);
-				break;
-
-			case AT_EnableTrigAll:			/* ENABLE TRIGGER ALL */
-				appendStringInfo(&buf, " ENABLE TRIGGER ALL");
-				break;
-
-			case AT_DisableTrigAll:			/* DISABLE TRIGGER ALL */
-				appendStringInfo(&buf, " DISABLE TRIGGER ALL");
-				break;
-
-			case AT_EnableTrigUser:			/* ENABLE TRIGGER USER */
-				appendStringInfo(&buf, " ENABLE TRIGGER USER");
-				break;
-
-			case AT_DisableTrigUser:		/* DISABLE TRIGGER USER */
-				appendStringInfo(&buf, " DISABLE TRIGGER USER");
-				break;
-
-			case AT_EnableRule:				/* ENABLE RULE name */
-				appendStringInfo(&buf, " ENABLE RULE %s", cmd->name);
-				break;
-
-			case AT_EnableAlwaysRule:		/* ENABLE ALWAYS RULE name */
-				appendStringInfo(&buf, " ENABLE ALWAYS RULE %s", cmd->name);
-				break;
-
-			case AT_EnableReplicaRule:		/* ENABLE REPLICA RULE name */
-				appendStringInfo(&buf, " ENABLE REPLICA RULE %s", cmd->name);
-				break;
-
-			case AT_DisableRule:			/* DISABLE RULE name */
-				appendStringInfo(&buf, " DISABLE RULE %s", cmd->name);
-				break;
-
-			case AT_AddInherit:				/* INHERIT parent */
-				appendStringInfo(&buf, " INHERIT %s",
-								 RangeVarToString((RangeVar *) cmd->def));
-				break;
-
-			case AT_DropInherit:			/* NO INHERIT parent */
-				appendStringInfo(&buf, " NO INHERIT %s",
-								 RangeVarToString((RangeVar *) cmd->def));
-				break;
-
-			case AT_AddOf:					/* OF <type_name> */
-				appendStringInfo(&buf, " OF %s", TypeNameToString(def->typeName));
-				break;
-
-			case AT_DropOf:					/* NOT OF */
-				appendStringInfo(&buf, " NOT OF");
-				break;
-
-			case AT_GenericOptions:			/* OPTIONS (...) */
-				break;
-
-			default:
-				break;
+			foreach(lcmd, subcmds)
+			{
+				_maybeAddSeparator(&buf, ",", &first);
+				_rwAlterTableCmd(&buf,
+								 (AlterTableCmd *)lfirst(lcmd),
+								 node->relation);
+			}
 		}
 	}
 	appendStringInfoChar(&buf, ';');

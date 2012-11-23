@@ -813,10 +813,19 @@ standard_ProcessUtility(Node *parsetree,
 						if (IsA(stmt, AlterTableStmt))
 						{
 							/* Do the table alteration proper */
-							AlterTable(relid, lockmode, (AlterTableStmt *) stmt);
+							AlterTableStmt *as = (AlterTableStmt *) stmt;
+							List *wq = AlterTable(relid, lockmode, as);
+
+							/*
+							 * Replace the command list with what really
+							 * happened, only consumer of that now is
+							 * src/backend/utils/adt/ddl_rewrite.c and it need
+							 * details like new constraints names.
+							 */
+							as->cmds = wq;
 
 							EventTriggerTargetOid = relid;
-							EventTriggerDDLCommandEnd(stmt, context);
+							EventTriggerDDLCommandEnd((Node *)as, context);
 						}
 						else
 						{
