@@ -1005,7 +1005,8 @@ standard_ProcessUtility(Node *parsetree,
 
 		case T_CreateFunctionStmt:		/* CREATE FUNCTION */
 			EventTriggerDDLCommandStart(parsetree, context);
-			CreateFunction((CreateFunctionStmt *) parsetree, queryString);
+			EventTriggerTargetOid =
+				CreateFunction((CreateFunctionStmt *) parsetree, queryString);
 			EventTriggerDDLCommandEnd(parsetree, context);
 			break;
 
