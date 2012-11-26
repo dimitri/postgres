@@ -22,6 +22,7 @@
 #include "catalog/dependency.h"
 #include "catalog/heap.h"
 #include "catalog/index.h"
+#include "catalog/pg_proc.h"
 #include "commands/defrem.h"
 #include "commands/event_trigger.h"
 #include "commands/tablecmds.h"
@@ -32,6 +33,7 @@
 #include "optimizer/planner.h"
 #include "parser/analyze.h"
 #include "parser/keywords.h"
+#include "parser/parse_expr.h"
 #include "parser/parse_func.h"
 #include "parser/parse_oper.h"
 #include "parser/parse_type.h"
@@ -239,7 +241,9 @@ _rwDropStmt(EventTriggerData *trigdata)
 			}
 
 			default:
-				elog(ERROR, "unexpected object type: %d", node->removeType);
+				/* development versions only */
+				elog(WARNING,
+					 "ddl rewrite: unexpected object type: %d", node->removeType);
 				break;
 		}
 	}
@@ -1610,6 +1614,165 @@ _rwCreateIndexStmt(EventTriggerData *trigdata)
 	trigdata->objectname = node->idxname;
 }
 
+/*
+ * rewrite func_arg: parser production
+ */
+static void
+_rwFuncArg(StringInfo buf, FunctionParameter *fp)
+{
+	/* Parameter's mode */
+	switch (fp->mode)
+	{
+		case FUNC_PARAM_INOUT:
+			appendStringInfoString(buf, "IN OUT");
+			break;
+
+		case FUNC_PARAM_IN:
+			appendStringInfoString(buf, "IN");
+			break;
+		case FUNC_PARAM_OUT:
+			appendStringInfoString(buf, "OUT");
+			break;
+
+		case FUNC_PARAM_VARIADIC:
+			appendStringInfoString(buf, "VARIADIC");
+			break;
+
+		case FUNC_PARAM_TABLE:
+			elog(ERROR, "FUNC_PARAM_TABLE not expected in Argument List");
+			break;
+	}
+
+	/* Parameter's name is optional */
+	if (fp->name)
+		appendStringInfo(buf, " %s", fp->name);
+
+	/* Paramter's type name is not */
+	appendStringInfo(buf, " %s", TypeNameToString(fp->argType));
+
+	if (fp->defexpr)
+	{
+		ParseState *pstate;
+		Node	   *def;
+
+		pstate = make_parsestate(NULL);
+
+		def = transformExpr(pstate, fp->defexpr, EXPR_KIND_FUNCTION_DEFAULT);
+		/* def = coerce_to_specific_type(pstate, def, toid, "DEFAULT"); */
+		/* assign_expr_collations(pstate, def); */
+	}
+}
+
+/*
+ * rewrite IndexStmt: parser production
+ */
+static void
+_rwCreateFunctionStmt(EventTriggerData *trigdata)
+{
+	CreateFunctionStmt	*node  = (CreateFunctionStmt *)trigdata->parsetree;
+	StringInfoData		 buf;
+	char				*fname, *nspname;
+	Oid					 namespaceId, languageOid;
+	ListCell			*x;
+	bool				 first = true;
+	Oid					 prorettype;
+	bool				 returnsSet;
+	List				*as_clause;
+	char				*language;
+	bool				 isWindowFunc, isStrict, security, isLeakProof;
+	char				 volatility = PROVOLATILE_VOLATILE;
+	ArrayType			*proconfig;
+	float4				 procost = -1;
+	float4				 prorows = -1;
+	char                *procost_str, *prorows_str;
+	char				*probin_str;
+	char				*prosrc_str;
+	HeapTuple			 languageTuple;
+
+	namespaceId = QualifiedNameGetCreationNamespace(node->funcname, &fname);
+	nspname = get_namespace_name(namespaceId);
+
+	initStringInfo(&buf);
+	appendStringInfo(&buf, "CREATE%s FUNCTION %s.%s",
+					 node->replace ? " OR REPLACE" : "", nspname, fname);
+
+	/* parameters */
+	if (node->parameters)
+		appendStringInfoChar(&buf, '(');
+
+	foreach(x, node->parameters)
+	{
+		FunctionParameter *fp = (FunctionParameter *) lfirst(x);
+
+		_maybeAddSeparator(&buf, ", ", &first);
+		_rwFuncArg(&buf, fp);
+	}
+	if (node->parameters)
+		appendStringInfoChar(&buf, ')');
+
+	/* return type */
+	compute_return_type(node->returnType, languageOid, &prorettype, &returnsSet);
+	appendStringInfo(&buf, " returns %s", TypeNameToString(node->returnType));
+
+	/* get options and attributes */
+	compute_attributes_sql_style(node->options,
+								 &as_clause, &language,
+								 &isWindowFunc, &volatility,
+								 &isStrict, &security, &isLeakProof,
+								 &proconfig, &procost, &prorows);
+
+	languageTuple = SearchSysCache1(LANGNAME, PointerGetDatum(language));
+	languageOid =  HeapTupleGetOid(languageTuple);
+	ReleaseSysCache(languageTuple);
+
+	/* also get the function's body */
+	interpret_AS_clause(languageOid, language, fname, as_clause,
+						&prosrc_str, &probin_str,
+						returnsSet, &procost, &prorows);
+
+	/* language */
+	appendStringInfo(&buf, " language %s", language);
+
+	/* options */
+	if (isWindowFunc)
+		appendStringInfo(&buf, " window");
+
+	switch (volatility)
+	{
+		case PROVOLATILE_IMMUTABLE:
+			appendStringInfo(&buf, " immutable");
+			break;
+		case PROVOLATILE_STABLE:
+			appendStringInfo(&buf, " stable");
+			break;
+		case PROVOLATILE_VOLATILE:
+			appendStringInfo(&buf, " volatile");
+			break;
+	}
+	appendStringInfo(&buf, " %sleakproof", isLeakProof ? "" : "not ");
+
+	if (isStrict)
+		appendStringInfo(&buf, " returns null on null input");
+	else
+		appendStringInfo(&buf, " called on null input");
+
+	/* friendly output for cost and rows */
+	procost_str = DatumGetCString(
+		DirectFunctionCall1(float4out, Float4GetDatum(procost)));
+	prorows_str = DatumGetCString(
+		DirectFunctionCall1(float4out, Float4GetDatum(prorows)));
+
+	appendStringInfo(&buf, " cost %s", procost_str);
+	appendStringInfo(&buf, " rows %s", prorows_str);
+
+	/* body */
+	appendStringInfo(&buf, " as $%s$ %s $%s$;", fname, prosrc_str, fname);
+
+	trigdata->command = buf.data;
+	trigdata->schemaname = nspname;
+	trigdata->objectname = fname;
+}
+
 /* get the work done */
 static void
 normalize_command_string(EventTriggerData *trigdata)
@@ -1650,6 +1813,10 @@ normalize_command_string(EventTriggerData *trigdata)
 
 		case T_IndexStmt:
 			_rwCreateIndexStmt(trigdata);
+			break;
+
+		case T_CreateFunctionStmt:
+			_rwCreateFunctionStmt(trigdata);
 			break;
 
 		default:

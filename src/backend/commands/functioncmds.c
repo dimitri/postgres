@@ -78,7 +78,7 @@
  * validator, so as not to produce a NOTICE and then an ERROR for the same
  * condition.)
  */
-static void
+void
 compute_return_type(TypeName *returnType, Oid languageOid,
 					Oid *prorettype_p, bool *returnsSet_p)
 {
@@ -551,7 +551,7 @@ update_proconfig_value(ArrayType *a, List *set_items)
  * Dissect the list of options assembled in gram.y into function
  * attributes.
  */
-static void
+void
 compute_attributes_sql_style(List *options,
 							 List **as,
 							 char **language,
@@ -688,7 +688,7 @@ compute_attributes_sql_style(List *options,
  *	   be assumed to be repeatable over multiple evaluations.
  *------------
  */
-static void
+void
 compute_attributes_with_style(List *parameters, bool *isStrict_p, char *volatility_p)
 {
 	ListCell   *pl;
@@ -722,11 +722,15 @@ compute_attributes_with_style(List *parameters, bool *isStrict_p, char *volatili
  * In all other cases
  *
  *	   AS <object reference, or sql code>
+ *
+ * The default values of procost and prorows also depend on the language of the
+ * function, so we fix those default values here.
  */
-static void
+void
 interpret_AS_clause(Oid languageOid, const char *languageName,
 					char *funcname, List *as,
-					char **prosrc_str_p, char **probin_str_p)
+					char **prosrc_str_p, char **probin_str_p,
+					bool returnsSet, float4 *procost, float4 *prorows)
 {
 	Assert(as != NIL);
 
@@ -776,8 +780,29 @@ interpret_AS_clause(Oid languageOid, const char *languageName,
 				*prosrc_str_p = funcname;
 		}
 	}
-}
 
+	/*
+	 * Set default values for COST and ROWS depending on other parameters;
+	 * reject ROWS if it's not returnsSet.  NB: pg_dump knows these default
+	 * values, keep it in sync if you change them.
+	 */
+	if (*procost < 0)
+	{
+		/* SQL and PL-language functions are assumed more expensive */
+		if (languageOid == INTERNALlanguageId ||
+			languageOid == ClanguageId)
+			*procost = 1;
+		else
+			*procost = 100;
+	}
+	if (*prorows < 0)
+	{
+		if (returnsSet)
+			*prorows = 1000;
+		else
+			*prorows = 0;		/* dummy value if not returnsSet */
+	}
+}
 
 
 /*
@@ -927,34 +952,15 @@ CreateFunction(CreateFunctionStmt *stmt, const char *queryString)
 
 	compute_attributes_with_style(stmt->withClause, &isStrict, &volatility);
 
-	interpret_AS_clause(languageOid, language, funcname, as_clause,
-						&prosrc_str, &probin_str);
-
-	/*
-	 * Set default values for COST and ROWS depending on other parameters;
-	 * reject ROWS if it's not returnsSet.  NB: pg_dump knows these default
-	 * values, keep it in sync if you change them.
-	 */
-	if (procost < 0)
-	{
-		/* SQL and PL-language functions are assumed more expensive */
-		if (languageOid == INTERNALlanguageId ||
-			languageOid == ClanguageId)
-			procost = 1;
-		else
-			procost = 100;
-	}
-	if (prorows < 0)
-	{
-		if (returnsSet)
-			prorows = 1000;
-		else
-			prorows = 0;		/* dummy value if not returnsSet */
-	}
-	else if (!returnsSet)
+	/* interpret_AS_clause is responsible for adjusting procost and prorows */
+	if (!returnsSet && prorows >= 0)
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 				 errmsg("ROWS is not applicable when function does not return a set")));
+
+	interpret_AS_clause(languageOid, language, funcname, as_clause,
+						&prosrc_str, &probin_str,
+						returnsSet, &procost, &prorows);
 
 	/*
 	 * And now that we have all the parameters, and know we're permitted to do
