@@ -30,6 +30,7 @@
 #include "miscadmin.h"
 #include "utils/acl.h"
 #include "utils/builtins.h"
+#include "utils/ddl_rewrite.h"
 #include "utils/evtcache.h"
 #include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
