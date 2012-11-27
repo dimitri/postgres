@@ -928,8 +928,9 @@ standard_ProcessUtility(Node *parsetree,
 				switch (stmt->kind)
 				{
 					case OBJECT_AGGREGATE:
-						DefineAggregate(stmt->defnames, stmt->args,
-										stmt->oldstyle, stmt->definition);
+						EventTriggerTargetOid =
+							DefineAggregate(stmt->defnames, stmt->args,
+											stmt->oldstyle, stmt->definition);
 						break;
 					case OBJECT_OPERATOR:
 						Assert(stmt->args == NIL);
