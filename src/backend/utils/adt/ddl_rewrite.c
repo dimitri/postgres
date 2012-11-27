@@ -145,7 +145,8 @@ _maybeAddSeparator(StringInfo buf, const char *sep, bool *first)
 /*
  * rewrite any_name: parser production
  */
-static void _rwAnyName(StringInfo buf, List *name)
+static void
+_rwAnyName(StringInfo buf, List *name)
 {
 	bool first = true;
 	ListCell *lc;
@@ -160,6 +161,24 @@ static void _rwAnyName(StringInfo buf, List *name)
 }
 
 /*
+ * rewrite a List of function or aggregate argument types
+ */
+static void
+_rwArgTypes(StringInfo buf, List *argtypes)
+{
+	ListCell   *lc;
+	bool        first = true;
+
+	foreach(lc, argtypes)
+	{
+		TypeName   *t = (TypeName *) lfirst(lc);
+
+		_maybeAddSeparator(buf, ",", &first);
+		appendStringInfoString(buf, TypeNameToString(t));
+	}
+}
+
+/*
  * The DROP statement is "generic" as in supporting multiple object types. The
  * specialized part is only finding the names of the objects dropped.
  *
@@ -168,17 +187,24 @@ static void _rwAnyName(StringInfo buf, List *name)
 static void
 _rwDropStmt(EventTriggerData *trigdata)
 {
-	DropStmt *node = (DropStmt *)trigdata->parsetree;
-	StringInfoData buf;
-	ListCell *obj;
-	bool first = true;
+	DropStmt			*node  = (DropStmt *)trigdata->parsetree;
+	StringInfoData		 buf;
+	ListCell			*obj, *args = NULL;
+	bool				 first = true, support = true;
 
 	initStringInfo(&buf);
 	appendStringInfo(&buf, "%s ", trigdata->ctag->tag);
 
 	foreach(obj, node->objects)
 	{
-		List *objname = lfirst(obj);
+		List	*objname = lfirst(obj);
+		List	*objargs = NIL;
+
+		if (node->arguments)
+		{
+			args = (!args ? list_head(node->arguments) : lnext(args));
+			objargs = lfirst(args);
+		}
 
 		switch (node->removeType)
 		{
@@ -240,9 +266,40 @@ _rwDropStmt(EventTriggerData *trigdata)
 				break;
 			}
 
+			case OBJECT_AGGREGATE:
+			case OBJECT_FUNCTION:
+			{
+				HeapTuple		tup;
+				Form_pg_proc	proc;
+				Oid				foid;
+
+				if (node->removeType == OBJECT_FUNCTION)
+					foid = LookupFuncNameTypeNames(objname, objargs, false);
+				else
+					foid = LookupAggNameTypeNames(objname, objargs, false);
+
+				tup = SearchSysCache1(PROCOID, ObjectIdGetDatum(foid));
+				if (!HeapTupleIsValid(tup)) /* should not happen */
+					elog(ERROR, "cache lookup failed for function %u", foid);
+
+				proc = (Form_pg_proc) GETSTRUCT(tup);
+
+				appendStringInfo(&buf, "%s(", NameStr(proc->proname));
+				_rwArgTypes(&buf, objargs);
+				appendStringInfoChar(&buf, ')');
+
+				trigdata->objectid   = foid;
+				trigdata->schemaname = get_namespace_name(proc->pronamespace);
+				trigdata->objectname = NameStr(proc->proname);
+
+				ReleaseSysCache(tup);
+				break;
+			}
+
 			default:
 				/* development versions only */
-				elog(WARNING,
+				support = false;
+				elog(DEBUG1,
 					 "ddl rewrite: unexpected object type: %d", node->removeType);
 				break;
 		}
@@ -251,7 +308,8 @@ _rwDropStmt(EventTriggerData *trigdata)
 					 node->missing_ok ? " IF EXISTS":"",
 					 node->behavior == DROP_CASCADE ? "CASCADE" : "RESTRICT");
 
-	trigdata->command = buf.data;
+	if (support)
+		trigdata->command = buf.data;
 }
 
 static void
