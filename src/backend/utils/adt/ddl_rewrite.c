@@ -1153,11 +1153,15 @@ _rwAlterTableCmd(StringInfo buf, AlterTableCmd *cmd, RangeVar *relation)
 			break;
 
 		case AT_SetOptions:				/* alter column set ( options ) */
-			_rwRelOptions(buf, (List *)cmd->def, true);
+			appendStringInfo(buf, " ALTER COLUMN %s SET (", cmd->name);
+			_rwRelOptions(buf, (List *) cmd->def, true);
+			appendStringInfoChar(buf, ')');
 			break;
 
 		case AT_ResetOptions:			/* alter column reset ( options ) */
-			_rwRelOptions(buf, (List *)cmd->def, true);
+			appendStringInfo(buf, " ALTER COLUMN %s RESET (", cmd->name);
+			_rwRelOptions(buf, (List *) cmd->def, false);
+			appendStringInfoChar(buf, ')');
 			break;
 
 		case AT_SetStorage:				/* alter column set storage */
@@ -1234,8 +1238,8 @@ _rwAlterTableCmd(StringInfo buf, AlterTableCmd *cmd, RangeVar *relation)
 		}
 
 		case AT_AlterColumnGenericOptions:	/* alter column OPTIONS (...) */
-			/* FIXME */
-			appendStringInfo(buf, " OPTIONS (");
+			appendStringInfo(buf, " SET (");
+			_rwRelOptions(buf, (List *) cmd->def, true);
 			appendStringInfoChar(buf, ')');
 			break;
 
@@ -1347,7 +1351,9 @@ _rwAlterTableCmd(StringInfo buf, AlterTableCmd *cmd, RangeVar *relation)
 			break;
 
 		case AT_GenericOptions:			/* OPTIONS (...) */
-			/* FIXME */
+			appendStringInfo(buf, " SET (");
+			_rwRelOptions(buf, (List *) cmd->def, true);
+			appendStringInfoChar(buf, ')');
 			break;
 
 		default:
