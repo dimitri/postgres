@@ -1662,7 +1662,6 @@ _rwCreateIndexStmt(EventTriggerData *trigdata)
 	_rwOptWith(&buf, node->options);
 	_rwOptConsTableSpace(&buf, node->tableSpace);
 
-	/* FIXME: handle where_clause: production */
 	if (node->whereClause)
 	{
 		char *str =
