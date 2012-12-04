@@ -1,4 +1,4 @@
-/* contrib/hstore/hstore--1.1.sql */
+/* contrib/hstore/hstore--1.0.sql */
 
 -- complain if script is sourced in psql, rather than via CREATE EXTENSION
 \echo Use "CREATE EXTENSION hstore" to load this file. \quit
@@ -220,6 +220,12 @@ CREATE FUNCTION hstore(text,text)
 RETURNS hstore
 AS 'MODULE_PATHNAME','hstore_from_text'
 LANGUAGE C IMMUTABLE; -- not STRICT; needs to allow (key,NULL)
+
+CREATE OPERATOR => (
+	LEFTARG = text,
+	RIGHTARG = text,
+	PROCEDURE = hstore
+);
 
 CREATE FUNCTION hstore(text[],text[])
 RETURNS hstore
