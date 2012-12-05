@@ -847,7 +847,7 @@ help(const char *progname)
 	printf(_("  -S, --superuser=NAME         superuser user name to use in plain-text format\n"));
 	printf(_("  -t, --table=TABLE            dump the named table(s) only\n"));
 	printf(_("  -T, --exclude-table=TABLE    do NOT dump the named table(s)\n"));
-	printf(_("  -X, --extension-script       dunp named extension(s) scripts\n"));
+	printf(_("  -X, --extension-script       dump named extension(s) scripts\n"));
 	printf(_("  -x, --no-privileges          do not dump privileges (grant/revoke)\n"));
 	printf(_("  --binary-upgrade             for use by upgrade utilities only\n"));
 	printf(_("  --column-inserts             dump data as INSERT commands with column names\n"));
@@ -7523,6 +7523,7 @@ dumpExtension(Archive *fout, ExtensionInfo *extinfo,
 	PQExpBuffer labelq;
 	char	   *qextname;
 
+	/* Skip if not to be dumped */
 	if (!extinfo->dobj.dump || dataOnly)
 		return;
 

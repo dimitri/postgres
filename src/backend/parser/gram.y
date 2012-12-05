@@ -3479,7 +3479,7 @@ CreateExtensionStmt: CREATE EXTENSION name opt_with create_extension_opt_list
 				{
 					CreateExtensionStmt *n = makeNode(CreateExtensionStmt);
 					n->extname = $6;
-					n->if_not_exists = false;
+					n->if_not_exists = true;
 					n->options = lappend($8,
 										 makeDefElem("script",
 													 (Node *)makeString($10)));
@@ -3514,6 +3514,12 @@ create_extension_opt_item:
                  * size of the main parser.
                  */
                 {
+					/*
+					 * This option is needed only when the script is given
+					 * inline. We then don't have any control file but still
+					 * need to set the search_path according to the dependency
+					 * list when running the extension's script.
+					 */
 					if (strcmp($1, "requires") == 0)
 						$$ = makeDefElem("requires", (Node *)makeString($2));
 					else

@@ -75,7 +75,7 @@ typedef struct ExtensionControlFile
 	bool		superuser;		/* must be superuser to install? */
 	int			encoding;		/* encoding of the script file, or -1 */
 	List	   *requires;		/* names of prerequisite extensions */
-	char       *script;
+	char       *script;			/* extension's script, when given inline */
 } ExtensionControlFile;
 
 /*

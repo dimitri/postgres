@@ -133,7 +133,7 @@ typedef struct _dumpableObject
 	struct _namespaceInfo *namespace;	/* containing namespace, or NULL */
 	bool		dump;			/* true if we want to dump this object */
 	bool		ext_member;		/* true if object is member of extension */
-	Oid 		extension_oid;	/* Oid of the extension woning this object */
+	Oid 		extension_oid;	/* Oid of the extension owning this object */
 	DumpId	   *dependencies;	/* dumpIds of objects this one depends on */
 	int			nDeps;			/* number of valid dependencies */
 	int			allocDeps;		/* allocated size of dependencies[] */
