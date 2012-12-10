@@ -4002,6 +4002,78 @@ SELECT * FROM sales_summary_bytime;
       </para>
      </listitem>
     </varlistentry>
+
+    <varlistentry>
+     <term><varname>TG_CONTEXT</varname></term>
+     <listitem>
+      <para>
+       Data type <type>text</type>; variable that contains the command
+       context for which the trigger is fired. One
+       of <literal>TOPLEVEL</>, <literal>QUERY</>, <literal>SUCOMMAND</>
+       or <literal>GENERATED</>. See <xref linkend="sql-createeventtrigger">
+       for details.
+      </para>
+     </listitem>
+    </varlistentry>
+
+    <varlistentry>
+     <term><varname>TG_OPERATION</varname></term>
+     <listitem>
+      <para>
+       Data type <type>text</type>; variable that contains the command
+       operation for which the trigger is fired. One
+       of <literal>CREATE</>, <literal>ALTER</> or <literal>DROP</>.
+      </para>
+     </listitem>
+    </varlistentry>
+
+    <varlistentry>
+     <term><varname>TG_TYPE</varname></term>
+     <listitem>
+      <para>
+       Data type <type>text</type>; variable that contains the kind of
+       object that is the main target of the command for which the trigger
+       is fired, e.g. <literal>TABLE</> or <literal>FUNCTION</>.
+      </para>
+      <para>
+       Note that for most commands <literal>TG_TAG = TG_OPERATION || ' ' ||
+       TG_TYPE</literal>.
+      </para>
+     </listitem>
+    </varlistentry>
+
+    <varlistentry>
+     <term><varname>TG_OBJECTID</varname></term>
+     <listitem>
+      <para>
+       Data type <type>oid</type>; variable that contains the main object's
+       oid that is the main target of the command for which the trigger is
+       fired.
+      </para>
+     </listitem>
+    </varlistentry>
+
+    <varlistentry>
+     <term><varname>TG_SCHEMANAME</varname></term>
+     <listitem>
+      <para>
+       Data type <type>text</type>; variable that contains the schema name
+       where to find the object that is the main target of the command for
+       which the trigger is fired.
+      </para>
+     </listitem>
+    </varlistentry>
+
+    <varlistentry>
+     <term><varname>TG_OBJECTNAME</varname></term>
+     <listitem>
+      <para>
+       Data type <type>text</type>; variable that contains the name of the
+       main object that is the target of the command for which the trigger
+       is fired.
+      </para>
+     </listitem>
+    </varlistentry>
    </variablelist>
   </para>
 
@@ -4019,13 +4091,17 @@ SELECT * FROM sales_summary_bytime;
     </para>
 
 <programlisting>
-CREATE OR REPLACE FUNCTION snitch() RETURNS event_trigger AS $$
+create function snitch() returns event_trigger as $$
 BEGIN
-    RAISE NOTICE 'snitch: % %', tg_event, tg_tag;
-END;
-$$ LANGUAGE plpgsql;
+    RAISE NOTICE 'snitch event: %, context: %, tag: %, operation: %, type: %',
+                 tg_event, tg_context, tg_tag, tg_operation, tg_obtypename;
+    RAISE NOTICE '         oid: %, schema: %, name: %',
+                 tg_objectid, tg_schemaname, tg_objectname;
+    RAISE NOTICE '     command: %', tg_command;
+END
+$$ language plpgsql;
 
-CREATE EVENT TRIGGER snitch ON ddl_command_start EXECUTE PROCEDURE snitch();
+CREATE EVENT TRIGGER snitch ON ddl_command_trace EXECUTE PROCEDURE snitch();
 </programlisting>
    </example>
   </sect2>
