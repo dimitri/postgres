@@ -1836,6 +1836,33 @@ _rwCreateFunctionStmt(EventTriggerData *trigdata)
 	trigdata->objectname = fname;
 }
 
+/*
+ * rewrite CreateSchemaStmt: parser production
+ *
+ * We don't bother with OptSchemaEltList, those will get back each separately
+ * as new ProcessUtility queries with a SUBCOMMAND context.
+ */
+static void
+_rwCreateSchemaStmt(EventTriggerData *trigdata)
+{
+	CreateSchemaStmt	*node  = (CreateSchemaStmt *)trigdata->parsetree;
+	StringInfoData		 buf;
+
+	initStringInfo(&buf);
+	appendStringInfo(&buf, "CREATE SCHEMA%s %s",
+					 node->if_not_exists ? " IF NOT EXISTS" : "",
+					 node->schemaname);
+
+	if (node->authid)
+		appendStringInfo(&buf, " AUTHORIZATION %s", node->authid);
+
+	appendStringInfoChar(&buf, ';');
+
+	trigdata->command = buf.data;
+	trigdata->schemaname = NULL;
+	trigdata->objectname = node->schemaname;
+}
+
 /* get the work done */
 static void
 normalize_command_string(EventTriggerData *trigdata)
@@ -1880,6 +1907,10 @@ normalize_command_string(EventTriggerData *trigdata)
 
 		case T_CreateFunctionStmt:
 			_rwCreateFunctionStmt(trigdata);
+			break;
+
+		case T_CreateSchemaStmt:
+			_rwCreateSchemaStmt(trigdata);
 			break;
 
 		default:

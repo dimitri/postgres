@@ -507,8 +507,8 @@ standard_ProcessUtility(Node *parsetree,
 			 */
 		case T_CreateSchemaStmt:
 			EventTriggerDDLCommandStart(parsetree, context);
-			CreateSchemaCommand((CreateSchemaStmt *) parsetree,
-								queryString);
+			EventTriggerTargetOid =
+				CreateSchemaCommand((CreateSchemaStmt *) parsetree, queryString);
 			EventTriggerDDLCommandEnd(parsetree, context);
 			break;
 
