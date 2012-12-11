@@ -5384,6 +5384,7 @@ getEventTriggers(Archive *fout, int *numEventTriggers)
 				i_evtevent,
 				i_evtowner,
 				i_evttags,
+				i_evtctxs,
 				i_evtfname,
 				i_evtenabled;
 	int			ntups;
@@ -5404,6 +5405,9 @@ getEventTriggers(Archive *fout, int *numEventTriggers)
 					  "array_to_string(array("
 					  "select quote_literal(x) "
 					  " from unnest(evttags) as t(x)), ', ') as evttags, "
+					  "array_to_string(array("
+					  "select quote_literal(x) "
+					  "from unnest(evtctxs) as t(x)), ', ') as evtctxs, "
 					  "e.evtfoid::regproc as evtfname "
 					  "FROM pg_event_trigger e "
 					  "ORDER BY e.oid",
@@ -5423,6 +5427,7 @@ getEventTriggers(Archive *fout, int *numEventTriggers)
 	i_evtevent = PQfnumber(res, "evtevent");
 	i_evtowner = PQfnumber(res, "evtowner");
 	i_evttags = PQfnumber(res, "evttags");
+	i_evtctxs = PQfnumber(res, "evtctxs");
 	i_evtfname = PQfnumber(res, "evtfname");
 	i_evtenabled = PQfnumber(res, "evtenabled");
 
@@ -5437,6 +5442,7 @@ getEventTriggers(Archive *fout, int *numEventTriggers)
 		evtinfo[i].evtevent = pg_strdup(PQgetvalue(res, i, i_evtevent));
 		evtinfo[i].evtowner = pg_strdup(PQgetvalue(res, i, i_evtowner));
 		evtinfo[i].evttags = pg_strdup(PQgetvalue(res, i, i_evttags));
+		evtinfo[i].evtctxs = pg_strdup(PQgetvalue(res, i, i_evtctxs));
 		evtinfo[i].evtfname = pg_strdup(PQgetvalue(res, i, i_evtfname));
 		evtinfo[i].evtenabled = *(PQgetvalue(res, i, i_evtenabled));
 	}
@@ -13876,6 +13882,7 @@ dumpEventTrigger(Archive *fout, EventTriggerInfo *evtinfo)
 {
 	PQExpBuffer query;
 	PQExpBuffer labelq;
+	bool        when = false;
 
 	query = createPQExpBuffer();
 	labelq = createPQExpBuffer();
@@ -13888,8 +13895,20 @@ dumpEventTrigger(Archive *fout, EventTriggerInfo *evtinfo)
 
 	if (strcmp("", evtinfo->evttags) != 0)
 	{
-		appendPQExpBufferStr(query, "\n         WHEN TAG IN (");
+		when = true;
+		appendPQExpBufferStr(query, "\n             WHEN TAG IN (");
 		appendPQExpBufferStr(query, evtinfo->evttags);
+		appendPQExpBufferStr(query, ") ");
+	}
+
+	if (strcmp("", evtinfo->evtctxs) != 0)
+	{
+		if (when)
+			appendPQExpBufferStr(query, "\n         AND ");
+		else
+			appendPQExpBufferStr(query, "\n        WHEN ");
+		appendPQExpBufferStr(query, "CONTEXT IN (");
+		appendPQExpBufferStr(query, evtinfo->evtctxs);
 		appendPQExpBufferStr(query, ") ");
 	}
 
