@@ -447,12 +447,15 @@ DefineIndex(IndexStmt *stmt,
 	 */
 	indexRelationName = stmt->idxname;
 	if (indexRelationName == NULL)
+	{
 		indexRelationName = ChooseIndexName(RelationGetRelationName(rel),
 											namespaceId,
 											indexColNames,
 											stmt->excludeOpNames,
 											stmt->primary,
 											stmt->isconstraint);
+		stmt->idxname = indexRelationName;
+	}
 
 	/*
 	 * look up the access method, verify it can handle the requested features
