@@ -1224,7 +1224,8 @@ standard_ProcessUtility(Node *parsetree,
 			 */
 		case T_CreateDomainStmt:
 			EventTriggerDDLCommandStart(parsetree, context);
-			DefineDomain((CreateDomainStmt *) parsetree);
+			EventTriggerTargetOid =
+				DefineDomain((CreateDomainStmt *) parsetree);
 			EventTriggerDDLCommandEnd(parsetree, context);
 			break;
 
