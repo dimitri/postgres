@@ -67,8 +67,12 @@ static char *
 RangeVarGetNamespace(RangeVar *r)
 {
 	char       *schemaname;
-	List	   *search_path = fetch_search_path(false);
+	List	   *search_path;
 
+	if (r->schemaname)
+		return r->schemaname;
+
+	search_path = fetch_search_path(false);
 	if (search_path == NIL) /* probably can't happen */
 		schemaname = NULL;
 	else
