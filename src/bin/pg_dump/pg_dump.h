@@ -364,6 +364,7 @@ typedef struct _evttriggerInfo
 	char	   *evtevent;
 	char	   *evtowner;
 	char	   *evttags;
+	char	   *evtctxs;
 	char	   *evtfname;
 	char		evttype;
 	char		evtenabled;

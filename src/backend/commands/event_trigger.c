@@ -657,7 +657,7 @@ get_event_trigger_oid(const char *trigname, bool missing_ok)
 
 /*
  * Return true when we want to fire given Event Trigger and false otherwise,
- * filterting on the session replication role and the event trigger registered
+ * filtering on the session replication role and the event trigger registered
  * tags matching.
  */
 static bool
@@ -785,15 +785,15 @@ EventTriggerDDLCommandStart(Node *parsetree, ProcessUtilityContext context)
 		return;
 
 	/*
-	 * If we wanted to pre-filter event triggers based on context, we would do
-	 * it here. As of now, all contexts are interesting for different reasons:
-	 *
-	 *	PROCESS_UTILITY_TOPLEVEL   is the default
-	 *  PROCESS_UTILITY_QUERY      is used in extensions scripts
-	 *  PROCESS_UTILITY_SUBCOMMAND is used in CREATE SCHEMA ...
-	 * 	PROCESS_UTILITY_GENERATED  is used for serial and unique indexes etc
-	 *
-	 * So we let the user pick his own poison here.
+     * If we wanted to pre-filter event triggers based on context, we would do
+     * it here. As of now, all contexts are interesting for different reasons:
+     *
+     *  PROCESS_UTILITY_TOPLEVEL   is the default
+     *  PROCESS_UTILITY_QUERY      is used in extensions scripts
+     *  PROCESS_UTILITY_SUBCOMMAND is used in CREATE SCHEMA ...
+     *  PROCESS_UTILITY_GENERATED  is used for serial and unique indexes etc
+     *
+     * So we let the user pick his own poison here.
 	 */
 
 	/*

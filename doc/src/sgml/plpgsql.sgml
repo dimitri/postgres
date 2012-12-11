@@ -4050,6 +4050,10 @@ SELECT * FROM sales_summary_bytime;
        oid that is the main target of the command for which the trigger is
        fired.
       </para>
+      <para>
+       Can be <literal>NULL</> when the object does not exists yet or is
+       already droped.
+      </para>
      </listitem>
     </varlistentry>
 
@@ -4060,6 +4064,9 @@ SELECT * FROM sales_summary_bytime;
        Data type <type>text</type>; variable that contains the schema name
        where to find the object that is the main target of the command for
        which the trigger is fired.
+      </para>
+      <para>
+       Can be <literal>NULL</> when the object does not live in a schema.
       </para>
      </listitem>
     </varlistentry>
@@ -4101,7 +4108,10 @@ BEGIN
 END
 $$ language plpgsql;
 
-CREATE EVENT TRIGGER snitch ON ddl_command_trace EXECUTE PROCEDURE snitch();
+CREATE EVENT TRIGGER snitch 
+                  ON ddl_command_trace
+                WHEN context in ('toplevel', 'generated', 'query', 'subcommand')
+   EXECUTE PROCEDURE snitch();
 </programlisting>
    </example>
   </sect2>
