@@ -23,6 +23,7 @@
 #include "catalog/heap.h"
 #include "catalog/index.h"
 #include "catalog/pg_proc.h"
+#include "catalog/pg_type.h"
 #include "commands/defrem.h"
 #include "commands/event_trigger.h"
 #include "commands/tablecmds.h"
@@ -33,6 +34,7 @@
 #include "optimizer/planner.h"
 #include "parser/analyze.h"
 #include "parser/keywords.h"
+#include "parser/parse_collate.h"
 #include "parser/parse_expr.h"
 #include "parser/parse_func.h"
 #include "parser/parse_oper.h"
@@ -2044,6 +2046,157 @@ _rwDefineStmt (EventTriggerData *trigdata)
 	trigdata->objectname = name;
 }
 
+/*
+ * rewrite ColQualList: parser production
+ */
+static void
+_rwColQualList(StringInfo buf, List *constraints,
+			   char *domainName, TypeName *typeName)
+{
+	ListCell			*lc;
+	HeapTuple			 typeTup = NULL;
+	Form_pg_type		 baseType;
+	Oid					 basetypeoid;
+	int32				 basetypeMod;
+
+	foreach(lc, constraints)
+	{
+		Constraint *c = (Constraint *) lfirst(lc);
+		Assert(IsA(c, Constraint));
+
+		if (c->conname != NULL)
+			appendStringInfo(buf, " CONSTRAINT %s", c->conname);
+
+		switch (c->contype)
+		{
+			case CONSTR_NOTNULL:
+				appendStringInfo(buf, " NOT NULL");
+				break;
+
+			case CONSTR_NULL:
+				appendStringInfo(buf, " NULL");
+				break;
+
+			case CONSTR_DEFAULT:
+			{
+				char			*str;
+				ParseState		*pstate;
+				Node			*defaultExpr;
+
+				if (typeTup == NULL)
+				{
+					typeTup = typenameType(NULL, typeName, &basetypeMod);
+					baseType = (Form_pg_type) GETSTRUCT(typeTup);
+					basetypeoid = HeapTupleGetOid(typeTup);
+				}
+
+				pstate = make_parsestate(NULL);
+				defaultExpr = cookDefault(pstate, c->raw_expr,
+										  basetypeoid,
+										  basetypeMod,
+										  domainName);
+
+				str = deparse_expression(defaultExpr,
+										 deparse_context_for(domainName,
+															 InvalidOid),
+										 false, false);
+
+				appendStringInfo(buf, " DEFAULT %s", str);
+				break;
+			}
+
+			case CONSTR_CHECK:
+			{
+				Node					*expr;
+				char					*ccsrc;
+				ParseState				*pstate;
+				CoerceToDomainValue		*domVal;
+
+				if (typeTup == NULL)
+				{
+					typeTup = typenameType(NULL, typeName, &basetypeMod);
+					baseType = (Form_pg_type) GETSTRUCT(typeTup);
+					basetypeoid = HeapTupleGetOid(typeTup);
+				}
+
+				pstate = make_parsestate(NULL);
+
+				domVal = makeNode(CoerceToDomainValue);
+				domVal->typeId = basetypeoid;
+				domVal->typeMod = basetypeMod;
+				domVal->collation = get_typcollation(basetypeoid);
+				domVal->location = -1;		/* will be set when/if used */
+
+				pstate->p_value_substitute = (Node *) domVal;
+
+				expr = transformExpr(pstate,
+									 c->raw_expr,
+									 EXPR_KIND_DOMAIN_CHECK);
+
+				assign_expr_collations(pstate, expr);
+
+				ccsrc = deparse_expression(expr,
+										   deparse_context_for(domainName,
+															   InvalidOid),
+										   false, false);
+
+				appendStringInfo(buf, " CHECK (%s)", ccsrc);
+				break;
+			}
+
+			default:
+				/* not a domain constraint */
+				break;
+		}
+	}
+
+	if (typeTup)
+		ReleaseSysCache(typeTup);
+
+}
+
+/*
+ * rewrite CreateDomainStmt: parser production
+ */
+static void
+_rwCreateDomainStmt(EventTriggerData *trigdata)
+{
+	CreateDomainStmt *node  = (CreateDomainStmt *)trigdata->parsetree;
+	StringInfoData		  buf;
+	Oid                   namespaceId;
+    char                 *domainname;
+
+	initStringInfo(&buf);
+
+	namespaceId = QualifiedNameGetCreationNamespace(node->domainname,
+													&domainname);
+
+	appendStringInfo(&buf, "CREATE DOMAIN %s AS %s ",
+					 domainname,
+					 TypeNameToString(node->typeName));
+
+	if (node->collClause)
+	{
+		Oid		 collNspId;
+		char	*collname;
+
+		collNspId =
+			QualifiedNameGetCreationNamespace(node->collClause->collname,
+											  &collname);
+
+		appendStringInfo(&buf, "COLLATE %s.%s ",
+						 get_namespace_name(collNspId), collname);
+	}
+	_rwColQualList(&buf, node->constraints, domainname, node->typeName);
+
+	appendStringInfoChar(&buf, ';');
+
+	trigdata->command = buf.data;
+	trigdata->schemaname = get_namespace_name(namespaceId);
+	trigdata->objectname = domainname;
+}
+
+
 /* get the work done */
 static void
 normalize_command_string(EventTriggerData *trigdata)
@@ -2100,6 +2253,10 @@ normalize_command_string(EventTriggerData *trigdata)
 
 		case T_DefineStmt:
 			_rwDefineStmt(trigdata);
+			break;
+
+		case T_CreateDomainStmt:
+			_rwCreateDomainStmt(trigdata);
 			break;
 
 		default:
