@@ -1952,6 +1952,98 @@ _rwCreateConversionStmt(EventTriggerData *trigdata)
 	trigdata->objectname = conversion_name;
 }
 
+/*
+ * rewrite DefineStmt: parser productions
+ */
+static void
+_rwDefineStmt (EventTriggerData *trigdata)
+{
+	DefineStmt			*node = (DefineStmt *)trigdata->parsetree;
+	StringInfoData		 buf;
+	Oid                  namespaceId;
+	char				*schemaname, *name;
+	ListCell			*opt;
+	bool                first = true;
+
+	initStringInfo(&buf);
+
+	namespaceId = QualifiedNameGetCreationNamespace(node->defnames, &name);
+	schemaname = get_namespace_name(namespaceId);
+
+	/* The command tag is: CREATE OBJECT_KIND */
+	appendStringInfo(&buf, "%s %s.%s", trigdata->ctag->tag, schemaname, name);
+
+	if (node->definition)
+	{
+		appendStringInfoChar(&buf, '(');
+
+		/* definition: grammar production */
+		foreach(opt, node->definition)
+		{
+			DefElem    *defel = (DefElem *) lfirst(opt);
+
+			_maybeAddSeparator(&buf, ", ", &first);
+
+			if (defel->arg != NULL)
+			{
+				Node *arg = (Node *)defel->arg;
+
+				appendStringInfo(&buf, "%s=", defel->defname);
+
+				/* def_arg: grammar production */
+				switch (nodeTag(arg))
+				{
+					/* func_type */
+					case T_TypeName:
+						appendStringInfoString(&buf,
+											   TypeNameToString((TypeName *)arg));
+						break;
+
+					/* reserved_keyword or Sconst */
+					case T_String:
+						appendStringInfo(&buf, "'%s'", defGetString(defel));
+						break;
+
+					/* qual_all_Op */
+					case T_List:
+						appendStringInfo(&buf, "OPERATOR (%s)",
+										 strVal((Value *)linitial((List *)arg)));
+						break;
+
+					/* NumericOnly */
+					case T_Float:
+						appendStringInfo(&buf, "%g", defGetNumeric(defel));
+						break;
+
+					/* NumericOnly */
+					case T_Integer:
+					{
+						char		num[100];
+
+						snprintf(num, sizeof(num), INT64_FORMAT, defGetInt64(defel));
+						appendStringInfo(&buf, "%s", num);
+						break;
+					}
+
+					default:
+						elog(DEBUG1, "unrecognized node type: %d",
+							 (int) nodeTag(arg));
+				}
+			}
+			else
+			{
+				appendStringInfo(&buf, "%s", defel->defname);
+			}
+		}
+		appendStringInfoChar(&buf, ')');
+	}
+	appendStringInfoChar(&buf, ';');
+
+	trigdata->command = buf.data;
+	trigdata->schemaname = schemaname;
+	trigdata->objectname = name;
+}
+
 /* get the work done */
 static void
 normalize_command_string(EventTriggerData *trigdata)
@@ -2004,6 +2096,10 @@ normalize_command_string(EventTriggerData *trigdata)
 
 		case T_CreateConversionStmt:
 			_rwCreateConversionStmt(trigdata);
+			break;
+
+		case T_DefineStmt:
+			_rwDefineStmt(trigdata);
 			break;
 
 		default:
