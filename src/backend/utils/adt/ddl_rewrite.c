@@ -2300,11 +2300,9 @@ get_event_trigger_data(EventTriggerData *trigdata)
 	trigdata->schemaname = NULL;
 	trigdata->objectname = NULL;
 
-	/* TODO: add the main target object's OID */
-
 	if (rewrite)
 	{
-		/* only add the objectid when we have it */
+		/* src/backend/tcop/utility.c sets EventTriggerTargetOid for us */
 		trigdata->objectid  = EventTriggerTargetOid;
 
 		/* that will also fill in schemaname and objectname */

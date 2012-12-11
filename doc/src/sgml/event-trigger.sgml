@@ -52,8 +52,8 @@
      not occur for DDL commands targeting shared objects - databases, roles,
      and tablespaces - or for command targeting event triggers themselves,
      or for commands that implement their own transaction semantics, such
-     as <literal>DROP INDEX CONCURRENT</>. The event trigger mechanism does
-     not support these object types.
+     as <literal>DROP INDEX CONCURRENTLY</>. The event trigger mechanism
+     does not support these object types and extended transaction scopes.
      <literal>ddl_command_end</> also occurs just after the execution of a
      <literal>SELECT INTO</literal> command, since this is equivalent to
      <literal>CREATE TABLE AS</literal>.
@@ -62,9 +62,10 @@
    <para>
      The <literal>ddl_command_trace</> event is an alias to
      either <literal>ddl_command_start</> when the command is
-     a <literal>DROP</> command, or to <literal>ddl_command_end</> for other
-     commands. Pick this event when you need to log or process the command
-     line of the command the trigger fire against.
+     a <literal>DROP</> operation, or to <literal>ddl_command_end</> for
+     other operations (<literal>ALTER</> and <literal>CREATE</>). Pick this
+     event when you need to log or process the command line of the command
+     the trigger fire against.
    </para>
 
    <para>

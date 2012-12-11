@@ -819,7 +819,7 @@ standard_ProcessUtility(Node *parsetree,
 							/*
 							 * Replace the command list with what really
 							 * happened, only consumer of that now is
-							 * src/backend/utils/adt/ddl_rewrite.c and it need
+							 * src/backend/utils/adt/ddl_rewrite.c and it needs
 							 * details like new constraints names.
 							 */
 							as->cmds = wq;

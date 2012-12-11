@@ -85,7 +85,7 @@ CREATE EVENT TRIGGER <replaceable class="PARAMETER">name</replaceable>
      </para>
      <para>
       The <literal>TAG</literal> variable defaults to no filtering being
-      done. The <literal>CONTEXT</> variable default
+      done. The <literal>CONTEXT</> variable defaults
       to <literal>TOPLEVEL</>.
      </para>
     </listitem>
