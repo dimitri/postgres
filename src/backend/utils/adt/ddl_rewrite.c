@@ -222,8 +222,12 @@ _rwDropStmt(EventTriggerData *trigdata)
 				_maybeAddSeparator(&buf, ", ", &first);
 				appendStringInfoString(&buf, RangeVarToString(rel));
 
-				trigdata->schemaname = RangeVarGetNamespace(rel);
-				trigdata->objectname = rel->relname;
+				/* fill-in the info for the "main" target only */
+				if (!trigdata->objectname)
+				{
+					trigdata->schemaname = RangeVarGetNamespace(rel);
+					trigdata->objectname = rel->relname;
+				}
 				break;
 			}
 
@@ -239,21 +243,34 @@ _rwDropStmt(EventTriggerData *trigdata)
 				/* deconstruct the name list */
 				DeconstructQualifiedName(typeName->names, &schema, &typname);
 
-				trigdata->schemaname = schema;
-				trigdata->objectname = typname;
+				/* fill-in the info for the "main" target only */
+				if (!trigdata->objectname)
+				{
+					trigdata->schemaname = schema;
+					trigdata->objectname = typname;
+				}
 				break;
 			}
 
 			case OBJECT_COLLATION:
 			case OBJECT_CONVERSION:
 			{
+				Oid         namespaceId;
 				char	   *schemaname;
 				char	   *name;
 
-				DeconstructQualifiedName(objname, &schemaname, &name);
+				namespaceId = QualifiedNameGetCreationNamespace(objname, &name);
+				schemaname = get_namespace_name(namespaceId);
 
-				trigdata->schemaname = schemaname;
-				trigdata->objectname = name;
+				_maybeAddSeparator(&buf, ", ", &first);
+				appendStringInfo(&buf, "%s.%s", schemaname, name);
+
+				/* fill-in the info for the "main" target only */
+				if (!trigdata->objectname)
+				{
+					trigdata->schemaname = schemaname;
+					trigdata->objectname = name;
+				}
 				break;
 			}
 
@@ -265,8 +282,12 @@ _rwDropStmt(EventTriggerData *trigdata)
 				_maybeAddSeparator(&buf, ", ", &first);
 				appendStringInfoString(&buf, name);
 
-				trigdata->schemaname = NULL;
-				trigdata->objectname = name;
+				/* fill-in the info for the "main" target only */
+				if (!trigdata->objectname)
+				{
+					trigdata->schemaname = NULL;
+					trigdata->objectname = name;
+				}
 				break;
 			}
 
@@ -292,10 +313,13 @@ _rwDropStmt(EventTriggerData *trigdata)
 				_rwArgTypes(&buf, objargs);
 				appendStringInfoChar(&buf, ')');
 
-				trigdata->objectid   = foid;
-				trigdata->schemaname = get_namespace_name(proc->pronamespace);
-				trigdata->objectname = NameStr(proc->proname);
-
+				/* fill-in the info for the "main" target only */
+				if (!trigdata->objectname)
+				{
+					trigdata->objectid   = foid;
+					trigdata->schemaname = get_namespace_name(proc->pronamespace);
+					trigdata->objectname = NameStr(proc->proname);
+				}
 				ReleaseSysCache(tup);
 				break;
 			}
