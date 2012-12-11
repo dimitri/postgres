@@ -934,31 +934,38 @@ standard_ProcessUtility(Node *parsetree,
 						break;
 					case OBJECT_OPERATOR:
 						Assert(stmt->args == NIL);
-						DefineOperator(stmt->defnames, stmt->definition);
+						EventTriggerTargetOid =
+							DefineOperator(stmt->defnames, stmt->definition);
 						break;
 					case OBJECT_TYPE:
 						Assert(stmt->args == NIL);
-						DefineType(stmt->defnames, stmt->definition);
+						EventTriggerTargetOid =
+							DefineType(stmt->defnames, stmt->definition);
 						break;
 					case OBJECT_TSPARSER:
 						Assert(stmt->args == NIL);
-						DefineTSParser(stmt->defnames, stmt->definition);
+						EventTriggerTargetOid =
+							DefineTSParser(stmt->defnames, stmt->definition);
 						break;
 					case OBJECT_TSDICTIONARY:
 						Assert(stmt->args == NIL);
-						DefineTSDictionary(stmt->defnames, stmt->definition);
+						EventTriggerTargetOid =
+							DefineTSDictionary(stmt->defnames, stmt->definition);
 						break;
 					case OBJECT_TSTEMPLATE:
 						Assert(stmt->args == NIL);
-						DefineTSTemplate(stmt->defnames, stmt->definition);
+						EventTriggerTargetOid =
+							DefineTSTemplate(stmt->defnames, stmt->definition);
 						break;
 					case OBJECT_TSCONFIGURATION:
 						Assert(stmt->args == NIL);
-						DefineTSConfiguration(stmt->defnames, stmt->definition);
+						EventTriggerTargetOid =
+							DefineTSConfiguration(stmt->defnames, stmt->definition);
 						break;
 					case OBJECT_COLLATION:
 						Assert(stmt->args == NIL);
-						DefineCollation(stmt->defnames, stmt->definition);
+						EventTriggerTargetOid =
+							DefineCollation(stmt->defnames, stmt->definition);
 						break;
 					default:
 						elog(ERROR, "unrecognized define stmt type: %d",
