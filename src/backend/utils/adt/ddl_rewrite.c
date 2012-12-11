@@ -899,7 +899,11 @@ _rwOptTableElementList(StringInfo buf, List *tableElts, RangeVar *relation)
 				appendStringInfo(buf, "%s %s",
 								 c->colname,
 								 TypeNameToString(c->typeName));
-				_rwColConstraintElem(buf, c->constraints, relation);
+				/*
+				 * Don't output Column Constraints now, as we will find them
+				 * properly transformed as new T_Constraint elements.
+				 * _rwColConstraintElem(buf, c->constraints, relation);
+				 */
 				break;
 			}
 			case T_TableLikeClause:
@@ -930,22 +934,31 @@ _rwOptTableElementList(StringInfo buf, List *tableElts, RangeVar *relation)
 static void
 _rwOptTypedTableElementList(StringInfo buf, List *tableElts, RangeVar *relation)
 {
-	bool        first = true;
+	bool        first = true, parens = false;
 	ListCell   *e;
 
 	foreach(e, tableElts)
 	{
 		Node *elmt = (Node *) lfirst(e);
 
-		_maybeAddSeparator(buf, ", ", &first);
-
 		switch (nodeTag(elmt))
 		{
 			case T_ColumnDef:
 			{
 				ColumnDef  *c = (ColumnDef *) elmt;
-				appendStringInfo(buf, "%s WITH OPTIONS", c->colname);
-				_rwColConstraintElem(buf, c->constraints, relation);
+				if (c->constraints)
+				{
+					_maybeAddSeparator(buf, ",", &first);
+
+					/* only add parens if we have columns with options */
+					if (!parens)
+					{
+						appendStringInfoChar(buf, '(');
+						parens = true;
+					}
+					appendStringInfo(buf, " %s WITH OPTIONS", c->colname);
+					_rwColConstraintElem(buf, c->constraints, relation);
+				}
 				break;
 			}
 			case T_Constraint:
@@ -959,6 +972,8 @@ _rwOptTypedTableElementList(StringInfo buf, List *tableElts, RangeVar *relation)
 				break;
 		}
 	}
+	if (parens)
+		appendStringInfoChar(buf, ')');
 }
 
 /*
@@ -1069,10 +1084,18 @@ _rwCreateStmt(EventTriggerData *trigdata)
 	StringInfoData buf;
 
 	initStringInfo(&buf);
-	appendStringInfo(&buf, "CREATE ");
+	appendStringInfo(&buf, "CREATE");
 	_rwRelPersistence(&buf, node->relation->relpersistence);
-	appendStringInfo(&buf, "TABLE %s %s",
-					 RangeVarToString(node->relation),
+
+	elog(NOTICE, "PHOQUE: %s.%s",
+		 node->relation->schemaname, node->relation->relname);
+
+	if (node->relation->relpersistence == RELPERSISTENCE_TEMP)
+		appendStringInfo(&buf, " TABLE pg_temp.%s", node->relation->relname);
+	else
+		appendStringInfo(&buf, " TABLE %s", RangeVarToString(node->relation));
+
+	appendStringInfo(&buf, " %s",
 					 node->if_not_exists ? " IF NOT EXISTS" : "");
 
 	if (node->ofTypename)
@@ -1520,9 +1543,9 @@ _rwCreateSeqStmt(EventTriggerData *trigdata)
 	StringInfoData buf;
 
 	initStringInfo(&buf);
-	appendStringInfo(&buf, "CREATE ");
+	appendStringInfo(&buf, "CREATE");
 	_rwRelPersistence(&buf, node->sequence->relpersistence);
-	appendStringInfo(&buf, "SEQUENCE %s", RangeVarToString(node->sequence));
+	appendStringInfo(&buf, " SEQUENCE %s", RangeVarToString(node->sequence));
 	_rwOptSeqOptList(&buf, node->options);
 	appendStringInfoChar(&buf, ';');
 
