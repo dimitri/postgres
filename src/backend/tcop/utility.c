@@ -1323,7 +1323,8 @@ standard_ProcessUtility(Node *parsetree,
 
 		case T_CreateConversionStmt:
 			EventTriggerDDLCommandStart(parsetree, context);
-			CreateConversionCommand((CreateConversionStmt *) parsetree);
+			EventTriggerTargetOid =
+				CreateConversionCommand((CreateConversionStmt *) parsetree);
 			EventTriggerDDLCommandEnd(parsetree, context);
 			break;
 

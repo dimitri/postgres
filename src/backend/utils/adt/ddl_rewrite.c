@@ -1898,6 +1898,36 @@ _rwCreateSchemaStmt(EventTriggerData *trigdata)
 	trigdata->objectname = node->schemaname;
 }
 
+/*
+ * rewrite CreateConversionStmt: parser production
+ */
+static void
+_rwCreateConversionStmt(EventTriggerData *trigdata)
+{
+	CreateConversionStmt *node  = (CreateConversionStmt *)trigdata->parsetree;
+	StringInfoData		  buf;
+	Oid                   namespaceId;
+    char                 *conversion_name, *fname;
+
+	initStringInfo(&buf);
+
+	namespaceId = QualifiedNameGetCreationNamespace(node->conversion_name,
+													&conversion_name);
+
+	(void) QualifiedNameGetCreationNamespace(node->func_name, &fname);
+
+	appendStringInfo(&buf, "CREATE%s CONVERSION %s FOR %s TO %s FROM %s;",
+					 node->def ? "DEFAULT " : "",
+					 conversion_name,
+					 node->for_encoding_name,
+					 node->to_encoding_name,
+					 fname);
+
+	trigdata->command = buf.data;
+	trigdata->schemaname = get_namespace_name(namespaceId);
+	trigdata->objectname = conversion_name;
+}
+
 /* get the work done */
 static void
 normalize_command_string(EventTriggerData *trigdata)
@@ -1946,6 +1976,10 @@ normalize_command_string(EventTriggerData *trigdata)
 
 		case T_CreateSchemaStmt:
 			_rwCreateSchemaStmt(trigdata);
+			break;
+
+		case T_CreateConversionStmt:
+			_rwCreateConversionStmt(trigdata);
 			break;
 
 		default:
