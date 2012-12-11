@@ -705,6 +705,7 @@ static void
 _rwTableConstraint(StringInfo buf, List *constraints, RangeVar *relation)
 {
 	ListCell   *lc;
+	List       *context = NIL;
 
 	foreach(lc, constraints)
 	{
@@ -811,8 +812,18 @@ _rwTableConstraint(StringInfo buf, List *constraints, RangeVar *relation)
 
 				/* ExclusionWhereClause: */
 				if (c->where_clause)
-					/* FIXME: Add support for raw expressions */
-					appendStringInfo(buf, " WHERE ( %s )", "?");
+				{
+					char *str;
+
+					if (context == NIL)
+						context = deparse_context_for(relation->relname,
+													  EventTriggerTargetOid);
+
+					str = deparse_expression_pretty(c->where_clause, context,
+													false, false, false, 0);
+
+					appendStringInfo(buf, " WHERE (%s)", str);
+				}
 
 				_rwConstraintAttributeSpec(buf,
 										   c->deferrable, c->initdeferred);
@@ -1043,7 +1054,7 @@ _rwOptWith(StringInfo buf, List *options)
 	{
 		appendStringInfoString(buf, " WITH (");
 		_rwRelOptions(buf, options, true);
-		appendStringInfoString(buf, " )");
+		appendStringInfoString(buf, ")");
 	}
 }
 
@@ -1086,9 +1097,6 @@ _rwCreateStmt(EventTriggerData *trigdata)
 	initStringInfo(&buf);
 	appendStringInfo(&buf, "CREATE");
 	_rwRelPersistence(&buf, node->relation->relpersistence);
-
-	elog(NOTICE, "PHOQUE: %s.%s",
-		 node->relation->schemaname, node->relation->relname);
 
 	if (node->relation->relpersistence == RELPERSISTENCE_TEMP)
 		appendStringInfo(&buf, " TABLE pg_temp.%s", node->relation->relname);
