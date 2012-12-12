@@ -515,10 +515,10 @@ AlterEventTrigger(AlterEventTrigStmt *stmt)
 Oid
 RenameEventTrigger(const char *trigname, const char *newname)
 {
-	Oid			evtId;
-	HeapTuple	tup;
-	Relation	rel;
-	Form_pg_event_trigger evtForm;
+	Oid							evtId;
+	HeapTuple					tup;
+	Relation					rel;
+	Form_pg_event_trigger		evtForm;
 
 	rel = heap_open(EventTriggerRelationId, RowExclusiveLock);
 
