@@ -768,7 +768,9 @@ standard_ProcessUtility(Node *parsetree,
 				stmt = (AlterObjectSchemaStmt *) parsetree;
 				if (EventTriggerSupportsObjectType(stmt->objectType))
 					EventTriggerDDLCommandStart(parsetree, context);
-				ExecAlterObjectSchemaStmt(stmt);
+
+				EventTriggerTargetOid = ExecAlterObjectSchemaStmt(stmt);
+
 				if (EventTriggerSupportsObjectType(stmt->objectType))
 					EventTriggerDDLCommandEnd(parsetree, context);
 				break;
@@ -781,7 +783,9 @@ standard_ProcessUtility(Node *parsetree,
 				stmt = (AlterOwnerStmt *) parsetree;
 				if (EventTriggerSupportsObjectType(stmt->objectType))
 					EventTriggerDDLCommandStart(parsetree, context);
-				ExecAlterOwnerStmt(stmt);
+
+				EventTriggerTargetOid = ExecAlterOwnerStmt(stmt);
+
 				if (EventTriggerSupportsObjectType(stmt->objectType))
 					EventTriggerDDLCommandEnd(parsetree, context);
 				break;
