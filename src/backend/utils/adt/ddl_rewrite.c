@@ -2201,9 +2201,11 @@ _rwCreateDomainStmt(EventTriggerData *trigdata)
  *
  * Used to support RenameStmt, AlterOwnerStmt and AlterObjectSchemaStmt parser
  * productions which are "generic" in pretty much the same way.
+ *
+ * The action parameter is either "RENAME TO" or "SET SCHEMA" or "OWNER TO".
  */
 static void
-_rwFullObjectNameWithArgs(StringInfo buf,
+_rwFullObjectNameWithArgs(StringInfo buf, const char *action,
 						  ObjectType kind, ObjectType relationType,
 						  RangeVar *relation,
 						  List *objname, List *objarg, char *subname,
@@ -2232,7 +2234,7 @@ _rwFullObjectNameWithArgs(StringInfo buf,
 				_maybeAddSeparator(buf, ", ", &first);
 				appendStringInfo(buf, "%s", TypeNameToString(t));
 			}
-			appendStringInfo(buf, ") RENAME TO");
+			appendStringInfo(buf, ") %s", action);
 			break;
 		}
 
@@ -2247,18 +2249,26 @@ _rwFullObjectNameWithArgs(StringInfo buf,
 			namespaceId = QualifiedNameGetCreationNamespace(objname, name);
 			*schemaname = get_namespace_name(namespaceId);
 
-			appendStringInfo(buf, "%s.%s RENAME TO", *schemaname, *name);
+			appendStringInfo(buf, "%s.%s %s", *schemaname, *name, action);
 			break;
 
 		case OBJECT_CONSTRAINT:
+			if (strcmp(action, "RENAME TO") != 0)
+				elog(ERROR, "unrecognized object type: %d", kind);
+
 			switch (relationType)
 			{
 				case OBJECT_DOMAIN:
 					namespaceId = QualifiedNameGetCreationNamespace(objname, name);
 					*schemaname = get_namespace_name(namespaceId);
 
-					appendStringInfo(buf, "%s.%s RENAME CONSTRAINT %s TO",
-									 *schemaname, *name, subname);
+					if (strcmp(action, "RENAME TO") == 0)
+						appendStringInfo(buf, "%s.%s RENAME CONSTRAINT %s TO",
+										 *schemaname, *name, subname);
+					else
+						/* we don't expect SET SCHEMA nor OWNER TO here */
+						elog(ERROR, "unrecognized relationType: %d",
+							 relationType);
 					break;
 
 				case OBJECT_TABLE:
@@ -2271,12 +2281,15 @@ _rwFullObjectNameWithArgs(StringInfo buf,
 					break;
 
 				default:
-					/* shouldn't happen, object not supported by event trigger */
+					/* shouldn't happen, object rewriting not supported */
 					elog(ERROR, "unrecognized object type: %d", relationType);
 			}
 			break;
 
 		case OBJECT_COLUMN:
+			if (strcmp(action, "RENAME TO") != 0)
+				elog(ERROR, "unrecognized object type: %d", kind);
+
 			switch (relationType)
 			{
 				case OBJECT_TABLE:
@@ -2289,7 +2302,7 @@ _rwFullObjectNameWithArgs(StringInfo buf,
 					break;
 
 				default:
-					/* shouldn't happen, object not supported by event trigger */
+					/* shouldn't happen, object rewriting not supported */
 					elog(ERROR, "unrecognized object type: %d", relationType);
 			}
 			break;
@@ -2303,7 +2316,7 @@ _rwFullObjectNameWithArgs(StringInfo buf,
 			*schemaname = NULL;
 			*name = subname;
 
-			appendStringInfo(buf, "%s RENAME TO", *name);
+			appendStringInfo(buf, "%s %s", *name, action);
 			break;
 
 		/* relation objects are special */
@@ -2316,7 +2329,7 @@ _rwFullObjectNameWithArgs(StringInfo buf,
 			*schemaname =
 				get_namespace_name(get_rel_namespace(EventTriggerTargetOid));
 
-			appendStringInfo(buf, "%s RENAME TO", RangeVarToString(relation));
+			appendStringInfo(buf, "%s %s", RangeVarToString(relation), action);
 			break;
 
 		case OBJECT_OPCLASS:
@@ -2324,25 +2337,28 @@ _rwFullObjectNameWithArgs(StringInfo buf,
 			namespaceId = QualifiedNameGetCreationNamespace(objname, name);
 			*schemaname = get_namespace_name(namespaceId);
 
-			appendStringInfo(buf, "%s.%s USING %s RENAME TO",
-							 *schemaname, *name, subname);
+			appendStringInfo(buf, "%s.%s USING %s %s",
+							 *schemaname, *name, subname, action);
 			break;
 
 		case OBJECT_TRIGGER:
 			*schemaname = NULL;
 
-			appendStringInfo(buf, "%s ON %s RENAME TO",
-							 subname, RangeVarToString(relation));
+			appendStringInfo(buf, "%s ON %s %s",
+							 subname, RangeVarToString(relation), action);
 			break;
 
 		case OBJECT_TYPE:
 			namespaceId = QualifiedNameGetCreationNamespace(objname, name);
 			*schemaname = get_namespace_name(namespaceId);
 
-			appendStringInfo(buf, "%s.%s RENAME TO", *schemaname, *name);
+			appendStringInfo(buf, "%s.%s %s", *schemaname, *name, action);
 			break;
 
 		case OBJECT_ATTRIBUTE:
+			if (strcmp(action, "RENAME TO") != 0)
+				elog(ERROR, "unrecognized object type: %d", kind);
+
 			switch (relationType)
 			{
 				case OBJECT_TYPE:
@@ -2355,13 +2371,13 @@ _rwFullObjectNameWithArgs(StringInfo buf,
 					break;
 
 				default:
-					/* shouldn't happen, object not supported by event trigger */
+					/* shouldn't happen, object rewriting not supported */
 					elog(ERROR, "unrecognized object type: %d", relationType);
 			}
 			break;
 
 		default:
-			/* shouldn't happen, object not supported by event triggers */
+			/* shouldn't happen, object rewriting not supported */
 			elog(ERROR, "unrecognized object type: %d", kind);
 			break;
 	}
@@ -2385,7 +2401,8 @@ _rwRenameStmt(EventTriggerData *trigdata)
 					 node->missing_ok ? "IF NOT EXISTS " : "");
 
 	/* This will output schema.name (extra) RENAME (extra) TO */
-	_rwFullObjectNameWithArgs(&buf, node->renameType, node->relationType,
+	_rwFullObjectNameWithArgs(&buf, "RENAME TO",
+							  node->renameType, node->relationType,
 							  node->relation,
 							  node->object, node->objarg, node->subname,
 							  &schemaname, &name);
@@ -2399,6 +2416,66 @@ _rwRenameStmt(EventTriggerData *trigdata)
 						 node->behavior == DROP_CASCADE ? "CASCADE" : "RESTRICT");
 
 	appendStringInfoString(&buf, ";");
+
+	trigdata->command = buf.data;
+	trigdata->schemaname = schemaname;
+	trigdata->objectname = name;
+}
+
+/*
+ * rewrite AlterObjectSchemaStmt: parser production
+ */
+static void
+_rwAlterObjectSchemaStmt(EventTriggerData *trigdata)
+{
+	AlterObjectSchemaStmt		*node = (AlterObjectSchemaStmt *)trigdata->parsetree;
+	StringInfoData				 buf;
+	char						*schemaname, *name;
+
+	initStringInfo(&buf);
+
+	/* The command tag is: ALTER OBJECT_KIND */
+	appendStringInfo(&buf, "%s%s ",
+					 trigdata->ctag->tag,
+					 node->missing_ok ? "IF NOT EXISTS " : "");
+
+	/* This will output schema.name (extra) SET SCHEMA */
+	_rwFullObjectNameWithArgs(&buf, "SET SCHEMA",
+							  node->objectType, -1,
+							  node->relation,
+							  node->object, node->objarg, NULL,
+							  &schemaname, &name);
+
+	appendStringInfo(&buf, " %s;", node->newschema);
+
+	trigdata->command = buf.data;
+	trigdata->schemaname = schemaname;
+	trigdata->objectname = name;
+}
+
+/*
+ * rewrite AlterOwnerStmt: parser production
+ */
+static void
+_rwAlterOwnerStmt(EventTriggerData *trigdata)
+{
+	AlterOwnerStmt		*node = (AlterOwnerStmt *)trigdata->parsetree;
+	StringInfoData		 buf;
+	char				*schemaname, *name;
+
+	initStringInfo(&buf);
+
+	/* The command tag is: ALTER OBJECT_KIND */
+	appendStringInfo(&buf, "%s ", trigdata->ctag->tag);
+
+	/* This will output schema.name (extra) OWNER TO */
+	_rwFullObjectNameWithArgs(&buf, "OWNER TO",
+							  node->objectType, -1,
+							  node->relation,
+							  node->object, node->objarg, NULL,
+							  &schemaname, &name);
+
+	appendStringInfo(&buf, " %s;", node->newowner);
 
 	trigdata->command = buf.data;
 	trigdata->schemaname = schemaname;
@@ -2470,6 +2547,14 @@ normalize_command_string(EventTriggerData *trigdata)
 
 		case T_RenameStmt:
 			_rwRenameStmt(trigdata);
+			break;
+
+		case T_AlterObjectSchemaStmt:
+			_rwAlterObjectSchemaStmt(trigdata);
+			break;
+
+		case T_AlterOwnerStmt:
+			_rwAlterOwnerStmt(trigdata);
 			break;
 
 		default:
