@@ -749,7 +749,10 @@ standard_ProcessUtility(Node *parsetree,
 				stmt = (RenameStmt *) parsetree;
 				if (EventTriggerSupportsObjectType(stmt->renameType))
 					EventTriggerDDLCommandStart(parsetree, context);
-				ExecRenameStmt(stmt);
+
+				/* there's s no harm in setting it in all cases */
+				EventTriggerTargetOid = ExecRenameStmt(stmt);
+
 				if (EventTriggerSupportsObjectType(stmt->renameType))
 					EventTriggerDDLCommandEnd(parsetree, context);
 				break;

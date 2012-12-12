@@ -2020,11 +2020,11 @@ renameatt_internal(Oid myrelid,
 				   int expected_parents,
 				   DropBehavior behavior)
 {
-	Relation	targetrelation;
-	Relation	attrelation;
-	HeapTuple	atttup;
+	Relation			targetrelation;
+	Relation			attrelation;
+	HeapTuple			atttup;
 	Form_pg_attribute	attform;
-	int			attnum;
+	int					attnum;
 
 	/*
 	 * Grab an exclusive lock on the target table, which we will NOT release
@@ -2110,6 +2110,7 @@ renameatt_internal(Oid myrelid,
 				(errcode(ERRCODE_UNDEFINED_COLUMN),
 				 errmsg("column \"%s\" does not exist",
 						oldattname)));
+
 	attform = (Form_pg_attribute) GETSTRUCT(atttup);
 
 	attnum = attform->attnum;

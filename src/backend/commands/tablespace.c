@@ -821,13 +821,13 @@ directory_is_empty(const char *path)
 Oid
 RenameTableSpace(const char *oldname, const char *newname)
 {
-	Oid			tspId;
-	Relation	rel;
-	ScanKeyData entry[1];
-	HeapScanDesc scan;
-	HeapTuple	tup;
-	HeapTuple	newtuple;
-	Form_pg_tablespace newform;
+	Oid					tspId;
+	Relation			rel;
+	ScanKeyData			entry[1];
+	HeapScanDesc		scan;
+	HeapTuple			tup;
+	HeapTuple			newtuple;
+	Form_pg_tablespace	newform;
 
 	/* Search pg_tablespace */
 	rel = heap_open(TableSpaceRelationId, RowExclusiveLock);
