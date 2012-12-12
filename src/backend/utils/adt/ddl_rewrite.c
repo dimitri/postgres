@@ -1788,7 +1788,7 @@ _rwFuncArg(StringInfo buf, FunctionParameter *fp)
 }
 
 /*
- * rewrite IndexStmt: parser production
+ * rewrite CreateFunctionStmt: parser production
  */
 static void
 _rwCreateFunctionStmt(EventTriggerData *trigdata)
@@ -2196,6 +2196,215 @@ _rwCreateDomainStmt(EventTriggerData *trigdata)
 	trigdata->objectname = domainname;
 }
 
+/*
+ * rewrite an Object's Full Name with Arguments
+ *
+ * Used to support RenameStmt, AlterOwnerStmt and AlterObjectSchemaStmt parser
+ * productions which are "generic" in pretty much the same way.
+ */
+static void
+_rwFullObjectNameWithArgs(StringInfo buf,
+						  ObjectType kind, ObjectType relationType,
+						  RangeVar *relation,
+						  List *objname, List *objarg, char *subname,
+						  char **schemaname, char **name)
+{
+	Oid          namespaceId;
+
+	switch (kind)
+	{
+		/* objects with special arguments to compose their names */
+		case OBJECT_AGGREGATE:
+		case OBJECT_FUNCTION:
+		{
+			ListCell	*arg;
+			bool		 first = true;
+
+			namespaceId = QualifiedNameGetCreationNamespace(objname, name);
+			*schemaname = get_namespace_name(namespaceId);
+
+			appendStringInfo(buf, "%s.%s(", *schemaname, *name);
+
+			foreach(arg, objarg)
+			{
+				TypeName   *t = (TypeName *) lfirst(arg);
+
+				_maybeAddSeparator(buf, ", ", &first);
+				appendStringInfo(buf, "%s", TypeNameToString(t));
+			}
+			appendStringInfo(buf, ") RENAME TO");
+			break;
+		}
+
+		/* objects living in a namespace */
+		case OBJECT_COLLATION:
+		case OBJECT_CONVERSION:
+		case OBJECT_DOMAIN:
+		case OBJECT_TSPARSER:
+		case OBJECT_TSDICTIONARY:
+		case OBJECT_TSTEMPLATE:
+		case OBJECT_TSCONFIGURATION:
+			namespaceId = QualifiedNameGetCreationNamespace(objname, name);
+			*schemaname = get_namespace_name(namespaceId);
+
+			appendStringInfo(buf, "%s.%s RENAME TO", *schemaname, *name);
+			break;
+
+		case OBJECT_CONSTRAINT:
+			switch (relationType)
+			{
+				case OBJECT_DOMAIN:
+					namespaceId = QualifiedNameGetCreationNamespace(objname, name);
+					*schemaname = get_namespace_name(namespaceId);
+
+					appendStringInfo(buf, "%s.%s RENAME CONSTRAINT %s TO",
+									 *schemaname, *name, subname);
+					break;
+
+				case OBJECT_TABLE:
+					*schemaname = RangeVarGetNamespace(relation);
+					*name = relation->relname;
+
+					appendStringInfo(buf, "%s RENAME CONSTRAINT %s TO",
+									 RangeVarToString(relation),
+									 subname);
+					break;
+
+				default:
+					/* shouldn't happen, object not supported by event trigger */
+					elog(ERROR, "unrecognized object type: %d", relationType);
+			}
+			break;
+
+		case OBJECT_COLUMN:
+			switch (relationType)
+			{
+				case OBJECT_TABLE:
+				case OBJECT_FOREIGN_TABLE:
+					*schemaname = RangeVarGetNamespace(relation);
+					*name = relation->relname;
+					appendStringInfo(buf, "%s RENAME COLUMN %s TO",
+									 RangeVarToString(relation),
+									 subname);
+					break;
+
+				default:
+					/* shouldn't happen, object not supported by event trigger */
+					elog(ERROR, "unrecognized object type: %d", relationType);
+			}
+			break;
+
+		/* objects not living in a namespace */
+		case OBJECT_EXTENSION:
+		case OBJECT_LANGUAGE:
+		case OBJECT_SCHEMA:
+		case OBJECT_FDW:
+		case OBJECT_FOREIGN_SERVER:
+			*schemaname = NULL;
+			*name = subname;
+
+			appendStringInfo(buf, "%s RENAME TO", *name);
+			break;
+
+		/* relation objects are special */
+		case OBJECT_TABLE:
+		case OBJECT_FOREIGN_TABLE:
+		case OBJECT_SEQUENCE:
+		case OBJECT_VIEW:
+		case OBJECT_INDEX:
+			*name = get_rel_name(EventTriggerTargetOid);
+			*schemaname =
+				get_namespace_name(get_rel_namespace(EventTriggerTargetOid));
+
+			appendStringInfo(buf, "%s RENAME TO", RangeVarToString(relation));
+			break;
+
+		case OBJECT_OPCLASS:
+		case OBJECT_OPFAMILY:
+			namespaceId = QualifiedNameGetCreationNamespace(objname, name);
+			*schemaname = get_namespace_name(namespaceId);
+
+			appendStringInfo(buf, "%s.%s USING %s RENAME TO",
+							 *schemaname, *name, subname);
+			break;
+
+		case OBJECT_TRIGGER:
+			*schemaname = NULL;
+
+			appendStringInfo(buf, "%s ON %s RENAME TO",
+							 subname, RangeVarToString(relation));
+			break;
+
+		case OBJECT_TYPE:
+			namespaceId = QualifiedNameGetCreationNamespace(objname, name);
+			*schemaname = get_namespace_name(namespaceId);
+
+			appendStringInfo(buf, "%s.%s RENAME TO", *schemaname, *name);
+			break;
+
+		case OBJECT_ATTRIBUTE:
+			switch (relationType)
+			{
+				case OBJECT_TYPE:
+					namespaceId = QualifiedNameGetCreationNamespace(objname, name);
+					*schemaname = get_namespace_name(namespaceId);
+
+					appendStringInfo(buf, "%s RENAME ATTRIBUTE %s TO",
+									 RangeVarToString(relation),
+									 subname);
+					break;
+
+				default:
+					/* shouldn't happen, object not supported by event trigger */
+					elog(ERROR, "unrecognized object type: %d", relationType);
+			}
+			break;
+
+		default:
+			/* shouldn't happen, object not supported by event triggers */
+			elog(ERROR, "unrecognized object type: %d", kind);
+			break;
+	}
+}
+
+/*
+ * rewrite RenameStmt: parser production
+ */
+static void
+_rwRenameStmt(EventTriggerData *trigdata)
+{
+	RenameStmt			*node = (RenameStmt *)trigdata->parsetree;
+	StringInfoData		 buf;
+	char				*schemaname, *name;
+
+	initStringInfo(&buf);
+
+	/* The command tag is: ALTER OBJECT_KIND */
+	appendStringInfo(&buf, "%s%s ",
+					 trigdata->ctag->tag,
+					 node->missing_ok ? "IF NOT EXISTS " : "");
+
+	/* This will output schema.name (extra) RENAME (extra) TO */
+	_rwFullObjectNameWithArgs(&buf, node->renameType, node->relationType,
+							  node->relation,
+							  node->object, node->objarg, node->subname,
+							  &schemaname, &name);
+
+	appendStringInfo(&buf, " %s", node->newname);
+
+	if (node->renameType == OBJECT_ATTRIBUTE
+		&& node->relationType == OBJECT_TYPE)
+		appendStringInfo(&buf,
+						 " %s",
+						 node->behavior == DROP_CASCADE ? "CASCADE" : "RESTRICT");
+
+	appendStringInfoString(&buf, ";");
+
+	trigdata->command = buf.data;
+	trigdata->schemaname = schemaname;
+	trigdata->objectname = name;
+}
+
 
 /* get the work done */
 static void
@@ -2257,6 +2466,10 @@ normalize_command_string(EventTriggerData *trigdata)
 
 		case T_CreateDomainStmt:
 			_rwCreateDomainStmt(trigdata);
+			break;
+
+		case T_RenameStmt:
+			_rwRenameStmt(trigdata);
 			break;
 
 		default:
