@@ -355,6 +355,9 @@ standard_ProcessUtility(Node *parsetree,
 	if (completionTag)
 		completionTag[0] = '\0';
 
+	/* reset Event Trigger in between commands. */
+	EventTriggerTargetOid = InvalidOid;
+
 	switch (nodeTag(parsetree))
 	{
 			/*
