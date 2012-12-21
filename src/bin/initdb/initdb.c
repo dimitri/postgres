@@ -118,6 +118,7 @@ static const char *authmethodlocal = "";
 static bool debug = false;
 static bool noclean = false;
 static bool do_sync = true;
+static bool sync_only = false;
 static bool show_setting = false;
 static char *xlog_dir = "";
 
@@ -254,9 +255,11 @@ void setup_pgdata(void);
 void setup_bin_paths(const char *argv0);
 void setup_data_file_paths(void);
 void setup_locale_encoding(void);
-void setup_signals_and_umask(void);
+void setup_signals(void);
 void setup_text_search(void);
-void process(const char *argv0);
+void create_data_directory(void);
+void create_xlog_symlink(void);
+void initialize_data_directory(void);
 
 
 #ifdef WIN32
@@ -1833,7 +1836,7 @@ setup_collation(void)
 #if defined(HAVE_LOCALE_T) && !defined(WIN32)
 	int			i;
 	FILE	   *locale_a_handle;
-	char		localebuf[NAMEDATALEN];
+	char		localebuf[NAMEDATALEN]; /* we assume ASCII so this is fine */
 	int			count = 0;
 
 	PG_CMD_DECL;
@@ -2796,6 +2799,7 @@ usage(const char *progname)
 	printf(_("  -n, --noclean             do not clean up after errors\n"));
 	printf(_("  -N, --nosync              do not wait for changes to be written safely to disk\n"));
 	printf(_("  -s, --show                show internal settings\n"));
+	printf(_("  -S, --sync-only           only sync data directory\n"));
 	printf(_("\nOther options:\n"));
 	printf(_("  -V, --version             output version information, then exit\n"));
 	printf(_("  -?, --help                show this help, then exit\n"));
@@ -3162,7 +3166,7 @@ setup_text_search(void)
 
 
 void
-setup_signals_and_umask(void)
+setup_signals(void)
 {
 	/* some of these are not valid on Windows */
 #ifdef SIGHUP
@@ -3182,19 +3186,12 @@ setup_signals_and_umask(void)
 #ifdef SIGPIPE
 	pqsignal(SIGPIPE, SIG_IGN);
 #endif
-
-	umask(S_IRWXG | S_IRWXO);
 }
 
 
 void
-process(const char *argv0)
+create_data_directory(void)
 {
-	int i;
-	char		bin_dir[MAXPGPATH];
-
-	setup_signals_and_umask();
- 
 	switch (pg_check_dir(pg_data))
 	{
 		case 0:
@@ -3247,7 +3244,12 @@ process(const char *argv0)
 					progname, pg_data, strerror(errno));
 			exit_nicely();
 	}
+}
 
+
+void
+create_xlog_symlink(void)
+{
 	/* Create transaction log symlink, if required */
 	if (strcmp(xlog_dir, "") != 0)
 	{
@@ -3334,6 +3336,21 @@ process(const char *argv0)
 		exit_nicely();
 #endif
 	}
+}
+
+
+void
+initialize_data_directory(void)
+{
+	int i;
+
+	setup_signals();
+
+	umask(S_IRWXG | S_IRWXO);
+ 
+	create_data_directory();
+
+	create_xlog_symlink();
 
 	/* Create required subdirectories */
 	printf(_("creating subdirectories ... "));
@@ -3394,27 +3411,6 @@ process(const char *argv0)
 	make_template0();
 
 	make_postgres();
-
-	if (do_sync)
-		perform_fsync();
-	else
-		printf(_("\nSync to disk skipped.\nThe data directory might become corrupt if the operating system crashes.\n"));
-
-	if (authwarning != NULL)
-		fprintf(stderr, "%s", authwarning);
-
-	/* Get directory specification used to start this executable */
-	strlcpy(bin_dir, argv0, sizeof(bin_dir));
-	get_parent_directory(bin_dir);
-
-	printf(_("\nSuccess. You can now start the database server using:\n\n"
-			 "    %s%s%spostgres%s -D %s%s%s\n"
-			 "or\n"
-			 "    %s%s%spg_ctl%s -D %s%s%s -l logfile start\n\n"),
-	   QUOTE_PATH, bin_dir, (strlen(bin_dir) > 0) ? DIR_SEP : "", QUOTE_PATH,
-		   QUOTE_PATH, pgdata_native, QUOTE_PATH,
-	   QUOTE_PATH, bin_dir, (strlen(bin_dir) > 0) ? DIR_SEP : "", QUOTE_PATH,
-		   QUOTE_PATH, pgdata_native, QUOTE_PATH);
 }
 
 
@@ -3445,6 +3441,7 @@ main(int argc, char *argv[])
 		{"show", no_argument, NULL, 's'},
 		{"noclean", no_argument, NULL, 'n'},
 		{"nosync", no_argument, NULL, 'N'},
+		{"sync-only", no_argument, NULL, 'S'},
 		{"xlogdir", required_argument, NULL, 'X'},
 		{NULL, 0, NULL, 0}
 	};
@@ -3456,6 +3453,7 @@ main(int argc, char *argv[])
 	int			c;
 	int			option_index;
 	char	   *effective_user;
+	char		bin_dir[MAXPGPATH];
 
 	progname = get_progname(argv[0]);
 	set_pglocale_pgservice(argv[0], PG_TEXTDOMAIN("initdb"));
@@ -3476,7 +3474,7 @@ main(int argc, char *argv[])
 
 	/* process command-line options */
 
-	while ((c = getopt_long(argc, argv, "dD:E:L:nNU:WA:sT:X:", long_options, &option_index)) != -1)
+	while ((c = getopt_long(argc, argv, "dD:E:L:nNU:WA:sST:X:", long_options, &option_index)) != -1)
 	{
 		switch (c)
 		{
@@ -3521,6 +3519,9 @@ main(int argc, char *argv[])
 				break;
 			case 'N':
 				do_sync = false;
+				break;
+			case 'S':
+				sync_only = true;
 				break;
 			case 'L':
 				share_path = pg_strdup(optarg);
@@ -3589,6 +3590,14 @@ main(int argc, char *argv[])
 		exit(1);
 	}
 
+	/* If we only need to fsync, just to it and exit */
+	if (sync_only)
+	{
+		setup_pgdata();
+		perform_fsync();
+		return 0;
+	}
+	
 	if (pwprompt && pwfilename)
 	{
 		fprintf(stderr, _("%s: password prompt and password file cannot be specified together\n"), progname);
@@ -3628,7 +3637,28 @@ main(int argc, char *argv[])
 	
 	printf("\n");
 
-	process(argv[0]);
+	initialize_data_directory();
 	
+	if (do_sync)
+		perform_fsync();
+	else
+		printf(_("\nSync to disk skipped.\nThe data directory might become corrupt if the operating system crashes.\n"));
+
+	if (authwarning != NULL)
+		fprintf(stderr, "%s", authwarning);
+
+	/* Get directory specification used to start this executable */
+	strlcpy(bin_dir, argv[0], sizeof(bin_dir));
+	get_parent_directory(bin_dir);
+
+	printf(_("\nSuccess. You can now start the database server using:\n\n"
+			 "    %s%s%spostgres%s -D %s%s%s\n"
+			 "or\n"
+			 "    %s%s%spg_ctl%s -D %s%s%s -l logfile start\n\n"),
+	   QUOTE_PATH, bin_dir, (strlen(bin_dir) > 0) ? DIR_SEP : "", QUOTE_PATH,
+		   QUOTE_PATH, pgdata_native, QUOTE_PATH,
+	   QUOTE_PATH, bin_dir, (strlen(bin_dir) > 0) ? DIR_SEP : "", QUOTE_PATH,
+		   QUOTE_PATH, pgdata_native, QUOTE_PATH);
+
 	return 0;
 }

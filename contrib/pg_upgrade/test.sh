@@ -71,6 +71,9 @@ logdir=$PWD/log
 rm -rf "$logdir"
 mkdir "$logdir"
 
+# enable echo so the user can see what is being executed
+set -x
+
 $oldbindir/initdb -N
 $oldbindir/pg_ctl start -l "$logdir/postmaster1.log" -o '-F' -w
 if "$MAKE" -C "$oldsrc" installcheck; then
@@ -124,6 +127,11 @@ esac
 
 pg_dumpall -f "$temp_root"/dump2.sql || pg_dumpall2_status=$?
 pg_ctl -m fast stop
+
+# no need to echo commands anymore
+set +x
+echo
+
 if [ -n "$pg_dumpall2_status" ]; then
 	echo "pg_dumpall of post-upgrade database cluster failed"
 	exit 1

@@ -168,7 +168,8 @@ typedef struct PGXACT
 
 	uint8		vacuumFlags;	/* vacuum-related flags, see above */
 	bool		overflowed;
-	bool		inCommit;		/* true if within commit critical section */
+	bool		delayChkpt; 	/* true if this proc delays checkpoint start */
+								/* previously called InCommit */
 
 	uint8		nxids;
 } PGXACT;
@@ -188,6 +189,8 @@ typedef struct PROC_HDR
 	PGPROC	   *freeProcs;
 	/* Head of list of autovacuum's free PGPROC structures */
 	PGPROC	   *autovacFreeProcs;
+	/* Head of list of bgworker free PGPROC structures */
+	PGPROC	   *bgworkerFreeProcs;
 	/* WALWriter process's latch */
 	Latch	   *walwriterLatch;
 	/* Checkpointer process's latch */

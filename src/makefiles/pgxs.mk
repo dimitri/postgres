@@ -240,7 +240,7 @@ distclean maintainer-clean: clean
 ifdef REGRESS
 
 # Select database to use for running the tests
-ifdef USE_MODULE_DB
+ifneq ($(USE_MODULE_DB),)
   REGRESS_OPTS += --dbname=$(CONTRIB_TESTDB_MODULE)
 else
   REGRESS_OPTS += --dbname=$(CONTRIB_TESTDB)
