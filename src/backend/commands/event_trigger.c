@@ -98,8 +98,8 @@ static void AlterEventTriggerOwner_internal(Relation rel,
 static event_trigger_command_tag_check_result check_ddl_tag(const char *tag);
 static void error_duplicate_filter_variable(const char *defname);
 static Datum filter_list_to_array(List *filterlist);
-static void insert_event_trigger_tuple(char *trigname, char *eventname,
-									   Oid evtOwner, Oid funcoid,
+static Oid insert_event_trigger_tuple(char *trigname, char *eventname,
+									  Oid evtOwner, Oid funcoid,
 									   List *tags, List *contexts);
 static void validate_ddl_tags(const char *filtervar, List *taglist);
 static void validate_ddl_contexts(const char *filtervar, List *ctxlist);
@@ -108,7 +108,7 @@ static void EventTriggerInvoke(List *fn_oid_list, EventTriggerData *trigdata);
 /*
  * Create an event trigger.
  */
-void
+Oid
 CreateEventTrigger(CreateEventTrigStmt *stmt)
 {
 	HeapTuple	tuple;
@@ -191,8 +191,8 @@ CreateEventTrigger(CreateEventTrigStmt *stmt)
 						NameListToString(stmt->funcname))));
 
 	/* Insert catalog entries. */
-	insert_event_trigger_tuple(stmt->trigname, stmt->eventname,
-							   evtowner, funcoid, tags, contexts);
+	return insert_event_trigger_tuple(stmt->trigname, stmt->eventname,
+									  evtowner, funcoid, tags, contexts);
 }
 
 /*
@@ -341,7 +341,7 @@ error_duplicate_filter_variable(const char *defname)
 /*
  * Insert the new pg_event_trigger row and record dependencies.
  */
-static void
+static Oid
 insert_event_trigger_tuple(char *trigname, char *eventname, Oid evtOwner,
 						   Oid funcoid, List *taglist, List *contexts)
 {
@@ -403,6 +403,8 @@ insert_event_trigger_tuple(char *trigname, char *eventname, Oid evtOwner,
 
 	/* Close pg_event_trigger. */
 	heap_close(tgrel, RowExclusiveLock);
+
+	return trigoid;
 }
 
 /*
@@ -467,11 +469,12 @@ RemoveEventTriggerById(Oid trigOid)
 /*
  * ALTER EVENT TRIGGER foo ENABLE|DISABLE|ENABLE ALWAYS|REPLICA
  */
-void
+Oid
 AlterEventTrigger(AlterEventTrigStmt *stmt)
 {
 	Relation	tgrel;
 	HeapTuple	tup;
+	Oid         trigoid;
 	Form_pg_event_trigger evtForm;
 	char        tgenabled = stmt->tgenabled;
 
@@ -484,7 +487,10 @@ AlterEventTrigger(AlterEventTrigStmt *stmt)
 				(errcode(ERRCODE_UNDEFINED_OBJECT),
 				 errmsg("event trigger \"%s\" does not exist",
 					stmt->trigname)));
-	if (!pg_event_trigger_ownercheck(HeapTupleGetOid(tup), GetUserId()))
+
+	trigoid = HeapTupleGetOid(tup);
+
+	if (!pg_event_trigger_ownercheck(trigoid, GetUserId()))
 		aclcheck_error(ACLCHECK_NOT_OWNER, ACL_KIND_EVENT_TRIGGER,
 					   stmt->trigname);
 
@@ -498,6 +504,8 @@ AlterEventTrigger(AlterEventTrigStmt *stmt)
 	/* clean up */
 	heap_freetuple(tup);
 	heap_close(tgrel, RowExclusiveLock);
+
+	return trigoid;
 }
 
 
