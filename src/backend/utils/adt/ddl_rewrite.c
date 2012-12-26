@@ -2593,11 +2593,6 @@ get_event_trigger_data(EventTriggerData *trigdata)
 		(trigdata->ctag->operation == COMMAND_TAG_DROP
 		 && strcmp(trigdata->event, "ddl_command_start") == 0);
 
-	/* initialize yet unknown pieces of information */
-	trigdata->command	 = NULL;
-	trigdata->schemaname = NULL;
-	trigdata->objectname = NULL;
-
 	if (rewrite)
 	{
 		/* that will also fill in schemaname and objectname */
