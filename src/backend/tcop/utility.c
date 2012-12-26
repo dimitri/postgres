@@ -620,50 +620,59 @@ standard_ProcessUtility(Node *parsetree,
 
 		case T_AlterExtensionStmt:
 			EventTriggerDDLCommandStart(parsetree, context);
-			ExecAlterExtensionStmt((AlterExtensionStmt *) parsetree);
+			EventTriggerTargetOid =
+				ExecAlterExtensionStmt((AlterExtensionStmt *) parsetree);
 			EventTriggerDDLCommandEnd(parsetree, context);
 			break;
 
 		case T_AlterExtensionContentsStmt:
 			EventTriggerDDLCommandStart(parsetree, context);
-			ExecAlterExtensionContentsStmt((AlterExtensionContentsStmt *) parsetree);
+			EventTriggerTargetOid =
+				ExecAlterExtensionContentsStmt(
+					(AlterExtensionContentsStmt *) parsetree);
 			EventTriggerDDLCommandEnd(parsetree, context);
 
 			break;
 
 		case T_CreateFdwStmt:
 			EventTriggerDDLCommandStart(parsetree, context);
-			CreateForeignDataWrapper((CreateFdwStmt *) parsetree);
+			EventTriggerTargetOid =
+				CreateForeignDataWrapper((CreateFdwStmt *) parsetree);
 			EventTriggerDDLCommandEnd(parsetree, context);
 			break;
 
 		case T_AlterFdwStmt:
 			EventTriggerDDLCommandStart(parsetree, context);
-			AlterForeignDataWrapper((AlterFdwStmt *) parsetree);
+			EventTriggerTargetOid =
+				AlterForeignDataWrapper((AlterFdwStmt *) parsetree);
 			EventTriggerDDLCommandEnd(parsetree, context);
 			break;
 
 		case T_CreateForeignServerStmt:
 			EventTriggerDDLCommandStart(parsetree, context);
-			CreateForeignServer((CreateForeignServerStmt *) parsetree);
+			EventTriggerTargetOid =
+				CreateForeignServer((CreateForeignServerStmt *) parsetree);
 			EventTriggerDDLCommandEnd(parsetree, context);
 			break;
 
 		case T_AlterForeignServerStmt:
 			EventTriggerDDLCommandStart(parsetree, context);
-			AlterForeignServer((AlterForeignServerStmt *) parsetree);
+			EventTriggerTargetOid =
+				AlterForeignServer((AlterForeignServerStmt *) parsetree);
 			EventTriggerDDLCommandEnd(parsetree, context);
 			break;
 
 		case T_CreateUserMappingStmt:
 			EventTriggerDDLCommandStart(parsetree, context);
-			CreateUserMapping((CreateUserMappingStmt *) parsetree);
+			EventTriggerTargetOid =
+				CreateUserMapping((CreateUserMappingStmt *) parsetree);
 			EventTriggerDDLCommandEnd(parsetree, context);
 			break;
 
 		case T_AlterUserMappingStmt:
 			EventTriggerDDLCommandStart(parsetree, context);
-			AlterUserMapping((AlterUserMappingStmt *) parsetree);
+			EventTriggerTargetOid =
+				AlterUserMapping((AlterUserMappingStmt *) parsetree);
 			EventTriggerDDLCommandEnd(parsetree, context);
 			break;
 
@@ -878,30 +887,36 @@ standard_ProcessUtility(Node *parsetree,
 						 * Recursively alter column default for table and, if
 						 * requested, for descendants
 						 */
-						AlterDomainDefault(stmt->typeName,
-										   stmt->def);
+						EventTriggerTargetOid =
+							AlterDomainDefault(stmt->typeName,
+											   stmt->def);
 						break;
 					case 'N':	/* ALTER DOMAIN DROP NOT NULL */
-						AlterDomainNotNull(stmt->typeName,
-										   false);
+						EventTriggerTargetOid =
+							AlterDomainNotNull(stmt->typeName,
+											   false);
 						break;
 					case 'O':	/* ALTER DOMAIN SET NOT NULL */
-						AlterDomainNotNull(stmt->typeName,
-										   true);
+						EventTriggerTargetOid =
+							AlterDomainNotNull(stmt->typeName,
+											   true);
 						break;
 					case 'C':	/* ADD CONSTRAINT */
-						AlterDomainAddConstraint(stmt->typeName,
-												 stmt->def);
+						EventTriggerTargetOid =
+							AlterDomainAddConstraint(stmt->typeName,
+													 stmt->def);
 						break;
 					case 'X':	/* DROP CONSTRAINT */
-						AlterDomainDropConstraint(stmt->typeName,
-												  stmt->name,
-												  stmt->behavior,
-												  stmt->missing_ok);
+						EventTriggerTargetOid =
+							AlterDomainDropConstraint(stmt->typeName,
+													  stmt->name,
+													  stmt->behavior,
+													  stmt->missing_ok);
 						break;
 					case 'V':	/* VALIDATE CONSTRAINT */
-						AlterDomainValidateConstraint(stmt->typeName,
-													  stmt->name);
+						EventTriggerTargetOid =
+							AlterDomainValidateConstraint(stmt->typeName,
+														  stmt->name);
 						break;
 					default:	/* oops */
 						elog(ERROR, "unrecognized alter domain type: %d",
@@ -991,26 +1006,30 @@ standard_ProcessUtility(Node *parsetree,
 				CompositeTypeStmt *stmt = (CompositeTypeStmt *) parsetree;
 
 				EventTriggerDDLCommandStart(parsetree, context);
-				DefineCompositeType(stmt->typevar, stmt->coldeflist);
+				EventTriggerTargetOid =
+					DefineCompositeType(stmt->typevar, stmt->coldeflist);
 				EventTriggerDDLCommandEnd(parsetree, context);
 			}
 			break;
 
 		case T_CreateEnumStmt:	/* CREATE TYPE AS ENUM */
 			EventTriggerDDLCommandStart(parsetree, context);
-			DefineEnum((CreateEnumStmt *) parsetree);
+			EventTriggerTargetOid =
+				DefineEnum((CreateEnumStmt *) parsetree);
 			EventTriggerDDLCommandEnd(parsetree, context);
 			break;
 
 		case T_CreateRangeStmt:	/* CREATE TYPE AS RANGE */
 			EventTriggerDDLCommandStart(parsetree, context);
-			DefineRange((CreateRangeStmt *) parsetree);
+			EventTriggerTargetOid =
+				DefineRange((CreateRangeStmt *) parsetree);
 			EventTriggerDDLCommandEnd(parsetree, context);
 			break;
 
 		case T_AlterEnumStmt:	/* ALTER TYPE (enum) */
 			EventTriggerDDLCommandStart(parsetree, context);
-			AlterEnum((AlterEnumStmt *) parsetree, isTopLevel);
+			EventTriggerTargetOid =
+				AlterEnum((AlterEnumStmt *) parsetree, isTopLevel);
 			EventTriggerDDLCommandEnd(parsetree, context);
 			break;
 
@@ -1030,7 +1049,8 @@ standard_ProcessUtility(Node *parsetree,
 
 		case T_AlterFunctionStmt:		/* ALTER FUNCTION */
 			EventTriggerDDLCommandStart(parsetree, context);
-			AlterFunction((AlterFunctionStmt *) parsetree);
+			EventTriggerTargetOid =
+				AlterFunction((AlterFunctionStmt *) parsetree);
 			EventTriggerDDLCommandEnd(parsetree, context);
 			break;
 
@@ -1069,7 +1089,8 @@ standard_ProcessUtility(Node *parsetree,
 
 		case T_RuleStmt:		/* CREATE RULE */
 			EventTriggerDDLCommandStart(parsetree, context);
-			DefineRule((RuleStmt *) parsetree, queryString);
+			EventTriggerTargetOid =
+				DefineRule((RuleStmt *) parsetree, queryString);
 			EventTriggerDDLCommandEnd(parsetree, context);
 			break;
 
@@ -1208,7 +1229,8 @@ standard_ProcessUtility(Node *parsetree,
 
 		case T_CreateTrigStmt:
 			EventTriggerDDLCommandStart(parsetree, context);
-			(void) CreateTrigger((CreateTrigStmt *) parsetree, queryString,
+			EventTriggerTargetOid =
+				CreateTrigger((CreateTrigStmt *) parsetree, queryString,
 								 InvalidOid, InvalidOid, false);
 			EventTriggerDDLCommandEnd(parsetree, context);
 			break;
@@ -1225,7 +1247,8 @@ standard_ProcessUtility(Node *parsetree,
 
 		case T_CreatePLangStmt:
 			EventTriggerDDLCommandStart(parsetree, context);
-			CreateProceduralLanguage((CreatePLangStmt *) parsetree);
+			EventTriggerTargetOid =
+				CreateProceduralLanguage((CreatePLangStmt *) parsetree);
 			EventTriggerDDLCommandEnd(parsetree, context);
 			break;
 
@@ -1348,37 +1371,43 @@ standard_ProcessUtility(Node *parsetree,
 
 		case T_CreateCastStmt:
 			EventTriggerDDLCommandStart(parsetree, context);
-			CreateCast((CreateCastStmt *) parsetree);
+			EventTriggerTargetOid =
+				CreateCast((CreateCastStmt *) parsetree);
 			EventTriggerDDLCommandEnd(parsetree, context);
 			break;
 
 		case T_CreateOpClassStmt:
 			EventTriggerDDLCommandStart(parsetree, context);
-			DefineOpClass((CreateOpClassStmt *) parsetree);
+			EventTriggerTargetOid =
+				DefineOpClass((CreateOpClassStmt *) parsetree);
 			EventTriggerDDLCommandEnd(parsetree, context);
 			break;
 
 		case T_CreateOpFamilyStmt:
 			EventTriggerDDLCommandStart(parsetree, context);
-			DefineOpFamily((CreateOpFamilyStmt *) parsetree);
+			EventTriggerTargetOid =
+				DefineOpFamily((CreateOpFamilyStmt *) parsetree);
 			EventTriggerDDLCommandEnd(parsetree, context);
 			break;
 
 		case T_AlterOpFamilyStmt:
 			EventTriggerDDLCommandStart(parsetree, context);
-			AlterOpFamily((AlterOpFamilyStmt *) parsetree);
+			EventTriggerTargetOid =
+				AlterOpFamily((AlterOpFamilyStmt *) parsetree);
 			EventTriggerDDLCommandEnd(parsetree, context);
 			break;
 
 		case T_AlterTSDictionaryStmt:
 			EventTriggerDDLCommandStart(parsetree, context);
-			AlterTSDictionary((AlterTSDictionaryStmt *) parsetree);
+			EventTriggerTargetOid =
+				AlterTSDictionary((AlterTSDictionaryStmt *) parsetree);
 			EventTriggerDDLCommandEnd(parsetree, context);
 			break;
 
 		case T_AlterTSConfigurationStmt:
 			EventTriggerDDLCommandStart(parsetree, context);
-			AlterTSConfiguration((AlterTSConfigurationStmt *) parsetree);
+			EventTriggerTargetOid =
+				AlterTSConfiguration((AlterTSConfigurationStmt *) parsetree);
 			EventTriggerDDLCommandEnd(parsetree, context);
 			break;
 
