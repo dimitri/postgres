@@ -2600,9 +2600,6 @@ get_event_trigger_data(EventTriggerData *trigdata)
 
 	if (rewrite)
 	{
-		/* src/backend/tcop/utility.c sets EventTriggerTargetOid for us */
-		trigdata->objectid  = EventTriggerTargetOid;
-
 		/* that will also fill in schemaname and objectname */
 		normalize_command_string(trigdata);
 	}

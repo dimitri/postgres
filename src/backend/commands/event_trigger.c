@@ -741,7 +741,9 @@ build_event_trigger_data(EventTriggerData *trigdata,
 	trigdata->event		= (char *)event;
 	trigdata->parsetree = parsetree;
 	trigdata->ctag		= ctag;
-	trigdata->objectid  = InvalidOid;
+
+	/* src/backend/tcop/utility.c sets EventTriggerTargetOid for us */
+	trigdata->objectid  = EventTriggerTargetOid;
 
 	switch (context)
 	{
