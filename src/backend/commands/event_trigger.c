@@ -25,7 +25,9 @@
 #include "commands/dbcommands.h"
 #include "commands/event_trigger.h"
 #include "commands/trigger.h"
+#include "nodes/makefuncs.h"
 #include "parser/parse_func.h"
+#include "parser/parse_type.h"
 #include "pgstat.h"
 #include "miscadmin.h"
 #include "utils/acl.h"
@@ -737,13 +739,13 @@ build_event_trigger_data(EventTriggerData *trigdata,
 						 ProcessUtilityContext context)
 
 {
-	trigdata->type		= T_EventTriggerData;
-	trigdata->event		= (char *)event;
-	trigdata->parsetree = parsetree;
-	trigdata->ctag		= ctag;
-
-	/* src/backend/tcop/utility.c sets EventTriggerTargetOid for us */
-	trigdata->objectid  = EventTriggerTargetOid;
+	trigdata->type		 = T_EventTriggerData;
+	trigdata->event		 = (char *)event;
+	trigdata->parsetree	 = parsetree;
+	trigdata->ctag		 = ctag;
+	trigdata->command	 = NULL;
+	trigdata->schemaname = NULL;
+	trigdata->objectname = NULL;
 
 	switch (context)
 	{
@@ -759,6 +761,124 @@ build_event_trigger_data(EventTriggerData *trigdata,
 		case PROCESS_UTILITY_GENERATED:
 			trigdata->context = "GENERATED";
 			break;
+	}
+
+	/*
+	 * For CREATE and ALTER operations, src/backend/tcop/utility.c sets
+	 * EventTriggerTargetOid for us after calling the function that implements
+	 * the operation, covering "ddl_event_end" in those cases.
+	 */
+	trigdata->objectid  = EventTriggerTargetOid;
+
+    /*
+	 * Fill in the EventTriggerTargetOid for a DROP command and a
+	 * "ddl_command_start" Event Trigger: the lookup didn't happen yet and we
+	 * still want to provide the user with that information when possible.
+	 *
+	 * We only do the lookup if the command contains a single element, which is
+	 * often forced to be the case as per the grammar (see the drop_type:
+	 * production for a list of cases where more than one object per command is
+	 * allowed).
+	 *
+	 * We take no exclusive lock here, the main command will have to do the
+	 * name lookup all over again and take appropriate locks down after the
+	 * User Defined Code runs anyway, and the commands executed by the User
+	 * Defined Code will take their own locks. We only lock the objects here so
+	 * that they don't disapear under us in another concurrent transaction,
+	 * hence using ShareUpdateExclusiveLock.
+	 */
+	if (ctag->operation == COMMAND_TAG_DROP
+		&& strcmp(event, "ddl_command_start") == 0)
+	{
+		DropStmt *stmt = (DropStmt *) parsetree;
+
+		/*
+		 * we only support filling-in information for DROP command if we only
+		 * drop a single object at a time, in all other cases the ObjectID,
+		 * Name and Schema will remain NULL.
+		 */
+		if (list_length(stmt->objects) != 1)
+			return;
+
+		switch (stmt->removeType)
+		{
+			case OBJECT_INDEX:
+			case OBJECT_TABLE:
+			case OBJECT_SEQUENCE:
+			case OBJECT_VIEW:
+			case OBJECT_FOREIGN_TABLE:
+			{
+				RangeVar *rel =
+					makeRangeVarFromNameList((List *) linitial(stmt->objects));
+				Oid				relOid;
+				ObjectAddress	address;
+				Oid				namespaceId;
+
+				relOid = RangeVarGetRelid(rel, ShareUpdateExclusiveLock, true);
+
+				trigdata->objectid  = relOid;
+
+				/* now that we have the addressect OID, get namespace */
+				address.classId = RelationRelationId;
+				address.objectId = relOid;
+				address.objectSubId = 0;
+
+				namespaceId = get_object_namespace(&address);
+				trigdata->schemaname = get_namespace_name(namespaceId);
+
+				/* and name */
+				trigdata->objectname = rel->relname;
+				break;
+			}
+
+			default:
+			{
+				ObjectAddress address;
+				List	   *objname = linitial(stmt->objects);
+				List	   *objargs = NIL;
+				Relation	relation = NULL;
+				Oid         namespaceId;
+
+				if (stmt->arguments)
+					objargs = linitial(stmt->arguments);
+
+				address = get_object_address(stmt->removeType,
+											 objname, objargs,
+											 &relation,
+											 ShareUpdateExclusiveLock,
+											 true);
+
+				trigdata->objectid = address.objectId;
+
+				/* now that we have the object OID, get namespace */
+				namespaceId = get_object_namespace(&address);
+				trigdata->schemaname = get_namespace_name(namespaceId);
+
+				/* and get the name too */
+				switch (stmt->removeType)
+				{
+					case OBJECT_TYPE:
+					case OBJECT_DOMAIN:
+						trigdata->objectname =
+							TypeNameToString(makeTypeNameFromNameList(objname));
+						break;
+
+					case OBJECT_CAST:
+						/* we don't support composite names */
+						break;
+
+					case OBJECT_TRIGGER:
+					case OBJECT_RULE:
+						trigdata->objectname = strVal(llast(objname));
+						break;
+
+					default:
+						trigdata->objectname = NameListToString(objname);
+						break;
+				}
+				break;
+			}
+		}
 	}
 }
 
