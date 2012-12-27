@@ -114,6 +114,7 @@ extern Oid CreateTrigger(CreateTrigStmt *stmt, const char *queryString,
 
 extern void RemoveTriggerById(Oid trigOid);
 extern Oid	get_trigger_oid(Oid relid, const char *name, bool missing_ok);
+extern char *get_trigger_name(Oid trigoid);
 
 extern Oid renametrig(RenameStmt *stmt);
 

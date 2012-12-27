@@ -1095,6 +1095,45 @@ RemoveTriggerById(Oid trigOid)
 }
 
 /*
+ * get_trigger_name - given a trigger OID, look up the name
+ *
+ * Returns a palloc'd string, or NULL if no such trigger.
+ */
+char *
+get_trigger_name(Oid trigoid)
+{
+	char	   *result;
+	Relation	rel;
+	SysScanDesc scandesc;
+	HeapTuple	tuple;
+	ScanKeyData entry[1];
+
+	rel = heap_open(TriggerRelationId, AccessShareLock);
+
+	ScanKeyInit(&entry[0],
+				ObjectIdAttributeNumber,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(trigoid));
+
+	scandesc = systable_beginscan(rel, TriggerOidIndexId, true,
+								  SnapshotNow, 1, entry);
+
+	tuple = systable_getnext(scandesc);
+
+	/* We assume that there can be at most one matching tuple */
+	if (HeapTupleIsValid(tuple))
+		result = pstrdup(NameStr(((Form_pg_trigger) GETSTRUCT(tuple))->tgname));
+	else
+		result = NULL;
+
+	systable_endscan(scandesc);
+
+	heap_close(rel, AccessShareLock);
+
+	return result;
+}
+
+/*
  * get_trigger_oid - Look up a trigger by name to find its OID.
  *
  * If missing_ok is false, throw an error if trigger not found.  If
