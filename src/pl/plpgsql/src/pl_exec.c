@@ -862,17 +862,6 @@ plpgsql_exec_event_trigger(PLpgSQL_function *func, EventTriggerData *trigdata)
 	else
 		var->isnull = true;
 
-	/* FIXME: not all commands are supported here. yet. */
-	var = (PLpgSQL_var *) (estate.datums[func->tg_command_varno]);
-	if (trigdata->command != NULL)
-	{
-		var->value = CStringGetTextDatum(trigdata->command);
-		var->isnull = false;
-		var->freeval = true;
-	}
-	else
-		var->isnull = true;
-
 	/*
 	 * Let the instrumentation plugin peek at this function
 	 */

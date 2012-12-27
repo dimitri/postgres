@@ -62,7 +62,6 @@ typedef struct EventTriggerData
 	char       *context;			/* ProcessUtilityContext */
 	char	   *schemaname;			/* schema name of the object */
 	char	   *objectname;			/* object name */
-	char	   *command;			/* deparsed command string */
 } EventTriggerData;
 
 /*

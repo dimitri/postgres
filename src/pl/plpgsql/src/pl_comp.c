@@ -756,14 +756,6 @@ do_compile(FunctionCallInfo fcinfo,
 										 true);
 			function->tg_operation_varno = var->dno;
 
-			/* Add the variable tg_command */
-			var = plpgsql_build_variable("tg_command", 0,
-										 plpgsql_build_datatype(TEXTOID,
-																-1,
-											   function->fn_input_collation),
-										 true);
-			function->tg_command_varno = var->dno;
-
 			break;
 
 		default:

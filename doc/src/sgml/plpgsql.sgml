@@ -4104,7 +4104,6 @@ BEGIN
                  tg_event, tg_context, tg_tag, tg_operation, tg_obtypename;
     RAISE NOTICE '         oid: %, schema: %, name: %',
                  tg_objectid, tg_schemaname, tg_objectname;
-    RAISE NOTICE '     command: %', tg_command;
 END
 $$ language plpgsql;
 
