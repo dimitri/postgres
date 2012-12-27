@@ -10,7 +10,6 @@ BEGIN
     RAISE NOTICE 'event: %, context: %, tag: %, operation: %, type: %, schema: %, name: %',
                  tg_event, tg_context, tg_tag, tg_operation, tg_obtypename,
                  tg_schemaname, tg_objectname;
-    RAISE NOTICE 'command: %', tg_command;
 END
 $$ language plpgsql;
 

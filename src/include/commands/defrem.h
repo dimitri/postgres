@@ -15,7 +15,6 @@
 #define DEFREM_H
 
 #include "nodes/parsenodes.h"
-#include "utils/array.h"
 
 /* commands/dropcmds.c */
 extern void RemoveObjects(DropStmt *stmt);
@@ -43,27 +42,6 @@ extern bool CheckIndexCompatible(Oid oldId,
 extern Oid	GetDefaultOpClass(Oid type_id, Oid am_id);
 
 /* commands/functioncmds.c */
-extern void compute_return_type(TypeName *returnType, Oid languageOid,
-								Oid *prorettype_p, bool *returnsSet_p);
-extern void compute_attributes_sql_style(List *options,
-										 List **as,
-										 char **language,
-										 bool *windowfunc_p,
-										 char *volatility_p,
-										 bool *strict_p,
-										 bool *security_definer,
-										 bool *leakproof_p,
-										 ArrayType **proconfig,
-										 float4 *procost,
-										 float4 *prorows);
-extern void compute_attributes_with_style(List *parameters,
-										  bool *isStrict_p,
-										  char *volatility_p);
-extern void interpret_AS_clause(Oid languageOid, const char *languageName,
-								char *funcname, List *as,
-								char **prosrc_str_p, char **probin_str_p,
-								bool returnsSet,
-								float4 *procost, float4 *prorows);
 extern Oid CreateFunction(CreateFunctionStmt *stmt, const char *queryString);
 extern void RemoveFunctionById(Oid funcOid);
 extern void SetFunctionReturnType(Oid funcOid, Oid newRetType);

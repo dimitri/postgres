@@ -14,10 +14,7 @@
 #ifndef BUILTINS_H
 #define BUILTINS_H
 
-#include "access/htup_details.h"
-#include "commands/event_trigger.h"
 #include "fmgr.h"
-#include "lib/stringinfo.h"
 #include "nodes/parsenodes.h"
 
 /*
@@ -667,12 +664,6 @@ extern char *quote_qualified_identifier(const char *qualifier,
 						   const char *ident);
 extern char *generate_collation_name(Oid collid);
 
-extern char *deparse_expression_pretty(Node *expr, List *dpcontext,
-									   bool forceprefix, bool showimplicit,
-									   int prettyFlags, int startIndent);
-extern void get_query_def(Query *query, StringInfo buf, List *parentnamespace,
-						  TupleDesc resultDesc,
-						  int prettyFlags, int wrapColumn, int startIndent);
 
 /* tid.c */
 extern Datum tidin(PG_FUNCTION_ARGS);

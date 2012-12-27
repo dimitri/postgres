@@ -56,7 +56,6 @@
 #include "miscadmin.h"
 #include "utils/acl.h"
 #include "utils/builtins.h"
-#include "utils/ddl_rewrite.h"
 #include "utils/evtcache.h"
 #include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
@@ -774,7 +773,6 @@ build_event_trigger_data(EventTriggerData *trigdata,
 	trigdata->event		 = (char *)event;
 	trigdata->parsetree	 = parsetree;
 	trigdata->ctag		 = ctag;
-	trigdata->command	 = NULL;
 	trigdata->schemaname = NULL;
 	trigdata->objectname = NULL;
 
@@ -934,14 +932,6 @@ EventTriggerDDLCommandStart(Node *parsetree, ProcessUtilityContext context)
 	build_event_trigger_data(&trigdata, "ddl_command_start",
 							 parsetree, ctag, context);
 
-	/*
-	 * Get some more context data, such as the kind of object which is the
-	 * target of the command, the operation we're running and the command
-	 * string. Some of the specific information we get here are specific to the
-	 * event.
-	 */
-	/* get_event_trigger_data(&trigdata); */
-
 	/* Run the triggers. */
 	EventTriggerInvoke(runlist, &trigdata);
 
@@ -1004,9 +994,6 @@ EventTriggerDDLCommandEnd(Node *parsetree, ProcessUtilityContext context)
 	/* Construct event trigger data. */
 	build_event_trigger_data(&trigdata, "ddl_command_end",
 							 parsetree, ctag, context);
-
-	/* Get some more context data, some specific to the event */
-	/* get_event_trigger_data(&trigdata); */
 
 	/* Run the triggers. */
 	EventTriggerInvoke(runlist, &trigdata);
