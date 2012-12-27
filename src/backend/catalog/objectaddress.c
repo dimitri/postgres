@@ -69,25 +69,6 @@
 #include "utils/syscache.h"
 #include "utils/tqual.h"
 
-/*
- * ObjectProperty
- *
- * This array provides a common part of system object structure; to help
- * consolidate routines to handle various kind of object classes.
- */
-typedef struct
-{
-	Oid			class_oid;		/* oid of catalog */
-	Oid			oid_index_oid;	/* oid of index on system oid column */
-	int			oid_catcache_id;	/* id of catcache on system oid column	*/
-	int			name_catcache_id;		/* id of catcache on (name,namespace) */
-	AttrNumber	attnum_name;	/* attnum of name field */
-	AttrNumber	attnum_namespace;		/* attnum of namespace field */
-	AttrNumber	attnum_owner;	/* attnum of owner field */
-	AttrNumber	attnum_acl;		/* attnum of acl field */
-	AclObjectKind acl_kind;		/* ACL_KIND_* of this object type */
-} ObjectPropertyType;
-
 static ObjectPropertyType ObjectProperty[] =
 {
 	{
@@ -392,7 +373,6 @@ static ObjectAddress get_object_address_type(ObjectType objtype,
 						List *objname, bool missing_ok);
 static ObjectAddress get_object_address_opcf(ObjectType objtype, List *objname,
 						List *objargs, bool missing_ok);
-static ObjectPropertyType *get_object_property_data(Oid class_id);
 
 /*
  * Translate an object name and arguments (as passed by the parser) to an
@@ -1336,7 +1316,7 @@ get_object_aclkind(Oid class_id)
 /*
  * Find ObjectProperty structure by class_id.
  */
-static ObjectPropertyType *
+ObjectPropertyType *
 get_object_property_data(Oid class_id)
 {
 	static ObjectPropertyType *prop_last = NULL;
