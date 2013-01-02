@@ -84,6 +84,7 @@ static event_trigger_support_data event_trigger_support[] = {
 	{ "TEXT SEARCH TEMPLATE", true },
 	{ "TYPE", true },
 	{ "USER MAPPING", true },
+	{ "TEMPLATE FOR EXTENSION", true },
 	{ "VIEW", true },
 	{ NULL, false }
 };

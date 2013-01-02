@@ -1625,6 +1625,16 @@ typedef struct AlterExtensionContentsStmt
 	List	   *objargs;		/* Arguments if needed (eg, for functions) */
 } AlterExtensionContentsStmt;
 
+typedef struct CreateTemplateStmt
+{
+	NodeTag		type;
+	char	   *extname;		/* Extension's name */
+	char	   *version;		/* Version to create from the template */
+	List	   *control;		/* List of DefElem nodes */
+	char	   *script;			/* Extension's install script */
+	bool		if_not_exists;	/* just do nothing if it already exists? */
+} CreateTemplateStmt;
+
 /* ----------------------
  *		Create/Alter FOREIGN DATA WRAPPER Statements
  * ----------------------

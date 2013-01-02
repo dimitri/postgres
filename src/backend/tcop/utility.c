@@ -46,6 +46,7 @@
 #include "commands/sequence.h"
 #include "commands/tablecmds.h"
 #include "commands/tablespace.h"
+#include "commands/template.h"
 #include "commands/trigger.h"
 #include "commands/typecmds.h"
 #include "commands/user.h"
@@ -224,6 +225,7 @@ check_xact_readonly(Node *parsetree)
 		case T_CreateExtensionStmt:
 		case T_AlterExtensionStmt:
 		case T_AlterExtensionContentsStmt:
+		case T_CreateTemplateStmt:
 		case T_CreateFdwStmt:
 		case T_AlterFdwStmt:
 		case T_CreateForeignServerStmt:
@@ -619,6 +621,12 @@ standard_ProcessUtility(Node *parsetree,
 			if (isCompleteQuery)
 				EventTriggerDDLCommandStart(parsetree);
 			ExecAlterExtensionContentsStmt((AlterExtensionContentsStmt *) parsetree);
+			break;
+
+		case T_CreateTemplateStmt:
+			if (isCompleteQuery)
+				EventTriggerDDLCommandStart(parsetree);
+			CreateTemplate((CreateTemplateStmt *) parsetree);
 			break;
 
 		case T_CreateFdwStmt:
@@ -1781,6 +1789,10 @@ CreateCommandTag(Node *parsetree)
 			tag = "ALTER EXTENSION";
 			break;
 
+		case T_CreateTemplateStmt:
+			tag = "CREATE TEMPLATE FOR EXTENSION";
+			break;
+
 		case T_CreateFdwStmt:
 			tag = "CREATE FOREIGN DATA WRAPPER";
 			break;
@@ -2408,6 +2420,10 @@ GetCommandLogLevel(Node *parsetree)
 		case T_CreateExtensionStmt:
 		case T_AlterExtensionStmt:
 		case T_AlterExtensionContentsStmt:
+			lev = LOGSTMT_DDL;
+			break;
+
+		case T_CreateTemplateStmt:
 			lev = LOGSTMT_DDL;
 			break;
 

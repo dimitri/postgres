@@ -229,7 +229,7 @@ static void processCASbits(int cas_bits, int location, const char *constrType,
 		CreateSchemaStmt CreateSeqStmt CreateStmt CreateTableSpaceStmt
 		CreateFdwStmt CreateForeignServerStmt CreateForeignTableStmt
 		CreateAssertStmt CreateTrigStmt CreateEventTrigStmt
-		CreateUserStmt CreateUserMappingStmt CreateRoleStmt
+		CreateUserStmt CreateUserMappingStmt CreateRoleStmt CreateTemplateStmt
 		CreatedbStmt DeclareCursorStmt DefineStmt DeleteStmt DiscardStmt DoStmt
 		DropGroupStmt DropOpClassStmt DropOpFamilyStmt DropPLangStmt DropStmt
 		DropAssertStmt DropTrigStmt DropRuleStmt DropCastStmt DropRoleStmt
@@ -265,6 +265,9 @@ static void processCASbits(int cas_bits, int location, const char *constrType,
 %type <defelt>	createdb_opt_item alterdb_opt_item copy_opt_item
 				transaction_mode_item
 				create_extension_opt_item alter_extension_opt_item
+
+%type <list>    create_template_control create_template_control_plist
+%type <defelt>  create_template_control_item
 
 %type <ival>	opt_lock lock_type cast_context
 %type <ival>	vacuum_option_list vacuum_option_elem
@@ -757,6 +760,7 @@ stmt :
 			| CreateUserStmt
 			| CreateUserMappingStmt
 			| CreatedbStmt
+			| CreateTemplateStmt
 			| DeallocateStmt
 			| DeclareCursorStmt
 			| DefineStmt
@@ -3434,6 +3438,83 @@ DropTableSpaceStmt: DROP TABLESPACE name
 					n->tablespacename = $5;
 					n->missing_ok = true;
 					$$ = (Node *) n;
+				}
+		;
+
+/*****************************************************************************
+ *
+ *		QUERY:
+ *             CREATE TEMPLATE FOR EXTENSION name
+ *
+ *****************************************************************************/
+
+CreateTemplateStmt: CREATE TEMPLATE FOR EXTENSION name
+                    VERSION_P ColId_or_Sconst
+                    WITH create_template_control AS Sconst
+				{
+					CreateTemplateStmt *n = makeNode(CreateTemplateStmt);
+					n->extname = $5;
+					n->version = $7;
+					n->control = $9;
+					n->script = $11;
+					n->if_not_exists = false;
+					$$ = (Node *) n;
+				}
+		;
+
+create_template_control:
+			'(' create_template_control_plist ')'		{ $$ = $2; }
+		;
+
+
+create_template_control_plist:
+			create_template_control_item
+				{ $$ = list_make1($1); }
+			| create_template_control_plist ',' create_template_control_item
+				{ $$ = lappend($1, $3); }
+			| /* EMPTY */
+				{ $$ = NIL; }
+		;
+
+create_template_control_item:
+			SCHEMA name
+				{
+					$$ = makeDefElem("schema", (Node *)makeString($2));
+				}
+			| DEFAULT VERSION_P ColId_or_Sconst
+				{
+					$$ = makeDefElem("default", (Node *)makeString($2));
+				}
+			| IDENT
+				{
+					/*
+					 * We handle identifiers that aren't parser keywords with
+					 * the following special-case codes, to avoid bloating the
+					 * size of the main parser.
+					 */
+					if (strcmp($1, "superuser") == 0)
+						$$ = makeDefElem("superuser", (Node *)makeInteger(TRUE));
+					else if (strcmp($1, "nosuperuser") == 0)
+						$$ = makeDefElem("superuser", (Node *)makeInteger(FALSE));
+					else if (strcmp($1, "relocatable") == 0)
+						$$ = makeDefElem("relocatable", (Node *)makeInteger(TRUE));
+					else if (strcmp($1, "norelocatable") == 0)
+						$$ = makeDefElem("relocatable", (Node *)makeInteger(FALSE));
+					else
+						ereport(ERROR,
+								(errcode(ERRCODE_SYNTAX_ERROR),
+								 errmsg("unrecognized template option \"%s\"", $1),
+									 parser_errposition(@1)));
+				}
+			| IDENT Sconst
+				{
+					if (strcmp($1, "requires") == 0)
+						$$ = makeDefElem("requires", (Node *)makeString($2));
+					else
+						ereport(ERROR,
+								(errcode(ERRCODE_SYNTAX_ERROR),
+								 errmsg("unrecognized template option \"%s\"", $1),
+									 parser_errposition(@1)));
 				}
 		;
 
