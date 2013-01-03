@@ -197,6 +197,7 @@ typedef enum AclObjectKind
 	ACL_KIND_FOREIGN_SERVER,	/* pg_foreign_server */
 	ACL_KIND_EVENT_TRIGGER,		/* pg_event_trigger */
 	ACL_KIND_EXTENSION,			/* pg_extension */
+	ACL_KIND_TEMPLATE,			/* pg_template */
 	MAX_ACL_KIND				/* MUST BE LAST */
 } AclObjectKind;
 

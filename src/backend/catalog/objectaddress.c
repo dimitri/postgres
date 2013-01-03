@@ -28,6 +28,9 @@
 #include "catalog/pg_conversion.h"
 #include "catalog/pg_database.h"
 #include "catalog/pg_extension.h"
+#include "catalog/pg_extension_control.h"
+#include "catalog/pg_extension_template.h"
+#include "catalog/pg_extension_uptmpl.h"
 #include "catalog/pg_foreign_data_wrapper.h"
 #include "catalog/pg_foreign_server.h"
 #include "catalog/pg_language.h"
@@ -52,6 +55,7 @@
 #include "commands/extension.h"
 #include "commands/proclang.h"
 #include "commands/tablespace.h"
+#include "commands/template.h"
 #include "commands/trigger.h"
 #include "foreign/foreign.h"
 #include "libpq/be-fsstubs.h"
@@ -155,6 +159,39 @@ static ObjectPropertyType ObjectProperty[] =
 		Anum_pg_extension_extowner,
 		InvalidAttrNumber,
 		ACL_KIND_EXTENSION
+	},
+	{
+		ExtensionControlRelationId,
+		ExtensionControlOidIndexId,
+		-1,
+		-1,
+		Anum_pg_extension_control_ctlname,
+		InvalidAttrNumber,		/* extension doesn't belong to extnamespace */
+		Anum_pg_extension_control_ctlowner,
+		InvalidAttrNumber,
+		ACL_KIND_TEMPLATE
+	},
+	{
+		ExtensionTemplateRelationId,
+		ExtensionTemplateOidIndexId,
+		-1,
+		-1,
+		Anum_pg_extension_template_tplname,
+		InvalidAttrNumber,		/* extension doesn't belong to extnamespace */
+		Anum_pg_extension_template_tplowner,
+		InvalidAttrNumber,
+		ACL_KIND_TEMPLATE
+	},
+	{
+		ExtensionUpTmplRelationId,
+		ExtensionUpTmplOidIndexId,
+		-1,
+		-1,
+		Anum_pg_extension_uptmpl_uptname,
+		InvalidAttrNumber,		/* extension doesn't belong to extnamespace */
+		Anum_pg_extension_uptmpl_uptowner,
+		InvalidAttrNumber,
+		ACL_KIND_TEMPLATE
 	},
 	{
 		ForeignDataWrapperRelationId,
@@ -392,6 +429,8 @@ static ObjectAddress get_object_address_type(ObjectType objtype,
 						List *objname, bool missing_ok);
 static ObjectAddress get_object_address_opcf(ObjectType objtype, List *objname,
 						List *objargs, bool missing_ok);
+static ObjectAddress get_object_address_tmpl(ObjectType objtype,
+						List *objname, List *objargs, bool missing_ok);
 static ObjectPropertyType *get_object_property_data(Oid class_id);
 
 /*
@@ -471,6 +510,11 @@ get_object_address(ObjectType objtype, List *objname, List *objargs,
 			case OBJECT_EVENT_TRIGGER:
 				address = get_object_address_unqualified(objtype,
 														 objname, missing_ok);
+				break;
+			case OBJECT_EXTENSION_TEMPLATE:
+			case OBJECT_EXTENSION_UPTMPL:
+				address = get_object_address_tmpl(objtype,
+												  objname, objargs, missing_ok);
 				break;
 			case OBJECT_TYPE:
 			case OBJECT_DOMAIN:
@@ -716,11 +760,6 @@ get_object_address_unqualified(ObjectType objtype,
 		case OBJECT_EXTENSION:
 			address.classId = ExtensionRelationId;
 			address.objectId = get_extension_oid(name, missing_ok);
-			address.objectSubId = 0;
-			break;
-		case OBJECT_TABLESPACE:
-			address.classId = TableSpaceRelationId;
-			address.objectId = get_tablespace_oid(name, missing_ok);
 			address.objectSubId = 0;
 			break;
 		case OBJECT_ROLE:
@@ -1059,6 +1098,82 @@ get_object_address_opcf(ObjectType objtype,
 }
 
 /*
+ * Find the ObjectAddress for an extension template, control or update
+ * template.
+ */
+static ObjectAddress
+get_object_address_tmpl(ObjectType objtype,
+						List *objname, List *objargs, bool missing_ok)
+{
+	const char *name;
+	ObjectAddress address;
+
+	/*
+	 * The types of names handled by this function are not permitted to be
+	 * schema-qualified or catalog-qualified.
+	 */
+	if (list_length(objname) != 1)
+	{
+		const char *msg;
+
+		switch (objtype)
+		{
+			case OBJECT_EXTENSION_TEMPLATE:
+				msg = gettext_noop("extension template name cannot be qualified");
+				break;
+			case OBJECT_EXTENSION_UPTMPL:
+				msg = gettext_noop("extension update template name cannot be qualified");
+				break;
+			default:
+				elog(ERROR, "unrecognized objtype: %d", (int) objtype);
+				msg = NULL;		/* placate compiler */
+		}
+		ereport(ERROR,
+				(errcode(ERRCODE_SYNTAX_ERROR),
+				 errmsg("%s", _(msg))));
+	}
+
+	name = strVal(linitial(objname));
+
+	switch (objtype)
+	{
+		case OBJECT_EXTENSION_TEMPLATE:
+		{
+			const char *version;
+
+			Assert(list_length(objargs) == 1);
+			version = strVal(linitial(objargs));
+
+			address.classId = ExtensionTemplateRelationId;
+			address.objectId = get_template_oid(name, version, missing_ok);
+			address.objectSubId = 0;
+			break;
+		}
+		case OBJECT_EXTENSION_UPTMPL:
+		{
+			const char *from, *to;
+
+			Assert(list_length(objargs) == 2);
+
+			from = strVal(linitial(objargs));
+			to = strVal(lsecond(objargs));
+
+			address.classId = ExtensionUpTmplRelationId;
+			address.objectId = get_uptmpl_oid(name, from, to, missing_ok);
+			address.objectSubId = 0;
+			break;
+		}
+		default:
+			elog(ERROR, "unrecognized objtype: %d", (int) objtype);
+			/* placate compiler, which doesn't know elog won't return */
+			address.classId = InvalidOid;
+			address.objectId = InvalidOid;
+			address.objectSubId = 0;
+	}
+	return address;
+}
+
+/*
  * Check ownership of an object previously identified by get_object_address.
  */
 void
@@ -1120,6 +1235,12 @@ check_object_ownership(Oid roleid, ObjectType objtype, ObjectAddress address,
 		case OBJECT_EXTENSION:
 			if (!pg_extension_ownercheck(address.objectId, roleid))
 				aclcheck_error(ACLCHECK_NOT_OWNER, ACL_KIND_EXTENSION,
+							   NameListToString(objname));
+			break;
+		case OBJECT_EXTENSION_TEMPLATE:
+		case OBJECT_EXTENSION_UPTMPL:
+			if (!pg_extension_ownercheck(address.objectId, roleid))
+				aclcheck_error(ACLCHECK_NOT_OWNER, ACL_KIND_TEMPLATE,
 							   NameListToString(objname));
 			break;
 		case OBJECT_FDW:

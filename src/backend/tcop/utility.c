@@ -1881,6 +1881,12 @@ CreateCommandTag(Node *parsetree)
 				case OBJECT_EXTENSION:
 					tag = "DROP EXTENSION";
 					break;
+				case OBJECT_EXTENSION_TEMPLATE:
+					tag = "DROP TEMPLATE FOR EXTENSION";
+					break;
+				case OBJECT_EXTENSION_UPTMPL:
+					tag = "DROP TEMPLATE FOR EXTENSION";
+					break;
 				case OBJECT_FUNCTION:
 					tag = "DROP FUNCTION";
 					break;

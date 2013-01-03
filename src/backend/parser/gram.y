@@ -233,7 +233,7 @@ static void processCASbits(int cas_bits, int location, const char *constrType,
 		CreatedbStmt DeclareCursorStmt DefineStmt DeleteStmt DiscardStmt DoStmt
 		DropGroupStmt DropOpClassStmt DropOpFamilyStmt DropPLangStmt DropStmt
 		DropAssertStmt DropTrigStmt DropRuleStmt DropCastStmt DropRoleStmt
-		DropUserStmt DropdbStmt DropTableSpaceStmt DropFdwStmt
+		DropTemplateStmt DropUserStmt DropdbStmt DropTableSpaceStmt DropFdwStmt
 		DropForeignServerStmt DropUserMappingStmt ExplainStmt FetchStmt
 		GrantStmt GrantRoleStmt IndexStmt InsertStmt ListenStmt LoadStmt
 		LockStmt NotifyStmt ExplainableStmt PreparableStmt
@@ -784,6 +784,7 @@ stmt :
 			| DropUserStmt
 			| DropUserMappingStmt
 			| DropdbStmt
+			| DropTemplateStmt
 			| ExecuteStmt
 			| ExplainStmt
 			| FetchStmt
@@ -3484,6 +3485,34 @@ CreateTemplateStmt:
 					n->script = $13;
 					n->if_not_exists = false;
 					$$ = (Node *) n;
+				}
+		;
+
+DropTemplateStmt:
+			DROP TEMPLATE FOR EXTENSION name
+			VERSION_P ColId_or_Sconst opt_drop_behavior
+				{
+					DropStmt *n = makeNode(DropStmt);
+					n->removeType = OBJECT_EXTENSION_TEMPLATE;
+					n->objects = list_make1(list_make1(makeString($5)));
+					n->arguments = list_make1(list_make1(makeString($7)));
+					n->behavior = $8;
+					n->missing_ok = false;
+					n->concurrent = false;
+					$$ = (Node *)n;
+				}
+			| DROP TEMPLATE FOR EXTENSION name
+			FROM ColId_or_Sconst TO ColId_or_Sconst opt_drop_behavior
+				{
+					DropStmt *n = makeNode(DropStmt);
+					n->removeType = OBJECT_EXTENSION_UPTMPL;
+					n->objects = list_make1(list_make1(makeString($5)));
+					n->arguments = list_make1(list_make2(makeString($7),
+														 makeString($9)));
+					n->behavior = $10;
+					n->missing_ok = false;
+					n->concurrent = false;
+					$$ = (Node *)n;
 				}
 		;
 

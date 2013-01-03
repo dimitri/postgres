@@ -555,7 +555,7 @@ InsertExtensionTemplateTuple(Oid owner, ExtensionControlFile *control,
 	ctrl.objectId = extControlOid;
 	ctrl.objectSubId = 0;
 
-	recordDependencyOn(&myself, &ctrl, DEPENDENCY_NORMAL);
+	recordDependencyOn(&ctrl, &myself, DEPENDENCY_INTERNAL);
 
 	/* Post creation hook for new extension control */
 	InvokeObjectAccessHook(OAT_POST_CREATE,
@@ -641,7 +641,7 @@ InsertExtensionUpTmplTuple(Oid owner,
 		ctrl.objectId = extControlOid;
 		ctrl.objectSubId = 0;
 
-		recordDependencyOn(&myself, &ctrl, DEPENDENCY_NORMAL);
+		recordDependencyOn(&ctrl, &myself, DEPENDENCY_INTERNAL);
 	}
 
 	/* Post creation hook for new extension control */
@@ -801,4 +801,97 @@ get_uptmpl_oid(const char *extname, const char *from, const char *to,
 						extname, from, to)));
 
 	return result;
+}
+
+/*
+ * Remove Extension Control by OID
+ */
+void
+RemoveExtensionControlById(Oid extControlOid)
+{
+	Relation	rel;
+	SysScanDesc scandesc;
+	HeapTuple	tuple;
+	ScanKeyData entry[1];
+
+	rel = heap_open(ExtensionControlRelationId, RowExclusiveLock);
+
+	ScanKeyInit(&entry[0],
+				ObjectIdAttributeNumber,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(extControlOid));
+	scandesc = systable_beginscan(rel, ExtensionControlOidIndexId, true,
+								  SnapshotNow, 1, entry);
+
+	tuple = systable_getnext(scandesc);
+
+	/* We assume that there can be at most one matching tuple */
+	if (HeapTupleIsValid(tuple))
+		simple_heap_delete(rel, &tuple->t_self);
+
+	systable_endscan(scandesc);
+
+	heap_close(rel, RowExclusiveLock);
+}
+
+/*
+ * Remove Extension Control by OID
+ */
+void
+RemoveExtensionTemplateById(Oid extTemplateOid)
+{
+	Relation	rel;
+	SysScanDesc scandesc;
+	HeapTuple	tuple;
+	ScanKeyData entry[1];
+
+	rel = heap_open(ExtensionTemplateRelationId, RowExclusiveLock);
+
+	ScanKeyInit(&entry[0],
+				ObjectIdAttributeNumber,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(extTemplateOid));
+	scandesc = systable_beginscan(rel, ExtensionTemplateOidIndexId, true,
+								  SnapshotNow, 1, entry);
+
+	tuple = systable_getnext(scandesc);
+
+	/* We assume that there can be at most one matching tuple */
+	if (HeapTupleIsValid(tuple))
+		simple_heap_delete(rel, &tuple->t_self);
+
+	systable_endscan(scandesc);
+
+	heap_close(rel, RowExclusiveLock);
+}
+
+/*
+ * Remove Extension Control by OID
+ */
+void
+RemoveExtensionUpTmplById(Oid extUpTmplOid)
+{
+	Relation	rel;
+	SysScanDesc scandesc;
+	HeapTuple	tuple;
+	ScanKeyData entry[1];
+
+	rel = heap_open(ExtensionUpTmplRelationId, RowExclusiveLock);
+
+	ScanKeyInit(&entry[0],
+				ObjectIdAttributeNumber,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(extUpTmplOid));
+	scandesc = systable_beginscan(rel, ExtensionUpTmplOidIndexId, true,
+								  SnapshotNow, 1, entry);
+
+	tuple = systable_getnext(scandesc);
+
+	/* We assume that there can be at most one matching tuple */
+	if (HeapTupleIsValid(tuple))
+		simple_heap_delete(rel, &tuple->t_self);
+
+	systable_endscan(scandesc);
+
+	heap_close(rel, RowExclusiveLock);
 }

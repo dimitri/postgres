@@ -16,7 +16,6 @@
 
 #include "nodes/parsenodes.h"
 
-
 extern Oid CreateTemplate(CreateTemplateStmt *stmt);
 extern Oid CreateUpdateTemplate(CreateTemplateStmt *stmt);
 
@@ -28,5 +27,8 @@ extern Oid get_uptmpl_oid(const char *extname,
 						  const char *from, const char *to,
 						  bool missing_ok);
 
+extern void RemoveExtensionControlById(Oid extControlOid);
+extern void RemoveExtensionTemplateById(Oid extTemplateOid);
+extern void RemoveExtensionUpTmplById(Oid extUpTmplOid);
 
 #endif   /* TEMPLATE_H */
