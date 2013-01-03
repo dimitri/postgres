@@ -624,10 +624,18 @@ standard_ProcessUtility(Node *parsetree,
 			break;
 
 		case T_CreateTemplateStmt:
+		{
+			CreateTemplateStmt *stmt = (CreateTemplateStmt *) parsetree;
+
 			if (isCompleteQuery)
 				EventTriggerDDLCommandStart(parsetree);
-			CreateTemplate((CreateTemplateStmt *) parsetree);
+
+			if (stmt->version)
+				CreateTemplate((CreateTemplateStmt *) parsetree);
+			else
+				CreateUpdateTemplate((CreateTemplateStmt *) parsetree);
 			break;
+		}
 
 		case T_CreateFdwStmt:
 			if (isCompleteQuery)

@@ -56,8 +56,8 @@ typedef FormData_pg_extension_uptmpl *Form_pg_extension_uptmpl;
 #define Anum_pg_extension_uptmpl_uptname	1
 #define Anum_pg_extension_uptmpl_uptowner	2
 #define Anum_pg_extension_uptmpl_uptfrom	3
-#define Anum_pg_extension_uptmpl_uptto		3
-#define Anum_pg_extension_uptmpl_uptscript	4
+#define Anum_pg_extension_uptmpl_uptto		4
+#define Anum_pg_extension_uptmpl_uptscript	5
 
 /* ----------------
  *		pg_extension_uptmpl has no initial contents

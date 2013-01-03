@@ -3448,15 +3448,40 @@ DropTableSpaceStmt: DROP TABLESPACE name
  *
  *****************************************************************************/
 
-CreateTemplateStmt: CREATE TEMPLATE FOR EXTENSION name
-                    VERSION_P ColId_or_Sconst
-                    WITH create_template_control AS Sconst
+CreateTemplateStmt:
+            CREATE TEMPLATE FOR EXTENSION name VERSION_P ColId_or_Sconst
+            WITH create_template_control AS Sconst
 				{
 					CreateTemplateStmt *n = makeNode(CreateTemplateStmt);
 					n->extname = $5;
 					n->version = $7;
 					n->control = $9;
 					n->script = $11;
+					n->if_not_exists = false;
+					$$ = (Node *) n;
+				}
+            | CREATE TEMPLATE FOR EXTENSION name
+              FROM ColId_or_Sconst TO ColId_or_Sconst AS Sconst
+				{
+					CreateTemplateStmt *n = makeNode(CreateTemplateStmt);
+					n->extname = $5;
+					n->from = $7;
+					n->to = $9;
+					n->control = NIL;
+					n->script = $11;
+					n->if_not_exists = false;
+					$$ = (Node *) n;
+				}
+            | CREATE TEMPLATE FOR EXTENSION name
+              FROM ColId_or_Sconst TO ColId_or_Sconst
+              WITH create_template_control AS Sconst
+				{
+					CreateTemplateStmt *n = makeNode(CreateTemplateStmt);
+					n->extname = $5;
+					n->from = $7;
+					n->to = $9;
+					n->control = $11;
+					n->script = $13;
 					n->if_not_exists = false;
 					$$ = (Node *) n;
 				}

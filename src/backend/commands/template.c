@@ -28,6 +28,7 @@
 #include "catalog/pg_extension.h"
 #include "catalog/pg_extension_control.h"
 #include "catalog/pg_extension_template.h"
+#include "catalog/pg_extension_uptmpl.h"
 #include "catalog/pg_namespace.h"
 #include "catalog/pg_type.h"
 #include "commands/extension.h"
@@ -50,6 +51,13 @@ static Oid InsertExtensionTemplateTuple(Oid owner,
                                             ExtensionControlFile *control,
                                             const char *version,
 											const char *script);
+
+static Oid InsertExtensionUpTmplTuple(Oid owner,
+										  const char *extname,
+										  ExtensionControlFile *control,
+										  const char *from,
+										  const char *to,
+										  const char *script);
 
 /*
  * CREATE TEMPLATE FOR EXTENSION
@@ -214,13 +222,172 @@ CreateTemplate(CreateTemplateStmt *stmt)
 }
 
 /*
+ * CREATE TEMPLATE FOR UPDATE OF EXTENSION
+ */
+Oid
+CreateUpdateTemplate(CreateTemplateStmt *stmt)
+{
+	DefElem		*d_schema = NULL;
+	DefElem		*d_default = NULL;
+	DefElem		*d_superuser = NULL;
+	DefElem		*d_relocatable = NULL;
+	DefElem		*d_requires = NULL;
+	Oid			 owner = GetUserId();
+	ExtensionControlFile *control;
+	ListCell	*lc;
+
+	elog(NOTICE, "CREATE TEMPLATE FOR UPDATE OF EXTENSION %s FROM %s TO %s",
+		 stmt->extname, stmt->from, stmt->to);
+
+	/* Check extension name validity before any filesystem access */
+	check_valid_extension_name(stmt->extname);
+
+	/*
+	 * Check that a template for installing extension already exists in the
+	 * catalogs. Do not enforce that we have a complete path upgrade path at
+	 * template creation time, that will get checked at CREATE EXTENSION time.
+	 */
+	(void) can_create_extension_from_template(stmt->extname, false);
+
+	/*
+	 * Check for duplicate template for given extension and versions. The
+	 * unique index on pg_extension_uptmpl(uptname, uptfrom, uptto) would catch
+	 * this anyway, and serves as a backstop in case of race conditions; but
+	 * this is a friendlier error message, and besides we need a check to
+	 * support IF NOT EXISTS.
+	 */
+	if (get_uptmpl_oid(stmt->extname, stmt->from, stmt->to, true) != InvalidOid)
+	{
+		if (stmt->if_not_exists)
+		{
+			ereport(NOTICE,
+					(errcode(ERRCODE_DUPLICATE_OBJECT),
+					 errmsg("template for extension \"%s\" update from version \"%s\" to version \"%s\" already exists, skipping",
+							stmt->extname, stmt->from, stmt->to)));
+			return InvalidOid;
+		}
+		else
+			ereport(ERROR,
+					(errcode(ERRCODE_DUPLICATE_OBJECT),
+					 errmsg("template for extension \"%s\" update from version \"%s\" to version \"%s\" already exists",
+							stmt->extname, stmt->from, stmt->to)));
+	}
+
+	/*
+	 * Check that no control file of the same extension's name is already
+	 * available on disk, as a friendliness service to our users. Between
+	 * CREATE TEMPLATE FOR EXTENSION and CREATE EXTENSION time, some new file
+	 * might have been added to the file-system and would then be prefered, but
+	 * at least we tried to be as nice as we possibly can.
+	 */
+	PG_TRY();
+	{
+		control = read_extension_control_file(stmt->extname);
+	}
+	PG_CATCH();
+	{
+		/* no control file found is good news for us */
+		control = NULL;
+	}
+	PG_END_TRY();
+
+	if (control)
+	{
+			ereport(ERROR,
+					(errcode(ERRCODE_DUPLICATE_OBJECT),
+					 errmsg("extension \"%s\" is already available",
+							stmt->extname)));
+	}
+
+	/* Create an Extension Control structure to pass down the options */
+	if (stmt->control)
+	{
+		control = (ExtensionControlFile *) palloc0(sizeof(ExtensionControlFile));
+		control->name = pstrdup(stmt->extname);
+	}
+
+	/*
+	 * Read the statement option list
+	 */
+	foreach(lc, stmt->control)
+	{
+		DefElem    *defel = (DefElem *) lfirst(lc);
+
+		if (strcmp(defel->defname, "schema") == 0)
+		{
+			if (d_schema)
+				ereport(ERROR,
+						(errcode(ERRCODE_SYNTAX_ERROR),
+						 errmsg("conflicting or redundant options")));
+			d_schema = defel;
+
+			control->schema = strVal(d_schema->arg);
+		}
+		else if (strcmp(defel->defname, "default") == 0)
+		{
+			if (d_default)
+				ereport(ERROR,
+						(errcode(ERRCODE_SYNTAX_ERROR),
+						 errmsg("conflicting or redundant options")));
+			d_default = defel;
+
+			control->default_version = pstrdup(strVal(d_default->arg));
+		}
+		else if (strcmp(defel->defname, "superuser") == 0)
+		{
+			if (d_superuser)
+				ereport(ERROR,
+						(errcode(ERRCODE_SYNTAX_ERROR),
+						 errmsg("conflicting or redundant options")));
+			d_superuser = defel;
+
+			control->superuser = intVal(d_superuser->arg) != 0;
+		}
+		else if (strcmp(defel->defname, "relocatable") == 0)
+		{
+			if (d_relocatable)
+				ereport(ERROR,
+						(errcode(ERRCODE_SYNTAX_ERROR),
+						 errmsg("conflicting or redundant options")));
+			d_relocatable = defel;
+
+			control->relocatable = intVal(d_relocatable->arg) != 0;
+		}
+		else if (strcmp(defel->defname, "requires") == 0)
+		{
+			if (d_requires)
+				ereport(ERROR,
+						(errcode(ERRCODE_SYNTAX_ERROR),
+						 errmsg("conflicting or redundant options")));
+			d_requires = defel;
+
+			if (!SplitIdentifierString(pstrdup(strVal(d_requires->arg)),
+									   ',',
+									   &control->requires))
+			{
+				/* syntax error in name list */
+				ereport(ERROR,
+						(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+						 errmsg("parameter \"requires\" must be a list of extension names")));
+			}
+		}
+		else
+			elog(ERROR, "unrecognized option: %s", defel->defname);
+	}
+
+	return InsertExtensionUpTmplTuple(owner, stmt->extname, control,
+									  stmt->from, stmt->to, stmt->script);
+}
+
+/*
  * InsertExtensionControlTuple
  *
  * Insert the new pg_extension_control row and register its dependency to its
  * owner. Return the OID assigned to the new row.
  */
 static Oid
-InsertExtensionControlTuple(Oid owner, ExtensionControlFile *control,
+InsertExtensionControlTuple(Oid owner,
+							ExtensionControlFile *control,
 							const char *version)
 {
 	Oid			extControlOid;
@@ -398,6 +565,93 @@ InsertExtensionTemplateTuple(Oid owner, ExtensionControlFile *control,
 }
 
 /*
+ * InsertExtensionUpTmplTuple
+ *
+ * Insert the new pg_extension_uptmpl row and register its dependencies.
+ * Return the OID assigned to the new row.
+ */
+static Oid
+InsertExtensionUpTmplTuple(Oid owner,
+						   const char *extname,
+						   ExtensionControlFile *control,
+						   const char *from,
+						   const char *to,
+						   const char *script)
+{
+	Oid			extControlOid, extUpTmplOid;
+	Relation	rel;
+	Datum		values[Natts_pg_extension_uptmpl];
+	bool		nulls[Natts_pg_extension_uptmpl];
+	HeapTuple	tuple;
+	ObjectAddress myself;
+
+	/*
+	 * First create the companion extension control entry, if any. In the case
+	 * of an Update Template the comanion control entry is somilar in scope to
+	 * a secondary control file, and is attached to the target version.
+	 */
+	if (control)
+		extControlOid = InsertExtensionControlTuple(owner, control, to);
+	else
+		extControlOid = InvalidOid;
+
+	/*
+	 * Build and insert the pg_extension_uptmpl tuple
+	 */
+	rel = heap_open(ExtensionUpTmplRelationId, RowExclusiveLock);
+
+	memset(values, 0, sizeof(values));
+	memset(nulls, 0, sizeof(nulls));
+
+	values[Anum_pg_extension_uptmpl_uptname - 1] =
+		DirectFunctionCall1(namein, CStringGetDatum(extname));
+	values[Anum_pg_extension_uptmpl_uptowner - 1] = ObjectIdGetDatum(owner);
+	values[Anum_pg_extension_uptmpl_uptfrom - 1] = CStringGetTextDatum(from);
+	values[Anum_pg_extension_uptmpl_uptto - 1] = CStringGetTextDatum(to);
+	values[Anum_pg_extension_uptmpl_uptscript - 1] = CStringGetTextDatum(script);
+
+	tuple = heap_form_tuple(rel->rd_att, values, nulls);
+
+	extUpTmplOid = simple_heap_insert(rel, tuple);
+	CatalogUpdateIndexes(rel, tuple);
+
+	heap_freetuple(tuple);
+	heap_close(rel, RowExclusiveLock);
+
+	/*
+	 * Record dependencies on owner only.
+	 *
+	 * When we create the extension template and control file, the target
+	 * extension, its schema and requirements usually do not exist in the
+	 * database. Don't even think about registering a dependency from the
+	 * template.
+	 */
+	recordDependencyOnOwner(ExtensionUpTmplRelationId, extUpTmplOid, owner);
+
+	myself.classId = ExtensionUpTmplRelationId;
+	myself.objectId = extUpTmplOid;
+	myself.objectSubId = 0;
+
+	/* record he dependency between the control row and the template row */
+	if (control)
+	{
+		ObjectAddress ctrl;
+
+		ctrl.classId = ExtensionControlRelationId;
+		ctrl.objectId = extControlOid;
+		ctrl.objectSubId = 0;
+
+		recordDependencyOn(&myself, &ctrl, DEPENDENCY_NORMAL);
+	}
+
+	/* Post creation hook for new extension control */
+	InvokeObjectAccessHook(OAT_POST_CREATE,
+						   ExtensionUpTmplRelationId, extUpTmplOid, 0, NULL);
+
+	return extUpTmplOid;
+}
+
+/*
  * get_template_oid - given an extension name and version, look up the template
  * OID
  *
@@ -446,6 +700,105 @@ get_template_oid(const char *extname, const char *version, bool missing_ok)
 				(errcode(ERRCODE_UNDEFINED_OBJECT),
 				 errmsg("template for extension \"%s\" version \"%s\" does not exist",
 						extname, version)));
+
+	return result;
+}
+
+/*
+ * Check that the given extension name has a create template.
+ */
+bool
+can_create_extension_from_template(const char *extname, bool missing_ok)
+{
+	bool		result;
+	Relation	rel;
+	SysScanDesc scandesc;
+	HeapTuple	tuple;
+	ScanKeyData entry[1];
+
+	rel = heap_open(ExtensionTemplateRelationId, AccessShareLock);
+
+	ScanKeyInit(&entry[0],
+				Anum_pg_extension_template_tplname,
+				BTEqualStrategyNumber, F_NAMEEQ,
+				CStringGetDatum(extname));
+
+	scandesc = systable_beginscan(rel,
+								  ExtensionTemplateNameVersionIndexId, true,
+								  SnapshotNow, 1, entry);
+
+	tuple = systable_getnext(scandesc);
+
+	/* We only are interested into knowing if we found at least one tuple */
+	result = HeapTupleIsValid(tuple);
+
+	systable_endscan(scandesc);
+
+	heap_close(rel, AccessShareLock);
+
+	if (!result && !missing_ok)
+		ereport(ERROR,
+				(errcode(ERRCODE_UNDEFINED_OBJECT),
+				 errmsg("no template for extension \"%s\"", extname)));
+
+	return result;
+}
+
+/*
+ * get_uptmpl_oid - given an extension name, from version and to version, look
+ * up the uptmpl OID
+ *
+ * If missing_ok is false, throw an error if extension name not found.	If
+ * true, just return InvalidOid.
+ */
+Oid
+get_uptmpl_oid(const char *extname, const char *from, const char *to,
+			   bool missing_ok)
+{
+	Oid			result;
+	Relation	rel;
+	SysScanDesc scandesc;
+	HeapTuple	tuple;
+	ScanKeyData entry[3];
+
+	rel = heap_open(ExtensionUpTmplRelationId, AccessShareLock);
+
+	ScanKeyInit(&entry[0],
+				Anum_pg_extension_uptmpl_uptname,
+				BTEqualStrategyNumber, F_NAMEEQ,
+				CStringGetDatum(extname));
+
+	ScanKeyInit(&entry[1],
+				Anum_pg_extension_uptmpl_uptfrom,
+				BTEqualStrategyNumber, F_TEXTEQ,
+				CStringGetTextDatum(from));
+
+	ScanKeyInit(&entry[2],
+				Anum_pg_extension_uptmpl_uptto,
+				BTEqualStrategyNumber, F_TEXTEQ,
+				CStringGetTextDatum(to));
+
+	scandesc = systable_beginscan(rel,
+								  ExtensionUpTpmlNameFromToIndexId, true,
+								  SnapshotNow, 3, entry);
+
+	tuple = systable_getnext(scandesc);
+
+	/* We assume that there can be at most one matching tuple */
+	if (HeapTupleIsValid(tuple))
+		result = HeapTupleGetOid(tuple);
+	else
+		result = InvalidOid;
+
+	systable_endscan(scandesc);
+
+	heap_close(rel, AccessShareLock);
+
+	if (!OidIsValid(result) && !missing_ok)
+		ereport(ERROR,
+				(errcode(ERRCODE_UNDEFINED_OBJECT),
+				 errmsg("template for extension \"%s\" update from version \"%s\" to version \"%s\"does not exist",
+						extname, from, to)));
 
 	return result;
 }

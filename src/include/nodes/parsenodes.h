@@ -1630,6 +1630,8 @@ typedef struct CreateTemplateStmt
 	NodeTag		type;
 	char	   *extname;		/* Extension's name */
 	char	   *version;		/* Version to create from the template */
+	char	   *from;			/*   In case of an update template, we update */
+	char	   *to;				/*   from version to version */
 	List	   *control;		/* List of DefElem nodes */
 	char	   *script;			/* Extension's install script */
 	bool		if_not_exists;	/* just do nothing if it already exists? */

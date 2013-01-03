@@ -18,7 +18,15 @@
 
 
 extern Oid CreateTemplate(CreateTemplateStmt *stmt);
+extern Oid CreateUpdateTemplate(CreateTemplateStmt *stmt);
 
-Oid get_template_oid(const char *extname, const char *version, bool missing_ok);
+extern Oid get_template_oid(const char *extname, const char *version,
+							bool missing_ok);
+extern bool can_create_extension_from_template(const char *extname,
+											   bool missing_ok);
+extern Oid get_uptmpl_oid(const char *extname,
+						  const char *from, const char *to,
+						  bool missing_ok);
+
 
 #endif   /* TEMPLATE_H */
