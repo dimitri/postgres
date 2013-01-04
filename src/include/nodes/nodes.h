@@ -362,6 +362,7 @@ typedef enum NodeTag
 	T_CreateEventTrigStmt,
 	T_AlterEventTrigStmt,
 	T_CreateTemplateStmt,
+	T_AlterTemplateStmt,
 
 	/*
 	 * TAGS FOR PARSE TREE NODES (parsenodes.h)

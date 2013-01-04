@@ -17,7 +17,12 @@
 #include "nodes/parsenodes.h"
 
 extern Oid CreateTemplate(CreateTemplateStmt *stmt);
-extern Oid CreateUpdateTemplate(CreateTemplateStmt *stmt);
+extern Oid CreateExtensionTemplate(CreateTemplateStmt *stmt);
+extern Oid CreateExtensionUpdateTemplate(CreateTemplateStmt *stmt);
+
+extern Oid AlterTemplate(AlterTemplateStmt *stmt);
+extern Oid AlterExtensionTemplate(AlterTemplateStmt *stmt);
+extern Oid AlterExtensionUpdateTemplate(AlterTemplateStmt *stmt);
 
 extern Oid get_template_oid(const char *extname, const char *version,
 							bool missing_ok);
@@ -30,5 +35,11 @@ extern Oid get_uptmpl_oid(const char *extname,
 extern void RemoveExtensionControlById(Oid extControlOid);
 extern void RemoveExtensionTemplateById(Oid extTemplateOid);
 extern void RemoveExtensionUpTmplById(Oid extUpTmplOid);
+
+extern ExtensionControlFile *
+find_pg_extension_control(const char *extname, const char *version);
+
+extern ExtensionControlFile *
+find_default_pg_extension_control(const char *extname, bool missing_ok);
 
 #endif   /* TEMPLATE_H */

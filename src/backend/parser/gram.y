@@ -220,7 +220,7 @@ static void processCASbits(int cas_bits, int location, const char *constrType,
 		AlterObjectSchemaStmt AlterOwnerStmt AlterSeqStmt AlterTableStmt
 		AlterExtensionStmt AlterExtensionContentsStmt AlterForeignTableStmt
 		AlterCompositeTypeStmt AlterUserStmt AlterUserMappingStmt AlterUserSetStmt
-		AlterRoleStmt AlterRoleSetStmt
+		AlterRoleStmt AlterRoleSetStmt AlterTemplateStmt
 		AlterDefaultPrivilegesStmt DefACLAction
 		AnalyzeStmt ClosePortalStmt ClusterStmt CommentStmt
 		ConstraintsSetStmt CopyStmt CreateAsStmt CreateCastStmt
@@ -723,6 +723,7 @@ stmt :
 			| AlterCompositeTypeStmt
 			| AlterRoleSetStmt
 			| AlterRoleStmt
+			| AlterTemplateStmt
 			| AlterTSConfigurationStmt
 			| AlterTSDictionaryStmt
 			| AlterUserMappingStmt
@@ -3454,17 +3455,34 @@ CreateTemplateStmt:
             WITH create_template_control AS Sconst
 				{
 					CreateTemplateStmt *n = makeNode(CreateTemplateStmt);
+					n->template = TEMPLATE_CREATE_EXTENSION;
 					n->extname = $5;
 					n->version = $7;
 					n->control = $9;
 					n->script = $11;
 					n->if_not_exists = false;
+					n->default_version = false;
+					$$ = (Node *) n;
+				}
+            | CREATE TEMPLATE FOR EXTENSION name
+			  DEFAULT VERSION_P ColId_or_Sconst
+              WITH create_template_control AS Sconst
+				{
+					CreateTemplateStmt *n = makeNode(CreateTemplateStmt);
+					n->template = TEMPLATE_CREATE_EXTENSION;
+					n->extname = $5;
+					n->version = $8;
+					n->control = $10;
+					n->script = $12;
+					n->if_not_exists = false;
+					n->default_version = true;
 					$$ = (Node *) n;
 				}
             | CREATE TEMPLATE FOR EXTENSION name
               FROM ColId_or_Sconst TO ColId_or_Sconst AS Sconst
 				{
 					CreateTemplateStmt *n = makeNode(CreateTemplateStmt);
+					n->template = TEMPLATE_UPDATE_EXTENSION;
 					n->extname = $5;
 					n->from = $7;
 					n->to = $9;
@@ -3478,6 +3496,7 @@ CreateTemplateStmt:
               WITH create_template_control AS Sconst
 				{
 					CreateTemplateStmt *n = makeNode(CreateTemplateStmt);
+					n->template = TEMPLATE_UPDATE_EXTENSION;
 					n->extname = $5;
 					n->from = $7;
 					n->to = $9;
@@ -3488,6 +3507,86 @@ CreateTemplateStmt:
 				}
 		;
 
+/*****************************************************************************
+ *
+ *		QUERY:
+ *             ALTER TEMPLATE FOR EXTENSION name
+ *
+ * We only allow a single subcommand per command here.
+ *
+ *****************************************************************************/
+AlterTemplateStmt:
+			ALTER TEMPLATE FOR EXTENSION name
+			SET DEFAULT VERSION_P ColId_or_Sconst
+				{
+					AlterTemplateStmt *n = makeNode(AlterTemplateStmt);
+					n->template = TEMPLATE_CREATE_EXTENSION;
+					n->cmdtype = AET_SET_DEFAULT;
+					n->extname = $5;
+					n->version = $9;
+					n->missing_ok = false;
+					$$ = (Node *) n;
+				}
+			| ALTER TEMPLATE FOR EXTENSION name VERSION_P ColId_or_Sconst
+			  AS Sconst
+				{
+					AlterTemplateStmt *n = makeNode(AlterTemplateStmt);
+					n->template = TEMPLATE_CREATE_EXTENSION;
+					n->cmdtype = AET_SET_SCRIPT;
+					n->extname = $5;
+					n->version = $7;
+					n->script = $9;
+					n->missing_ok = false;
+					$$ = (Node *) n;
+				}
+			| ALTER TEMPLATE FOR EXTENSION name VERSION_P ColId_or_Sconst
+			  WITH create_template_control
+				{
+					AlterTemplateStmt *n = makeNode(AlterTemplateStmt);
+					n->template = TEMPLATE_CREATE_EXTENSION;
+					n->cmdtype = AET_UPDATE_CONTROL;
+					n->extname = $5;
+					n->version = $7;
+					n->control = $9;
+					n->missing_ok = false;
+					$$ = (Node *) n;
+				}
+			| ALTER TEMPLATE FOR EXTENSION name
+			  FROM ColId_or_Sconst TO ColId_or_Sconst
+			  AS Sconst
+				{
+					AlterTemplateStmt *n = makeNode(AlterTemplateStmt);
+					n->template = TEMPLATE_UPDATE_EXTENSION;
+					n->cmdtype = AET_SET_SCRIPT;
+					n->extname = $5;
+					n->from = $7;
+					n->to = $9;
+					n->script = $11;
+					n->missing_ok = false;
+					$$ = (Node *) n;
+				}
+			| ALTER TEMPLATE FOR EXTENSION name
+			  FROM ColId_or_Sconst TO ColId_or_Sconst
+			  WITH create_template_control
+				{
+					AlterTemplateStmt *n = makeNode(AlterTemplateStmt);
+					n->template = TEMPLATE_UPDATE_EXTENSION;
+					n->cmdtype = AET_UPDATE_CONTROL;
+					n->extname = $5;
+					n->from = $7;
+					n->to = $9;
+					n->control = $11;
+					n->missing_ok = false;
+					$$ = (Node *) n;
+				}
+		;
+
+/*****************************************************************************
+ *
+ *		QUERY:
+ *             DROP TEMPLATE FOR EXTENSION name
+ *
+ *****************************************************************************/
 DropTemplateStmt:
 			DROP TEMPLATE FOR EXTENSION name
 			VERSION_P ColId_or_Sconst opt_drop_behavior
@@ -3534,10 +3633,6 @@ create_template_control_item:
 			SCHEMA name
 				{
 					$$ = makeDefElem("schema", (Node *)makeString($2));
-				}
-			| DEFAULT VERSION_P ColId_or_Sconst
-				{
-					$$ = makeDefElem("default", (Node *)makeString($2));
 				}
 			| IDENT
 				{

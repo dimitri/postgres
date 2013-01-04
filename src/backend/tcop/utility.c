@@ -226,6 +226,7 @@ check_xact_readonly(Node *parsetree)
 		case T_AlterExtensionStmt:
 		case T_AlterExtensionContentsStmt:
 		case T_CreateTemplateStmt:
+		case T_AlterTemplateStmt:
 		case T_CreateFdwStmt:
 		case T_AlterFdwStmt:
 		case T_CreateForeignServerStmt:
@@ -624,18 +625,16 @@ standard_ProcessUtility(Node *parsetree,
 			break;
 
 		case T_CreateTemplateStmt:
-		{
-			CreateTemplateStmt *stmt = (CreateTemplateStmt *) parsetree;
-
 			if (isCompleteQuery)
 				EventTriggerDDLCommandStart(parsetree);
-
-			if (stmt->version)
-				CreateTemplate((CreateTemplateStmt *) parsetree);
-			else
-				CreateUpdateTemplate((CreateTemplateStmt *) parsetree);
+			CreateTemplate((CreateTemplateStmt *) parsetree);
 			break;
-		}
+
+		case T_AlterTemplateStmt:
+			if (isCompleteQuery)
+				EventTriggerDDLCommandStart(parsetree);
+			AlterTemplate((AlterTemplateStmt *)parsetree);
+			break;
 
 		case T_CreateFdwStmt:
 			if (isCompleteQuery)
@@ -1801,6 +1800,10 @@ CreateCommandTag(Node *parsetree)
 			tag = "CREATE TEMPLATE FOR EXTENSION";
 			break;
 
+		case T_AlterTemplateStmt:
+			tag = "ALTER TEMPLATE FOR EXTENSION";
+			break;
+
 		case T_CreateFdwStmt:
 			tag = "CREATE FOREIGN DATA WRAPPER";
 			break;
@@ -2438,6 +2441,7 @@ GetCommandLogLevel(Node *parsetree)
 			break;
 
 		case T_CreateTemplateStmt:
+		case T_AlterTemplateStmt:
 			lev = LOGSTMT_DDL;
 			break;
 

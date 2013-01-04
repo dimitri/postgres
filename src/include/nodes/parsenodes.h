@@ -1627,9 +1627,16 @@ typedef struct AlterExtensionContentsStmt
 	List	   *objargs;		/* Arguments if needed (eg, for functions) */
 } AlterExtensionContentsStmt;
 
+typedef enum TemplateType
+{
+	TEMPLATE_CREATE_EXTENSION,
+	TEMPLATE_UPDATE_EXTENSION
+} TemplateType;
+
 typedef struct CreateTemplateStmt
 {
 	NodeTag		type;
+	TemplateType template;
 	char	   *extname;		/* Extension's name */
 	char	   *version;		/* Version to create from the template */
 	char	   *from;			/*   In case of an update template, we update */
@@ -1637,7 +1644,30 @@ typedef struct CreateTemplateStmt
 	List	   *control;		/* List of DefElem nodes */
 	char	   *script;			/* Extension's install script */
 	bool		if_not_exists;	/* just do nothing if it already exists? */
+	bool        default_version; /* default version of this extension */
 } CreateTemplateStmt;
+
+typedef enum AlterTemplateType
+{
+	AET_SET_DEFAULT,
+	AET_SET_SCRIPT,
+	AET_UPDATE_CONTROL,
+} AlterTemplateType;
+
+typedef struct AlterTemplateStmt
+{
+	NodeTag		type;
+	TemplateType template;
+	AlterTemplateType cmdtype; /* Type of command */
+	char	   *extname;				/* Extension's name */
+	char       *version;				/* Extension's version */
+	char	   *from;			/*   In case of an update template, we update */
+	char	   *to;				/*   from version to version */
+	List	   *control;		/* List of DefElem nodes */
+	char	   *script;			/* Extension's install script */
+	bool		missing_ok;		/* skip error if missing? */
+
+} AlterTemplateStmt;
 
 /* ----------------------
  *		Create/Alter FOREIGN DATA WRAPPER Statements

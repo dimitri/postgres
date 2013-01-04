@@ -20,6 +20,7 @@
 #include "access/heapam.h"
 #include "access/htup_details.h"
 #include "access/sysattr.h"
+#include "access/xact.h"
 #include "catalog/dependency.h"
 #include "catalog/indexing.h"
 #include "catalog/namespace.h"
@@ -59,22 +60,122 @@ static Oid InsertExtensionUpTmplTuple(Oid owner,
 										  const char *to,
 										  const char *script);
 
+static Oid AlterTemplateSetDefault(const char *extname, const char *version);
+static Oid modify_pg_extension_control_default(const char *extname,
+											   const char *version,
+											   bool value);
+
+static ExtensionControlFile *
+read_pg_extension_control(const char *extname,
+							  Relation rel,
+							  HeapTuple tuple);
+
+
+/*
+ * The grammar accumulates control properties into a DefElem list that we have
+ * to process in multiple places.
+ */
+static void
+parse_statement_control_defelems(ExtensionControlFile *control, List *defelems)
+{
+	ListCell	*lc;
+	DefElem		*d_schema	   = NULL;
+	DefElem		*d_superuser   = NULL;
+	DefElem		*d_relocatable = NULL;
+	DefElem		*d_requires	   = NULL;
+
+	/*
+	 * Read the statement option list
+	 */
+	foreach(lc, defelems)
+	{
+		DefElem    *defel = (DefElem *) lfirst(lc);
+
+		if (strcmp(defel->defname, "schema") == 0)
+		{
+			if (d_schema)
+				ereport(ERROR,
+						(errcode(ERRCODE_SYNTAX_ERROR),
+						 errmsg("conflicting or redundant options")));
+			d_schema = defel;
+
+			control->schema = strVal(d_schema->arg);
+		}
+		else if (strcmp(defel->defname, "superuser") == 0)
+		{
+			if (d_superuser)
+				ereport(ERROR,
+						(errcode(ERRCODE_SYNTAX_ERROR),
+						 errmsg("conflicting or redundant options")));
+			d_superuser = defel;
+
+			control->superuser = intVal(d_superuser->arg) != 0;
+		}
+		else if (strcmp(defel->defname, "relocatable") == 0)
+		{
+			if (d_relocatable)
+				ereport(ERROR,
+						(errcode(ERRCODE_SYNTAX_ERROR),
+						 errmsg("conflicting or redundant options")));
+			d_relocatable = defel;
+
+			control->relocatable = intVal(d_relocatable->arg) != 0;
+		}
+		else if (strcmp(defel->defname, "requires") == 0)
+		{
+			if (d_requires)
+				ereport(ERROR,
+						(errcode(ERRCODE_SYNTAX_ERROR),
+						 errmsg("conflicting or redundant options")));
+			d_requires = defel;
+
+			if (!SplitIdentifierString(pstrdup(strVal(d_requires->arg)),
+									   ',',
+									   &control->requires))
+			{
+				/* syntax error in name list */
+				ereport(ERROR,
+						(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+						 errmsg("parameter \"requires\" must be a list of extension names")));
+			}
+		}
+		else
+			elog(ERROR, "unrecognized option: %s", defel->defname);
+	}
+}
+
 /*
  * CREATE TEMPLATE FOR EXTENSION
+ *
+ * Routing function, the statement can be either about a template for creating
+ * an extension or a template for updating and extension.
  */
 Oid
 CreateTemplate(CreateTemplateStmt *stmt)
 {
-	DefElem		*d_schema = NULL;
-	DefElem		*d_default = NULL;
-	DefElem		*d_superuser = NULL;
-	DefElem		*d_relocatable = NULL;
-	DefElem		*d_requires = NULL;
-	Oid			 owner = GetUserId();
-	ExtensionControlFile *control;
-	ListCell	*lc;
+	switch (stmt->template)
+	{
+		case TEMPLATE_CREATE_EXTENSION:
+			return CreateExtensionTemplate(stmt);
 
-	elog(NOTICE, "CREATE TEMPLATE FOR EXTENSION %s", stmt->extname);
+		case TEMPLATE_UPDATE_EXTENSION:
+			return CreateExtensionUpdateTemplate(stmt);
+	}
+	/* keep compiler happy */
+	return InvalidOid;
+}
+
+/*
+ * CREATE TEMPLATE FOR EXTENSION
+ *
+ * Create a template for an extension's given version.
+ */
+Oid
+CreateExtensionTemplate(CreateTemplateStmt *stmt)
+{
+    Oid			 extTemplateOid;
+	Oid			 owner		   = GetUserId();
+	ExtensionControlFile *control;
 
 	/* Check extension name validity before any filesystem access */
 	check_valid_extension_name(stmt->extname);
@@ -142,102 +243,53 @@ CreateTemplate(CreateTemplateStmt *stmt)
 							stmt->extname)));
 	}
 
-	/* Create an Extension Control structure to pass down the options */
-	control = (ExtensionControlFile *) palloc0(sizeof(ExtensionControlFile));
+	/* Now read the control properties from the statement */
+ 	control = (ExtensionControlFile *) palloc0(sizeof(ExtensionControlFile));
 	control->name = pstrdup(stmt->extname);
+	parse_statement_control_defelems(control, stmt->control);
 
 	/*
-	 * Read the statement option list
+	 * Check that there's no other pg_extension_control row already claiming to
+	 * be the default for this extension, when the statement claims to be the
+	 * default.
 	 */
-	foreach(lc, stmt->control)
+	if (stmt->default_version)
 	{
-		DefElem    *defel = (DefElem *) lfirst(lc);
+		ExtensionControlFile *default_version =
+			find_default_pg_extension_control(control->name, true);
 
-		if (strcmp(defel->defname, "schema") == 0)
-		{
-			if (d_schema)
-				ereport(ERROR,
-						(errcode(ERRCODE_SYNTAX_ERROR),
-						 errmsg("conflicting or redundant options")));
-			d_schema = defel;
+		if (default_version)
+			ereport(ERROR,
+					(errcode(ERRCODE_DUPLICATE_OBJECT),
+					 errmsg("extension \"%s\" already has a default control template",
+							control->name),
+					 errdetail("default version is \"%s\"",
+							   default_version->default_version)));
 
-			control->schema = strVal(d_schema->arg);
-		}
-		else if (strcmp(defel->defname, "default") == 0)
-		{
-			if (d_default)
-				ereport(ERROR,
-						(errcode(ERRCODE_SYNTAX_ERROR),
-						 errmsg("conflicting or redundant options")));
-			d_default = defel;
-
-			control->default_version = pstrdup(strVal(d_default->arg));
-		}
-		else if (strcmp(defel->defname, "superuser") == 0)
-		{
-			if (d_superuser)
-				ereport(ERROR,
-						(errcode(ERRCODE_SYNTAX_ERROR),
-						 errmsg("conflicting or redundant options")));
-			d_superuser = defel;
-
-			control->superuser = intVal(d_superuser->arg) != 0;
-		}
-		else if (strcmp(defel->defname, "relocatable") == 0)
-		{
-			if (d_relocatable)
-				ereport(ERROR,
-						(errcode(ERRCODE_SYNTAX_ERROR),
-						 errmsg("conflicting or redundant options")));
-			d_relocatable = defel;
-
-			control->relocatable = intVal(d_relocatable->arg) != 0;
-		}
-		else if (strcmp(defel->defname, "requires") == 0)
-		{
-			if (d_requires)
-				ereport(ERROR,
-						(errcode(ERRCODE_SYNTAX_ERROR),
-						 errmsg("conflicting or redundant options")));
-			d_requires = defel;
-
-			if (!SplitIdentifierString(pstrdup(strVal(d_requires->arg)),
-									   ',',
-									   &control->requires))
-			{
-				/* syntax error in name list */
-				ereport(ERROR,
-						(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-						 errmsg("parameter \"requires\" must be a list of extension names")));
-			}
-		}
-		else
-			elog(ERROR, "unrecognized option: %s", defel->defname);
+		/* no pre-existing */
+		control->default_version = pstrdup(stmt->version);
 	}
 
-	return InsertExtensionTemplateTuple(owner,
-										control,
-										stmt->version,
-										stmt->script);
+	extTemplateOid =  InsertExtensionTemplateTuple(owner,
+												   control,
+												   stmt->version,
+												   stmt->script);
+
+	/* Check that we have a default version target now */
+	CommandCounterIncrement();
+	find_default_pg_extension_control(stmt->extname, false);
+
+	return extTemplateOid;
 }
 
 /*
  * CREATE TEMPLATE FOR UPDATE OF EXTENSION
  */
 Oid
-CreateUpdateTemplate(CreateTemplateStmt *stmt)
+CreateExtensionUpdateTemplate(CreateTemplateStmt *stmt)
 {
-	DefElem		*d_schema = NULL;
-	DefElem		*d_default = NULL;
-	DefElem		*d_superuser = NULL;
-	DefElem		*d_relocatable = NULL;
-	DefElem		*d_requires = NULL;
 	Oid			 owner = GetUserId();
 	ExtensionControlFile *control;
-	ListCell	*lc;
-
-	elog(NOTICE, "CREATE TEMPLATE FOR UPDATE OF EXTENSION %s FROM %s TO %s",
-		 stmt->extname, stmt->from, stmt->to);
 
 	/* Check extension name validity before any filesystem access */
 	check_valid_extension_name(stmt->extname);
@@ -299,80 +351,13 @@ CreateUpdateTemplate(CreateTemplateStmt *stmt)
 							stmt->extname)));
 	}
 
-	/* Create an Extension Control structure to pass down the options */
+	/* Now read the (optional) control properties from the statement */
 	if (stmt->control)
 	{
-		control = (ExtensionControlFile *) palloc0(sizeof(ExtensionControlFile));
-		control->name = pstrdup(stmt->extname);
-	}
+ 	    control = (ExtensionControlFile *) palloc0(sizeof(ExtensionControlFile));
+	    control->name = pstrdup(stmt->extname);
 
-	/*
-	 * Read the statement option list
-	 */
-	foreach(lc, stmt->control)
-	{
-		DefElem    *defel = (DefElem *) lfirst(lc);
-
-		if (strcmp(defel->defname, "schema") == 0)
-		{
-			if (d_schema)
-				ereport(ERROR,
-						(errcode(ERRCODE_SYNTAX_ERROR),
-						 errmsg("conflicting or redundant options")));
-			d_schema = defel;
-
-			control->schema = strVal(d_schema->arg);
-		}
-		else if (strcmp(defel->defname, "default") == 0)
-		{
-			if (d_default)
-				ereport(ERROR,
-						(errcode(ERRCODE_SYNTAX_ERROR),
-						 errmsg("conflicting or redundant options")));
-			d_default = defel;
-
-			control->default_version = pstrdup(strVal(d_default->arg));
-		}
-		else if (strcmp(defel->defname, "superuser") == 0)
-		{
-			if (d_superuser)
-				ereport(ERROR,
-						(errcode(ERRCODE_SYNTAX_ERROR),
-						 errmsg("conflicting or redundant options")));
-			d_superuser = defel;
-
-			control->superuser = intVal(d_superuser->arg) != 0;
-		}
-		else if (strcmp(defel->defname, "relocatable") == 0)
-		{
-			if (d_relocatable)
-				ereport(ERROR,
-						(errcode(ERRCODE_SYNTAX_ERROR),
-						 errmsg("conflicting or redundant options")));
-			d_relocatable = defel;
-
-			control->relocatable = intVal(d_relocatable->arg) != 0;
-		}
-		else if (strcmp(defel->defname, "requires") == 0)
-		{
-			if (d_requires)
-				ereport(ERROR,
-						(errcode(ERRCODE_SYNTAX_ERROR),
-						 errmsg("conflicting or redundant options")));
-			d_requires = defel;
-
-			if (!SplitIdentifierString(pstrdup(strVal(d_requires->arg)),
-									   ',',
-									   &control->requires))
-			{
-				/* syntax error in name list */
-				ereport(ERROR,
-						(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-						 errmsg("parameter \"requires\" must be a list of extension names")));
-			}
-		}
-		else
-			elog(ERROR, "unrecognized option: %s", defel->defname);
+		parse_statement_control_defelems(control, stmt->control);
 	}
 
 	return InsertExtensionUpTmplTuple(owner, stmt->extname, control,
@@ -426,11 +411,14 @@ InsertExtensionControlTuple(Oid owner,
 	values[Anum_pg_extension_control_ctlversion - 1] =
 		CStringGetTextDatum(version);
 
+	/*
+	 * We only register that this pg_extension_control row is the default for
+	 * the given extension. Necessary controls must have been made before.
+	 */
 	if (control->default_version == NULL)
-		nulls[Anum_pg_extension_control_ctldefault - 1] = true;
+		values[Anum_pg_extension_control_ctldefault - 1] = false;
 	else
-		values[Anum_pg_extension_control_ctldefault - 1] =
-			CStringGetTextDatum(control->default_version);
+		values[Anum_pg_extension_control_ctldefault - 1] = true;
 
 	if (control->requires == NULL)
 		nulls[Anum_pg_extension_control_ctlrequires - 1] = true;
@@ -649,6 +637,151 @@ InsertExtensionUpTmplTuple(Oid owner,
 						   ExtensionUpTmplRelationId, extUpTmplOid, 0, NULL);
 
 	return extUpTmplOid;
+}
+
+/*
+ * ALTER TEMPLATE FOR EXTENSION name VERSION version
+ *
+ * This implements high level routing for sub commands.
+ */
+Oid
+AlterTemplate(AlterTemplateStmt *stmt)
+{
+	switch (stmt->template)
+	{
+		case TEMPLATE_CREATE_EXTENSION:
+			return AlterExtensionTemplate(stmt);
+
+		case TEMPLATE_UPDATE_EXTENSION:
+			return AlterExtensionUpdateTemplate(stmt);
+	}
+	/* keep compiler happy */
+	return InvalidOid;
+}
+
+Oid
+AlterExtensionTemplate(AlterTemplateStmt *stmt)
+{
+	switch (stmt->cmdtype)
+	{
+		case AET_SET_DEFAULT:
+			return AlterTemplateSetDefault(stmt->extname, stmt->version);
+
+		case AET_SET_SCRIPT:
+			elog(WARNING, "Not Yet Implemented");
+			break;
+
+		case AET_UPDATE_CONTROL:
+			elog(WARNING, "Not Yet Implemented");
+			break;
+	}
+
+	return InvalidOid;
+}
+
+/*
+ * ALTER TEMPLATE FOR EXTENSION ... SET DEFAULT VERSION ...
+ *
+ * We refuse to run without a default, so we drop the current one when
+ * assigning a new one.
+ */
+static Oid
+AlterTemplateSetDefault(const char *extname, const char *version)
+{
+	/* we need to know who's the default */
+	ExtensionControlFile *current =
+		find_default_pg_extension_control(extname, true);
+
+	if (current)
+	{
+		if (strcmp(current->default_version, version) == 0)
+			/* silently do nothing */
+			return InvalidOid;
+
+		/* set ctldefault to false on current default extension */
+		modify_pg_extension_control_default(current->name,
+											current->default_version,
+											false);
+	}
+	/* set ctldefault to true on new default extension */
+	return modify_pg_extension_control_default(extname, version, true);
+}
+
+/*
+ * Implement flipping the ctldefault bit from value to repl.
+ */
+static Oid
+modify_pg_extension_control_default(const char *extname,
+									const char *version,
+									bool value)
+{
+	Oid         ctrlOid;
+	Relation	rel;
+	SysScanDesc scandesc;
+	HeapTuple	tuple;
+	ScanKeyData entry[2];
+	Datum		values[Natts_pg_extension_control];
+	bool		nulls[Natts_pg_extension_control];
+	bool		repl[Natts_pg_extension_control];
+
+	rel = heap_open(ExtensionControlRelationId, AccessShareLock);
+
+	ScanKeyInit(&entry[0],
+				Anum_pg_extension_control_ctlname,
+				BTEqualStrategyNumber, F_NAMEEQ,
+				CStringGetDatum(extname));
+
+	ScanKeyInit(&entry[1],
+				Anum_pg_extension_control_ctlversion,
+				BTEqualStrategyNumber, F_TEXTEQ,
+				CStringGetTextDatum(version));
+
+	scandesc = systable_beginscan(rel,
+								  ExtensionControlNameVersionIndexId, true,
+								  SnapshotNow, 2, entry);
+
+	tuple = systable_getnext(scandesc);
+
+	/* We assume that there can be at most one matching tuple */
+
+	if (!HeapTupleIsValid(tuple))		/* should not happen */
+		elog(ERROR,
+			 "pg_extension_control for extension \"%s\" version \"%s\" does not exist",
+			 extname, version);
+
+	ctrlOid = HeapTupleGetOid(tuple);
+
+	/* Modify ctldefault in the pg_extension_control tuple */
+	memset(values, 0, sizeof(values));
+	memset(nulls, 0, sizeof(nulls));
+	memset(repl, 0, sizeof(repl));
+
+	values[Anum_pg_extension_control_ctldefault - 1] = BoolGetDatum(value);
+	repl[Anum_pg_extension_control_ctldefault - 1] = true;
+
+	tuple = heap_modify_tuple(tuple, RelationGetDescr(rel),
+							  values, nulls, repl);
+
+	simple_heap_update(rel, &tuple->t_self, tuple);
+	CatalogUpdateIndexes(rel, tuple);
+
+	systable_endscan(scandesc);
+
+	heap_close(rel, AccessShareLock);
+
+	return ctrlOid;
+}
+
+/*
+ * ALTER TEMPLATE FOR EXTENSION name FROM old TO new
+ *
+ * This implements high level routing for sub commands.
+ */
+Oid
+AlterExtensionUpdateTemplate(AlterTemplateStmt *stmt)
+{
+	elog(WARNING, "Not Yet Implemented");
+	return InvalidOid;
 }
 
 /*
@@ -894,4 +1027,177 @@ RemoveExtensionUpTmplById(Oid extUpTmplOid)
 	systable_endscan(scandesc);
 
 	heap_close(rel, RowExclusiveLock);
+}
+
+/*
+ * read_pg_extension_control
+ *
+ * Read a pg_extension_control row and fill in an ExtensionControlFile
+ * structure with the right elements in there.
+ */
+static ExtensionControlFile *
+read_pg_extension_control(const char *extname, Relation rel, HeapTuple tuple)
+{
+	Datum dreqs;
+	bool isnull;
+	Form_pg_extension_control ctrl =
+		(Form_pg_extension_control) GETSTRUCT(tuple);
+
+	ExtensionControlFile *control =
+		(ExtensionControlFile *) palloc0(sizeof(ExtensionControlFile));
+
+	/* Those fields are not null */
+	control->name = pstrdup(extname);
+	control->relocatable = ctrl->ctlrelocatable;
+	control->superuser = ctrl->ctlsuperuser;
+	control->schema = pstrdup(NameStr(ctrl->ctlnamespace));
+
+	if (ctrl->ctldefault)
+	{
+		Datum dvers =
+			heap_getattr(tuple, Anum_pg_extension_control_ctlversion,
+						 RelationGetDescr(rel), &isnull);
+
+		char *version = isnull? NULL : text_to_cstring(DatumGetTextPP(dvers));
+
+		if (isnull)
+		{
+			/* shouldn't happen */
+			elog(ERROR,
+				 "pg_extension_control row without version for \"%s\"",
+				 extname);
+		}
+
+		/* get the version and requires fields from here */
+		control->default_version = pstrdup(version);
+	}
+
+	/* now see about the dependencies array */
+	dreqs = heap_getattr(tuple, Anum_pg_extension_control_ctlrequires,
+						 RelationGetDescr(rel), &isnull);
+
+	if (!isnull)
+	{
+		ArrayType  *arr = DatumGetArrayTypeP(dreqs);
+		Datum	   *elems;
+		int			i;
+		int			nelems;
+
+		if (ARR_NDIM(arr) != 1 || ARR_HASNULL(arr) || ARR_ELEMTYPE(arr) != TEXTOID)
+			elog(ERROR, "expected 1-D text array");
+		deconstruct_array(arr, TEXTOID, -1, false, 'i', &elems, NULL, &nelems);
+
+		for (i = 0; i < nelems; ++i)
+			control->requires = lappend(control->requires,
+										TextDatumGetCString(elems[i]));
+
+		pfree(elems);
+	}
+
+	return control;
+}
+
+/*
+ * Find the pg_extension_control row for given extname and version, if any, and
+ * return a filled in ExtensionControlFile structure.
+ *
+ * In case we don't have any pg_extension_control row for given extname and
+ * version, return NULL.
+ */
+ExtensionControlFile *
+find_pg_extension_control(const char *extname, const char *version)
+{
+	ExtensionControlFile *control;
+	Relation	rel;
+	SysScanDesc scandesc;
+	HeapTuple	tuple;
+	ScanKeyData entry[2];
+
+	rel = heap_open(ExtensionControlRelationId, AccessShareLock);
+
+	ScanKeyInit(&entry[0],
+				Anum_pg_extension_control_ctlname,
+				BTEqualStrategyNumber, F_NAMEEQ,
+				CStringGetDatum(extname));
+
+	ScanKeyInit(&entry[1],
+				Anum_pg_extension_control_ctlversion,
+				BTEqualStrategyNumber, F_TEXTEQ,
+				CStringGetTextDatum(version));
+
+	scandesc = systable_beginscan(rel,
+								  ExtensionControlNameVersionIndexId, true,
+								  SnapshotNow, 2, entry);
+
+	tuple = systable_getnext(scandesc);
+
+	/* We assume that there can be at most one matching tuple */
+	if (HeapTupleIsValid(tuple))
+		control = read_pg_extension_control(extname, rel, tuple);
+	else
+		control = NULL;
+
+	systable_endscan(scandesc);
+
+	heap_close(rel, AccessShareLock);
+
+	return control;
+}
+
+/*
+ * Find the default extension's control properties.
+ */
+ExtensionControlFile *
+find_default_pg_extension_control(const char *extname, bool missing_ok)
+{
+	ExtensionControlFile *control = NULL;
+	Relation	rel;
+	SysScanDesc scandesc;
+	HeapTuple	tuple;
+	ScanKeyData entry[1];
+
+	rel = heap_open(ExtensionControlRelationId, AccessShareLock);
+
+	ScanKeyInit(&entry[0],
+				Anum_pg_extension_control_ctlname,
+				BTEqualStrategyNumber, F_NAMEEQ,
+				CStringGetDatum(extname));
+
+	scandesc = systable_beginscan(rel,
+								  ExtensionControlNameVersionIndexId, true,
+								  SnapshotNow, 1, entry);
+
+	/* find all the control tuples for extname */
+	while (HeapTupleIsValid(tuple = systable_getnext(scandesc)))
+	{
+		bool isnull;
+		bool ctldefault =
+			DatumGetBool(
+				fastgetattr(tuple, Anum_pg_extension_control_ctldefault,
+							RelationGetDescr(rel), &isnull));
+
+		/* only of those is the default */
+		if (ctldefault)
+		{
+			if (control == NULL)
+				control = read_pg_extension_control(extname, rel, tuple);
+			else
+				/* should not happen */
+				elog(ERROR,
+					 "Extension \"%s\" has more than one default control template",
+					 extname);
+		}
+	}
+	systable_endscan(scandesc);
+
+	heap_close(rel, AccessShareLock);
+
+	/* we really need a single default version. */
+	if (control == NULL && !missing_ok)
+		ereport(ERROR,
+				(errcode(ERRCODE_UNDEFINED_OBJECT),
+				 errmsg("extension \"%s\" has no default control template",
+						extname)));
+
+	return control;
 }
