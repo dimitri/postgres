@@ -1,0 +1,81 @@
+<!--
+doc/src/sgml/ref/drop_extension_template.sgml
+PostgreSQL documentation
+-->
+
+<refentry id="SQL-DROPTSTEMPLATE">
+ <refmeta>
+  <refentrytitle>DROP TEMPLATE FOR EXTENSION</refentrytitle>
+  <manvolnum>7</manvolnum>
+  <refmiscinfo>SQL - Language Statements</refmiscinfo>
+ </refmeta>
+
+ <refnamediv>
+  <refname>DROP TEMPLATE FOR EXTENSION</refname>
+  <refpurpose>remove a template for an extension</refpurpose>
+ </refnamediv>
+
+ <indexterm zone="sql-droptstemplate">
+  <primary>DROP TEMPLATE FOR EXTENSION</primary>
+ </indexterm>
+
+ <refsynopsisdiv>
+<synopsis>
+ DROP TEMPLATE FOR EXTENSION <replaceable class="PARAMETER">name</replaceable> VERSION <replaceable class="PARAMETER">version</replaceable> [ CASCADE | RESTRICT ]
+ DROP TEMPLATE FOR EXTENSION <replaceable class="PARAMETER">name</replaceable> FROM <replaceable class="PARAMETER">old_version</replaceable> TO <replaceable class="PARAMETER">new_version</replaceable> [ CASCADE | RESTRICT ]
+</synopsis>
+ </refsynopsisdiv>
+
+ <refsect1>
+  <title>Description</title>
+
+  <para>
+   <command>DROP TEMPLATE FOR EXTENSION</command> drops an existing template
+   for named extension
+  </para>
+ </refsect1>
+
+ <refsect1>
+  <title>Parameters</title>
+
+  <variablelist>
+   <varlistentry>
+    <term><replaceable class="parameter">name</replaceable></term>
+    <listitem>
+     <para>
+      The name of an existing text search template.
+     </para>
+    </listitem>
+   </varlistentry>
+
+   <varlistentry>
+    <term><literal>CASCADE</literal></term>
+    <listitem>
+     <para>
+      Automatically drop objects that depend on the template.
+     </para>
+    </listitem>
+   </varlistentry>
+
+   <varlistentry>
+    <term><literal>RESTRICT</literal></term>
+    <listitem>
+     <para>
+      Refuse to drop the template if any objects depend on it. This is the
+      default.
+     </para>
+    </listitem>
+   </varlistentry>
+  </variablelist>
+ </refsect1>
+
+ <refsect1>
+  <title>See Also</title>
+
+  <simplelist type="inline">
+   <member><xref linkend="sql-alterextensiontemplate"></member>
+   <member><xref linkend="sql-createextensiontemplate"></member>
+  </simplelist>
+ </refsect1>
+
+</refentry>

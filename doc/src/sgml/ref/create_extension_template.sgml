@@ -1,0 +1,104 @@
+<!--
+doc/src/sgml/ref/create_extension_template.sgml
+PostgreSQL documentation
+-->
+
+<refentry id="SQL-CREATEEXTENSIONTEMPLATE">
+ <refmeta>
+  <refentrytitle>CREATE TEMPLATE FOR EXTENSION</refentrytitle>
+  <manvolnum>7</manvolnum>
+  <refmiscinfo>SQL - Language Statements</refmiscinfo>
+ </refmeta>
+
+ <refnamediv>
+  <refname>CREATE TEMPLATE FOR EXTENSION</refname>
+  <refpurpose>define a new template for extension</refpurpose>
+ </refnamediv>
+
+ <indexterm zone="sql-createtstemplate">
+  <primary>CREATE TEMPLATE FOR EXTENSION</primary>
+ </indexterm>
+
+ <refsynopsisdiv>
+<synopsis>
+CREATE TEMPLATE FOR EXTENSION <replaceable class="parameter">name</replaceable>
+[ DEFAULT ] VERSION <replaceable class="parameter">version</replaceable>
+[ WITH <replaceable class="parameter"> [ (
+  [ <replaceable class="parameter">control_parameter</replaceable> ] [, ... ]
+) ] ]
+AS <replaceable class="parameter">script</replaceable>
+
+CREATE TEMPLATE FOR EXTENSION <replaceable class="parameter">name</replaceable>
+  FROM <replaceable class="parameter">old_version</replaceable> TO <replaceable class="parameter">new_version</replaceable>
+[ WITH <replaceable class="parameter"> [ (
+  [ <replaceable class="parameter">control_parameter</replaceable> ] [, ... ]
+) ] ]
+AS <replaceable class="parameter">script</replaceable>
+
+
+<phrase>where <replaceable class="parameter">control_parameter</replaceable> is one of:
+
+ SCHEMA <replaceable class="parameter">schema_name</replaceable>
+ SUPERUSER
+ NOSUPERUSER
+ RELOCATABLE
+ NORELOCATABLE
+ REQUIRES <replaceable class="parameter">requirements</replaceable>
+
+</synopsis>
+ </refsynopsisdiv>
+
+ <refsect1>
+  <title>Description</title>
+
+  <para>
+   <command>CREATE TEMPLATE FOR EXTENSION</command> creates a new template
+   for creating the extension of the same name. It allows tools and users to
+   upload an extension script and control file without needing to access the
+   file system of the server which is running
+   the <productname>PostgreSQL</productname> service.
+  </para>
+
+  <para>
+   Using the <command>CREATE TEMPLATE FOR EXTENSION</command> command you
+   can upload script to be run at <command>CREATE EXTENSION</command> time
+   and at <command>ALTER EXTENSION ... UPDATE</command> time.
+  </para>
+
+  <para>
+   Refer to <xref linkend="extend-extension"> for further information.
+  </para>
+ </refsect1>
+
+ <refsect1>
+  <title>Control Parameters</title>
+
+  <para>
+   For details about the control parameters meaning, please refer
+   to <xref linkend="extend-extension">.
+  </para>
+
+  <para>
+   The arguments can appear in any order, not only the one shown above.
+  </para>
+ </refsect1>
+
+ <refsect1>
+  <title>Compatibility</title>
+
+  <para>
+   There is no
+   <command>CREATE TEMPLATE FOR EXTENSION</command> statement in the SQL
+   standard.
+  </para>
+ </refsect1>
+
+ <refsect1>
+  <title>See Also</title>
+
+  <simplelist type="inline">
+   <member><xref linkend="sql-alterextensiontemplate"></member>
+   <member><xref linkend="sql-dropextensiontemplate"></member>
+  </simplelist>
+ </refsect1>
+</refentry>
