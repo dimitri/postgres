@@ -1434,3 +1434,103 @@ list_pg_extension_update_versions(const char *extname)
 
 	return versions;
 }
+
+/*
+ * pg_extension_controls
+ *
+ * List all extensions for which we have a default control entry. Returns a
+ * sorted list of name, version of such extensions.
+ */
+List *
+pg_extension_default_controls(void)
+{
+	List		*extensions = NIL;
+	Relation	 rel;
+	SysScanDesc	 scandesc;
+	HeapTuple	 tuple;
+
+	rel = heap_open(ExtensionControlRelationId, AccessShareLock);
+
+	scandesc = systable_beginscan(rel,
+								  ExtensionControlNameVersionIndexId, true,
+								  SnapshotNow, 0, NULL);
+
+	/* find all the control tuples for extname */
+	while (HeapTupleIsValid(tuple = systable_getnext(scandesc)))
+	{
+		Form_pg_extension_control ctrl =
+			(Form_pg_extension_control) GETSTRUCT(tuple);
+
+		bool isnull;
+		bool ctldefault =
+			DatumGetBool(
+				fastgetattr(tuple, Anum_pg_extension_control_ctldefault,
+							RelationGetDescr(rel), &isnull));
+
+		/* only of those is the default */
+		if (ctldefault)
+		{
+			Datum dvers =
+				heap_getattr(tuple, Anum_pg_extension_control_ctlversion,
+							 RelationGetDescr(rel), &isnull);
+
+			char *version = isnull? NULL:text_to_cstring(DatumGetTextPP(dvers));
+
+			extensions = lappend(extensions,
+								 list_make2(pstrdup(NameStr(ctrl->ctlname)),
+											version));
+		}
+	}
+
+	systable_endscan(scandesc);
+
+	heap_close(rel, AccessShareLock);
+
+	return extensions;
+}
+
+/*
+ * pg_extension_templates
+ *
+ * Return a list of list of name, version of extensions available to install
+ * from templates, in alphabetical order.
+ */
+List *
+pg_extension_templates(void)
+{
+	List		*templates = NIL;
+	Relation	 rel;
+	SysScanDesc	 scandesc;
+	HeapTuple	 tuple;
+	ScanKeyData	 entry[1];
+
+	rel = heap_open(ExtensionTemplateRelationId, AccessShareLock);
+
+	scandesc = systable_beginscan(rel,
+								  ExtensionTemplateNameVersionIndexId, true,
+								  SnapshotNow, 0, entry);
+
+	while (HeapTupleIsValid(tuple = systable_getnext(scandesc)))
+	{
+		Form_pg_extension_template tmpl =
+			(Form_pg_extension_template) GETSTRUCT(tuple);
+
+		bool	isnull;
+
+		Datum dvers =
+			heap_getattr(tuple, Anum_pg_extension_template_tplversion,
+						 RelationGetDescr(rel), &isnull);
+
+		char *version = isnull? NULL : text_to_cstring(DatumGetTextPP(dvers));
+
+		templates = lappend(templates,
+							list_make2(pstrdup(NameStr(tmpl->tplname)),
+									   version));
+	}
+
+	systable_endscan(scandesc);
+
+	heap_close(rel, AccessShareLock);
+
+	return templates;
+}

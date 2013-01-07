@@ -1749,13 +1749,15 @@ Datum
 pg_available_extensions(PG_FUNCTION_ARGS)
 {
 	ReturnSetInfo *rsinfo = (ReturnSetInfo *) fcinfo->resultinfo;
-	TupleDesc	tupdesc;
-	Tuplestorestate *tupstore;
-	MemoryContext per_query_ctx;
-	MemoryContext oldcontext;
-	char	   *location;
-	DIR		   *dir;
-	struct dirent *de;
+	TupleDesc			 tupdesc;
+	Tuplestorestate		*tupstore;
+	MemoryContext		 per_query_ctx;
+	MemoryContext		 oldcontext;
+	char				*location;
+	DIR					*dir;
+	struct dirent		*de;
+	List				*templates;
+	ListCell			*lc;
 
 	/* check to see if caller supports us returning a tuplestore */
 	if (rsinfo == NULL || !IsA(rsinfo, ReturnSetInfo))
@@ -1837,6 +1839,29 @@ pg_available_extensions(PG_FUNCTION_ARGS)
 		}
 
 		FreeDir(dir);
+	}
+
+    /* add in the extension we can install from a template */
+	templates = pg_extension_default_controls();
+
+    foreach(lc, templates)
+	{
+		char	*name = (char *)linitial(lfirst(lc));
+		char	*vers = (char *)lsecond(lfirst(lc));
+		Datum	 values[3];
+		bool	 nulls[3];
+
+		memset(values, 0, sizeof(values));
+		memset(nulls, 0, sizeof(nulls));
+
+		/* name */
+		values[0] = DirectFunctionCall1(namein, CStringGetDatum(name));
+		/* default_version */
+		values[1] = CStringGetTextDatum(vers);
+		/* comment */
+		nulls[2] = true;
+
+		tuplestore_putvalues(tupstore, tupdesc, values, nulls);
 	}
 
 	/* clean up and return the tuplestore */
