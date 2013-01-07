@@ -45,30 +45,29 @@
 #include "utils/tqual.h"
 
 static Oid InsertExtensionControlTuple(Oid owner,
-										   ExtensionControlFile *control,
-										   const char *version);
+									   ExtensionControl *control,
+									   const char *version);
 
 static Oid InsertExtensionTemplateTuple(Oid owner,
-                                            ExtensionControlFile *control,
-                                            const char *version,
-											const char *script);
+										ExtensionControl *control,
+										const char *version,
+										const char *script);
 
 static Oid InsertExtensionUpTmplTuple(Oid owner,
-										  const char *extname,
-										  ExtensionControlFile *control,
-										  const char *from,
-										  const char *to,
-										  const char *script);
+									  const char *extname,
+									  ExtensionControl *control,
+									  const char *from,
+									  const char *to,
+									  const char *script);
 
 static Oid AlterTemplateSetDefault(const char *extname, const char *version);
 static Oid modify_pg_extension_control_default(const char *extname,
 											   const char *version,
 											   bool value);
 
-static ExtensionControlFile *
-read_pg_extension_control(const char *extname,
-							  Relation rel,
-							  HeapTuple tuple);
+static ExtensionControl *read_pg_extension_control(const char *extname,
+												   Relation rel,
+												   HeapTuple tuple);
 
 
 /*
@@ -76,7 +75,7 @@ read_pg_extension_control(const char *extname,
  * to process in multiple places.
  */
 static void
-parse_statement_control_defelems(ExtensionControlFile *control, List *defelems)
+parse_statement_control_defelems(ExtensionControl *control, List *defelems)
 {
 	ListCell	*lc;
 	DefElem		*d_schema	   = NULL;
@@ -175,7 +174,7 @@ CreateExtensionTemplate(CreateTemplateStmt *stmt)
 {
     Oid			 extTemplateOid;
 	Oid			 owner		   = GetUserId();
-	ExtensionControlFile *control;
+	ExtensionControl *control;
 
 	/* Check extension name validity before any filesystem access */
 	check_valid_extension_name(stmt->extname);
@@ -244,7 +243,7 @@ CreateExtensionTemplate(CreateTemplateStmt *stmt)
 	}
 
 	/* Now read the control properties from the statement */
- 	control = (ExtensionControlFile *) palloc0(sizeof(ExtensionControlFile));
+ 	control = (ExtensionControl *) palloc0(sizeof(ExtensionControl));
 	control->name = pstrdup(stmt->extname);
 	parse_statement_control_defelems(control, stmt->control);
 
@@ -255,7 +254,7 @@ CreateExtensionTemplate(CreateTemplateStmt *stmt)
 	 */
 	if (stmt->default_version)
 	{
-		ExtensionControlFile *default_version =
+		ExtensionControl *default_version =
 			find_default_pg_extension_control(control->name, true);
 
 		if (default_version)
@@ -289,7 +288,7 @@ Oid
 CreateExtensionUpdateTemplate(CreateTemplateStmt *stmt)
 {
 	Oid			 owner = GetUserId();
-	ExtensionControlFile *control;
+	ExtensionControl *control;
 
 	/* Check extension name validity before any filesystem access */
 	check_valid_extension_name(stmt->extname);
@@ -354,7 +353,7 @@ CreateExtensionUpdateTemplate(CreateTemplateStmt *stmt)
 	/* Now read the (optional) control properties from the statement */
 	if (stmt->control)
 	{
- 	    control = (ExtensionControlFile *) palloc0(sizeof(ExtensionControlFile));
+ 	    control = (ExtensionControl *) palloc0(sizeof(ExtensionControl));
 	    control->name = pstrdup(stmt->extname);
 
 		parse_statement_control_defelems(control, stmt->control);
@@ -372,7 +371,7 @@ CreateExtensionUpdateTemplate(CreateTemplateStmt *stmt)
  */
 static Oid
 InsertExtensionControlTuple(Oid owner,
-							ExtensionControlFile *control,
+							ExtensionControl *control,
 							const char *version)
 {
 	Oid			extControlOid;
@@ -483,7 +482,7 @@ InsertExtensionControlTuple(Oid owner,
  * Return the OID assigned to the new row.
  */
 static Oid
-InsertExtensionTemplateTuple(Oid owner, ExtensionControlFile *control,
+InsertExtensionTemplateTuple(Oid owner, ExtensionControl *control,
 							 const char *version, const char *script)
 {
 	Oid			extControlOid, extTemplateOid;
@@ -561,7 +560,7 @@ InsertExtensionTemplateTuple(Oid owner, ExtensionControlFile *control,
 static Oid
 InsertExtensionUpTmplTuple(Oid owner,
 						   const char *extname,
-						   ExtensionControlFile *control,
+						   ExtensionControl *control,
 						   const char *from,
 						   const char *to,
 						   const char *script)
@@ -689,7 +688,7 @@ static Oid
 AlterTemplateSetDefault(const char *extname, const char *version)
 {
 	/* we need to know who's the default */
-	ExtensionControlFile *current =
+	ExtensionControl *current =
 		find_default_pg_extension_control(extname, true);
 
 	if (current)
@@ -1032,10 +1031,10 @@ RemoveExtensionUpTmplById(Oid extUpTmplOid)
 /*
  * read_pg_extension_control
  *
- * Read a pg_extension_control row and fill in an ExtensionControlFile
+ * Read a pg_extension_control row and fill in an ExtensionControl
  * structure with the right elements in there.
  */
-static ExtensionControlFile *
+static ExtensionControl *
 read_pg_extension_control(const char *extname, Relation rel, HeapTuple tuple)
 {
 	Datum dreqs;
@@ -1043,11 +1042,12 @@ read_pg_extension_control(const char *extname, Relation rel, HeapTuple tuple)
 	Form_pg_extension_control ctrl =
 		(Form_pg_extension_control) GETSTRUCT(tuple);
 
-	ExtensionControlFile *control =
-		(ExtensionControlFile *) palloc0(sizeof(ExtensionControlFile));
+	ExtensionControl *control =
+		(ExtensionControl *) palloc0(sizeof(ExtensionControl));
 
 	/* Those fields are not null */
 	control->name = pstrdup(extname);
+	control->is_template = true;
 	control->relocatable = ctrl->ctlrelocatable;
 	control->superuser = ctrl->ctlsuperuser;
 	control->schema = pstrdup(NameStr(ctrl->ctlnamespace));
@@ -1093,21 +1093,22 @@ read_pg_extension_control(const char *extname, Relation rel, HeapTuple tuple)
 
 		pfree(elems);
 	}
-
 	return control;
 }
 
 /*
  * Find the pg_extension_control row for given extname and version, if any, and
- * return a filled in ExtensionControlFile structure.
+ * return a filled in ExtensionControl structure.
  *
  * In case we don't have any pg_extension_control row for given extname and
  * version, return NULL.
  */
-ExtensionControlFile *
-find_pg_extension_control(const char *extname, const char *version)
+ExtensionControl *
+find_pg_extension_control(const char *extname,
+						  const char *version,
+						  bool missing_ok)
 {
-	ExtensionControlFile *control;
+	ExtensionControl *control = NULL;
 	Relation	rel;
 	SysScanDesc scandesc;
 	HeapTuple	tuple;
@@ -1134,12 +1135,16 @@ find_pg_extension_control(const char *extname, const char *version)
 	/* We assume that there can be at most one matching tuple */
 	if (HeapTupleIsValid(tuple))
 		control = read_pg_extension_control(extname, rel, tuple);
-	else
-		control = NULL;
 
 	systable_endscan(scandesc);
 
 	heap_close(rel, AccessShareLock);
+
+	if (control == NULL && !missing_ok)
+		ereport(ERROR,
+				(errcode(ERRCODE_UNDEFINED_OBJECT),
+				 errmsg("extension \"%s\" has no control template for version \"%s\"",
+						extname, version)));
 
 	return control;
 }
@@ -1147,10 +1152,10 @@ find_pg_extension_control(const char *extname, const char *version)
 /*
  * Find the default extension's control properties.
  */
-ExtensionControlFile *
+ExtensionControl *
 find_default_pg_extension_control(const char *extname, bool missing_ok)
 {
-	ExtensionControlFile *control = NULL;
+	ExtensionControl *control = NULL;
 	Relation	rel;
 	SysScanDesc scandesc;
 	HeapTuple	tuple;
@@ -1200,4 +1205,232 @@ find_default_pg_extension_control(const char *extname, bool missing_ok)
 						extname)));
 
 	return control;
+}
+
+/*
+ * read_pg_extension_uptmpl_script
+ *
+ * Return the script from the pg_extension_template catalogs.
+ */
+char *
+read_pg_extension_template_script(const char *extname, const char *version)
+{
+	char		*script;
+	Relation	 rel;
+	SysScanDesc	 scandesc;
+	HeapTuple	 tuple;
+	ScanKeyData	 entry[2];
+
+	rel = heap_open(ExtensionTemplateRelationId, AccessShareLock);
+
+	ScanKeyInit(&entry[0],
+				Anum_pg_extension_template_tplname,
+				BTEqualStrategyNumber, F_NAMEEQ,
+				CStringGetDatum(extname));
+
+	ScanKeyInit(&entry[1],
+				Anum_pg_extension_template_tplversion,
+				BTEqualStrategyNumber, F_TEXTEQ,
+				CStringGetTextDatum(version));
+
+	scandesc = systable_beginscan(rel,
+								  ExtensionTemplateNameVersionIndexId, true,
+								  SnapshotNow, 2, entry);
+
+	tuple = systable_getnext(scandesc);
+
+	/* We assume that there can be at most one matching tuple */
+	if (HeapTupleIsValid(tuple))
+	{
+		bool	isnull;
+		Datum	dscript;
+
+		dscript = heap_getattr(tuple, Anum_pg_extension_template_tplscript,
+							   RelationGetDescr(rel), &isnull);
+
+		script = isnull? NULL : text_to_cstring(DatumGetTextPP(dscript));
+	}
+	else
+		/* can't happen */
+		elog(ERROR,
+			 "Missing Extension Template entry for extension \"%s\" version \"%s\"",
+			 extname, version);
+
+	systable_endscan(scandesc);
+
+	heap_close(rel, AccessShareLock);
+
+	return script;
+}
+
+/*
+ * read_pg_extension_uptmpl_script
+ *
+ * Return the script from the pg_extension_uptmpl catalogs.
+ */
+char *
+read_pg_extension_uptmpl_script(const char *extname,
+								const char *from_version, const char *version)
+{
+	char		*script;
+	Relation	 rel;
+	SysScanDesc	 scandesc;
+	HeapTuple	 tuple;
+	ScanKeyData	 entry[3];
+
+	rel = heap_open(ExtensionUpTmplRelationId, AccessShareLock);
+
+	ScanKeyInit(&entry[0],
+				Anum_pg_extension_uptmpl_uptname,
+				BTEqualStrategyNumber, F_NAMEEQ,
+				CStringGetDatum(extname));
+
+	ScanKeyInit(&entry[1],
+				Anum_pg_extension_uptmpl_uptfrom,
+				BTEqualStrategyNumber, F_TEXTEQ,
+				CStringGetTextDatum(from_version));
+
+	ScanKeyInit(&entry[2],
+				Anum_pg_extension_uptmpl_uptto,
+				BTEqualStrategyNumber, F_TEXTEQ,
+				CStringGetTextDatum(version));
+
+	scandesc = systable_beginscan(rel,
+								  ExtensionUpTpmlNameFromToIndexId, true,
+								  SnapshotNow, 3, entry);
+
+	tuple = systable_getnext(scandesc);
+
+	/* We assume that there can be at most one matching tuple */
+	if (HeapTupleIsValid(tuple))
+	{
+		bool	isnull;
+		Datum	dscript;
+
+		dscript = heap_getattr(tuple, Anum_pg_extension_uptmpl_uptscript,
+							   RelationGetDescr(rel), &isnull);
+
+		script = isnull? NULL : text_to_cstring(DatumGetTextPP(dscript));
+	}
+	else
+		/* can't happen */
+		elog(ERROR, "Extension Template Control entry for \"%s\" has no template for update from version \"%s\" to version \"%s\"",
+			 extname, from_version, version);
+
+	systable_endscan(scandesc);
+
+	heap_close(rel, AccessShareLock);
+
+	return script;
+}
+
+/*
+ * read_extension_template_script
+ *
+ * Given an extension's name and a version, return the extension's script from
+ * the pg_extension_template or the pg_extension_uptmpl catalog. The former is
+ * used when from_version is NULL.
+ */
+char *
+read_extension_template_script(const char *extname,
+							   const char *from_version, const char *version)
+{
+	if (from_version)
+		return read_pg_extension_uptmpl_script(extname, from_version, version);
+	else
+		return read_pg_extension_template_script(extname, version);
+}
+
+/*
+ * Returns a list of cstring containing all known versions that you can install
+ * for a given extension.
+ */
+List *
+list_pg_extension_template_versions(const char *extname)
+{
+	List		*versions = NIL;
+	Relation	 rel;
+	SysScanDesc	 scandesc;
+	HeapTuple	 tuple;
+	ScanKeyData	 entry[1];
+
+	rel = heap_open(ExtensionTemplateRelationId, AccessShareLock);
+
+	ScanKeyInit(&entry[0],
+				Anum_pg_extension_template_tplname,
+				BTEqualStrategyNumber, F_NAMEEQ,
+				CStringGetDatum(extname));
+
+	scandesc = systable_beginscan(rel,
+								  ExtensionTemplateNameVersionIndexId, true,
+								  SnapshotNow, 1, entry);
+
+	while (HeapTupleIsValid(tuple = systable_getnext(scandesc)))
+	{
+		bool	isnull;
+		Datum dvers =
+			heap_getattr(tuple, Anum_pg_extension_template_tplversion,
+						 RelationGetDescr(rel), &isnull);
+
+		char *version = isnull? NULL : text_to_cstring(DatumGetTextPP(dvers));
+
+		versions = lappend(versions, version);
+	}
+
+	systable_endscan(scandesc);
+
+	heap_close(rel, AccessShareLock);
+
+	return versions;
+}
+
+/*
+ * Returns a list of lists of source and target versions for which we have a
+ * direct upgrade path for.
+ */
+List *
+list_pg_extension_update_versions(const char *extname)
+{
+	List		*versions = NIL;
+	Relation	 rel;
+	SysScanDesc	 scandesc;
+	HeapTuple	 tuple;
+	ScanKeyData	 entry[1];
+
+	rel = heap_open(ExtensionUpTmplRelationId, AccessShareLock);
+
+	ScanKeyInit(&entry[0],
+				Anum_pg_extension_uptmpl_uptname,
+				BTEqualStrategyNumber, F_NAMEEQ,
+				CStringGetDatum(extname));
+
+	scandesc = systable_beginscan(rel,
+								  ExtensionUpTpmlNameFromToIndexId, true,
+								  SnapshotNow, 1, entry);
+
+	while (HeapTupleIsValid(tuple = systable_getnext(scandesc)))
+	{
+		bool	 isnull;
+		Datum	 dfrom, dto;
+		char	*from, *to;
+
+		/* neither from nor to are allowed to be null... */
+		dfrom = heap_getattr(tuple, Anum_pg_extension_uptmpl_uptfrom,
+							 RelationGetDescr(rel), &isnull);
+
+		from = isnull ? NULL : text_to_cstring(DatumGetTextPP(dfrom));
+
+		dto = heap_getattr(tuple, Anum_pg_extension_uptmpl_uptto,
+						   RelationGetDescr(rel), &isnull);
+
+		to = isnull ? NULL : text_to_cstring(DatumGetTextPP(dto));
+
+		versions = lappend(versions, list_make2(from, to));
+	}
+
+	systable_endscan(scandesc);
+
+	heap_close(rel, AccessShareLock);
+
+	return versions;
 }

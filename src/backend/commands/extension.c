@@ -43,6 +43,7 @@
 #include "commands/comment.h"
 #include "commands/extension.h"
 #include "commands/schemacmds.h"
+#include "commands/template.h"
 #include "funcapi.h"
 #include "mb/pg_wchar.h"
 #include "miscadmin.h"
@@ -79,11 +80,11 @@ static List *find_update_path(List *evi_list,
 				 ExtensionVersionInfo *evi_start,
 				 ExtensionVersionInfo *evi_target,
 				 bool reinitialize);
-static void get_available_versions_for_extension(ExtensionControlFile *pcontrol,
+static void get_available_versions_for_extension(ExtensionControl *pcontrol,
 									 Tuplestorestate *tupstore,
 									 TupleDesc tupdesc);
 static void ApplyExtensionUpdates(Oid extensionOid,
-					  ExtensionControlFile *pcontrol,
+					  ExtensionControl *pcontrol,
 					  const char *initialVersion,
 					  List *updateVersions);
 
@@ -353,7 +354,7 @@ get_extension_control_filename(const char *extname)
 }
 
 static char *
-get_extension_script_directory(ExtensionControlFile *control)
+get_extension_script_directory(ExtensionControl *control)
 {
 	char		sharepath[MAXPGPATH];
 	char	   *result;
@@ -376,7 +377,7 @@ get_extension_script_directory(ExtensionControlFile *control)
 }
 
 static char *
-get_extension_aux_control_filename(ExtensionControlFile *control,
+get_extension_aux_control_filename(ExtensionControl *control,
 								   const char *version)
 {
 	char	   *result;
@@ -394,7 +395,7 @@ get_extension_aux_control_filename(ExtensionControlFile *control,
 }
 
 static char *
-get_extension_script_filename(ExtensionControlFile *control,
+get_extension_script_filename(ExtensionControl *control,
 							  const char *from_version, const char *version)
 {
 	char	   *result;
@@ -426,7 +427,7 @@ get_extension_script_filename(ExtensionControlFile *control,
  * worry about what encoding it's in; all values are expected to be ASCII.
  */
 static void
-parse_extension_control_file(ExtensionControlFile *control,
+parse_extension_control_file(ExtensionControl *control,
 							 const char *version)
 {
 	char	   *filename;
@@ -466,7 +467,7 @@ parse_extension_control_file(ExtensionControlFile *control,
 	FreeFile(file);
 
 	/*
-	 * Convert the ConfigVariable list into ExtensionControlFile entries.
+	 * Convert the ConfigVariable list into ExtensionControl entries.
 	 */
 	for (item = head; item != NULL; item = item->next)
 	{
@@ -562,16 +563,17 @@ parse_extension_control_file(ExtensionControlFile *control,
 /*
  * Read the primary control file for the specified extension.
  */
-ExtensionControlFile *
+ExtensionControl *
 read_extension_control_file(const char *extname)
 {
-	ExtensionControlFile *control;
+	ExtensionControl *control;
 
 	/*
 	 * Set up default values.  Pointer fields are initially null.
 	 */
-	control = (ExtensionControlFile *) palloc0(sizeof(ExtensionControlFile));
+	control = (ExtensionControl *) palloc0(sizeof(ExtensionControl));
 	control->name = pstrdup(extname);
+	control->is_template = false;
 	control->relocatable = false;
 	control->superuser = true;
 	control->encoding = -1;
@@ -587,20 +589,20 @@ read_extension_control_file(const char *extname)
 /*
  * Read the auxiliary control file for the specified extension and version.
  *
- * Returns a new modified ExtensionControlFile struct; the original struct
+ * Returns a new modified ExtensionControl struct; the original struct
  * (reflecting just the primary control file) is not modified.
  */
-static ExtensionControlFile *
-read_extension_aux_control_file(const ExtensionControlFile *pcontrol,
+static ExtensionControl *
+read_extension_aux_control_file(const ExtensionControl *pcontrol,
 								const char *version)
 {
-	ExtensionControlFile *acontrol;
+	ExtensionControl *acontrol;
 
 	/*
 	 * Flat-copy the struct.  Pointer fields share values with original.
 	 */
-	acontrol = (ExtensionControlFile *) palloc(sizeof(ExtensionControlFile));
-	memcpy(acontrol, pcontrol, sizeof(ExtensionControlFile));
+	acontrol = (ExtensionControl *) palloc(sizeof(ExtensionControl));
+	memcpy(acontrol, pcontrol, sizeof(ExtensionControl));
 
 	/*
 	 * Parse the auxiliary control file, overwriting struct fields
@@ -611,10 +613,75 @@ read_extension_aux_control_file(const ExtensionControlFile *pcontrol,
 }
 
 /*
+ * Read the control properties for given extension, either from a file on the
+ * dile system or if it does not exists there, from a template catalog in
+ * pg_extension_control, if it exists.
+ *
+ * In the file system case, we get the default properties for the extension and
+ * one of them is the default_version property that allows us to know which
+ * version to install. Knowing that we can then read the right auxilliary
+ * control file to override some defaults if needs be.
+ *
+ * When reading from the catalogs, we have in pg_extension_control at most a
+ * row per version, with the whole set of properties we need to apply. So once
+ * we found the current default version to install, we don't need to read and
+ * another set of properties and override them.
+ *
+ * In both cases we return the structure ExtensionControl, which maybe
+ * should get renamed now.
+ */
+static ExtensionControl *
+read_extension_control(const char *extname)
+{
+	char *filename;
+
+	filename = get_extension_control_filename(extname);
+
+	if (access(filename, F_OK) == -1 && errno == ENOENT)
+	{
+		/* ENOENT: let's look at the control templates */
+		return find_default_pg_extension_control(extname, false);
+	}
+	else
+		/* we let the file specific routines deal with any other error */
+		return read_extension_control_file(extname);
+}
+
+static ExtensionControl *
+read_extension_aux_control(const ExtensionControl *pcontrol,
+						   const char *version)
+{
+	if (pcontrol->is_template)
+	{
+		/* we might already have read the right version */
+		if (strcmp(pcontrol->default_version, version) != 0)
+		{
+			ExtensionControl *control;
+			/*
+			 * While read_extension_aux_control() override pcontrol with the
+			 * auxilliary control file properties, in the case when we read
+			 * from the catalogs, the overriding has been done already at
+			 * CREATE TEMPLATE time, so we only need to load a single row from
+			 * pg_extension_control at any time.
+			 */
+			control = find_pg_extension_control(pcontrol->name, version, true);
+
+			return control ? control : (ExtensionControl *)pcontrol;
+		}
+		else
+			/* pcontrol is the control file for the right version. */
+			return (ExtensionControl *)pcontrol;
+	}
+	else
+		/* read ExtensionControl from files */
+		return read_extension_aux_control_file(pcontrol, version);
+}
+
+/*
  * Read an SQL script file into a string, and convert to database encoding
  */
 static char *
-read_extension_script_file(const ExtensionControlFile *control,
+read_extension_script_file(const ExtensionControl *control,
 						   const char *filename)
 {
 	int			src_encoding;
@@ -657,8 +724,6 @@ read_extension_script_file(const ExtensionControlFile *control,
 /*
  * Execute given SQL string.
  *
- * filename is used only to report errors.
- *
  * Note: it's tempting to just use SPI to execute the string, but that does
  * not work very well.	The really serious problem is that SPI will parse,
  * analyze, and plan the whole string before executing any of it; of course
@@ -668,7 +733,7 @@ read_extension_script_file(const ExtensionControlFile *control,
  * could be very long.
  */
 static void
-execute_sql_string(const char *sql, const char *filename)
+execute_sql_string(const char *sql)
 {
 	List	   *raw_parsetree_list;
 	DestReceiver *dest;
@@ -753,13 +818,12 @@ execute_sql_string(const char *sql, const char *filename)
  * If from_version isn't NULL, it's an update
  */
 static void
-execute_extension_script(Oid extensionOid, ExtensionControlFile *control,
+execute_extension_script(Oid extensionOid, ExtensionControl *control,
 						 const char *from_version,
 						 const char *version,
 						 List *requiredSchemas,
 						 const char *schemaName, Oid schemaOid)
 {
-	char	   *filename;
 	int			save_nestlevel;
 	StringInfoData pathbuf;
 	ListCell   *lc;
@@ -784,8 +848,6 @@ execute_extension_script(Oid extensionOid, ExtensionControlFile *control,
 							control->name),
 					 errhint("Must be superuser to update this extension.")));
 	}
-
-	filename = get_extension_script_filename(control, from_version, version);
 
 	/*
 	 * Force client_min_messages and log_min_messages to be at least WARNING,
@@ -841,8 +903,23 @@ execute_extension_script(Oid extensionOid, ExtensionControlFile *control,
 	CurrentExtensionObject = extensionOid;
 	PG_TRY();
 	{
-		char	   *c_sql = read_extension_script_file(control, filename);
-		Datum		t_sql;
+		char	*c_sql;
+		Datum	 t_sql;
+
+		if (control->is_template)
+		{
+			c_sql = read_extension_template_script(control->name,
+												   from_version,
+												   version);
+		}
+		else
+		{
+			char *filename = get_extension_script_filename(control,
+														   from_version,
+														   version);
+
+			c_sql = read_extension_script_file(control, filename);
+		}
 
 		/* We use various functions that want to operate on text datums */
 		t_sql = CStringGetTextDatum(c_sql);
@@ -891,7 +968,7 @@ execute_extension_script(Oid extensionOid, ExtensionControlFile *control,
 		/* And now back to C string */
 		c_sql = text_to_cstring(DatumGetTextPP(t_sql));
 
-		execute_sql_string(c_sql, filename);
+		execute_sql_string(c_sql);
 	}
 	PG_CATCH();
 	{
@@ -980,7 +1057,7 @@ get_nearest_unprocessed_vertex(List *evi_list)
  * the versions that can be reached in one step from that version.
  */
 static List *
-get_ext_ver_list(ExtensionControlFile *control)
+get_ext_ver_list_from_files(ExtensionControl *control)
 {
 	List	   *evi_list = NIL;
 	int			extnamelen = strlen(control->name);
@@ -1036,6 +1113,58 @@ get_ext_ver_list(ExtensionControlFile *control)
 }
 
 /*
+ * We scan pg_extension_template for all install scripts of given extension,
+ * then pg_extension_uptmpl for all update scripts of same extension.
+ */
+static List *
+get_ext_ver_list_from_catalogs(ExtensionControl *control)
+{
+	List		*evi_list = NIL;
+	List		*installable, *direct_update_paths;
+	ListCell    *lc;
+
+	/* pg_extension_template contains install scripts */
+	installable = list_pg_extension_template_versions(control->name);
+
+	foreach(lc, installable)
+	{
+		ExtensionVersionInfo	*evi;
+		char					*vername = (char *) lfirst(lc);
+
+		evi = get_ext_ver_info(vername, &evi_list);
+	}
+
+	/* pg_extension_uptmpl contains upgrade scripts */
+	direct_update_paths = list_pg_extension_update_versions(control->name);
+
+	foreach(lc, direct_update_paths)
+	{
+		ExtensionVersionInfo	*evi, *evi2;
+		char					*vername = (char *) linitial(lfirst(lc));
+		char					*vername2 = (char *) lsecond(lfirst(lc));
+
+		evi = get_ext_ver_info(vername, &evi_list);
+		evi2 = get_ext_ver_info(vername2, &evi_list);
+		evi->reachable = lappend(evi->reachable, evi2);
+	}
+	return evi_list;
+}
+
+/*
+ * We have to implement that function twice. The first implementation deals
+ * with control files and sql scripts on the file system while the second one
+ * deals with the catalogs pg_extension_template and pg_extension_uptmpl.
+ */
+static List *
+get_ext_ver_list(ExtensionControl *control)
+{
+	if (control->is_template)
+		return get_ext_ver_list_from_catalogs(control);
+	else
+		return get_ext_ver_list_from_files(control);
+}
+
+/*
  * Given an initial and final version name, identify the sequence of update
  * scripts that have to be applied to perform that update.
  *
@@ -1043,7 +1172,7 @@ get_ext_ver_list(ExtensionControlFile *control)
  * version is *not* included).
  */
 static List *
-identify_update_path(ExtensionControlFile *control,
+identify_update_path(ExtensionControl *control,
 					 const char *oldVersion, const char *newVersion)
 {
 	List	   *result;
@@ -1168,8 +1297,8 @@ CreateExtension(CreateExtensionStmt *stmt)
 	char	   *versionName;
 	char	   *oldVersionName;
 	Oid			extowner = GetUserId();
-	ExtensionControlFile *pcontrol;
-	ExtensionControlFile *control;
+	ExtensionControl *pcontrol;
+	ExtensionControl *control;
 	List	   *updateVersions;
 	List	   *requiredExtensions;
 	List	   *requiredSchemas;
@@ -1216,7 +1345,7 @@ CreateExtension(CreateExtensionStmt *stmt)
 	 * any non-ASCII data, so there is no need to worry about encoding at this
 	 * point.
 	 */
-	pcontrol = read_extension_control_file(stmt->extname);
+	pcontrol = read_extension_control(stmt->extname);
 
 	/*
 	 * Read the statement option list
@@ -1255,6 +1384,11 @@ CreateExtension(CreateExtensionStmt *stmt)
 
 	/*
 	 * Determine the version to install
+	 *
+	 * Note that in the case when we install an extension from a template, and
+	 * when the target version to install is given in the SQL command, we could
+	 * arrange the code to only scan pg_extension_control once: there's no need
+	 * to read any primary control row in that case. There's no harm doing so.
 	 */
 	if (d_new_version && d_new_version->arg)
 		versionName = strVal(d_new_version->arg);
@@ -1317,7 +1451,7 @@ CreateExtension(CreateExtensionStmt *stmt)
 	/*
 	 * Fetch control parameters for installation target version
 	 */
-	control = read_extension_aux_control_file(pcontrol, versionName);
+	control = read_extension_aux_control(pcontrol, versionName);
 
 	/*
 	 * Determine the target schema to install the extension into
@@ -1664,7 +1798,7 @@ pg_available_extensions(PG_FUNCTION_ARGS)
 	{
 		while ((de = ReadDir(dir, location)) != NULL)
 		{
-			ExtensionControlFile *control;
+			ExtensionControl *control;
 			char	   *extname;
 			Datum		values[3];
 			bool		nulls[3];
@@ -1773,7 +1907,7 @@ pg_available_extension_versions(PG_FUNCTION_ARGS)
 	{
 		while ((de = ReadDir(dir, location)) != NULL)
 		{
-			ExtensionControlFile *control;
+			ExtensionControl *control;
 			char	   *extname;
 
 			if (!is_extension_control_filename(de->d_name))
@@ -1808,7 +1942,7 @@ pg_available_extension_versions(PG_FUNCTION_ARGS)
  *		read versions of one extension, add rows to tupstore
  */
 static void
-get_available_versions_for_extension(ExtensionControlFile *pcontrol,
+get_available_versions_for_extension(ExtensionControl *pcontrol,
 									 Tuplestorestate *tupstore,
 									 TupleDesc tupdesc)
 {
@@ -1822,7 +1956,7 @@ get_available_versions_for_extension(ExtensionControlFile *pcontrol,
 	/* Note this will fail if script directory doesn't exist */
 	while ((de = ReadDir(dir, location)) != NULL)
 	{
-		ExtensionControlFile *control;
+		ExtensionControl *control;
 		char	   *vername;
 		Datum		values[7];
 		bool		nulls[7];
@@ -1919,7 +2053,7 @@ pg_extension_update_paths(PG_FUNCTION_ARGS)
 	MemoryContext per_query_ctx;
 	MemoryContext oldcontext;
 	List	   *evi_list;
-	ExtensionControlFile *control;
+	ExtensionControl *control;
 	ListCell   *lc1;
 
 	/* Check extension name validity before any filesystem access */
@@ -1952,7 +2086,7 @@ pg_extension_update_paths(PG_FUNCTION_ARGS)
 	MemoryContextSwitchTo(oldcontext);
 
 	/* Read the extension's control file */
-	control = read_extension_control_file(NameStr(*extname));
+	control = read_extension_control(NameStr(*extname));
 
 	/* Extract the version update graph from the script directory */
 	evi_list = get_ext_ver_list(control);
@@ -2569,7 +2703,7 @@ ExecAlterExtensionStmt(AlterExtensionStmt *stmt)
 	DefElem    *d_new_version = NULL;
 	char	   *versionName;
 	char	   *oldVersionName;
-	ExtensionControlFile *control;
+	ExtensionControl *control;
 	Oid			extensionOid;
 	Relation	extRel;
 	ScanKeyData key[1];
@@ -2635,7 +2769,7 @@ ExecAlterExtensionStmt(AlterExtensionStmt *stmt)
 	 * any non-ASCII data, so there is no need to worry about encoding at this
 	 * point.
 	 */
-	control = read_extension_control_file(stmt->extname);
+	control = read_extension_control(stmt->extname);
 
 	/*
 	 * Read the statement option list
@@ -2710,7 +2844,7 @@ ExecAlterExtensionStmt(AlterExtensionStmt *stmt)
  */
 static void
 ApplyExtensionUpdates(Oid extensionOid,
-					  ExtensionControlFile *pcontrol,
+					  ExtensionControl *pcontrol,
 					  const char *initialVersion,
 					  List *updateVersions)
 {
@@ -2720,7 +2854,7 @@ ApplyExtensionUpdates(Oid extensionOid,
 	foreach(lcv, updateVersions)
 	{
 		char	   *versionName = (char *) lfirst(lcv);
-		ExtensionControlFile *control;
+		ExtensionControl *control;
 		char	   *schemaName;
 		Oid			schemaOid;
 		List	   *requiredExtensions;
@@ -2739,7 +2873,7 @@ ApplyExtensionUpdates(Oid extensionOid,
 		/*
 		 * Fetch parameters for specific version (pcontrol is not changed)
 		 */
-		control = read_extension_aux_control_file(pcontrol, versionName);
+		control = read_extension_aux_control(pcontrol, versionName);
 
 		/* Find the pg_extension tuple */
 		extRel = heap_open(ExtensionRelationId, RowExclusiveLock);

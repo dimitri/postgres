@@ -36,10 +36,23 @@ extern void RemoveExtensionControlById(Oid extControlOid);
 extern void RemoveExtensionTemplateById(Oid extTemplateOid);
 extern void RemoveExtensionUpTmplById(Oid extUpTmplOid);
 
-extern ExtensionControlFile *
-find_pg_extension_control(const char *extname, const char *version);
+extern ExtensionControl *find_pg_extension_control(const char *extname,
+												   const char *version,
+												   bool missing_ok);
 
-extern ExtensionControlFile *
-find_default_pg_extension_control(const char *extname, bool missing_ok);
+extern ExtensionControl *find_default_pg_extension_control(const char *extname,
+														   bool missing_ok);
+
+extern char *read_pg_extension_template_script(const char *extname,
+											   const char *version);
+extern char *read_pg_extension_uptmpl_script(const char *extname,
+											 const char *from_version,
+											 const char *version);
+extern char *read_extension_template_script(const char *extname,
+											const char *from_version,
+											const char *version);
+
+extern List * list_pg_extension_template_versions(const char *extname);
+extern List * list_pg_extension_update_versions(const char *extname);
 
 #endif   /* TEMPLATE_H */

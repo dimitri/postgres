@@ -29,7 +29,7 @@ extern Oid	CurrentExtensionObject;
 /*
  * Internal data structure to hold the results of parsing a control file
  */
-typedef struct ExtensionControlFile
+typedef struct ExtensionControl
 {
 	char	   *name;			/* name of the extension */
 	char	   *directory;		/* directory for script files */
@@ -41,9 +41,10 @@ typedef struct ExtensionControlFile
 	bool		superuser;		/* must be superuser to install? */
 	int			encoding;		/* encoding of the script file, or -1 */
 	List	   *requires;		/* names of prerequisite extensions */
-} ExtensionControlFile;
+	bool		is_template;	/* true if we're using catalog templates */
+} ExtensionControl;
 
-extern ExtensionControlFile *read_extension_control_file(const char *extname);
+extern ExtensionControl *read_extension_control_file(const char *extname);
 extern void check_valid_extension_name(const char *extensionname);
 
 extern Oid CreateExtension(CreateExtensionStmt *stmt);
