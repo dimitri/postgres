@@ -18,7 +18,9 @@
 
 typedef enum
 {
-	EVT_DDLCommandStart
+	EVT_DDLCommandStart,
+	EVT_DDLCommandEnd,
+	EVT_DDLCommandTrace
 } EventTriggerEvent;
 
 typedef struct
@@ -26,7 +28,9 @@ typedef struct
 	Oid			fnoid;				/* function to be called */
 	char		enabled;			/* as SESSION_REPLICATION_ROLE_* */
 	int			ntags;				/* number of command tags */
+	int			nctxs;				/* number of command contexts */
 	char	  **tag;				/* command tags in SORTED order */
+	char	  **context;			/* command contexts in SORTED order */
 } EventTriggerCacheItem;
 
 extern List *EventCacheLookup(EventTriggerEvent event);

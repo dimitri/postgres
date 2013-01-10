@@ -15,13 +15,54 @@
 
 #include "catalog/pg_event_trigger.h"
 #include "nodes/parsenodes.h"
+#include "tcop/utility.h"
+
+/*
+ * Deparsing CHECK and DEFAULT constraints on a relation need that the relation
+ * exists in the catalogs and that we have its Oid. We also want to be able to
+ * fill in the Oid of the main object target of a command, when it's relevant,
+ * to use in the Event Trigger user code.
+ */
+extern Oid	EventTriggerTargetOid;
+
+/*
+ * Several steps of event trigger processing need to see through the command
+ * tag in order to decide what to do next. The first part of the command tag is
+ * CREATE, ALTER, DROP or some other specialized command, and the second part
+ * is the name of the object kind we're dealing with.
+ */
+typedef enum {
+	COMMAND_TAG_ALTER,
+	COMMAND_TAG_CREATE,
+	COMMAND_TAG_DROP,
+	COMMAND_TAG_OTHER
+} CommandTagOperation;
+
+/*
+ * This structure is meant to ease access to the object type's name and
+ * operation, not as something to edit on the fly. See function
+ * split_command_tag which should be the only thing editing those pieces of
+ * information.
+ */
+typedef struct CommandTag
+{
+	const char			*tag;
+	const char			*opname;
+	CommandTagOperation	 operation;
+	const char			*obtypename;
+} CommandTag;
+
 
 typedef struct EventTriggerData
 {
 	NodeTag		type;
 	char	   *event;				/* event name */
 	Node	   *parsetree;			/* parse tree */
-	const char *tag;				/* command tag */
+	CommandTag *ctag;				/* command tag */
+	Oid         objectid;			/* main target object's id */
+	const char *context;			/* ProcessUtilityContext */
+	char	   *schemaname;			/* schema name of the object */
+	char	   *objectname;			/* object name */
 } EventTriggerData;
 
 /*
@@ -41,6 +82,9 @@ extern Oid AlterEventTriggerOwner(const char *name, Oid newOwnerId);
 extern void AlterEventTriggerOwner_oid(Oid, Oid newOwnerId);
 
 extern bool EventTriggerSupportsObjectType(ObjectType obtype);
-extern void EventTriggerDDLCommandStart(Node *parsetree);
+extern void EventTriggerDDLCommandStart(Node *parsetree,
+										ProcessUtilityContext context);
+extern void EventTriggerDDLCommandEnd(Node *parsetree,
+									  ProcessUtilityContext context);
 
 #endif   /* EVENT_TRIGGER_H */

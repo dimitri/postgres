@@ -150,6 +150,8 @@ BuildEventTriggerCache(void)
 		EventTriggerCacheItem *item;
 		Datum		evttags;
 		bool		evttags_isnull;
+		Datum		evtctxs;
+		bool		evtctxs_isnull;
 		EventTriggerCacheEntry *entry;
 		bool		found;
 
@@ -167,6 +169,10 @@ BuildEventTriggerCache(void)
 		evtevent = NameStr(form->evtevent);
 		if (strcmp(evtevent, "ddl_command_start") == 0)
 			event = EVT_DDLCommandStart;
+		else if (strcmp(evtevent, "ddl_command_end") == 0)
+			event = EVT_DDLCommandEnd;
+		else if (strcmp(evtevent, "ddl_command_trace") == 0)
+			event = EVT_DDLCommandTrace;
 		else
 			continue;
 
@@ -182,6 +188,15 @@ BuildEventTriggerCache(void)
 		{
 			item->ntags = DecodeTextArrayToCString(evttags, &item->tag);
 			qsort(item->tag, item->ntags, sizeof(char *), pg_qsort_strcmp);
+		}
+
+		/* Decode and sort context array. */
+		evtctxs = heap_getattr(tup, Anum_pg_event_trigger_evtctxs,
+							   RelationGetDescr(rel), &evtctxs_isnull);
+		if (!evtctxs_isnull)
+		{
+			item->nctxs = DecodeTextArrayToCString(evtctxs, &item->context);
+			qsort(item->context, item->nctxs, sizeof(char *), pg_qsort_strcmp);
 		}
 
 		/* Add to cache entry. */

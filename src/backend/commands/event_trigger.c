@@ -18,26 +18,26 @@
 #include "catalog/dependency.h"
 #include "catalog/indexing.h"
 #include "catalog/objectaccess.h"
-#include "catalog/pg_event_trigger.h"
 #include "catalog/pg_proc.h"
 #include "catalog/pg_trigger.h"
 #include "catalog/pg_type.h"
 #include "commands/dbcommands.h"
 #include "commands/event_trigger.h"
 #include "commands/trigger.h"
-#include "parser/parse_func.h"
-#include "pgstat.h"
 #include "miscadmin.h"
-#include "utils/acl.h"
+#include "nodes/makefuncs.h"
+#include "parser/parse_func.h"
+#include "parser/parse_type.h"
+#include "pgstat.h"
 #include "utils/builtins.h"
 #include "utils/evtcache.h"
-#include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
 #include "utils/rel.h"
-#include "utils/tqual.h"
 #include "utils/syscache.h"
-#include "tcop/utility.h"
+
+/* Globally visible state variables */
+Oid	EventTriggerTargetOid = InvalidOid;
 
 typedef struct
 {
@@ -52,7 +52,8 @@ typedef enum
 	EVENT_TRIGGER_COMMAND_TAG_NOT_RECOGNIZED
 } event_trigger_command_tag_check_result;
 
-static event_trigger_support_data event_trigger_support[] = {
+static event_trigger_support_data event_trigger_support[] =
+{
 	{ "AGGREGATE", true },
 	{ "CAST", true },
 	{ "CONSTRAINT", true },
@@ -92,12 +93,17 @@ static void AlterEventTriggerOwner_internal(Relation rel,
 											HeapTuple tup,
 											Oid newOwnerId);
 static event_trigger_command_tag_check_result check_ddl_tag(const char *tag);
-static void error_duplicate_filter_variable(const char *defname);
 static Datum filter_list_to_array(List *filterlist);
 static Oid insert_event_trigger_tuple(char *trigname, char *eventname,
-									  Oid evtOwner, Oid funcoid, List *tags);
+									  Oid evtOwner, Oid funcoid,
+									   List *tags, List *contexts);
 static void validate_ddl_tags(const char *filtervar, List *taglist);
+static void validate_ddl_contexts(const char *filtervar, List *ctxlist);
 static void EventTriggerInvoke(List *fn_oid_list, EventTriggerData *trigdata);
+
+static Oid get_objtype_from_parsetree(Node *parsetree);
+static void lookup_objectaddr_to_drop(EventTriggerData *trigdata,
+									  ObjectAddress *address);
 
 /*
  * Create an event trigger.
@@ -111,6 +117,7 @@ CreateEventTrigger(CreateEventTrigStmt *stmt)
 	Oid			evtowner = GetUserId();
 	ListCell   *lc;
 	List	   *tags = NULL;
+	List	   *contexts = NULL;
 
 	/*
 	 * It would be nice to allow database owners or even regular users to do
@@ -125,11 +132,13 @@ CreateEventTrigger(CreateEventTrigStmt *stmt)
 			 errhint("Must be superuser to create an event trigger.")));
 
 	/* Validate event name. */
-	if (strcmp(stmt->eventname, "ddl_command_start") != 0)
+	if (strcmp(stmt->eventname, "ddl_command_start") != 0 &&
+		strcmp(stmt->eventname, "ddl_command_end") != 0 &&
+		strcmp(stmt->eventname, "ddl_command_trace") != 0)
 		ereport(ERROR,
-			(errcode(ERRCODE_SYNTAX_ERROR),
-			 errmsg("unrecognized event name \"%s\"",
-					stmt->eventname)));
+				(errcode(ERRCODE_SYNTAX_ERROR),
+				 errmsg("unrecognized event name \"%s\"",
+						stmt->eventname)));
 
 	/* Validate filter conditions. */
 	foreach (lc, stmt->whenclause)
@@ -138,9 +147,21 @@ CreateEventTrigger(CreateEventTrigStmt *stmt)
 
 		if (strcmp(def->defname, "tag") == 0)
 		{
-			if (tags != NULL)
-				error_duplicate_filter_variable(def->defname);
+			if (tags != NIL)
+				ereport(ERROR,
+						(errcode(ERRCODE_SYNTAX_ERROR),
+						 errmsg("filter variable \"%s\" specified more than once",
+								def->defname)));
 			tags = (List *) def->arg;
+		}
+		else if (strcmp(def->defname, "context") == 0)
+		{
+			if (contexts != NIL)
+				ereport(ERROR,
+						(errcode(ERRCODE_SYNTAX_ERROR),
+						 errmsg("filter variable \"%s\" specified more than once",
+								def->defname)));
+			contexts = (List *) def->arg;
 		}
 		else
 			ereport(ERROR,
@@ -149,8 +170,11 @@ CreateEventTrigger(CreateEventTrigStmt *stmt)
 	}
 
 	/* Validate tag list, if any. */
-	if (strcmp(stmt->eventname, "ddl_command_start") == 0 && tags != NULL)
+	if (strncmp(stmt->eventname, "ddl_command_", 12) == 0 && tags != NULL)
 		validate_ddl_tags("tag", tags);
+
+	if (strncmp(stmt->eventname, "ddl_command_", 12) == 0 && contexts != NULL)
+		validate_ddl_contexts("context", contexts);
 
 	/*
 	 * Give user a nice error message if an event trigger of the same name
@@ -174,7 +198,7 @@ CreateEventTrigger(CreateEventTrigStmt *stmt)
 
 	/* Insert catalog entries. */
 	return insert_event_trigger_tuple(stmt->trigname, stmt->eventname,
-									  evtowner, funcoid, tags);
+									  evtowner, funcoid, tags, contexts);
 }
 
 /*
@@ -205,11 +229,79 @@ validate_ddl_tags(const char *filtervar, List *taglist)
 	}
 }
 
+/*
+ * Validate DDL command contexts: there's no recognized but not supported
+ * values, so the implementation is straightforward.
+ */
+static void
+validate_ddl_contexts(const char *filtervar, List *ctxlist)
+{
+	ListCell   *lc;
+
+	foreach (lc, ctxlist)
+	{
+		const char *context = strVal(lfirst(lc));
+
+		if (!(pg_strcasecmp(context, "TOPLEVEL") == 0
+			  || pg_strcasecmp(context, "QUERY") == 0
+			  || pg_strcasecmp(context, "SUBCOMMAND") == 0
+			  || pg_strcasecmp(context, "GENERATED") == 0))
+			ereport(ERROR,
+					(errcode(ERRCODE_SYNTAX_ERROR),
+					 errmsg("filter value \"%s\" not recognized for filter variable \"%s\"",
+						context, filtervar)));
+	}
+}
+
+/*
+ * Split the command tag into its parts, only for common tags.
+ */
+static CommandTag *
+split_command_tag(const char *tag)
+{
+	CommandTag *ctag = (CommandTag *)palloc(sizeof(CommandTag));
+	ctag->tag = tag;
+
+	/* for our purposes, those are CREATE events */
+	if (pg_strcasecmp(tag, "CREATE TABLE AS") == 0
+		|| pg_strcasecmp(tag, "SELECT INTO") == 0)
+	{
+		ctag->opname = "CREATE";
+		ctag->operation = COMMAND_TAG_CREATE;
+		ctag->obtypename = "TABLE";
+	}
+	else if (pg_strncasecmp(tag, "CREATE ", 7) == 0)
+	{
+		ctag->opname = "CREATE";
+		ctag->operation = COMMAND_TAG_CREATE;
+		ctag->obtypename = ctag->tag + 7;
+	}
+	else if (pg_strncasecmp(tag, "ALTER ", 6) == 0)
+	{
+		ctag->opname = "ALTER";
+		ctag->operation = COMMAND_TAG_ALTER;
+		ctag->obtypename = ctag->tag + 6;
+	}
+	else if (pg_strncasecmp(tag, "DROP ", 5) == 0)
+	{
+		ctag->opname = "DROP";
+		ctag->operation = COMMAND_TAG_DROP;
+		ctag->obtypename = ctag->tag + 5;
+	}
+	else
+	{
+		ctag->opname = NULL;
+		ctag->operation = COMMAND_TAG_OTHER;
+		ctag->obtypename = NULL;
+	}
+	return ctag;
+}
+
 static event_trigger_command_tag_check_result
 check_ddl_tag(const char *tag)
 {
-	const char *obtypename;
-	event_trigger_support_data	   *etsd;
+	event_trigger_support_data	*etsd;
+	CommandTag					*ctag;
 
 	/*
 	 * Handle some idiosyncratic special cases.
@@ -223,20 +315,15 @@ check_ddl_tag(const char *tag)
 	/*
 	 * Otherwise, command should be CREATE, ALTER, or DROP.
 	 */
-	if (pg_strncasecmp(tag, "CREATE ", 7) == 0)
-		obtypename = tag + 7;
-	else if (pg_strncasecmp(tag, "ALTER ", 6) == 0)
-		obtypename = tag + 6;
-	else if (pg_strncasecmp(tag, "DROP ", 5) == 0)
-		obtypename = tag + 5;
-	else
+	ctag = split_command_tag(tag);
+	if (ctag->operation == COMMAND_TAG_OTHER)
 		return EVENT_TRIGGER_COMMAND_TAG_NOT_RECOGNIZED;
 
 	/*
 	 * ...and the object type should be something recognizable.
 	 */
 	for (etsd = event_trigger_support; etsd->obtypename != NULL; etsd++)
-		if (pg_strcasecmp(etsd->obtypename, obtypename) == 0)
+		if (pg_strcasecmp(etsd->obtypename, ctag->obtypename) == 0)
 			break;
 	if (etsd->obtypename == NULL)
 		return EVENT_TRIGGER_COMMAND_TAG_NOT_RECOGNIZED;
@@ -246,30 +333,19 @@ check_ddl_tag(const char *tag)
 }
 
 /*
- * Complain about a duplicate filter variable.
- */
-static void
-error_duplicate_filter_variable(const char *defname)
-{
-	ereport(ERROR,
-			(errcode(ERRCODE_SYNTAX_ERROR),
-			 errmsg("filter variable \"%s\" specified more than once",
-				defname)));
-}
-
-/*
  * Insert the new pg_event_trigger row and record dependencies.
  */
 static Oid
 insert_event_trigger_tuple(char *trigname, char *eventname, Oid evtOwner,
-						   Oid funcoid, List *taglist)
+						   Oid funcoid, List *taglist, List *contexts)
 {
-	Relation tgrel;
+	Relation	tgrel;
 	Oid         trigoid;
 	HeapTuple	tuple;
 	Datum		values[Natts_pg_trigger];
 	bool		nulls[Natts_pg_trigger];
-	ObjectAddress myself, referenced;
+	ObjectAddress myself,
+				  referenced;
 
 	/* Open pg_event_trigger. */
 	tgrel = heap_open(EventTriggerRelationId, RowExclusiveLock);
@@ -287,6 +363,16 @@ insert_event_trigger_tuple(char *trigname, char *eventname, Oid evtOwner,
 	else
 		values[Anum_pg_event_trigger_evttags - 1] =
 			filter_list_to_array(taglist);
+	if (contexts == NIL)
+	{
+		/* The default context is forced to TOPLEVEL */
+		contexts = list_make1(makeString(pstrdup("TOPLEVEL")));
+		values[Anum_pg_event_trigger_evtctxs - 1] =
+			filter_list_to_array(contexts);
+	}
+	else
+		values[Anum_pg_event_trigger_evtctxs - 1] =
+			filter_list_to_array(contexts);
 
 	/* Insert heap tuple. */
 	tuple = heap_form_tuple(tgrel->rd_att, values, nulls);
@@ -424,10 +510,10 @@ AlterEventTrigger(AlterEventTrigStmt *stmt)
 Oid
 RenameEventTrigger(const char *trigname, const char *newname)
 {
-	Oid			evtId;
-	HeapTuple	tup;
-	Relation	rel;
-	Form_pg_event_trigger evtForm;
+	Oid							evtId;
+	HeapTuple					tup;
+	Relation					rel;
+	Form_pg_event_trigger		evtForm;
 
 	rel = heap_open(EventTriggerRelationId, RowExclusiveLock);
 
@@ -573,15 +659,159 @@ get_event_trigger_oid(const char *trigname, bool missing_ok)
 }
 
 /*
+ * Return true when we want to fire given Event Trigger and false otherwise,
+ * filtering on the session replication role and the event trigger registered
+ * tags matching.
+ */
+static bool
+filter_event_trigger(ProcessUtilityContext context,
+					 const char **tag,
+					 EventTriggerCacheItem  *item)
+{
+	/*
+	 * Filter by session replication role, knowing that we never see disabled
+	 * items down here.
+	 */
+	if (SessionReplicationRole == SESSION_REPLICATION_ROLE_REPLICA)
+	{
+		if (item->enabled == TRIGGER_FIRES_ON_ORIGIN)
+			return false;
+	}
+	else
+	{
+		if (item->enabled == TRIGGER_FIRES_ON_REPLICA)
+			return false;
+	}
+
+	/* Filter by tags, if any were specified. */
+	if (item->ntags != 0
+		&& bsearch(tag, item->tag, item->ntags,
+				   sizeof(char *), pg_qsort_strcmp) == NULL)
+		return false;
+
+	/* Filter by context, if any were specified */
+	if (item->nctxs != 0)
+	{
+		char *ctxstr;
+
+		switch (context)
+		{
+			case PROCESS_UTILITY_TOPLEVEL:
+				ctxstr = "TOPLEVEL";
+				break;
+			case PROCESS_UTILITY_QUERY:
+				ctxstr = "QUERY";
+				break;
+			case PROCESS_UTILITY_SUBCOMMAND:
+				ctxstr = "SUBCOMMAND";
+				break;
+			case PROCESS_UTILITY_GENERATED:
+				ctxstr = "GENERATED";
+				break;
+		}
+		if (bsearch(&ctxstr, item->context, item->nctxs,
+					sizeof(char *), pg_qsort_strcmp) == NULL)
+			return false;
+	}
+
+	/* if we reach that point, we're not filtering out this item */
+	return true;
+}
+
+/*
+ * Fill in the basic information about an event trigger we want to fire. It's
+ * better to have that as a separate function so that we get compiler help in
+ * fixing all the call sites when we expand the basic set of information to
+ * publish for all supported events.
+ */
+static void
+build_event_trigger_data(EventTriggerData *trigdata,
+						 const char *event,
+						 Node *parsetree,
+						 CommandTag *ctag,
+						 ProcessUtilityContext context)
+
+{
+	ObjectAddress	address;
+
+	trigdata->type = T_EventTriggerData;
+	trigdata->event = (char *) event;
+	trigdata->parsetree = parsetree;
+	trigdata->ctag = ctag;
+	trigdata->schemaname = NULL;
+	trigdata->objectname = NULL;
+
+	switch (context)
+	{
+		case PROCESS_UTILITY_TOPLEVEL:
+			trigdata->context = "TOPLEVEL";
+			break;
+		case PROCESS_UTILITY_QUERY:
+			trigdata->context = "QUERY";
+			break;
+		case PROCESS_UTILITY_SUBCOMMAND:
+			trigdata->context = "SUBCOMMAND";
+			break;
+		case PROCESS_UTILITY_GENERATED:
+			trigdata->context = "GENERATED";
+			break;
+	}
+
+	address.classId = InvalidOid;
+	address.objectId = InvalidOid;
+	address.objectSubId = 0;
+
+	/*
+	 * OID, Name and Namespace lookup.
+	 *
+	 * We only do those lookups when the current command targets a single
+	 * object and this object exists in the catalogs.
+	 */
+	if (ctag->operation == COMMAND_TAG_DROP &&
+		strcmp(event, "ddl_command_start") == 0)
+	{
+		/*
+		 * In case of a DROP command, we don't have EventTriggerTargetOid,
+		 * so look it up manually.
+		 */
+		lookup_objectaddr_to_drop(trigdata, &address);
+	}
+	else if ((trigdata->ctag->operation == COMMAND_TAG_CREATE ||
+			  trigdata->ctag->operation == COMMAND_TAG_ALTER) &&
+			 strcmp(trigdata->event, "ddl_command_end") == 0)
+	{
+		ObjectType		objtype;
+
+		/*
+		 * For CREATE and ALTER, utility.c has helpfully recorded the
+		 * Oid for us, so we just need to figure out the object type
+		 * from the parse tree.
+		 *
+		 * XXX why not have utility.c set that up as well?
+		 */
+		objtype = get_objtype_from_parsetree(trigdata->parsetree);
+
+		address.objectId = EventTriggerTargetOid;
+		address.classId = get_objtype_classid(objtype);
+		address.objectSubId = 0;
+	}
+
+	trigdata->objectid = EventTriggerTargetOid;
+	get_objname_nspname(&address, &trigdata->objectname,
+						&trigdata->schemaname);
+}
+
+/*
  * Fire ddl_command_start triggers.
  */
 void
-EventTriggerDDLCommandStart(Node *parsetree)
+EventTriggerDDLCommandStart(Node *parsetree, ProcessUtilityContext context)
 {
-	List	   *cachelist;
+	List	   *cachelist, *trace_cachelist;
 	List	   *runlist = NIL;
 	ListCell   *lc;
 	const char *tag;
+	CommandTag *ctag;
 	EventTriggerData	trigdata;
 
 	/*
@@ -602,6 +832,18 @@ EventTriggerDDLCommandStart(Node *parsetree)
 	 */
 	if (!IsUnderPostmaster)
 		return;
+
+	/*
+     * If we wanted to pre-filter event triggers based on context, we would do
+     * it here. As of now, all contexts are interesting for different reasons:
+     *
+     *  PROCESS_UTILITY_TOPLEVEL   is the default
+     *  PROCESS_UTILITY_QUERY      is used in extensions scripts
+     *  PROCESS_UTILITY_SUBCOMMAND is used in CREATE SCHEMA ...
+     *  PROCESS_UTILITY_GENERATED  is used for serial and unique indexes etc
+     *
+     * So we let the user pick his own poison here.
+	 */
 
 	/*
 	 * We want the list of command tags for which this procedure is actually
@@ -630,11 +872,13 @@ EventTriggerDDLCommandStart(Node *parsetree)
 
 	/* Use cache to find triggers for this event; fast exit if none. */
 	cachelist = EventCacheLookup(EVT_DDLCommandStart);
-	if (cachelist == NULL)
+	trace_cachelist = EventCacheLookup(EVT_DDLCommandTrace);
+	if (cachelist == NULL && trace_cachelist == NULL)
 		return;
 
 	/* Get the command tag. */
 	tag = CreateCommandTag(parsetree);
+	ctag = split_command_tag(tag);
 
 	/*
 	 * Filter list of event triggers by command tag, and copy them into
@@ -647,33 +891,89 @@ EventTriggerDDLCommandStart(Node *parsetree)
 	{
 		EventTriggerCacheItem  *item = lfirst(lc);
 
-		/* Filter by session replication role. */
-		if (SessionReplicationRole == SESSION_REPLICATION_ROLE_REPLICA)
-		{
-			if (item->enabled == TRIGGER_FIRES_ON_ORIGIN)
-				continue;
-		}
-		else
-		{
-			if (item->enabled == TRIGGER_FIRES_ON_REPLICA)
-				continue;
-		}
+		if (filter_event_trigger(context, &tag, item))
+			runlist = lappend_oid(runlist, item->fnoid);
+	}
 
-		/* Filter by tags, if any were specified. */
-		if (item->ntags != 0 && bsearch(&tag, item->tag,
-										item->ntags, sizeof(char *),
-										pg_qsort_strcmp) == NULL)
-				continue;
+	/*
+	 * In the case of a DROP operation, the ddl_event_trace is an alias to
+	 * ddl_command_start.
+	 */
+	foreach (lc, trace_cachelist)
+	{
+		EventTriggerCacheItem  *item = lfirst(lc);
 
-		/* We must plan to fire this trigger. */
-		runlist = lappend_oid(runlist, item->fnoid);
+		if (ctag->operation == COMMAND_TAG_DROP &&
+			filter_event_trigger(context, &tag, item))
+			runlist = lappend_oid(runlist, item->fnoid);
 	}
 
 	/* Construct event trigger data. */
-	trigdata.type = T_EventTriggerData;
-	trigdata.event = "ddl_command_start";
-	trigdata.parsetree = parsetree;
-	trigdata.tag = tag;
+	build_event_trigger_data(&trigdata, "ddl_command_start",
+							 parsetree, ctag, context);
+
+	/* Run the triggers. */
+	EventTriggerInvoke(runlist, &trigdata);
+
+	/* Cleanup. */
+	list_free(runlist);
+}
+
+/*
+ * Fire ddl_command_end triggers.
+ */
+void
+EventTriggerDDLCommandEnd(Node *parsetree, ProcessUtilityContext context)
+{
+	List	   *cachelist, *trace_cachelist;
+	List	   *runlist = NIL;
+	ListCell   *lc;
+	const char *tag;
+	CommandTag *ctag;
+	EventTriggerData	trigdata;
+
+	/*
+	 * See EventTriggerDDLCommandStart for a discussion about filtering on
+	 * context before the user has a change to do so
+	 */
+
+	/* Use cache to find triggers for this event; fast exit if none. */
+	cachelist = EventCacheLookup(EVT_DDLCommandEnd);
+	trace_cachelist = EventCacheLookup(EVT_DDLCommandTrace);
+	if (cachelist == NULL && trace_cachelist == NULL)
+		return;
+
+	/* Get the command tag. */
+	tag = CreateCommandTag(parsetree);
+	ctag = split_command_tag(tag);
+
+	/* Filter list of event triggers by command tag. */
+	foreach (lc, cachelist)
+	{
+		EventTriggerCacheItem  *item = lfirst(lc);
+
+		if (filter_event_trigger(context, &tag, item))
+			runlist = lappend_oid(runlist, item->fnoid);
+	}
+
+	/*
+	 * In the case of an ALTER or a CREATE operation, the ddl_event_trace is an
+	 * alias to ddl_command_end.
+	 */
+	foreach (lc, trace_cachelist)
+	{
+		EventTriggerCacheItem  *item = lfirst(lc);
+
+		if ((ctag->operation == COMMAND_TAG_ALTER
+			 || ctag->operation == COMMAND_TAG_CREATE)
+			&& filter_event_trigger(context, &tag, item))
+
+			runlist = lappend_oid(runlist, item->fnoid);
+	}
+
+	/* Construct event trigger data. */
+	build_event_trigger_data(&trigdata, "ddl_command_end",
+							 parsetree, ctag, context);
 
 	/* Run the triggers. */
 	EventTriggerInvoke(runlist, &trigdata);
@@ -754,7 +1054,224 @@ EventTriggerSupportsObjectType(ObjectType obtype)
 			/* no support for event triggers on event triggers */
 			return false;
 		default:
-			break;
+			return true;
 	}
-	return true;
+}
+
+/*
+ * Return the ObjectType corresponding to the object being modified by a
+ * certain parse tree.
+ *
+ * XXX it's unclear how compound commands such as CreateSchema are handled.
+ */
+static Oid
+get_objtype_from_parsetree(Node *parsetree)
+{
+	ObjectType		objtype;
+
+	switch (nodeTag(parsetree))
+	{
+		/* XXX missing T_CreateTableAs */
+		/* XXX missing T_CreateCast */
+		/* XXX missing T_DropOwned */
+		case T_DefineStmt:
+			objtype = ((DefineStmt *) parsetree)->kind;
+			break;
+
+		case T_RenameStmt:
+			objtype = ((RenameStmt *) parsetree)->renameType;
+			break;
+
+		case T_AlterObjectSchemaStmt:
+			objtype = ((AlterObjectSchemaStmt *) parsetree)->objectType;
+			break;
+
+		case T_AlterOwnerStmt:
+			objtype = ((AlterOwnerStmt *) parsetree)->objectType;
+			break;
+
+		case T_CreateSchemaStmt:
+			objtype = OBJECT_SCHEMA;
+			break;
+
+		case T_AlterTableStmt:
+		case T_CreateStmt:
+			objtype = OBJECT_TABLE;
+			break;
+
+		case T_CreateForeignTableStmt:
+			objtype = OBJECT_FOREIGN_TABLE;
+			break;
+
+		case T_CreateFdwStmt:
+		case T_AlterFdwStmt:
+			objtype = OBJECT_FDW;
+			break;
+
+		case T_IndexStmt:
+			objtype = OBJECT_INDEX;
+			break;
+
+		case T_ViewStmt:
+			objtype = OBJECT_VIEW;
+			break;
+
+		case T_CreateSeqStmt:
+		case T_AlterSeqStmt:
+			objtype = OBJECT_SEQUENCE;
+			break;
+
+		case T_CreateExtensionStmt:
+		case T_AlterExtensionStmt:
+		case T_AlterExtensionContentsStmt:
+			objtype = OBJECT_EXTENSION;
+			break;
+
+		case T_CreateForeignServerStmt:
+		case T_AlterForeignServerStmt:
+			objtype = OBJECT_FOREIGN_SERVER;
+			break;
+
+		case T_AlterDomainStmt:
+		case T_CreateDomainStmt:
+			objtype = OBJECT_DOMAIN;
+			break;
+
+		case T_CompositeTypeStmt:
+		case T_CreateEnumStmt:
+		case T_CreateRangeStmt:
+		case T_AlterEnumStmt:
+			objtype = OBJECT_TYPE;
+			break;
+
+		case T_CreateFunctionStmt:
+		case T_AlterFunctionStmt:
+			objtype = OBJECT_FUNCTION;
+			break;
+
+		case T_RuleStmt:
+			objtype = OBJECT_RULE;
+			break;
+
+		case T_CreateTrigStmt:
+			objtype = OBJECT_TRIGGER;
+			break;
+
+		case T_CreatePLangStmt:
+			objtype = OBJECT_LANGUAGE;
+			break;
+
+		case T_CreateConversionStmt:
+			objtype = OBJECT_CONVERSION;
+			break;
+
+		case T_CreateOpClassStmt:
+			objtype = OBJECT_OPCLASS;
+			break;
+
+		case T_CreateOpFamilyStmt:
+		case T_AlterOpFamilyStmt:
+			objtype = OBJECT_OPFAMILY;
+			break;
+
+		case T_AlterTSDictionaryStmt:
+			objtype = OBJECT_TSDICTIONARY;
+			break;
+
+		case T_AlterTSConfigurationStmt:
+			objtype = OBJECT_TSCONFIGURATION;
+			break;
+
+		case T_DropStmt:
+			/* No DROP support in ddl_command_end, fall through */
+
+		case T_CreateCastStmt:
+			/* No support for composite object name, fall through */
+
+		default:
+			/* objectname and schemaname will be NULL */
+			elog(DEBUG1, "unrecognized node type: %d",
+				 (int) nodeTag(parsetree));
+	}
+
+	return objtype;
+}
+
+/*
+ * Fill in the EventTriggerTargetOid for a DROP command and a
+ * "ddl_command_start" Event Trigger: the lookup didn't happen yet and we
+ * still want to provide the user with that information when possible.
+ *
+ * We only do the lookup if the command contains a single element, which is
+ * often forced to be the case as per the grammar (see the drop_type:
+ * production for a list of cases where more than one object per command is
+ * allowed).
+ *
+ * We take no exclusive lock here, the main command will have to do the
+ * name lookup all over again and take appropriate locks down after the
+ * User Defined Code runs anyway, and the commands executed by the User
+ * Defined Code will take their own locks. We only lock the objects here so
+ * that they don't disapear under us in another concurrent transaction,
+ * hence using ShareUpdateExclusiveLock.  XXX this seems prone to lock
+ * escalation troubles.
+ */
+static void
+lookup_objectaddr_to_drop(EventTriggerData *trigdata, ObjectAddress *address)
+{
+	DropStmt *stmt = (DropStmt *) trigdata->parsetree;
+
+	/*
+	 * we only support filling-in information for DROP command if we only
+	 * drop a single object at a time, in all other cases the ObjectID,
+	 * Name and Schema will remain NULL.
+	 */
+	if (list_length(stmt->objects) != 1)
+		return;
+
+	switch (stmt->removeType)
+	{
+		case OBJECT_INDEX:
+		case OBJECT_TABLE:
+		case OBJECT_SEQUENCE:
+		case OBJECT_VIEW:
+		case OBJECT_FOREIGN_TABLE:
+			{
+				RangeVar *rel =
+					makeRangeVarFromNameList((List *) linitial(stmt->objects));
+				Oid				relOid;
+
+				relOid = RangeVarGetRelid(rel, ShareUpdateExclusiveLock, true);
+				/*
+				 * XXX this might return InvalidOid if the table has been dropped.
+				 * What's the correct reaction in that case?
+				 */
+
+				trigdata->objectid = relOid;
+
+				/* now that we have the address OID, get namespace */
+				address->classId = RelationRelationId;
+				address->objectId = relOid;
+				address->objectSubId = 0;
+				break;
+			}
+
+		default:
+			{
+				List	   *objname = linitial(stmt->objects);
+				List	   *objargs = NIL;
+				Relation	relation = NULL;
+				ObjectAddress addr;
+
+				if (stmt->arguments)
+					objargs = linitial(stmt->arguments);
+
+				addr = get_object_address(stmt->removeType,
+										  objname, objargs,
+										  &relation,
+										  ShareUpdateExclusiveLock,
+										  true);
+				*address = addr;
+				break;
+			}
+	}
 }

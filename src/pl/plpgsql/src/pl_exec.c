@@ -803,9 +803,64 @@ plpgsql_exec_event_trigger(PLpgSQL_function *func, EventTriggerData *trigdata)
 	var->freeval = true;
 
 	var = (PLpgSQL_var *) (estate.datums[func->tg_tag_varno]);
-	var->value = CStringGetTextDatum(trigdata->tag);
+	var->value = CStringGetTextDatum(trigdata->ctag->tag);
 	var->isnull = false;
 	var->freeval = true;
+
+	var = (PLpgSQL_var *) (estate.datums[func->tg_context_varno]);
+	var->value = CStringGetTextDatum(trigdata->context);
+	var->isnull = false;
+	var->freeval = true;
+
+	var = (PLpgSQL_var *) (estate.datums[func->tg_objectid_varno]);
+	if (trigdata->objectid != InvalidOid)
+	{
+		var->value = ObjectIdGetDatum(trigdata->objectid);
+		var->isnull = false;
+		var->freeval = true;
+	}
+	else
+		var->isnull = true;
+
+	var = (PLpgSQL_var *) (estate.datums[func->tg_schemaname_varno]);
+	if (trigdata->schemaname != NULL)
+	{
+		var->value = CStringGetTextDatum(trigdata->schemaname);
+		var->isnull = false;
+		var->freeval = true;
+	}
+	else
+		var->isnull = true;
+
+	var = (PLpgSQL_var *) (estate.datums[func->tg_objectname_varno]);
+	if (trigdata->objectname != NULL)
+	{
+		var->value = CStringGetTextDatum(trigdata->objectname);
+		var->isnull = false;
+		var->freeval = true;
+	}
+	else
+		var->isnull = true;
+
+	var = (PLpgSQL_var *) (estate.datums[func->tg_kind_varno]);
+	if (trigdata->ctag->obtypename != NULL)
+	{
+		var->value = CStringGetTextDatum(trigdata->ctag->obtypename);
+		var->isnull = false;
+		var->freeval = true;
+	}
+	else
+		var->isnull = true;
+
+	var = (PLpgSQL_var *) (estate.datums[func->tg_operation_varno]);
+	if (trigdata->ctag->operation != COMMAND_TAG_OTHER)
+	{
+		var->value = CStringGetTextDatum(trigdata->ctag->opname);
+		var->isnull = false;
+		var->freeval = true;
+	}
+	else
+		var->isnull = true;
 
 	/*
 	 * Let the instrumentation plugin peek at this function

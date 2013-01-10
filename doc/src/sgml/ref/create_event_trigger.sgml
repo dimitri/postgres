@@ -70,11 +70,23 @@ CREATE EVENT TRIGGER <replaceable class="PARAMETER">name</replaceable>
     <term><replaceable class="parameter">filter_variable</replaceable></term>
     <listitem>
      <para>
-      The name of a variable used to filter events.  This makes it possible
-      to restrict the firing of the trigger to a subset of the cases in which
-      it is supported.  Currently the only supported
+      The name of a variable of type text used to filter events. This makes
+      it possible to restrict the firing of the trigger to a subset of the
+      cases in which it is supported. Currently the only supported
       <replaceable class="parameter">filter_variable</replaceable>
-      is <literal>TAG</literal>.
+      are <literal>TAG</literal> and <literal>CONTEXT</>.
+     </para>
+     <para>
+      The <literal>TAG</literal> variable is set to the command tag,
+      the <literal>CONTEXT</> variable is set to a value that indicates if
+      the command has been given by a user (<literal>TOPLEVEL</>) or
+      generated interannyl by the system
+      (<literal>GENERATED</>, <literal>QUERY</> or <literal>SUBCOMMAND</>).
+     </para>
+     <para>
+      The <literal>TAG</literal> variable defaults to no filtering being
+      done. The <literal>CONTEXT</> variable defaults
+      to <literal>TOPLEVEL</>.
      </para>
     </listitem>
    </varlistentry>

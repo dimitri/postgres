@@ -723,6 +723,12 @@ typedef struct PLpgSQL_function
 	/* for event triggers */
 	int			tg_event_varno;
 	int			tg_tag_varno;
+	int			tg_context_varno;
+	int			tg_objectid_varno;
+	int			tg_schemaname_varno;
+	int			tg_objectname_varno;
+	int			tg_kind_varno;
+	int			tg_operation_varno;
 
 	PLpgSQL_resolve_option resolve_option;
 
