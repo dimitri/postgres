@@ -18,52 +18,23 @@
 #include "catalog/dependency.h"
 #include "catalog/indexing.h"
 #include "catalog/objectaccess.h"
-#include "catalog/pg_authid.h"
-#include "catalog/pg_cast.h"
-#include "catalog/pg_event_trigger.h"
-#include "catalog/pg_collation.h"
-#include "catalog/pg_constraint.h"
-#include "catalog/pg_conversion.h"
-#include "catalog/pg_database.h"
-#include "catalog/pg_event_trigger.h"
-#include "catalog/pg_extension.h"
-#include "catalog/pg_foreign_data_wrapper.h"
-#include "catalog/pg_foreign_server.h"
-#include "catalog/pg_language.h"
-#include "catalog/pg_largeobject.h"
-#include "catalog/pg_largeobject_metadata.h"
-#include "catalog/pg_namespace.h"
-#include "catalog/pg_opclass.h"
-#include "catalog/pg_opfamily.h"
-#include "catalog/pg_operator.h"
 #include "catalog/pg_proc.h"
-#include "catalog/pg_rewrite.h"
-#include "catalog/pg_tablespace.h"
 #include "catalog/pg_trigger.h"
-#include "catalog/pg_ts_config.h"
-#include "catalog/pg_ts_dict.h"
-#include "catalog/pg_ts_parser.h"
-#include "catalog/pg_ts_template.h"
 #include "catalog/pg_type.h"
 #include "commands/dbcommands.h"
 #include "commands/event_trigger.h"
-#include "commands/extension.h"
 #include "commands/trigger.h"
+#include "miscadmin.h"
 #include "nodes/makefuncs.h"
 #include "parser/parse_func.h"
 #include "parser/parse_type.h"
 #include "pgstat.h"
-#include "miscadmin.h"
-#include "utils/acl.h"
 #include "utils/builtins.h"
 #include "utils/evtcache.h"
-#include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
 #include "utils/memutils.h"
 #include "utils/rel.h"
-#include "utils/tqual.h"
 #include "utils/syscache.h"
-#include "tcop/utility.h"
 
 /* Globally visible state variables */
 Oid	EventTriggerTargetOid = InvalidOid;
@@ -81,7 +52,8 @@ typedef enum
 	EVENT_TRIGGER_COMMAND_TAG_NOT_RECOGNIZED
 } event_trigger_command_tag_check_result;
 
-static event_trigger_support_data event_trigger_support[] = {
+static event_trigger_support_data event_trigger_support[] =
+{
 	{ "AGGREGATE", true },
 	{ "CAST", true },
 	{ "CONSTRAINT", true },
@@ -121,7 +93,6 @@ static void AlterEventTriggerOwner_internal(Relation rel,
 											HeapTuple tup,
 											Oid newOwnerId);
 static event_trigger_command_tag_check_result check_ddl_tag(const char *tag);
-static void error_duplicate_filter_variable(const char *defname);
 static Datum filter_list_to_array(List *filterlist);
 static Oid insert_event_trigger_tuple(char *trigname, char *eventname,
 									  Oid evtOwner, Oid funcoid,
@@ -130,12 +101,9 @@ static void validate_ddl_tags(const char *filtervar, List *taglist);
 static void validate_ddl_contexts(const char *filtervar, List *ctxlist);
 static void EventTriggerInvoke(List *fn_oid_list, EventTriggerData *trigdata);
 
-static void lookup_object_name_and_namespace_from_oid(EventTriggerData *trigdata);
-static Oid get_classid_from_ObjectType(ObjectType obtype);
-static void lookup_object_to_drop_name_and_namespace(EventTriggerData *trigdata);
-
-static void get_object_name_and_namespace(EventTriggerData *trigdata,
-										  ObjectAddress *address);
+static Oid get_objtype_from_parsetree(Node *parsetree);
+static void lookup_objectaddr_to_drop(EventTriggerData *trigdata,
+									  ObjectAddress *address);
 
 /*
  * Create an event trigger.
@@ -164,13 +132,13 @@ CreateEventTrigger(CreateEventTrigStmt *stmt)
 			 errhint("Must be superuser to create an event trigger.")));
 
 	/* Validate event name. */
-	if (! (strcmp(stmt->eventname, "ddl_command_start") == 0
-		   || strcmp(stmt->eventname, "ddl_command_end") == 0
-		   || strcmp(stmt->eventname, "ddl_command_trace") == 0))
+	if (strcmp(stmt->eventname, "ddl_command_start") != 0 &&
+		strcmp(stmt->eventname, "ddl_command_end") != 0 &&
+		strcmp(stmt->eventname, "ddl_command_trace") != 0)
 		ereport(ERROR,
-			(errcode(ERRCODE_SYNTAX_ERROR),
-			 errmsg("unrecognized event name \"%s\"",
-					stmt->eventname)));
+				(errcode(ERRCODE_SYNTAX_ERROR),
+				 errmsg("unrecognized event name \"%s\"",
+						stmt->eventname)));
 
 	/* Validate filter conditions. */
 	foreach (lc, stmt->whenclause)
@@ -179,14 +147,20 @@ CreateEventTrigger(CreateEventTrigStmt *stmt)
 
 		if (strcmp(def->defname, "tag") == 0)
 		{
-			if (tags != NULL)
-				error_duplicate_filter_variable(def->defname);
+			if (tags != NIL)
+				ereport(ERROR,
+						(errcode(ERRCODE_SYNTAX_ERROR),
+						 errmsg("filter variable \"%s\" specified more than once",
+								def->defname)));
 			tags = (List *) def->arg;
 		}
 		else if (strcmp(def->defname, "context") == 0)
 		{
-			if (contexts != NULL)
-				error_duplicate_filter_variable(def->defname);
+			if (contexts != NIL)
+				ereport(ERROR,
+						(errcode(ERRCODE_SYNTAX_ERROR),
+						 errmsg("filter variable \"%s\" specified more than once",
+								def->defname)));
 			contexts = (List *) def->arg;
 		}
 		else
@@ -359,30 +333,19 @@ check_ddl_tag(const char *tag)
 }
 
 /*
- * Complain about a duplicate filter variable.
- */
-static void
-error_duplicate_filter_variable(const char *defname)
-{
-	ereport(ERROR,
-			(errcode(ERRCODE_SYNTAX_ERROR),
-			 errmsg("filter variable \"%s\" specified more than once",
-				defname)));
-}
-
-/*
  * Insert the new pg_event_trigger row and record dependencies.
  */
 static Oid
 insert_event_trigger_tuple(char *trigname, char *eventname, Oid evtOwner,
 						   Oid funcoid, List *taglist, List *contexts)
 {
-	Relation tgrel;
+	Relation	tgrel;
 	Oid         trigoid;
 	HeapTuple	tuple;
 	Datum		values[Natts_pg_trigger];
 	bool		nulls[Natts_pg_trigger];
-	ObjectAddress myself, referenced;
+	ObjectAddress myself,
+				  referenced;
 
 	/* Open pg_event_trigger. */
 	tgrel = heap_open(EventTriggerRelationId, RowExclusiveLock);
@@ -769,10 +732,12 @@ build_event_trigger_data(EventTriggerData *trigdata,
 						 ProcessUtilityContext context)
 
 {
-	trigdata->type		 = T_EventTriggerData;
-	trigdata->event		 = (char *)event;
-	trigdata->parsetree	 = parsetree;
-	trigdata->ctag		 = ctag;
+	ObjectAddress	address;
+
+	trigdata->type = T_EventTriggerData;
+	trigdata->event = (char *) event;
+	trigdata->parsetree = parsetree;
+	trigdata->ctag = ctag;
 	trigdata->schemaname = NULL;
 	trigdata->objectname = NULL;
 
@@ -792,32 +757,48 @@ build_event_trigger_data(EventTriggerData *trigdata,
 			break;
 	}
 
+	address.classId = InvalidOid;
+	address.objectId = InvalidOid;
+	address.objectSubId = 0;
+
 	/*
 	 * OID, Name and Namespace lookup.
 	 *
 	 * We only do those lookups when the current command targets a single
-	 * object and this object do exists in the catalogs.
+	 * object and this object exists in the catalogs.
 	 */
-	if (ctag->operation == COMMAND_TAG_DROP
-		&& strcmp(event, "ddl_command_start") == 0)
+	if (ctag->operation == COMMAND_TAG_DROP &&
+		strcmp(event, "ddl_command_start") == 0)
 	{
 		/*
-		 * In case of a DROP command, we don't have EventTriggerTargetOid
+		 * In case of a DROP command, we don't have EventTriggerTargetOid,
+		 * so look it up manually.
 		 */
-		lookup_object_to_drop_name_and_namespace(trigdata);
+		lookup_objectaddr_to_drop(trigdata, &address);
 	}
-	else if ((trigdata->ctag->operation == COMMAND_TAG_CREATE
-			  || trigdata->ctag->operation == COMMAND_TAG_ALTER)
-			 && strcmp(trigdata->event, "ddl_command_end") == 0)
+	else if ((trigdata->ctag->operation == COMMAND_TAG_CREATE ||
+			  trigdata->ctag->operation == COMMAND_TAG_ALTER) &&
+			 strcmp(trigdata->event, "ddl_command_end") == 0)
 	{
+		ObjectType		objtype;
+
 		/*
-		 * For CREATE and ALTER operations, src/backend/tcop/utility.c sets
-		 * EventTriggerTargetOid for us after calling the function that
-		 * implements the operation, covering "ddl_event_end" in those cases.
+		 * For CREATE and ALTER, utility.c has helpfully recorded the
+		 * Oid for us, so we just need to figure out the object type
+		 * from the parse tree.
+		 *
+		 * XXX why not have utility.c set that up as well?
 		 */
-		trigdata->objectid  = EventTriggerTargetOid;
-		lookup_object_name_and_namespace_from_oid(trigdata);
+		objtype = get_objtype_from_parsetree(trigdata->parsetree);
+
+		address.objectId = EventTriggerTargetOid;
+		address.classId = get_objtype_classid(objtype);
+		address.objectSubId = 0;
 	}
+
+	trigdata->objectid = EventTriggerTargetOid;
+	get_objname_nspname(&address, &trigdata->objectname,
+						&trigdata->schemaname);
 }
 
 /*
@@ -922,9 +903,8 @@ EventTriggerDDLCommandStart(Node *parsetree, ProcessUtilityContext context)
 	{
 		EventTriggerCacheItem  *item = lfirst(lc);
 
-		if (ctag->operation == COMMAND_TAG_DROP
-			&& filter_event_trigger(context, &tag, item))
-
+		if (ctag->operation == COMMAND_TAG_DROP &&
+			filter_event_trigger(context, &tag, item))
 			runlist = lappend_oid(runlist, item->fnoid);
 	}
 
@@ -1074,150 +1054,132 @@ EventTriggerSupportsObjectType(ObjectType obtype)
 			/* no support for event triggers on event triggers */
 			return false;
 		default:
-			break;
+			return true;
 	}
-	return true;
 }
 
 /*
- * Lookup object name and schema from its OID and the command's parsetree
- * nodeTag. Only call this function when EventTriggerTargetOid is set to the
- * object's OID, so when the object actually do exists in the catalogs.
+ * Return the ObjectType corresponding to the object being modified by a
+ * certain parse tree.
+ *
+ * XXX it's unclear how compound commands such as CreateSchema are handled.
  */
-static void
-lookup_object_name_and_namespace_from_oid(EventTriggerData *trigdata)
+static Oid
+get_objtype_from_parsetree(Node *parsetree)
 {
-	ObjectAddress address;
+	ObjectType		objtype;
 
-	address.classId = InvalidOid;
-	address.objectId = EventTriggerTargetOid;
-	address.objectSubId = 0;
-
-	switch (nodeTag(trigdata->parsetree))
+	switch (nodeTag(parsetree))
 	{
+		/* XXX missing T_CreateTableAs */
+		/* XXX missing T_CreateCast */
+		/* XXX missing T_DropOwned */
 		case T_DefineStmt:
-			{
-				DefineStmt *stmt = (DefineStmt *) trigdata->parsetree;
-
-				address.classId = get_classid_from_ObjectType(stmt->kind);
-				break;
-			}
+			objtype = ((DefineStmt *) parsetree)->kind;
+			break;
 
 		case T_RenameStmt:
-			{
-				RenameStmt *stmt = (RenameStmt *) trigdata->parsetree;
-
-				address.classId = get_classid_from_ObjectType(stmt->renameType);
-				break;
-			}
+			objtype = ((RenameStmt *) parsetree)->renameType;
+			break;
 
 		case T_AlterObjectSchemaStmt:
-			{
-				AlterObjectSchemaStmt *stmt =
-					(AlterObjectSchemaStmt *) trigdata->parsetree;
-
-				address.classId = get_classid_from_ObjectType(stmt->objectType);
-				break;
-			}
+			objtype = ((AlterObjectSchemaStmt *) parsetree)->objectType;
+			break;
 
 		case T_AlterOwnerStmt:
-			{
-				AlterOwnerStmt *stmt = (AlterOwnerStmt *) trigdata->parsetree;
-
-				address.classId = get_classid_from_ObjectType(stmt->objectType);
-				break;
-			}
+			objtype = ((AlterOwnerStmt *) parsetree)->objectType;
+			break;
 
 		case T_CreateSchemaStmt:
-			address.classId = get_classid_from_ObjectType(OBJECT_SCHEMA);
+			objtype = OBJECT_SCHEMA;
 			break;
 
 		case T_AlterTableStmt:
 		case T_CreateStmt:
-			address.classId = get_classid_from_ObjectType(OBJECT_TABLE);
+			objtype = OBJECT_TABLE;
 			break;
 
 		case T_CreateForeignTableStmt:
-			address.classId = get_classid_from_ObjectType(OBJECT_FOREIGN_TABLE);
+			objtype = OBJECT_FOREIGN_TABLE;
 			break;
 
 		case T_CreateFdwStmt:
 		case T_AlterFdwStmt:
-			address.classId = get_classid_from_ObjectType(OBJECT_FDW);
+			objtype = OBJECT_FDW;
 			break;
 
 		case T_IndexStmt:
-			address.classId = get_classid_from_ObjectType(OBJECT_INDEX);
+			objtype = OBJECT_INDEX;
 			break;
 
 		case T_ViewStmt:
-			address.classId = get_classid_from_ObjectType(OBJECT_VIEW);
+			objtype = OBJECT_VIEW;
 			break;
 
 		case T_CreateSeqStmt:
 		case T_AlterSeqStmt:
-			address.classId = get_classid_from_ObjectType(OBJECT_SEQUENCE);
+			objtype = OBJECT_SEQUENCE;
 			break;
 
 		case T_CreateExtensionStmt:
 		case T_AlterExtensionStmt:
 		case T_AlterExtensionContentsStmt:
-			address.classId = get_classid_from_ObjectType(OBJECT_EXTENSION);
+			objtype = OBJECT_EXTENSION;
 			break;
 
 		case T_CreateForeignServerStmt:
 		case T_AlterForeignServerStmt:
-			address.classId = get_classid_from_ObjectType(OBJECT_FOREIGN_SERVER);
+			objtype = OBJECT_FOREIGN_SERVER;
 			break;
 
 		case T_AlterDomainStmt:
 		case T_CreateDomainStmt:
-			address.classId = get_classid_from_ObjectType(OBJECT_DOMAIN);
+			objtype = OBJECT_DOMAIN;
 			break;
 
 		case T_CompositeTypeStmt:
 		case T_CreateEnumStmt:
 		case T_CreateRangeStmt:
 		case T_AlterEnumStmt:
-			address.classId = get_classid_from_ObjectType(OBJECT_TYPE);
+			objtype = OBJECT_TYPE;
 			break;
 
 		case T_CreateFunctionStmt:
 		case T_AlterFunctionStmt:
-			address.classId = get_classid_from_ObjectType(OBJECT_FUNCTION);
+			objtype = OBJECT_FUNCTION;
 			break;
 
 		case T_RuleStmt:
-			address.classId = get_classid_from_ObjectType(OBJECT_RULE);
+			objtype = OBJECT_RULE;
 			break;
 
 		case T_CreateTrigStmt:
-			address.classId = get_classid_from_ObjectType(OBJECT_TRIGGER);
+			objtype = OBJECT_TRIGGER;
 			break;
 
 		case T_CreatePLangStmt:
-			address.classId = get_classid_from_ObjectType(OBJECT_LANGUAGE);
+			objtype = OBJECT_LANGUAGE;
 			break;
 
 		case T_CreateConversionStmt:
-			address.classId = get_classid_from_ObjectType(OBJECT_CONVERSION);
+			objtype = OBJECT_CONVERSION;
 			break;
 
 		case T_CreateOpClassStmt:
-			address.classId = get_classid_from_ObjectType(OBJECT_OPCLASS);
+			objtype = OBJECT_OPCLASS;
 			break;
 
 		case T_CreateOpFamilyStmt:
 		case T_AlterOpFamilyStmt:
-			address.classId = get_classid_from_ObjectType(OBJECT_OPFAMILY);
+			objtype = OBJECT_OPFAMILY;
 			break;
 
 		case T_AlterTSDictionaryStmt:
-			address.classId = get_classid_from_ObjectType(OBJECT_TSDICTIONARY);
+			objtype = OBJECT_TSDICTIONARY;
 			break;
 
 		case T_AlterTSConfigurationStmt:
-			address.classId = get_classid_from_ObjectType(OBJECT_TSCONFIGURATION);
+			objtype = OBJECT_TSCONFIGURATION;
 			break;
 
 		case T_DropStmt:
@@ -1229,11 +1191,10 @@ lookup_object_name_and_namespace_from_oid(EventTriggerData *trigdata)
 		default:
 			/* objectname and schemaname will be NULL */
 			elog(DEBUG1, "unrecognized node type: %d",
-				 (int) nodeTag(trigdata->parsetree));
+				 (int) nodeTag(parsetree));
 	}
 
-	/* now lookup the name and namespace */
-	get_object_name_and_namespace(trigdata, &address);
+	return objtype;
 }
 
 /*
@@ -1251,292 +1212,66 @@ lookup_object_name_and_namespace_from_oid(EventTriggerData *trigdata)
  * User Defined Code runs anyway, and the commands executed by the User
  * Defined Code will take their own locks. We only lock the objects here so
  * that they don't disapear under us in another concurrent transaction,
- * hence using ShareUpdateExclusiveLock.
+ * hence using ShareUpdateExclusiveLock.  XXX this seems prone to lock
+ * escalation troubles.
  */
 static void
-lookup_object_to_drop_name_and_namespace(EventTriggerData *trigdata)
+lookup_objectaddr_to_drop(EventTriggerData *trigdata, ObjectAddress *address)
 {
+	DropStmt *stmt = (DropStmt *) trigdata->parsetree;
+
+	/*
+	 * we only support filling-in information for DROP command if we only
+	 * drop a single object at a time, in all other cases the ObjectID,
+	 * Name and Schema will remain NULL.
+	 */
+	if (list_length(stmt->objects) != 1)
+		return;
+
+	switch (stmt->removeType)
 	{
-		DropStmt *stmt = (DropStmt *) trigdata->parsetree;
-
-		/*
-		 * we only support filling-in information for DROP command if we only
-		 * drop a single object at a time, in all other cases the ObjectID,
-		 * Name and Schema will remain NULL.
-		 */
-		if (list_length(stmt->objects) != 1)
-			return;
-
-		switch (stmt->removeType)
-		{
-			case OBJECT_INDEX:
-			case OBJECT_TABLE:
-			case OBJECT_SEQUENCE:
-			case OBJECT_VIEW:
-			case OBJECT_FOREIGN_TABLE:
+		case OBJECT_INDEX:
+		case OBJECT_TABLE:
+		case OBJECT_SEQUENCE:
+		case OBJECT_VIEW:
+		case OBJECT_FOREIGN_TABLE:
 			{
 				RangeVar *rel =
 					makeRangeVarFromNameList((List *) linitial(stmt->objects));
 				Oid				relOid;
-				ObjectAddress	address;
 
 				relOid = RangeVarGetRelid(rel, ShareUpdateExclusiveLock, true);
+				/*
+				 * XXX this might return InvalidOid if the table has been dropped.
+				 * What's the correct reaction in that case?
+				 */
 
-				trigdata->objectid  = relOid;
+				trigdata->objectid = relOid;
 
-				/* now that we have the addressect OID, get namespace */
-				address.classId = RelationRelationId;
-				address.objectId = relOid;
-				address.objectSubId = 0;
-
-				/* now lookup the name and namespace */
-				get_object_name_and_namespace(trigdata, &address);
+				/* now that we have the address OID, get namespace */
+				address->classId = RelationRelationId;
+				address->objectId = relOid;
+				address->objectSubId = 0;
 				break;
 			}
 
-			default:
+		default:
 			{
-				ObjectAddress address;
 				List	   *objname = linitial(stmt->objects);
 				List	   *objargs = NIL;
 				Relation	relation = NULL;
+				ObjectAddress addr;
 
 				if (stmt->arguments)
 					objargs = linitial(stmt->arguments);
 
-				address = get_object_address(stmt->removeType,
-											 objname, objargs,
-											 &relation,
-											 ShareUpdateExclusiveLock,
-											 true);
-
-				trigdata->objectid = address.objectId;
-
-				/* now lookup the name and namespace */
-				get_object_name_and_namespace(trigdata, &address);
+				addr = get_object_address(stmt->removeType,
+										  objname, objargs,
+										  &relation,
+										  ShareUpdateExclusiveLock,
+										  true);
+				*address = addr;
 				break;
 			}
-		}
-	}
-}
-
-/*
- * get_object_name_and_namespace
- *
- * Find the name of the specified object, and the name of the schema containing
- * it if any.
- *
- * This function Could live in src/backend/catalog/objectaddress.c if we
- * decided to export yet another structure to host name/namespace as a return
- * value, or if we wanted to pass in a couple of char **parameters.
- */
-static void
-get_object_name_and_namespace(EventTriggerData *trigdata,
-							  ObjectAddress *address)
-{
-	int					 cache;
-	HeapTuple			 tuple;
-	ObjectPropertyType	*property;
-	bool				 isnull;
-	Name				 objectname;
-
-	if (!OidIsValid(address->classId))
-		return;
-
-	/*
-	 * To lookup a RewriteRelationId (VIEW) we use the system cache for
-	 * pg_class, names RelationRelationId.
-	 */
-	if (address->classId == RewriteRelationId)
-		property = get_object_property_data(RelationRelationId);
-	else
-		property = get_object_property_data(address->classId);
-
-	/*
-	 * First make sure system caches are uptodata, and that we can see current
-	 * catalog information.
-	 */
-	CommandCounterIncrement();
-
-	/* the lookup is mostly done from system caches */
-	cache = property->oid_catcache_id;
-
-	if (cache != -1)
-	{
-		tuple = SearchSysCache1(cache, ObjectIdGetDatum(address->objectId));
-		if (!HeapTupleIsValid(tuple))
-			elog(ERROR, "cache lookup failed for cache %d oid %u",
-				 cache, address->objectId);
-
-		/* some objects do not live in a namespace */
-		if (property->attnum_namespace != InvalidAttrNumber)
-		{
-			Oid		namespaceId;
-
-			namespaceId = DatumGetObjectId(
-				SysCacheGetAttr(cache,
-								tuple,
-								property->attnum_namespace,
-								&isnull));
-
-			trigdata->schemaname = get_namespace_name(namespaceId);
-		}
-
-		/* now fetch the object's name */
-		objectname = DatumGetName(
-			SysCacheGetAttr(cache,
-							tuple,
-							property->attnum_name,
-							&isnull));
-
-		trigdata->objectname = pstrdup(NameStr(*objectname));
-
-		/* cleanup */
-		ReleaseSysCache(tuple);
-	}
-	else
-	{
-		/*
-		 * No system cache for name lookup, the cases here are meant to
-		 * match ObjectProperty[] entries with oid_catcache_id = -1. See
-		 * src/backend/catalog/objectaddress.c
-		 */
-		switch (address->classId)
-		{
-			case CastRelationId:
-				/* we don't handle composite names */
-				break;
-
-			case ExtensionRelationId:
-				/* extension objects do not live in a schema */
-				trigdata->objectname = get_extension_name(address->objectId);
-				break;
-
-			case LargeObjectMetadataRelationId:
-				/* we don't support event trigger on Large Objects */
-				break;
-
-			case RewriteRelationId:
-				/* special cased to use main relation cache */
-				break;
-
-			case TriggerRelationId:
-			{
-				Oid namespaceId = get_object_namespace(address);
-				trigdata->schemaname = get_namespace_name(namespaceId);
-				trigdata->objectname = get_trigger_name(address->objectId);
-				break;
-			}
-
-			default:
-				/* can't happen situation */
-				elog(DEBUG1, "unexpected lookup failure for class %u",
-					 address->classId);
-				break;
-		}
-	}
-}
-
-/*
- * We already have the object OID in EventTriggerTargetOid, to form the
- * ObjectAddress in order to get to the object's name and namespace we need the
- * classid.
- */
-static Oid
-get_classid_from_ObjectType(ObjectType obtype)
-{
-	switch (obtype)
-	{
-		case OBJECT_INDEX:
-		case OBJECT_SEQUENCE:
-		case OBJECT_TABLE:
-		case OBJECT_VIEW:
-		case OBJECT_FOREIGN_TABLE:
-			return RelationRelationId;
-
-		case OBJECT_COLUMN:
-			/* the command address a relation, not a column directly */
-			return RelationRelationId;
-
-		case OBJECT_RULE:
-			return RewriteRelationId;
-
-		case OBJECT_TRIGGER:
-			return RewriteRelationId;
-
-		case OBJECT_CONSTRAINT:
-			return ConstraintRelationId;
-
-		case OBJECT_DATABASE:
-			return DatabaseRelationId;
-
-		case OBJECT_EXTENSION:
-			return ExtensionRelationId;
-
-		case OBJECT_TABLESPACE:
-			return TableSpaceRelationId;
-
-		case OBJECT_ROLE:
-			return AuthIdRelationId;
-
-		case OBJECT_SCHEMA:
-			return NamespaceRelationId;
-
-		case OBJECT_LANGUAGE:
-			return LanguageRelationId;
-
-		case OBJECT_FDW:
-			return ForeignDataWrapperRelationId;
-
-		case OBJECT_FOREIGN_SERVER:
-			return ForeignServerRelationId;
-
-		case OBJECT_EVENT_TRIGGER:
-			return EventTriggerRelationId;
-
-		case OBJECT_TYPE:
-		case OBJECT_DOMAIN:
-			return TypeRelationId;
-
-		case OBJECT_AGGREGATE:
-		case OBJECT_FUNCTION:
-			return ProcedureRelationId;
-
-		case OBJECT_OPERATOR:
-			return OperatorRelationId;
-
-		case OBJECT_COLLATION:
-			return CollationRelationId;
-
-		case OBJECT_CONVERSION:
-			return ConversionRelationId;
-
-		case OBJECT_OPCLASS:
-			return OperatorClassRelationId;
-
-		case OBJECT_OPFAMILY:
-			return OperatorFamilyRelationId;
-
-		case OBJECT_LARGEOBJECT:
-			return LargeObjectRelationId;
-
-		case OBJECT_CAST:
-			return CastRelationId;
-
-		case OBJECT_TSPARSER:
-			return TSParserRelationId;
-
-		case OBJECT_TSDICTIONARY:
-			return TSDictionaryRelationId;
-
-		case OBJECT_TSTEMPLATE:
-			return TSTemplateRelationId;
-
-		case OBJECT_TSCONFIGURATION:
-			return TSConfigRelationId;
-
-		default:
-			elog(ERROR, "unrecognized objtype: %d", (int) obtype);
-			return InvalidOid;	/* keep compiler quiet */
 	}
 }

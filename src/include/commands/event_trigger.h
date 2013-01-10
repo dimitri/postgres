@@ -44,7 +44,8 @@ typedef enum {
  * split_command_tag which should be the only thing editing those pieces of
  * information.
  */
-typedef struct {
+typedef struct CommandTag
+{
 	const char			*tag;
 	const char			*opname;
 	CommandTagOperation	 operation;
@@ -59,7 +60,7 @@ typedef struct EventTriggerData
 	Node	   *parsetree;			/* parse tree */
 	CommandTag *ctag;				/* command tag */
 	Oid         objectid;			/* main target object's id */
-	char       *context;			/* ProcessUtilityContext */
+	const char *context;			/* ProcessUtilityContext */
 	char	   *schemaname;			/* schema name of the object */
 	char	   *objectname;			/* object name */
 } EventTriggerData;

@@ -30,6 +30,7 @@
 #include "catalog/pg_extension.h"
 #include "catalog/pg_foreign_data_wrapper.h"
 #include "catalog/pg_foreign_server.h"
+#include "catalog/pg_foreign_table.h"
 #include "catalog/pg_language.h"
 #include "catalog/pg_largeobject.h"
 #include "catalog/pg_largeobject_metadata.h"
@@ -68,6 +69,25 @@
 #include "utils/lsyscache.h"
 #include "utils/syscache.h"
 #include "utils/tqual.h"
+
+/*
+ * ObjectProperty
+ *
+ * This array provides a common part of system object structure; to help
+ * consolidate routines to handle various kind of object classes.
+ */
+typedef struct
+{
+	Oid			class_oid;		/* oid of catalog */
+	Oid			oid_index_oid;	/* oid of index on system oid column */
+	int			oid_catcache_id;	/* id of catcache on system oid column	*/
+	int			name_catcache_id;		/* id of catcache on (name,namespace) */
+	AttrNumber	attnum_name;	/* attnum of name field */
+	AttrNumber	attnum_namespace;		/* attnum of namespace field */
+	AttrNumber	attnum_owner;	/* attnum of owner field */
+	AttrNumber	attnum_acl;		/* attnum of acl field */
+	AclObjectKind acl_kind;		/* ACL_KIND_* of this object type */
+} ObjectPropertyType;
 
 static ObjectPropertyType ObjectProperty[] =
 {
@@ -373,6 +393,7 @@ static ObjectAddress get_object_address_type(ObjectType objtype,
 						List *objname, bool missing_ok);
 static ObjectAddress get_object_address_opcf(ObjectType objtype, List *objname,
 						List *objargs, bool missing_ok);
+static ObjectPropertyType *get_object_property_data(Oid class_id);
 
 /*
  * Translate an object name and arguments (as passed by the parser) to an
@@ -623,6 +644,84 @@ get_object_address(ObjectType objtype, List *objname, List *objargs,
 	/* Return the object address and the relation. */
 	*relp = relation;
 	return address;
+}
+
+/*
+ * For a given object type, return the same class Id that would be
+ * used in dependency tracking.
+ */
+Oid
+get_objtype_classid(ObjectType objtype)
+{
+	switch (objtype)
+	{
+		case OBJECT_AGGREGATE:
+		case OBJECT_FUNCTION:
+			return ProcedureRelationId;
+		case OBJECT_ATTRIBUTE:
+			return AttributeRelationId;
+		case OBJECT_CAST:
+			return CastRelationId;
+		case OBJECT_COLUMN:
+			return AttributeRelationId;
+		case OBJECT_CONSTRAINT:
+			return ConstraintRelationId;
+		case OBJECT_COLLATION:
+			return CollationRelationId;
+		case OBJECT_CONVERSION:
+			return ConversionRelationId;
+		case OBJECT_DATABASE:
+			return DatabaseRelationId;
+		case OBJECT_DOMAIN:
+		case OBJECT_TYPE:
+			return TypeRelationId;
+		case OBJECT_EVENT_TRIGGER:
+			return EventTriggerRelationId;
+		case OBJECT_EXTENSION:
+			return ExtensionRelationId;
+		case OBJECT_FDW:
+			return ForeignDataWrapperRelationId;
+		case OBJECT_FOREIGN_SERVER:
+			return ForeignServerRelationId;
+		case OBJECT_FOREIGN_TABLE:
+			return ForeignTableRelationId;
+		case OBJECT_INDEX:
+		case OBJECT_SEQUENCE:
+		case OBJECT_TABLE:
+		case OBJECT_VIEW:
+			return RelationRelationId;
+		case OBJECT_LANGUAGE:
+			return LanguageRelationId;
+		case OBJECT_LARGEOBJECT:
+			return LargeObjectRelationId;
+		case OBJECT_OPCLASS:
+			return OperatorClassRelationId;
+		case OBJECT_OPERATOR:
+			return OperatorRelationId;
+		case OBJECT_OPFAMILY:
+			return OperatorFamilyRelationId;
+		case OBJECT_ROLE:
+			return AuthIdRelationId;
+		case OBJECT_RULE:
+			return RewriteRelationId;
+		case OBJECT_SCHEMA:
+			return NamespaceRelationId;
+		case OBJECT_TABLESPACE:
+			return TableSpaceRelationId;
+		case OBJECT_TRIGGER:
+			return TriggerRelationId;
+		case OBJECT_TSCONFIGURATION:
+			return TSConfigRelationId;
+		case OBJECT_TSDICTIONARY:
+			return TSDictionaryRelationId;
+		case OBJECT_TSPARSER:
+			return TSParserRelationId;
+		case OBJECT_TSTEMPLATE:
+			return TSTemplateRelationId;
+		default:
+			elog(ERROR, "unrecognized objtype: %d", (int) objtype);
+			return InvalidOid;	/* placate compiler */
+	}
 }
 
 /*
@@ -1247,6 +1346,105 @@ get_object_namespace(const ObjectAddress *address)
 }
 
 /*
+ * Set objname and nspname to the object name and schema name, respectively, of
+ * the object referenced by address.
+ *
+ * Note that nspname might be untouched if the object class does not have a
+ * namespace associated with it.
+ */
+void
+get_objname_nspname(const ObjectAddress *address,
+					char **objname, char **nspname)
+{
+	ObjectPropertyType	*property;
+	Oid			cache;
+	bool		isnull;
+
+	if (!OidIsValid(address->classId))
+		return;
+
+	property = get_object_property_data(address->classId);
+
+	/* If there's a catcache-by-OID, use it */
+	cache = property->oid_catcache_id;
+	if (cache != -1)
+	{
+		HeapTuple	tuple;
+		Datum		nameDatum;
+
+
+		tuple = SearchSysCache1(cache, ObjectIdGetDatum(address->objectId));
+		if (!HeapTupleIsValid(tuple))
+			elog(ERROR, "cache lookup failed for cache %d oid %u",
+				 cache, address->objectId);
+
+		/*
+		 * Fetch namespace name for objects that do have one
+		 */
+		if (property->attnum_namespace != InvalidAttrNumber)
+		{
+			Datum	nspDatum;
+			Oid		namespaceId;
+
+			nspDatum = SysCacheGetAttr(cache,
+						   			   tuple,
+							   		   property->attnum_namespace,
+								   	   &isnull);
+			namespaceId = DatumGetObjectId(nspDatum);
+			*nspname = get_namespace_name(namespaceId);
+		}
+
+		/* now fetch the object's name */
+		nameDatum = SysCacheGetAttr(cache,
+									tuple,
+									property->attnum_name,
+									&isnull);
+		*objname = pstrdup(NameStr(*DatumGetName(nameDatum)));
+
+		/* cleanup */
+		ReleaseSysCache(tuple);
+	}
+	else
+	{
+		/*
+		 * No system cache for name lookup, the cases here are meant to
+		 * match ObjectProperty[] entries with oid_catcache_id = -1. See
+		 * src/backend/catalog/objectaddress.c
+		 */
+		switch (address->classId)
+		{
+			case CastRelationId:
+				/* we don't handle composite names */
+				break;
+
+			case ExtensionRelationId:
+				/* extension objects do not live in a schema */
+				*objname = get_extension_name(address->objectId);
+				break;
+
+			case LargeObjectMetadataRelationId:
+				/* we don't support event trigger on large objects */
+				break;
+
+			case TriggerRelationId:
+			{
+				Oid namespaceId = get_object_namespace(address);
+
+				*nspname = get_namespace_name(namespaceId);
+				*objname = get_trigger_name(address->objectId);
+				break;
+			}
+
+			default:
+				/* can't happen situation */
+				elog(DEBUG1, "unexpected lookup failure for class %u",
+					 address->classId);
+				break;
+		}
+	}
+}
+
+/*
  * Interfaces to reference fields of ObjectPropertyType
  */
 Oid
@@ -1316,7 +1514,7 @@ get_object_aclkind(Oid class_id)
 /*
  * Find ObjectProperty structure by class_id.
  */
-ObjectPropertyType *
+static ObjectPropertyType *
 get_object_property_data(Oid class_id)
 {
 	static ObjectPropertyType *prop_last = NULL;

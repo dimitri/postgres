@@ -50,6 +50,9 @@ typedef struct
 	BulkInsertState bistate;	/* bulk insert state */
 } DR_intorel;
 
+/* the OID of the created table, for ExecCreateTableAs consumption */
+static Oid	CreateAsRelid = InvalidOid;
+
 static void intorel_startup(DestReceiver *self, int operation, TupleDesc typeinfo);
 static void intorel_receive(TupleTableSlot *slot, DestReceiver *self);
 static void intorel_shutdown(DestReceiver *self);
@@ -59,13 +62,14 @@ static void intorel_destroy(DestReceiver *self);
 /*
  * ExecCreateTableAs -- execute a CREATE TABLE AS command
  */
-void
+Oid
 ExecCreateTableAs(CreateTableAsStmt *stmt, const char *queryString,
 				  ParamListInfo params, char *completionTag)
 {
 	Query	   *query = (Query *) stmt->query;
 	IntoClause *into = stmt->into;
 	DestReceiver *dest;
+	Oid			relOid;
 	List	   *rewritten;
 	PlannedStmt *plan;
 	QueryDesc  *queryDesc;
@@ -88,7 +92,9 @@ ExecCreateTableAs(CreateTableAsStmt *stmt, const char *queryString,
 
 		ExecuteQuery(estmt, into, queryString, params, dest, completionTag);
 
-		return;
+		relOid = CreateAsRelid;
+		CreateAsRelid = InvalidOid;
+		return relOid;
 	}
 	Assert(query->commandType == CMD_SELECT);
 
@@ -156,6 +162,11 @@ ExecCreateTableAs(CreateTableAsStmt *stmt, const char *queryString,
 	FreeQueryDesc(queryDesc);
 
 	PopActiveSnapshot();
+
+	relOid = CreateAsRelid;
+	CreateAsRelid = InvalidOid;
+
+	return relOid;
 }
 
 /*
@@ -352,6 +363,9 @@ intorel_startup(DestReceiver *self, int operation, TupleDesc typeinfo)
 	 */
 	myState->rel = intoRelationDesc;
 	myState->output_cid = GetCurrentCommandId(true);
+
+	/* and remember the new relation's OID for ExecCreateTableAs */
+	CreateAsRelid = RelationGetRelid(myState->rel);
 
 	/*
 	 * We can skip WAL-logging the insertions, unless PITR or streaming
