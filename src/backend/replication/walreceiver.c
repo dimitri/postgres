@@ -338,7 +338,7 @@ WalReceiverMain(void)
 		 * ensure that a unique timeline id is chosen in every case, but let's
 		 * avoid the confusion of timeline id collisions where we can.
 		 */
-		WalRcvFetchTimeLineHistoryFiles(startpointTLI + 1, primaryTLI);
+		WalRcvFetchTimeLineHistoryFiles(startpointTLI, primaryTLI);
 
 		/*
 		 * Start streaming.
@@ -431,7 +431,9 @@ WalReceiverMain(void)
 						{
 							ereport(LOG,
 									(errmsg("replication terminated by primary server"),
-									 errdetail("End of WAL reached on timeline %u", startpointTLI)));
+									 errdetail("End of WAL reached on timeline %u at %X/%X",
+											   startpointTLI,
+											   (uint32) (LogstreamResult.Write >> 32), (uint32) LogstreamResult.Write)));
 							endofwal = true;
 							break;
 						}
@@ -503,8 +505,15 @@ WalReceiverMain(void)
 			 * our side, too.
 			 */
 			EnableWalRcvImmediateExit();
-			walrcv_endstreaming();
+			walrcv_endstreaming(&primaryTLI);
 			DisableWalRcvImmediateExit();
+
+			/*
+			 * If the server had switched to a new timeline that we didn't know
+			 * about when we began streaming, fetch its timeline history file
+			 * now.
+			 */
+			WalRcvFetchTimeLineHistoryFiles(startpointTLI, primaryTLI);
 		}
 		else
 			ereport(LOG,
@@ -627,7 +636,8 @@ WalRcvFetchTimeLineHistoryFiles(TimeLineID first, TimeLineID last)
 
 	for (tli = first; tli <= last; tli++)
 	{
-		if (!existsTimeLineHistory(tli))
+		/* there's no history file for timeline 1 */
+		if (tli != 1 && !existsTimeLineHistory(tli))
 		{
 			char	   *fname;
 			char	   *content;

@@ -126,7 +126,8 @@ CreateEventTrigger(CreateEventTrigStmt *stmt)
 			 errhint("Must be superuser to create an event trigger.")));
 
 	/* Validate event name. */
-	if (strcmp(stmt->eventname, "ddl_command_start") != 0)
+	if (strcmp(stmt->eventname, "ddl_command_start") != 0 &&
+		strcmp(stmt->eventname, "ddl_command_end") != 0)
 		ereport(ERROR,
 			(errcode(ERRCODE_SYNTAX_ERROR),
 			 errmsg("unrecognized event name \"%s\"",
@@ -418,52 +419,6 @@ AlterEventTrigger(AlterEventTrigStmt *stmt)
 	return trigoid;
 }
 
-
-/*
- * Rename event trigger
- */
-Oid
-RenameEventTrigger(const char *trigname, const char *newname)
-{
-	Oid			evtId;
-	HeapTuple	tup;
-	Relation	rel;
-	Form_pg_event_trigger evtForm;
-
-	rel = heap_open(EventTriggerRelationId, RowExclusiveLock);
-
-	/* newname must be available */
-	if (SearchSysCacheExists1(EVENTTRIGGERNAME, CStringGetDatum(newname)))
-		ereport(ERROR,
-				(errcode(ERRCODE_DUPLICATE_OBJECT),
-				 errmsg("event trigger \"%s\" already exists", newname)));
-
-	/* trigname must exists */
-	tup = SearchSysCacheCopy1(EVENTTRIGGERNAME, CStringGetDatum(trigname));
-	if (!HeapTupleIsValid(tup))
-		ereport(ERROR,
-				(errcode(ERRCODE_UNDEFINED_OBJECT),
-				 errmsg("event trigger \"%s\" does not exist", trigname)));
-	if (!pg_event_trigger_ownercheck(HeapTupleGetOid(tup), GetUserId()))
-		aclcheck_error(ACLCHECK_NOT_OWNER, ACL_KIND_EVENT_TRIGGER,
-					   trigname);
-
-	evtId = HeapTupleGetOid(tup);
-
-	evtForm = (Form_pg_event_trigger) GETSTRUCT(tup);
-
-	/* tuple is a copy, so we can rename it now */
-	namestrcpy(&(evtForm->evtname), newname);
-	simple_heap_update(rel, &tup->t_self, tup);
-	CatalogUpdateIndexes(rel, tup);
-
-	heap_freetuple(tup);
-	heap_close(rel, RowExclusiveLock);
-
-	return evtId;
-}
-
-
 /*
  * Change event trigger's owner -- by name
  */
@@ -574,6 +529,39 @@ get_event_trigger_oid(const char *trigname, bool missing_ok)
 }
 
 /*
+ * Return true when we want to fire given Event Trigger and false otherwise,
+ * filtering on the session replication role and the event trigger registered
+ * tags matching.
+ */
+static bool
+filter_event_trigger(const char **tag, EventTriggerCacheItem  *item)
+{
+	/*
+	 * Filter by session replication role, knowing that we never see disabled
+	 * items down here.
+	 */
+	if (SessionReplicationRole == SESSION_REPLICATION_ROLE_REPLICA)
+	{
+		if (item->enabled == TRIGGER_FIRES_ON_ORIGIN)
+			return false;
+	}
+	else
+	{
+		if (item->enabled == TRIGGER_FIRES_ON_REPLICA)
+			return false;
+	}
+
+	/* Filter by tags, if any were specified. */
+	if (item->ntags != 0 && bsearch(&tag, item->tag,
+									item->ntags, sizeof(char *),
+									pg_qsort_strcmp) == NULL)
+		return false;
+
+	/* if we reach that point, we're not filtering out this item */
+	return true;
+}
+
+/*
  * Fire ddl_command_start triggers.
  */
 void
@@ -648,26 +636,11 @@ EventTriggerDDLCommandStart(Node *parsetree)
 	{
 		EventTriggerCacheItem  *item = lfirst(lc);
 
-		/* Filter by session replication role. */
-		if (SessionReplicationRole == SESSION_REPLICATION_ROLE_REPLICA)
+		if (filter_event_trigger(&tag, item))
 		{
-			if (item->enabled == TRIGGER_FIRES_ON_ORIGIN)
-				continue;
+			/* We must plan to fire this trigger. */
+			runlist = lappend_oid(runlist, item->fnoid);
 		}
-		else
-		{
-			if (item->enabled == TRIGGER_FIRES_ON_REPLICA)
-				continue;
-		}
-
-		/* Filter by tags, if any were specified. */
-		if (item->ntags != 0 && bsearch(&tag, item->tag,
-										item->ntags, sizeof(char *),
-										pg_qsort_strcmp) == NULL)
-				continue;
-
-		/* We must plan to fire this trigger. */
-		runlist = lappend_oid(runlist, item->fnoid);
 	}
 
 	/* Construct event trigger data. */
@@ -675,6 +648,92 @@ EventTriggerDDLCommandStart(Node *parsetree)
 	trigdata.event = "ddl_command_start";
 	trigdata.parsetree = parsetree;
 	trigdata.tag = tag;
+
+	/* Run the triggers. */
+	EventTriggerInvoke(runlist, &trigdata);
+
+	/* Cleanup. */
+	list_free(runlist);
+
+	/*
+	 * Make sure anything the event triggers did will be visible to
+	 * the main command.
+	 */
+	CommandCounterIncrement();
+}
+
+/*
+ * Fire ddl_command_end triggers.
+ */
+void
+EventTriggerDDLCommandEnd(Node *parsetree)
+{
+	List	   *cachelist;
+	List	   *runlist = NIL;
+	ListCell   *lc;
+	const char *tag;
+	EventTriggerData	trigdata;
+
+	/*
+	 * See EventTriggerDDLCommandStart for a discussion about why event
+	 * triggers are disabled in single user mode.
+	 */
+	if (!IsUnderPostmaster)
+		return;
+
+	/*
+	 * See EventTriggerDDLCommandStart for a discussion about why this check is
+	 * important.
+	 *
+	 */
+#ifdef USE_ASSERT_CHECKING
+	if (assert_enabled)
+	{
+		const char *dbgtag;
+
+		dbgtag = CreateCommandTag(parsetree);
+		if (check_ddl_tag(dbgtag) != EVENT_TRIGGER_COMMAND_TAG_OK)
+			elog(ERROR, "unexpected command tag \"%s\"", dbgtag);
+	}
+#endif
+
+	/* Use cache to find triggers for this event; fast exit if none. */
+	cachelist = EventCacheLookup(EVT_DDLCommandEnd);
+	if (cachelist == NULL)
+		return;
+
+	/* Get the command tag. */
+	tag = CreateCommandTag(parsetree);
+
+	/*
+	 * Filter list of event triggers by command tag, and copy them into
+	 * our memory context.  Once we start running the command trigers, or
+	 * indeed once we do anything at all that touches the catalogs, an
+	 * invalidation might leave cachelist pointing at garbage, so we must
+	 * do this before we can do much else.
+	 */
+	foreach (lc, cachelist)
+	{
+		EventTriggerCacheItem  *item = lfirst(lc);
+
+		if (filter_event_trigger(&tag, item))
+		{
+			/* We must plan to fire this trigger. */
+			runlist = lappend_oid(runlist, item->fnoid);
+		}
+	}
+
+	/* Construct event trigger data. */
+	trigdata.type = T_EventTriggerData;
+	trigdata.event = "ddl_command_end";
+	trigdata.parsetree = parsetree;
+	trigdata.tag = tag;
+
+	/*
+	 * Make sure anything the main command did will be visible to the
+	 * event triggers.
+	 */
+	CommandCounterIncrement();
 
 	/* Run the triggers. */
 	EventTriggerInvoke(runlist, &trigdata);
@@ -692,6 +751,7 @@ EventTriggerInvoke(List *fn_oid_list, EventTriggerData *trigdata)
 	MemoryContext	context;
 	MemoryContext	oldcontext;
 	ListCell	   *lc;
+	bool			first = true;
 
 	/*
 	 * Let's evaluate event triggers in their own memory context, so
@@ -712,6 +772,17 @@ EventTriggerInvoke(List *fn_oid_list, EventTriggerData *trigdata)
 		FunctionCallInfoData fcinfo;
 		PgStat_FunctionCallUsage fcusage;
 
+		/*
+		 * We want each event trigger to be able to see the results of
+		 * the previous event trigger's action.  Caller is responsible
+		 * for any command-counter increment that is needed between the
+		 * event trigger and anything else in the transaction.
+		 */
+		if (first)
+			first = false;
+		else
+			CommandCounterIncrement();
+
 		/* Look up the function */
 		fmgr_info(fnoid, &flinfo);
 
@@ -724,13 +795,6 @@ EventTriggerInvoke(List *fn_oid_list, EventTriggerData *trigdata)
 
 		/* Reclaim memory. */
 		MemoryContextReset(context);
-
-		/*
-		 * We want each event trigger to be able to see the results of
-		 * the previous event trigger's action, and we want the main
-		 * command to be able to see the results of all event triggers.
-		 */
-		CommandCounterIncrement();
 	}
 
 	/* Restore old memory context and delete the temporary one. */

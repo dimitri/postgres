@@ -393,7 +393,7 @@ range_constructor3(PG_FUNCTION_ARGS)
 	if (PG_ARGISNULL(2))
 		ereport(ERROR,
 				(errcode(ERRCODE_DATA_EXCEPTION),
-			   errmsg("range constructor flags argument must not be NULL")));
+			   errmsg("range constructor flags argument must not be null")));
 
 	flags = range_parse_flags(text_to_cstring(PG_GETARG_TEXT_P(2)));
 
@@ -1966,7 +1966,7 @@ range_parse(const char *string, char *flags, char **lbound_str,
 					(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
 					 errmsg("malformed range literal: \"%s\"",
 							string),
-					 errdetail("Junk after \"empty\" keyword.")));
+					 errdetail("Junk after \"empty\" key word.")));
 
 		return;
 	}

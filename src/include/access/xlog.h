@@ -267,7 +267,7 @@ extern bool XLogNeedsFlush(XLogRecPtr RecPtr);
 extern int XLogFileInit(XLogSegNo segno, bool *use_existent, bool use_lock);
 extern int	XLogFileOpen(XLogSegNo segno);
 
-extern void XLogGetLastRemoved(XLogSegNo *segno);
+extern void CheckXLogRemoved(XLogSegNo segno, TimeLineID tli);
 extern void XLogSetAsyncXactLSN(XLogRecPtr record);
 
 extern Buffer RestoreBackupBlock(XLogRecPtr lsn, XLogRecord *record,
@@ -317,8 +317,10 @@ extern void SetWalWriterSleeping(bool sleeping);
 /*
  * Starting/stopping a base backup
  */
-extern XLogRecPtr do_pg_start_backup(const char *backupidstr, bool fast, char **labelfile);
-extern XLogRecPtr do_pg_stop_backup(char *labelfile, bool waitforarchive);
+extern XLogRecPtr do_pg_start_backup(const char *backupidstr, bool fast,
+				   TimeLineID *starttli_p, char **labelfile);
+extern XLogRecPtr do_pg_stop_backup(char *labelfile, bool waitforarchive,
+				  TimeLineID *stoptli_p);
 extern void do_pg_abort_backup(void);
 
 /* File path names (all relative to $PGDATA) */

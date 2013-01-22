@@ -3653,6 +3653,9 @@ PostgresMain(int argc, char *argv[], const char *username)
 		 * Create lockfile for data directory.
 		 */
 		CreateDataDirLockFile(false);
+
+		/* Initialize MaxBackends (if under postmaster, was done already) */
+		InitializeMaxBackends();
 	}
 
 	/* Early initialization */

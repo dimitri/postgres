@@ -32,6 +32,7 @@
 #include "utils/builtins.h"
 #include "utils/elog.h"
 #include "utils/ps_status.h"
+#include "pgtar.h"
 
 typedef struct
 {
@@ -54,15 +55,14 @@ static void SendBackupHeader(List *tablespaces);
 static void base_backup_cleanup(int code, Datum arg);
 static void perform_base_backup(basebackup_options *opt, DIR *tblspcdir);
 static void parse_basebackup_options(List *options, basebackup_options *opt);
-static void SendXlogRecPtrResult(XLogRecPtr ptr);
+static void SendXlogRecPtrResult(XLogRecPtr ptr, TimeLineID tli);
+static int compareWalFileNames(const void *a, const void *b);
 
 /* Was the backup currently in-progress initiated in recovery mode? */
 static bool backup_started_in_recovery = false;
 
 /*
  * Size of each block sent into the tar stream for larger files.
- *
- * XLogSegSize *MUST* be evenly dividable by this
  */
 #define TAR_SEND_SIZE 32768
 
@@ -94,13 +94,16 @@ static void
 perform_base_backup(basebackup_options *opt, DIR *tblspcdir)
 {
 	XLogRecPtr	startptr;
+	TimeLineID	starttli;
 	XLogRecPtr	endptr;
+	TimeLineID	endtli;
 	char	   *labelfile;
 
 	backup_started_in_recovery = RecoveryInProgress();
 
-	startptr = do_pg_start_backup(opt->label, opt->fastcheckpoint, &labelfile);
-	SendXlogRecPtrResult(startptr);
+	startptr = do_pg_start_backup(opt->label, opt->fastcheckpoint, &starttli,
+								  &labelfile);
+	SendXlogRecPtrResult(startptr, starttli);
 
 	PG_ENSURE_ERROR_CLEANUP(base_backup_cleanup, (Datum) 0);
 	{
@@ -218,7 +221,7 @@ perform_base_backup(basebackup_options *opt, DIR *tblspcdir)
 	}
 	PG_END_ENSURE_ERROR_CLEANUP(base_backup_cleanup, (Datum) 0);
 
-	endptr = do_pg_stop_backup(labelfile, !opt->nowait);
+	endptr = do_pg_stop_backup(labelfile, !opt->nowait, &endtli);
 
 	if (opt->includewal)
 	{
@@ -226,70 +229,220 @@ perform_base_backup(basebackup_options *opt, DIR *tblspcdir)
 		 * We've left the last tar file "open", so we can now append the
 		 * required WAL files to it.
 		 */
-		XLogSegNo	logsegno;
-		XLogSegNo	endlogsegno;
+		char		pathbuf[MAXPGPATH];
+		XLogSegNo	segno;
+		XLogSegNo	startsegno;
+		XLogSegNo	endsegno;
 		struct stat statbuf;
+		List	   *historyFileList = NIL;
+		List	   *walFileList = NIL;
+		char	  **walFiles;
+		int			nWalFiles;
+		char		firstoff[MAXFNAMELEN];
+		char		lastoff[MAXFNAMELEN];
+		DIR		   *dir;
+		struct dirent *de;
+		int			i;
+		ListCell   *lc;
+		TimeLineID	tli;
 
-		MemSet(&statbuf, 0, sizeof(statbuf));
-		statbuf.st_mode = S_IRUSR | S_IWUSR;
-#ifndef WIN32
-		statbuf.st_uid = geteuid();
-		statbuf.st_gid = getegid();
-#endif
-		statbuf.st_size = XLogSegSize;
-		statbuf.st_mtime = time(NULL);
+		/*
+		 * I'd rather not worry about timelines here, so scan pg_xlog and
+		 * include all WAL files in the range between 'startptr' and 'endptr',
+		 * regardless of the timeline the file is stamped with. If there are
+		 * some spurious WAL files belonging to timelines that don't belong
+		 * in this server's history, they will be included too. Normally there
+		 * shouldn't be such files, but if there are, there's little harm in
+		 * including them.
+		 */
+		XLByteToSeg(startptr, startsegno);
+		XLogFileName(firstoff, ThisTimeLineID, startsegno);
+		XLByteToPrevSeg(endptr, endsegno);
+		XLogFileName(lastoff, ThisTimeLineID, endsegno);
 
-		XLByteToSeg(startptr, logsegno);
-		XLByteToPrevSeg(endptr, endlogsegno);
-
-		while (true)
+		dir = AllocateDir("pg_xlog");
+		if (!dir)
+			ereport(ERROR,
+					(errmsg("could not open directory \"%s\": %m", "pg_xlog")));
+		while ((de = ReadDir(dir, "pg_xlog")) != NULL)
 		{
-			/* Send another xlog segment */
-			char		fn[MAXPGPATH];
-			int			i;
-
-			XLogFilePath(fn, ThisTimeLineID, logsegno);
-			_tarWriteHeader(fn, NULL, &statbuf);
-
-			/* Send the actual WAL file contents, block-by-block */
-			for (i = 0; i < XLogSegSize / TAR_SEND_SIZE; i++)
+			/* Does it look like a WAL segment, and is it in the range? */
+			if (strlen(de->d_name) == 24 &&
+				strspn(de->d_name, "0123456789ABCDEF") == 24 &&
+				strcmp(de->d_name + 8, firstoff + 8) >= 0 &&
+				strcmp(de->d_name + 8, lastoff + 8) <= 0)
 			{
-				char		buf[TAR_SEND_SIZE];
-				XLogRecPtr	ptr;
+				walFileList = lappend(walFileList, pstrdup(de->d_name));
+			}
+			/* Does it look like a timeline history file? */
+			else if (strlen(de->d_name) == 8 + strlen(".history") &&
+					 strspn(de->d_name, "0123456789ABCDEF") == 8 &&
+					 strcmp(de->d_name + 8, ".history") == 0)
+			{
+				historyFileList = lappend(historyFileList, pstrdup(de->d_name));
+			}
+		}
+		FreeDir(dir);
 
-				XLogSegNoOffsetToRecPtr(logsegno, TAR_SEND_SIZE * i, ptr);
+		/*
+		 * Before we go any further, check that none of the WAL segments we
+		 * need were removed.
+		 */
+		CheckXLogRemoved(startsegno, ThisTimeLineID);
 
+		/*
+		 * Put the WAL filenames into an array, and sort. We send the files
+		 * in order from oldest to newest, to reduce the chance that a file
+		 * is recycled before we get a chance to send it over.
+		 */
+		nWalFiles = list_length(walFileList);
+		walFiles = palloc(nWalFiles * sizeof(char *));
+		i = 0;
+		foreach(lc, walFileList)
+		{
+			walFiles[i++] = lfirst(lc);
+		}
+		qsort(walFiles, nWalFiles, sizeof(char *), compareWalFileNames);
+
+		/*
+		 * Sanity check: the first and last segment should cover startptr and
+		 * endptr, with no gaps in between.
+		 */
+		XLogFromFileName(walFiles[0], &tli, &segno);
+		if (segno != startsegno)
+		{
+			char startfname[MAXFNAMELEN];
+			XLogFileName(startfname, ThisTimeLineID, startsegno);
+			ereport(ERROR,
+					(errmsg("could not find WAL file %s", startfname)));
+		}
+		for (i = 0; i < nWalFiles; i++)
+		{
+			XLogSegNo currsegno = segno;
+			XLogSegNo nextsegno = segno + 1;
+
+			XLogFromFileName(walFiles[i], &tli, &segno);
+			if (!(nextsegno == segno || currsegno == segno))
+			{
+				char nextfname[MAXFNAMELEN];
+				XLogFileName(nextfname, ThisTimeLineID, nextsegno);
+				ereport(ERROR,
+						(errmsg("could not find WAL file %s", nextfname)));
+			}
+		}
+		if (segno != endsegno)
+		{
+			char endfname[MAXFNAMELEN];
+			XLogFileName(endfname, ThisTimeLineID, endsegno);
+			ereport(ERROR,
+					(errmsg("could not find WAL file %s", endfname)));
+		}
+
+		/* Ok, we have everything we need. Send the WAL files. */
+		for (i = 0; i < nWalFiles; i++)
+		{
+			FILE	   *fp;
+			char		buf[TAR_SEND_SIZE];
+			size_t		cnt;
+			pgoff_t		len = 0;
+
+			snprintf(pathbuf, MAXPGPATH, XLOGDIR "/%s", walFiles[i]);
+			XLogFromFileName(walFiles[i], &tli, &segno);
+
+			fp = AllocateFile(pathbuf, "rb");
+			if (fp == NULL)
+			{
 				/*
-				 * Some old compilers, e.g. gcc 2.95.3/x86, think that passing
-				 * a struct in the same function as a longjump might clobber a
-				 * variable.  bjm 2011-02-04
-				 * http://lists.apple.com/archives/xcode-users/2003/Dec//msg000
-				 * 51.html
+				 * Most likely reason for this is that the file was already
+				 * removed by a checkpoint, so check for that to get a better
+				 * error message.
 				 */
-				XLogRead(buf, ThisTimeLineID, ptr, TAR_SEND_SIZE);
-				if (pq_putmessage('d', buf, TAR_SEND_SIZE))
-					ereport(ERROR,
-							(errmsg("base backup could not send data, aborting backup")));
+				CheckXLogRemoved(segno, tli);
+
+				ereport(ERROR,
+						(errcode_for_file_access(),
+						 errmsg("could not open file \"%s\": %m", pathbuf)));
 			}
 
-			/*
-			 * Files are always fixed size, and always end on a 512 byte
-			 * boundary, so padding is never necessary.
-			 */
+			if (fstat(fileno(fp), &statbuf) != 0)
+				ereport(ERROR,
+						(errcode_for_file_access(),
+						 errmsg("could not stat file \"%s\": %m",
+								pathbuf)));
+			if (statbuf.st_size != XLogSegSize)
+			{
+				CheckXLogRemoved(segno, tli);
+				ereport(ERROR,
+						(errcode_for_file_access(),
+						 errmsg("unexpected WAL file size \"%s\"", walFiles[i])));
+			}
 
+			_tarWriteHeader(pathbuf, NULL, &statbuf);
 
-			/* Advance to the next WAL file */
-			logsegno++;
+			while ((cnt = fread(buf, 1, Min(sizeof(buf), XLogSegSize - len), fp)) > 0)
+			{
+				CheckXLogRemoved(segno, tli);
+				/* Send the chunk as a CopyData message */
+				if (pq_putmessage('d', buf, cnt))
+					ereport(ERROR,
+							(errmsg("base backup could not send data, aborting backup")));
 
-			/* Have we reached our stop position yet? */
-			if (logsegno > endlogsegno)
-				break;
+				len += cnt;
+				if (len == XLogSegSize)
+					break;
+			}
+
+			if (len != XLogSegSize)
+			{
+				CheckXLogRemoved(segno, tli);
+				ereport(ERROR,
+						(errcode_for_file_access(),
+						 errmsg("unexpected WAL file size \"%s\"", walFiles[i])));
+			}
+
+			/* XLogSegSize is a multiple of 512, so no need for padding */
+			FreeFile(fp);
+		}
+
+		/*
+		 * Send timeline history files too. Only the latest timeline history
+		 * file is required for recovery, and even that only if there happens
+		 * to be a timeline switch in the first WAL segment that contains the
+		 * checkpoint record, or if we're taking a base backup from a standby
+		 * server and the target timeline changes while the backup is taken. 
+		 * But they are small and highly useful for debugging purposes, so
+		 * better include them all, always.
+		 */
+		foreach(lc, historyFileList)
+		{
+			char *fname = lfirst(lc);
+			snprintf(pathbuf, MAXPGPATH, XLOGDIR "/%s", fname);
+
+			if (lstat(pathbuf, &statbuf) != 0)
+				ereport(ERROR,
+						(errcode_for_file_access(),
+						 errmsg("could not stat file \"%s\": %m", pathbuf)));
+
+			sendFile(pathbuf, pathbuf, &statbuf, false);
 		}
 
 		/* Send CopyDone message for the last tar file */
 		pq_putemptymessage('c');
 	}
-	SendXlogRecPtrResult(endptr);
+	SendXlogRecPtrResult(endptr, endtli);
+}
+
+/*
+ * qsort comparison function, to compare log/seg portion of WAL segment
+ * filenames, ignoring the timeline portion.
+ */
+static int
+compareWalFileNames(const void *a, const void *b)
+{
+	char *fna = *((char **) a);
+	char *fnb = *((char **) b);
+
+	return strcmp(fna + 8, fnb + 8);
 }
 
 /*
@@ -485,17 +638,15 @@ SendBackupHeader(List *tablespaces)
  * XlogRecPtr record (in text format)
  */
 static void
-SendXlogRecPtrResult(XLogRecPtr ptr)
+SendXlogRecPtrResult(XLogRecPtr ptr, TimeLineID tli)
 {
 	StringInfoData buf;
 	char		str[MAXFNAMELEN];
 
-	snprintf(str, sizeof(str), "%X/%X", (uint32) (ptr >> 32), (uint32) ptr);
-
 	pq_beginmessage(&buf, 'T'); /* RowDescription */
-	pq_sendint(&buf, 1, 2);		/* 1 field */
+	pq_sendint(&buf, 2, 2);		/* 2 fields */
 
-	/* Field header */
+	/* Field headers */
 	pq_sendstring(&buf, "recptr");
 	pq_sendint(&buf, 0, 4);		/* table oid */
 	pq_sendint(&buf, 0, 2);		/* attnum */
@@ -503,11 +654,29 @@ SendXlogRecPtrResult(XLogRecPtr ptr)
 	pq_sendint(&buf, -1, 2);
 	pq_sendint(&buf, 0, 4);
 	pq_sendint(&buf, 0, 2);
+
+	pq_sendstring(&buf, "tli");
+	pq_sendint(&buf, 0, 4);		/* table oid */
+	pq_sendint(&buf, 0, 2);		/* attnum */
+	/*
+	 * int8 may seem like a surprising data type for this, but in thory int4
+	 * would not be wide enough for this, as TimeLineID is unsigned.
+	 */
+	pq_sendint(&buf, INT8OID, 4);	/* type oid */
+	pq_sendint(&buf, -1, 2);
+	pq_sendint(&buf, 0, 4);
+	pq_sendint(&buf, 0, 2);
 	pq_endmessage(&buf);
 
 	/* Data row */
 	pq_beginmessage(&buf, 'D');
-	pq_sendint(&buf, 1, 2);		/* number of columns */
+	pq_sendint(&buf, 2, 2);		/* number of columns */
+
+	snprintf(str, sizeof(str), "%X/%X", (uint32) (ptr >> 32), (uint32) ptr);
+	pq_sendint(&buf, strlen(str), 4);	/* length */
+	pq_sendbytes(&buf, str, strlen(str));
+
+	snprintf(str, sizeof(str), "%u", tli);
 	pq_sendint(&buf, strlen(str), 4);	/* length */
 	pq_sendbytes(&buf, str, strlen(str));
 	pq_endmessage(&buf);
