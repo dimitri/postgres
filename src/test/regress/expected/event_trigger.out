@@ -67,6 +67,7 @@ alter event trigger regress_event_trigger enable;
 alter event trigger regress_event_trigger disable;
 -- regress_event_trigger2 should fire, but not regress_event_trigger
 create table event_trigger_fire1 (a int);
+NOTICE:  test_event_trigger: ddl_command_start CREATE TABLE
 NOTICE:  test_event_trigger: ddl_command_end CREATE TABLE
 -- but nothing should fire here
 drop table event_trigger_fire1;
@@ -90,6 +91,111 @@ ERROR:  event trigger "regress_event_trigger" does not exist
 drop role regression_bob;
 ERROR:  role "regression_bob" cannot be dropped because some objects depend on it
 DETAIL:  owner of event trigger regress_event_trigger3
+-- now try something crazy to ensure we don't crash the backend
+create function test_event_trigger_drop_function()
+ returns event_trigger
+ set max_stack_depth to '100' -- limit the size of the stack trace we output
+ as $$
+BEGIN
+    drop function test_event_trigger2() cascade;
+END
+$$ language plpgsql;
+NOTICE:  test_event_trigger: ddl_command_start CREATE FUNCTION
+NOTICE:  test_event_trigger: ddl_command_end CREATE FUNCTION
+create function test_event_trigger2() returns event_trigger as $$
+BEGIN
+    RAISE NOTICE 'test_event_trigger2: % %', tg_event, tg_tag;
+END
+$$ language plpgsql;
+NOTICE:  test_event_trigger: ddl_command_start CREATE FUNCTION
+NOTICE:  test_event_trigger: ddl_command_end CREATE FUNCTION
+create event trigger drop_test_a on "ddl_command_start"
+   execute procedure test_event_trigger_drop_function();
+create event trigger drop_test_b on "ddl_command_start"
+   execute procedure test_event_trigger2();
+-- now watch the fun
+create table event_trigger_fire1 (a int);
+ERROR:  stack depth limit exceeded
+HINT:  Increase the configuration parameter "max_stack_depth" (currently 100kB), after ensuring the platform's stack depth limit is adequate.
+CONTEXT:  SQL statement "drop function test_event_trigger2() cascade"
+PL/pgSQL function test_event_trigger_drop_function() line 3 at SQL statement
+SQL statement "drop function test_event_trigger2() cascade"
+PL/pgSQL function test_event_trigger_drop_function() line 3 at SQL statement
+SQL statement "drop function test_event_trigger2() cascade"
+PL/pgSQL function test_event_trigger_drop_function() line 3 at SQL statement
+SQL statement "drop function test_event_trigger2() cascade"
+PL/pgSQL function test_event_trigger_drop_function() line 3 at SQL statement
+SQL statement "drop function test_event_trigger2() cascade"
+PL/pgSQL function test_event_trigger_drop_function() line 3 at SQL statement
+SQL statement "drop function test_event_trigger2() cascade"
+PL/pgSQL function test_event_trigger_drop_function() line 3 at SQL statement
+SQL statement "drop function test_event_trigger2() cascade"
+PL/pgSQL function test_event_trigger_drop_function() line 3 at SQL statement
+SQL statement "drop function test_event_trigger2() cascade"
+PL/pgSQL function test_event_trigger_drop_function() line 3 at SQL statement
+SQL statement "drop function test_event_trigger2() cascade"
+PL/pgSQL function test_event_trigger_drop_function() line 3 at SQL statement
+SQL statement "drop function test_event_trigger2() cascade"
+PL/pgSQL function test_event_trigger_drop_function() line 3 at SQL statement
+SQL statement "drop function test_event_trigger2() cascade"
+PL/pgSQL function test_event_trigger_drop_function() line 3 at SQL statement
+SQL statement "drop function test_event_trigger2() cascade"
+PL/pgSQL function test_event_trigger_drop_function() line 3 at SQL statement
+SQL statement "drop function test_event_trigger2() cascade"
+PL/pgSQL function test_event_trigger_drop_function() line 3 at SQL statement
+SQL statement "drop function test_event_trigger2() cascade"
+PL/pgSQL function test_event_trigger_drop_function() line 3 at SQL statement
+SQL statement "drop function test_event_trigger2() cascade"
+PL/pgSQL function test_event_trigger_drop_function() line 3 at SQL statement
+SQL statement "drop function test_event_trigger2() cascade"
+PL/pgSQL function test_event_trigger_drop_function() line 3 at SQL statement
+SQL statement "drop function test_event_trigger2() cascade"
+PL/pgSQL function test_event_trigger_drop_function() line 3 at SQL statement
+SQL statement "drop function test_event_trigger2() cascade"
+PL/pgSQL function test_event_trigger_drop_function() line 3 at SQL statement
+SQL statement "drop function test_event_trigger2() cascade"
+PL/pgSQL function test_event_trigger_drop_function() line 3 at SQL statement
+SQL statement "drop function test_event_trigger2() cascade"
+PL/pgSQL function test_event_trigger_drop_function() line 3 at SQL statement
+SQL statement "drop function test_event_trigger2() cascade"
+PL/pgSQL function test_event_trigger_drop_function() line 3 at SQL statement
+SQL statement "drop function test_event_trigger2() cascade"
+PL/pgSQL function test_event_trigger_drop_function() line 3 at SQL statement
+SQL statement "drop function test_event_trigger2() cascade"
+PL/pgSQL function test_event_trigger_drop_function() line 3 at SQL statement
+SQL statement "drop function test_event_trigger2() cascade"
+PL/pgSQL function test_event_trigger_drop_function() line 3 at SQL statement
+SQL statement "drop function test_event_trigger2() cascade"
+PL/pgSQL function test_event_trigger_drop_function() line 3 at SQL statement
+SQL statement "drop function test_event_trigger2() cascade"
+PL/pgSQL function test_event_trigger_drop_function() line 3 at SQL statement
+SQL statement "drop function test_event_trigger2() cascade"
+PL/pgSQL function test_event_trigger_drop_function() line 3 at SQL statement
+SQL statement "drop function test_event_trigger2() cascade"
+PL/pgSQL function test_event_trigger_drop_function() line 3 at SQL statement
+SQL statement "drop function test_event_trigger2() cascade"
+PL/pgSQL function test_event_trigger_drop_function() line 3 at SQL statement
+SQL statement "drop function test_event_trigger2() cascade"
+PL/pgSQL function test_event_trigger_drop_function() line 3 at SQL statement
+-- now limit the event trigger to avoid infinite recursion
+drop event trigger drop_test_a;
+create event trigger drop_test_a on "ddl_command_start"
+    when tag in ('create table')
+   execute procedure test_event_trigger_drop_function();
+-- and try again, see if we crash
+--
+-- we want to avoid seeing the following in the regression tests:
+--     ERROR:  cache lookup failed for function 30201
+-- because the OID of course changes each time
+--
+set client_min_messages to fatal;
+create table event_trigger_fire1 (a int);
+reset client_min_messages;
+-- then cleanup the crazy test
+drop event trigger drop_test_a;
+drop event trigger drop_test_b;
+drop function test_event_trigger_drop_function();
+NOTICE:  test_event_trigger: ddl_command_end DROP FUNCTION
 -- these are all OK; the second one should emit a NOTICE
 drop event trigger if exists regress_event_trigger2;
 drop event trigger if exists regress_event_trigger2;

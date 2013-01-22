@@ -95,6 +95,53 @@ drop event trigger regress_event_trigger;
 -- should fail, regression_bob owns regress_event_trigger2/3
 drop role regression_bob;
 
+-- now try something crazy to ensure we don't crash the backend
+create function test_event_trigger_drop_function()
+ returns event_trigger
+ set max_stack_depth to '100' -- limit the size of the stack trace we output
+ as $$
+BEGIN
+    drop function test_event_trigger2() cascade;
+END
+$$ language plpgsql;
+
+create function test_event_trigger2() returns event_trigger as $$
+BEGIN
+    RAISE NOTICE 'test_event_trigger2: % %', tg_event, tg_tag;
+END
+$$ language plpgsql;
+
+create event trigger drop_test_a on "ddl_command_start"
+   execute procedure test_event_trigger_drop_function();
+
+create event trigger drop_test_b on "ddl_command_start"
+   execute procedure test_event_trigger2();
+
+-- now watch the fun
+create table event_trigger_fire1 (a int);
+
+-- now limit the event trigger to avoid infinite recursion
+drop event trigger drop_test_a;
+
+create event trigger drop_test_a on "ddl_command_start"
+    when tag in ('create table')
+   execute procedure test_event_trigger_drop_function();
+
+-- and try again, see if we crash
+--
+-- we want to avoid seeing the following in the regression tests:
+--     ERROR:  cache lookup failed for function 30201
+-- because the OID of course changes each time
+--
+set client_min_messages to fatal;
+create table event_trigger_fire1 (a int);
+reset client_min_messages;
+
+-- then cleanup the crazy test
+drop event trigger drop_test_a;
+drop event trigger drop_test_b;
+drop function test_event_trigger_drop_function();
+
 -- these are all OK; the second one should emit a NOTICE
 drop event trigger if exists regress_event_trigger2;
 drop event trigger if exists regress_event_trigger2;

@@ -52,6 +52,16 @@
    </para>
 
    <para>
+    Event Triggers themselves are not run in
+    a <xref linkend="sql-savepoint">. That means that you can stop the
+    execution of the current command by issuing a <command>RAISE
+    EXCEPTION</command> command from anywhere in your trigger function, and
+    that if an error occurs in the command itself (e.g.
+    when <command>DROP</command> targets an object that does not exists),
+    the <literal>ddl_command_end</> triggers will not get run.
+   </para>
+
+   <para>
      For a complete list of commands supported by the event trigger mechanism,
      see <xref linkend="event-trigger-matrix">.
    </para>
