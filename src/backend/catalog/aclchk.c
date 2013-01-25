@@ -32,6 +32,7 @@
 #include "catalog/pg_default_acl.h"
 #include "catalog/pg_event_trigger.h"
 #include "catalog/pg_extension.h"
+#include "catalog/pg_extension_control.h"
 #include "catalog/pg_foreign_data_wrapper.h"
 #include "catalog/pg_foreign_server.h"
 #include "catalog/pg_language.h"
@@ -5035,6 +5036,50 @@ pg_extension_ownercheck(Oid ext_oid, Oid roleid)
 
 	systable_endscan(scan);
 	heap_close(pg_extension, AccessShareLock);
+
+	return has_privs_of_role(roleid, ownerId);
+}
+
+/*
+ * Ownership check for an extension control (specified by OID).
+ */
+bool
+pg_extension_control_ownercheck(Oid ext_control_oid, Oid roleid)
+{
+	Relation	pg_extension_control;
+	ScanKeyData entry[1];
+	SysScanDesc scan;
+	HeapTuple	tuple;
+	Oid			ownerId;
+
+	/* Superusers bypass all permission checking. */
+	if (superuser_arg(roleid))
+		return true;
+
+	/* There's no syscache for pg_extension, so do it the hard way */
+	pg_extension_control =
+		heap_open(ExtensionControlRelationId, AccessShareLock);
+
+	ScanKeyInit(&entry[0],
+				ObjectIdAttributeNumber,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(ext_control_oid));
+
+	scan = systable_beginscan(pg_extension_control,
+							  ExtensionControlOidIndexId, true,
+							  SnapshotNow, 1, entry);
+
+	tuple = systable_getnext(scan);
+	if (!HeapTupleIsValid(tuple))
+		ereport(ERROR,
+				(errcode(ERRCODE_UNDEFINED_OBJECT),
+				 errmsg("extension control with OID %u does not exist",
+						ext_control_oid)));
+
+	ownerId = ((Form_pg_extension_control) GETSTRUCT(tuple))->ctlowner;
+
+	systable_endscan(scan);
+	heap_close(pg_extension_control, AccessShareLock);
 
 	return has_privs_of_role(roleid, ownerId);
 }

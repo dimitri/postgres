@@ -614,7 +614,7 @@ read_extension_aux_control_file(const ExtensionControl *pcontrol,
 
 /*
  * Read the control properties for given extension, either from a file on the
- * dile system or if it does not exists there, from a template catalog in
+ * file system or if it does not exists there, from a template catalog in
  * pg_extension_control, if it exists.
  *
  * In the file system case, we get the default properties for the extension and
@@ -1117,7 +1117,7 @@ get_ext_ver_list_from_files(ExtensionControl *control)
  * then pg_extension_uptmpl for all update scripts of same extension.
  */
 static List *
-get_ext_ver_list_from_catalogs(ExtensionControl *control)
+get_ext_ver_list_from_catalog(ExtensionControl *control)
 {
 	List		*evi_list = NIL;
 	List		*installable, *direct_update_paths;
@@ -1159,7 +1159,7 @@ static List *
 get_ext_ver_list(ExtensionControl *control)
 {
 	if (control->is_template)
-		return get_ext_ver_list_from_catalogs(control);
+		return get_ext_ver_list_from_catalog(control);
 	else
 		return get_ext_ver_list_from_files(control);
 }

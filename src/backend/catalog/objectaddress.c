@@ -171,7 +171,7 @@ static ObjectPropertyType ObjectProperty[] =
 		InvalidAttrNumber,		/* extension doesn't belong to extnamespace */
 		Anum_pg_extension_control_ctlowner,
 		InvalidAttrNumber,
-		ACL_KIND_TEMPLATE
+		ACL_KIND_EXTCONTROL
 	},
 	{
 		ExtensionTemplateRelationId,
@@ -182,7 +182,7 @@ static ObjectPropertyType ObjectProperty[] =
 		InvalidAttrNumber,		/* extension doesn't belong to extnamespace */
 		Anum_pg_extension_template_tplowner,
 		InvalidAttrNumber,
-		ACL_KIND_TEMPLATE
+		ACL_KIND_EXTTEMPLATE
 	},
 	{
 		ExtensionUpTmplRelationId,
@@ -193,7 +193,7 @@ static ObjectPropertyType ObjectProperty[] =
 		InvalidAttrNumber,		/* extension doesn't belong to extnamespace */
 		Anum_pg_extension_uptmpl_uptowner,
 		InvalidAttrNumber,
-		ACL_KIND_TEMPLATE
+		ACL_KIND_EXTUPTMPL
 	},
 	{
 		ForeignDataWrapperRelationId,
@@ -794,6 +794,11 @@ get_object_address_unqualified(ObjectType objtype,
 			address.objectId = get_event_trigger_oid(name, missing_ok);
 			address.objectSubId = 0;
 			break;
+ 		case OBJECT_TABLESPACE:
+ 			address.classId = TableSpaceRelationId;
+ 			address.objectId = get_tablespace_oid(name, missing_ok);
+ 			address.objectSubId = 0;
+ 			break;
 		default:
 			elog(ERROR, "unrecognized objtype: %d", (int) objtype);
 			/* placate compiler, which doesn't know elog won't return */
@@ -1240,9 +1245,13 @@ check_object_ownership(Oid roleid, ObjectType objtype, ObjectAddress address,
 							   NameListToString(objname));
 			break;
 		case OBJECT_EXTENSION_TEMPLATE:
+			if (!pg_extension_ownercheck(address.objectId, roleid))
+				aclcheck_error(ACLCHECK_NOT_OWNER, ACL_KIND_EXTTEMPLATE,
+							   NameListToString(objname));
+			break;
 		case OBJECT_EXTENSION_UPTMPL:
 			if (!pg_extension_ownercheck(address.objectId, roleid))
-				aclcheck_error(ACLCHECK_NOT_OWNER, ACL_KIND_TEMPLATE,
+				aclcheck_error(ACLCHECK_NOT_OWNER, ACL_KIND_EXTUPTMPL,
 							   NameListToString(objname));
 			break;
 		case OBJECT_FDW:

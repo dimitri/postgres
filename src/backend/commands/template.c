@@ -37,6 +37,7 @@
 #include "funcapi.h"
 #include "miscadmin.h"
 #include "tcop/utility.h"
+#include "utils/acl.h"
 #include "utils/builtins.h"
 #include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
@@ -64,6 +65,10 @@ static Oid AlterTemplateSetDefault(const char *extname, const char *version);
 static Oid modify_pg_extension_control_default(const char *extname,
 											   const char *version,
 											   bool value);
+
+static Oid find_default_pg_extension_control_with_oid(const char *extname,
+													  ExtensionControl **control,
+													  bool missing_ok);
 
 static ExtensionControl *read_pg_extension_control(const char *extname,
 												   Relation rel,
@@ -688,8 +693,13 @@ static Oid
 AlterTemplateSetDefault(const char *extname, const char *version)
 {
 	/* we need to know who's the default */
-	ExtensionControl *current =
-		find_default_pg_extension_control(extname, true);
+	ExtensionControl *current;
+	Oid extControlOid =
+		find_default_pg_extension_control_with_oid(extname, &current, true);
+
+	if (!pg_extension_control_ownercheck(extControlOid, GetUserId()))
+		aclcheck_error(ACLCHECK_NOT_OWNER, ACL_KIND_EXTTEMPLATE,
+					   extname);
 
 	if (current)
 	{
@@ -1150,16 +1160,22 @@ find_pg_extension_control(const char *extname,
 }
 
 /*
- * Find the default extension's control properties.
+ * Find the default extension's control properties, and its OID, for internal
+ * use (such as checking ACLs).
  */
-ExtensionControl *
-find_default_pg_extension_control(const char *extname, bool missing_ok)
+static Oid
+find_default_pg_extension_control_with_oid(const char *extname,
+										   ExtensionControl **control,
+										   bool missing_ok)
 {
-	ExtensionControl *control = NULL;
+	Oid			extControlOid = InvalidOid;
 	Relation	rel;
 	SysScanDesc scandesc;
 	HeapTuple	tuple;
 	ScanKeyData entry[1];
+
+	/* init value */
+	*control = NULL;
 
 	rel = heap_open(ExtensionControlRelationId, AccessShareLock);
 
@@ -1184,8 +1200,11 @@ find_default_pg_extension_control(const char *extname, bool missing_ok)
 		/* only of those is the default */
 		if (ctldefault)
 		{
-			if (control == NULL)
-				control = read_pg_extension_control(extname, rel, tuple);
+			if (*control == NULL)
+			{
+				extControlOid = HeapTupleGetOid(tuple);
+				*control = read_pg_extension_control(extname, rel, tuple);
+			}
 			else
 				/* should not happen */
 				elog(ERROR,
@@ -1198,11 +1217,30 @@ find_default_pg_extension_control(const char *extname, bool missing_ok)
 	heap_close(rel, AccessShareLock);
 
 	/* we really need a single default version. */
-	if (control == NULL && !missing_ok)
+	if (*control == NULL && !missing_ok)
 		ereport(ERROR,
 				(errcode(ERRCODE_UNDEFINED_OBJECT),
 				 errmsg("extension \"%s\" has no default control template",
 						extname)));
+
+	return extControlOid;
+}
+
+/*
+ * Find the default extension's control properties.
+ *
+ * Most callers won't care about getting the Oid back, so the public API
+ * completely ignores that part.
+ */
+ExtensionControl *
+find_default_pg_extension_control(const char *extname, bool missing_ok)
+{
+	ExtensionControl *control;
+
+	/* quiet compiler */
+	(void) find_default_pg_extension_control_with_oid(extname,
+													  &control,
+													  missing_ok);
 
 	return control;
 }
