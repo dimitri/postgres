@@ -33,6 +33,8 @@
 #include "catalog/pg_event_trigger.h"
 #include "catalog/pg_extension.h"
 #include "catalog/pg_extension_control.h"
+#include "catalog/pg_extension_template.h"
+#include "catalog/pg_extension_uptmpl.h"
 #include "catalog/pg_foreign_data_wrapper.h"
 #include "catalog/pg_foreign_server.h"
 #include "catalog/pg_language.h"
@@ -5056,7 +5058,7 @@ pg_extension_control_ownercheck(Oid ext_control_oid, Oid roleid)
 	if (superuser_arg(roleid))
 		return true;
 
-	/* There's no syscache for pg_extension, so do it the hard way */
+	/* There's no syscache for pg_extension_control, so do it the hard way */
 	pg_extension_control =
 		heap_open(ExtensionControlRelationId, AccessShareLock);
 
@@ -5080,6 +5082,94 @@ pg_extension_control_ownercheck(Oid ext_control_oid, Oid roleid)
 
 	systable_endscan(scan);
 	heap_close(pg_extension_control, AccessShareLock);
+
+	return has_privs_of_role(roleid, ownerId);
+}
+
+/*
+ * Ownership check for an extension template (specified by OID).
+ */
+bool
+pg_extension_template_ownercheck(Oid ext_template_oid, Oid roleid)
+{
+	Relation	pg_extension_template;
+	ScanKeyData entry[1];
+	SysScanDesc scan;
+	HeapTuple	tuple;
+	Oid			ownerId;
+
+	/* Superusers bypass all permission checking. */
+	if (superuser_arg(roleid))
+		return true;
+
+	/* There's no syscache for pg_extension_template, so do it the hard way */
+	pg_extension_template =
+		heap_open(ExtensionTemplateRelationId, AccessShareLock);
+
+	ScanKeyInit(&entry[0],
+				ObjectIdAttributeNumber,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(ext_template_oid));
+
+	scan = systable_beginscan(pg_extension_template,
+							  ExtensionTemplateOidIndexId, true,
+							  SnapshotNow, 1, entry);
+
+	tuple = systable_getnext(scan);
+	if (!HeapTupleIsValid(tuple))
+		ereport(ERROR,
+				(errcode(ERRCODE_UNDEFINED_OBJECT),
+				 errmsg("extension template with OID %u does not exist",
+						ext_template_oid)));
+
+	ownerId = ((Form_pg_extension_template) GETSTRUCT(tuple))->tplowner;
+
+	systable_endscan(scan);
+	heap_close(pg_extension_template, AccessShareLock);
+
+	return has_privs_of_role(roleid, ownerId);
+}
+
+/*
+ * Ownership check for an extension update template (specified by OID).
+ */
+bool
+pg_extension_uptmpl_ownercheck(Oid ext_uptmpl_oid, Oid roleid)
+{
+	Relation	pg_extension_uptmpl;
+	ScanKeyData entry[1];
+	SysScanDesc scan;
+	HeapTuple	tuple;
+	Oid			ownerId;
+
+	/* Superusers bypass all permission checking. */
+	if (superuser_arg(roleid))
+		return true;
+
+	/* There's no syscache for pg_extension_uptmpl, so do it the hard way */
+	pg_extension_uptmpl =
+		heap_open(ExtensionUpTmplRelationId, AccessShareLock);
+
+	ScanKeyInit(&entry[0],
+				ObjectIdAttributeNumber,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(ext_uptmpl_oid));
+
+	scan = systable_beginscan(pg_extension_uptmpl,
+							  ExtensionUpTmplOidIndexId, true,
+							  SnapshotNow, 1, entry);
+
+	tuple = systable_getnext(scan);
+	if (!HeapTupleIsValid(tuple))
+		ereport(ERROR,
+				(errcode(ERRCODE_UNDEFINED_OBJECT),
+				 errmsg("extension uptmpl with OID %u does not exist",
+						ext_uptmpl_oid)));
+
+	ownerId = ((Form_pg_extension_uptmpl) GETSTRUCT(tuple))->uptowner;
+
+	systable_endscan(scan);
+	heap_close(pg_extension_uptmpl, AccessShareLock);
 
 	return has_privs_of_role(roleid, ownerId);
 }

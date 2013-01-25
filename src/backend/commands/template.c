@@ -62,6 +62,13 @@ static Oid InsertExtensionUpTmplTuple(Oid owner,
 									  const char *script);
 
 static Oid AlterTemplateSetDefault(const char *extname, const char *version);
+static Oid AlterTemplateSetScript(const char *extname,
+								  const char *version, const char *script);
+static Oid AlterUpTpmlSetScript(const char *extname,
+								const char *from,
+								const char *to,
+								const char *script);
+
 static Oid modify_pg_extension_control_default(const char *extname,
 											   const char *version,
 											   bool value);
@@ -663,6 +670,9 @@ AlterTemplate(AlterTemplateStmt *stmt)
 	return InvalidOid;
 }
 
+/*
+ * ALTER TEMPLATE FOR EXTENSION routing
+ */
 Oid
 AlterExtensionTemplate(AlterTemplateStmt *stmt)
 {
@@ -672,7 +682,21 @@ AlterExtensionTemplate(AlterTemplateStmt *stmt)
 			return AlterTemplateSetDefault(stmt->extname, stmt->version);
 
 		case AET_SET_SCRIPT:
-			elog(WARNING, "Not Yet Implemented");
+			switch (stmt->template)
+			{
+				case TEMPLATE_CREATE_EXTENSION:
+					return AlterTemplateSetScript(stmt->extname,
+												  stmt->version,
+												  stmt->script);
+					break;
+
+				case TEMPLATE_UPDATE_EXTENSION:
+					return AlterUpTpmlSetScript(stmt->extname,
+												stmt->from,
+												stmt->to,
+												stmt->script);
+					break;
+			}
 			break;
 
 		case AET_UPDATE_CONTROL:
@@ -698,7 +722,7 @@ AlterTemplateSetDefault(const char *extname, const char *version)
 		find_default_pg_extension_control_with_oid(extname, &current, true);
 
 	if (!pg_extension_control_ownercheck(extControlOid, GetUserId()))
-		aclcheck_error(ACLCHECK_NOT_OWNER, ACL_KIND_EXTTEMPLATE,
+		aclcheck_error(ACLCHECK_NOT_OWNER, ACL_KIND_EXTCONTROL,
 					   extname);
 
 	if (current)
@@ -780,6 +804,151 @@ modify_pg_extension_control_default(const char *extname,
 
 	return ctrlOid;
 }
+
+/*
+ * ALTER TEMPLATE FOR EXTENSION ... AS $$ ... $$
+ */
+static Oid
+AlterTemplateSetScript(const char *extname,
+					   const char *version,
+					   const char *script)
+{
+	Oid			extTemplateOid;
+	Relation	rel;
+	SysScanDesc	scandesc;
+	HeapTuple	tuple;
+	ScanKeyData	entry[2];
+	Datum		values[Natts_pg_extension_template];
+	bool		nulls[Natts_pg_extension_template];
+	bool		repl[Natts_pg_extension_template];
+
+	rel = heap_open(ExtensionTemplateRelationId, AccessShareLock);
+
+	ScanKeyInit(&entry[0],
+				Anum_pg_extension_template_tplname,
+				BTEqualStrategyNumber, F_NAMEEQ,
+				CStringGetDatum(extname));
+
+	ScanKeyInit(&entry[1],
+				Anum_pg_extension_template_tplversion,
+				BTEqualStrategyNumber, F_TEXTEQ,
+				CStringGetTextDatum(version));
+
+	scandesc = systable_beginscan(rel,
+								  ExtensionTemplateNameVersionIndexId, true,
+								  SnapshotNow, 2, entry);
+
+	tuple = systable_getnext(scandesc);
+
+	if (!HeapTupleIsValid(tuple))		/* should not happen */
+		elog(ERROR,
+			 "pg_extension_template for extension \"%s\" version \"%s\" does not exist",
+			 extname, version);
+
+	extTemplateOid = HeapTupleGetOid(tuple);
+
+	/* check privileges */
+	if (!pg_extension_template_ownercheck(extTemplateOid, GetUserId()))
+		aclcheck_error(ACLCHECK_NOT_OWNER, ACL_KIND_EXTTEMPLATE,
+					   extname);
+
+	/* Modify ctldefault in the pg_extension_control tuple */
+	memset(values, 0, sizeof(values));
+	memset(nulls, 0, sizeof(nulls));
+	memset(repl, 0, sizeof(repl));
+
+	repl[Anum_pg_extension_template_tplscript - 1] = true;
+	values[Anum_pg_extension_template_tplscript - 1] =
+		CStringGetTextDatum(script);
+
+	tuple = heap_modify_tuple(tuple, RelationGetDescr(rel),
+							  values, nulls, repl);
+
+	simple_heap_update(rel, &tuple->t_self, tuple);
+	CatalogUpdateIndexes(rel, tuple);
+
+	systable_endscan(scandesc);
+
+	heap_close(rel, AccessShareLock);
+
+	return extTemplateOid;
+}
+
+/*
+ * ALTER TEMPLATE FOR EXTENSION ... FROM ... TO ... AS $$ ... $$
+ */
+static Oid
+AlterUpTpmlSetScript(const char *extname,
+					 const char *from,
+					 const char *to,
+					 const char *script)
+{
+	Oid			extUpTmplOid;
+	Relation	rel;
+	SysScanDesc scandesc;
+	HeapTuple	tuple;
+	ScanKeyData entry[3];
+	Datum		values[Natts_pg_extension_template];
+	bool		nulls[Natts_pg_extension_template];
+	bool		repl[Natts_pg_extension_template];
+
+	rel = heap_open(ExtensionUpTmplRelationId, AccessShareLock);
+
+	ScanKeyInit(&entry[0],
+				Anum_pg_extension_uptmpl_uptname,
+				BTEqualStrategyNumber, F_NAMEEQ,
+				CStringGetDatum(extname));
+
+	ScanKeyInit(&entry[1],
+				Anum_pg_extension_uptmpl_uptfrom,
+				BTEqualStrategyNumber, F_TEXTEQ,
+				CStringGetTextDatum(from));
+
+	ScanKeyInit(&entry[2],
+				Anum_pg_extension_uptmpl_uptto,
+				BTEqualStrategyNumber, F_TEXTEQ,
+				CStringGetTextDatum(to));
+
+	scandesc = systable_beginscan(rel,
+								  ExtensionUpTpmlNameFromToIndexId, true,
+								  SnapshotNow, 3, entry);
+
+	tuple = systable_getnext(scandesc);
+
+	if (!HeapTupleIsValid(tuple))		/* should not happen */
+		elog(ERROR,
+			 "pg_extension_template for extension \"%s\" from version \"%s\" to version \"%s\" does not exist",
+			 extname, from, to);
+
+	extUpTmplOid = HeapTupleGetOid(tuple);
+
+	/* check privileges */
+	if (!pg_extension_uptmpl_ownercheck(extUpTmplOid, GetUserId()))
+		aclcheck_error(ACLCHECK_NOT_OWNER, ACL_KIND_EXTUPTMPL,
+					   extname);
+
+	/* Modify ctldefault in the pg_extension_control tuple */
+	memset(values, 0, sizeof(values));
+	memset(nulls, 0, sizeof(nulls));
+	memset(repl, 0, sizeof(repl));
+
+	repl[Anum_pg_extension_uptmpl_uptscript - 1] = true;
+	values[Anum_pg_extension_uptmpl_uptscript - 1] =
+		CStringGetTextDatum(script);
+
+	tuple = heap_modify_tuple(tuple, RelationGetDescr(rel),
+							  values, nulls, repl);
+
+	simple_heap_update(rel, &tuple->t_self, tuple);
+	CatalogUpdateIndexes(rel, tuple);
+
+	systable_endscan(scandesc);
+
+	heap_close(rel, AccessShareLock);
+
+	return extUpTmplOid;
+}
+
 
 /*
  * ALTER TEMPLATE FOR EXTENSION name FROM old TO new
