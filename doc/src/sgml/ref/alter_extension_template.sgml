@@ -22,9 +22,21 @@ PostgreSQL documentation
  <refsynopsisdiv>
 <synopsis>
 ALTER TEMPLATE FOR EXTENSION <replaceable>name</replaceable> SET DEFAULT VERSION <replaceable>version</replaceable>
+ALTER TEMPLATE FOR EXTENSION <replaceable>name</replaceable> VERSION <replaceable>version</replaceable> WITH [ ([ <replaceable class="parameter">control_parameter</replaceable> ] [, ... ]) ] 
+ALTER TEMPLATE FOR EXTENSION <replaceable>name</replaceable> VERSION <replaceable>version</replaceable> AS <replaceable>script</replaceable>
+ALTER TEMPLATE FOR EXTENSION <replaceable>name</replaceable> FROM <replaceable>from_version</replaceable> TO <replaceable>to_version</replaceable> AS <replaceable>script</replaceable>
+
+<phrase>where <replaceable class="parameter">control_parameter</replaceable> is one of:
+
+ SCHEMA <replaceable class="parameter">schema_name</replaceable>
+ SUPERUSER
+ NOSUPERUSER
+ RELOCATABLE
+ NORELOCATABLE
+ REQUIRES <replaceable class="parameter">requirements</replaceable>
+
 </synopsis>
  </refsynopsisdiv>
-
  <refsect1>
   <title>Description</title>
 
@@ -58,6 +70,24 @@ ALTER TEMPLATE FOR EXTENSION <replaceable>name</replaceable> SET DEFAULT VERSION
     </listitem>
    </varlistentry>
 
+   <varlistentry>
+    <term><replaceable class="parameter">script</replaceable></term>
+    <listitem>
+     <para>
+      The script to run when installing this version of the extension.
+     </para>
+    </listitem>
+   </varlistentry>
+
+   <varlistentry>
+    <term><replaceable class="parameter">control_parameters</replaceable></term>
+    <listitem>
+     <para>
+      For details about the control parameters meaning, please refer
+      to <xref linkend="extend-extension">.
+     </para>
+    </listitem>
+   </varlistentry>
  </variablelist>
  </refsect1>
 

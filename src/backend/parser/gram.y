@@ -3565,20 +3565,6 @@ AlterTemplateStmt:
 					n->missing_ok = false;
 					$$ = (Node *) n;
 				}
-			| ALTER TEMPLATE FOR EXTENSION name
-			  FROM ColId_or_Sconst TO ColId_or_Sconst
-			  WITH create_template_control
-				{
-					AlterTemplateStmt *n = makeNode(AlterTemplateStmt);
-					n->template = TEMPLATE_UPDATE_EXTENSION;
-					n->cmdtype = AET_UPDATE_CONTROL;
-					n->extname = $5;
-					n->from = $7;
-					n->to = $9;
-					n->control = $11;
-					n->missing_ok = false;
-					$$ = (Node *) n;
-				}
 		;
 
 /*****************************************************************************

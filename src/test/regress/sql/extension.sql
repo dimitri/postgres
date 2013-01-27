@@ -48,6 +48,27 @@ AS
   COMMENT ON EXTENSION pair IS 'Simple Key Value Text Type';
 $$;
 
+-- test some ALTER commands
+
+-- ok
+ALTER TEMPLATE FOR EXTENSION PAIR VERSION '1.0' WITH (relocatable);
+
+-- we don't have a version 1.3 known yet
+ALTER TEMPLATE FOR EXTENSION PAIR VERSION '1.3' WITH (relocatable);
+
+-- you can't set the default on an upgrade script, only an extension's version
+ALTER TEMPLATE FOR EXTENSION PAIR FROM '1.0' TO '1.1' SET DEFAULT;
+
+-- you can't set control properties on an upgrade script, only an
+-- extension's version
+ALTER TEMPLATE FOR EXTENSION PAIR FROM '1.0' TO '1.1' WITH (relocatable);
+
+-- you can actually change the script used to update, though
+ALTER TEMPLATE FOR EXTENSION PAIR FROM '1.1' TO '1.2'
+AS $$
+  COMMENT ON EXTENSION pair IS 'A Toy Key Value Text Type';
+$$;
+
 CREATE EXTENSION pair;
 
 \dx pair

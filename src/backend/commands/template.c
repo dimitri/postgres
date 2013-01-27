@@ -62,6 +62,10 @@ static Oid InsertExtensionUpTmplTuple(Oid owner,
 									  const char *script);
 
 static Oid AlterTemplateSetDefault(const char *extname, const char *version);
+static Oid AlterTemplateSetControl(const char *extname,
+								   const char *version,
+								   List *options);
+
 static Oid AlterTemplateSetScript(const char *extname,
 								  const char *version, const char *script);
 static Oid AlterUpTpmlSetScript(const char *extname,
@@ -376,6 +380,34 @@ CreateExtensionUpdateTemplate(CreateTemplateStmt *stmt)
 }
 
 /*
+ * Utility function to build a text[] from the List *requires option.
+ */
+static Datum
+construct_control_requires_datum(List *requires)
+{
+	Datum	   *datums;
+	int			ndatums;
+	ArrayType  *a;
+	ListCell   *lc;
+
+	ndatums = list_length(requires);
+	datums = (Datum *) palloc(ndatums * sizeof(Datum));
+	ndatums = 0;
+	foreach(lc, requires)
+	{
+		char	   *curreq = (char *) lfirst(lc);
+
+		datums[ndatums++] =
+			DirectFunctionCall1(namein, CStringGetDatum(curreq));
+	}
+	a = construct_array(datums, ndatums,
+						NAMEOID,
+						NAMEDATALEN, false, 'c');
+
+	return PointerGetDatum(a);
+}
+
+/*
  * InsertExtensionControlTuple
  *
  * Insert the new pg_extension_control row and register its dependency to its
@@ -434,29 +466,8 @@ InsertExtensionControlTuple(Oid owner,
 	if (control->requires == NULL)
 		nulls[Anum_pg_extension_control_ctlrequires - 1] = true;
 	else
-	{
-		Datum	   *datums;
-		int			ndatums;
-		ArrayType  *a;
-		ListCell   *lc;
-
-		ndatums = list_length(control->requires);
-		datums = (Datum *) palloc(ndatums * sizeof(Datum));
-		ndatums = 0;
-		foreach(lc, control->requires)
-		{
-			char	   *curreq = (char *) lfirst(lc);
-
-			datums[ndatums++] =
-				DirectFunctionCall1(namein, CStringGetDatum(curreq));
-		}
-		a = construct_array(datums, ndatums,
-							NAMEOID,
-							NAMEDATALEN, false, 'c');
-
 		values[Anum_pg_extension_control_ctlrequires - 1] =
-			PointerGetDatum(a);
-	}
+			construct_control_requires_datum(control->requires);
 
 	tuple = heap_form_tuple(rel->rd_att, values, nulls);
 
@@ -682,28 +693,45 @@ AlterExtensionTemplate(AlterTemplateStmt *stmt)
 			return AlterTemplateSetDefault(stmt->extname, stmt->version);
 
 		case AET_SET_SCRIPT:
-			switch (stmt->template)
-			{
-				case TEMPLATE_CREATE_EXTENSION:
-					return AlterTemplateSetScript(stmt->extname,
-												  stmt->version,
-												  stmt->script);
-					break;
+			return AlterTemplateSetScript(stmt->extname,
+										  stmt->version,
+										  stmt->script);
 
-				case TEMPLATE_UPDATE_EXTENSION:
-					return AlterUpTpmlSetScript(stmt->extname,
-												stmt->from,
-												stmt->to,
-												stmt->script);
-					break;
-			}
+		case AET_UPDATE_CONTROL:
+			return AlterTemplateSetControl(stmt->extname,
+										   stmt->version,
+										   stmt->control);
+	}
+	/* make compiler happy */
+	return InvalidOid;
+}
+
+/*
+ * ALTER TEMPLATE FOR EXTENSION UPDATE routing
+ */
+Oid
+AlterExtensionUpdateTemplate(AlterTemplateStmt *stmt)
+{
+	switch (stmt->cmdtype)
+	{
+		case AET_SET_DEFAULT:
+			/* shouldn't happen */
+			elog(ERROR, "pg_extension_control is associated to a specific version of an extension, not an update script.");
 			break;
 
 		case AET_UPDATE_CONTROL:
-			elog(WARNING, "Not Yet Implemented");
+			/* shouldn't happen */
+			elog(ERROR, "pg_extension_control is associated to a specific version of an extension, not an update script.");
 			break;
-	}
 
+		case AET_SET_SCRIPT:
+			return AlterUpTpmlSetScript(stmt->extname,
+										stmt->from,
+										stmt->to,
+										stmt->script);
+
+	}
+	/* make compiler happy */
 	return InvalidOid;
 }
 
@@ -949,17 +977,114 @@ AlterUpTpmlSetScript(const char *extname,
 	return extUpTmplOid;
 }
 
-
 /*
- * ALTER TEMPLATE FOR EXTENSION name FROM old TO new
- *
- * This implements high level routing for sub commands.
+ * AlterTemplateSetControl
  */
-Oid
-AlterExtensionUpdateTemplate(AlterTemplateStmt *stmt)
+static Oid
+AlterTemplateSetControl(const char *extname,
+						const char *version,
+						List *options)
 {
-	elog(WARNING, "Not Yet Implemented");
-	return InvalidOid;
+	Oid         ctrlOid;
+	Relation	rel;
+	SysScanDesc scandesc;
+	HeapTuple	tuple;
+	ScanKeyData entry[2];
+	Datum		values[Natts_pg_extension_control];
+	bool		nulls[Natts_pg_extension_control];
+	bool		repl[Natts_pg_extension_control];
+
+	ExtensionControl *current_control;
+ 	ExtensionControl *new_control =
+		(ExtensionControl *) palloc0(sizeof(ExtensionControl));
+
+	/* parse the new control options given in the SQL command */
+	new_control->name = pstrdup(extname);
+	parse_statement_control_defelems(new_control, options);
+
+	/* now find the tuple we want to edit */
+	rel = heap_open(ExtensionControlRelationId, AccessShareLock);
+
+	ScanKeyInit(&entry[0],
+				Anum_pg_extension_control_ctlname,
+				BTEqualStrategyNumber, F_NAMEEQ,
+				CStringGetDatum(extname));
+
+	ScanKeyInit(&entry[1],
+				Anum_pg_extension_control_ctlversion,
+				BTEqualStrategyNumber, F_TEXTEQ,
+				CStringGetTextDatum(version));
+
+	scandesc = systable_beginscan(rel,
+								  ExtensionControlNameVersionIndexId, true,
+								  SnapshotNow, 2, entry);
+
+	tuple = systable_getnext(scandesc);
+
+	if (!HeapTupleIsValid(tuple))		/* should not happen */
+		elog(ERROR,
+			 "pg_extension_control for extension \"%s\" version \"%s\" does not exist",
+			 extname, version);
+
+	ctrlOid = HeapTupleGetOid(tuple);
+
+	/* check privileges */
+	if (!pg_extension_control_ownercheck(ctrlOid, GetUserId()))
+		aclcheck_error(ACLCHECK_NOT_OWNER, ACL_KIND_EXTCONTROL,
+					   extname);
+
+	current_control = read_pg_extension_control(extname, rel, tuple);
+
+	/* Modify the pg_extension_control tuple */
+	memset(values, 0, sizeof(values));
+	memset(nulls, 0, sizeof(nulls));
+	memset(repl, 0, sizeof(repl));
+
+	/*
+	 * We don't compare with the current value, we directly set what's been
+	 * given in the new command, if anything was given
+	 */
+	if (new_control->schema)
+	{
+		values[Anum_pg_extension_control_ctlnamespace - 1] =
+			DirectFunctionCall1(namein, CStringGetDatum((new_control->schema)));
+		repl[Anum_pg_extension_control_ctlnamespace - 1] = true;
+	}
+	if (new_control->requires)
+	{
+		values[Anum_pg_extension_control_ctlrequires - 1] =
+			construct_control_requires_datum(new_control->requires);
+		repl[Anum_pg_extension_control_ctlrequires - 1] = true;
+	}
+
+	/*
+	 * We need to compare superuser and relocatable because those are bools,
+	 * and we don't have a NULL pointer when they were omited in the command.
+	 */
+	if (new_control->superuser != current_control->superuser)
+	{
+		values[Anum_pg_extension_control_ctlsuperuser - 1] =
+			BoolGetDatum(new_control->superuser);
+		repl[Anum_pg_extension_control_ctlsuperuser - 1] = true;
+	}
+	if (new_control->relocatable != current_control->relocatable)
+	{
+		values[Anum_pg_extension_control_ctlrelocatable - 1] =
+			BoolGetDatum(new_control->relocatable);
+		repl[Anum_pg_extension_control_ctlrelocatable - 1] = true;
+	}
+
+	tuple = heap_modify_tuple(tuple, RelationGetDescr(rel),
+							  values, nulls, repl);
+
+	simple_heap_update(rel, &tuple->t_self, tuple);
+	CatalogUpdateIndexes(rel, tuple);
+
+	systable_endscan(scandesc);
+
+	heap_close(rel, AccessShareLock);
+
+	return ctrlOid;
 }
 
 /*
