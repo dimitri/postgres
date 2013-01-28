@@ -27,17 +27,20 @@ extern bool creating_extension;
 extern Oid	CurrentExtensionObject;
 
 /*
- * Internal data structure to hold the results of parsing a control file
+ * Internal data structure to hold the extension control information, that we
+ * get either from parsing a control file or from the pg_extension_control
+ * catalog when working from Extension Templates.
  */
 typedef struct ExtensionControl
 {
+	Oid         ctrlOid;		 /* pg_control_extension oid, or invalidoid */
 	char	   *name;			/* name of the extension */
 	char	   *directory;		/* directory for script files */
 	char	   *default_version;	/* default install target version, if any */
-	char	   *module_pathname;	/* string to substitute for MODULE_PATHNAME */
+	char	   *module_pathname;	/* string to substitute for module_pathname */
 	char	   *comment;		/* comment, if any */
 	char	   *schema;			/* target schema (allowed if !relocatable) */
-	bool		relocatable;	/* is ALTER EXTENSION SET SCHEMA supported? */
+	bool		relocatable;	/* is alter extension set schema supported? */
 	bool		superuser;		/* must be superuser to install? */
 	int			encoding;		/* encoding of the script file, or -1 */
 	List	   *requires;		/* names of prerequisite extensions */
@@ -52,9 +55,10 @@ extern Oid CreateExtension(CreateExtensionStmt *stmt);
 extern void RemoveExtensionById(Oid extId);
 
 extern Oid InsertExtensionTuple(const char *extName, Oid extOwner,
-					 Oid schemaOid, bool relocatable, const char *extVersion,
-					 Datum extConfig, Datum extCondition,
-					 List *requiredExtensions);
+								Oid schemaOid, bool relocatable,
+								const char *extVersion,
+								Datum extConfig, Datum extCondition,
+								List *requiredExtensions, Oid ctrlOid);
 
 extern Oid ExecAlterExtensionStmt(AlterExtensionStmt *stmt);
 

@@ -37,6 +37,7 @@
 #include "catalog/pg_collation.h"
 #include "catalog/pg_depend.h"
 #include "catalog/pg_extension.h"
+#include "catalog/pg_extension_control.h"
 #include "catalog/pg_namespace.h"
 #include "catalog/pg_type.h"
 #include "commands/alter.h"
@@ -572,6 +573,7 @@ read_extension_control_file(const char *extname)
 	 * Set up default values.  Pointer fields are initially null.
 	 */
 	control = (ExtensionControl *) palloc0(sizeof(ExtensionControl));
+	control->ctrlOid = InvalidOid;
 	control->name = pstrdup(extname);
 	control->is_template = false;
 	control->relocatable = false;
@@ -1565,7 +1567,8 @@ CreateExtension(CreateExtensionStmt *stmt)
 										versionName,
 										PointerGetDatum(NULL),
 										PointerGetDatum(NULL),
-										requiredExtensions);
+										requiredExtensions,
+										control->ctrlOid);
 
 	/*
 	 * Apply any control-file comment on extension
@@ -1608,7 +1611,7 @@ Oid
 InsertExtensionTuple(const char *extName, Oid extOwner,
 					 Oid schemaOid, bool relocatable, const char *extVersion,
 					 Datum extConfig, Datum extCondition,
-					 List *requiredExtensions)
+					 List *requiredExtensions, Oid ctrlOid)
 {
 	Oid			extensionOid;
 	Relation	rel;
@@ -1678,6 +1681,19 @@ InsertExtensionTuple(const char *extName, Oid extOwner,
 
 		recordDependencyOn(&myself, &otherext, DEPENDENCY_NORMAL);
 	}
+
+	/* Record dependency on pg_control_extension, if created from a template */
+	if (OidIsValid(ctrlOid))
+	{
+		ObjectAddress pg_extension_control;
+
+		pg_extension_control.classId = ExtensionControlRelationId;
+		pg_extension_control.objectId = ctrlOid;
+		pg_extension_control.objectSubId = 0;
+
+		recordDependencyOn(&myself, &pg_extension_control, DEPENDENCY_NORMAL);
+	}
+
 	/* Post creation hook for new extension */
 	InvokeObjectAccessHook(OAT_POST_CREATE,
 						   ExtensionRelationId, extensionOid, 0, NULL);
