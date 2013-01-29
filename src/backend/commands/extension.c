@@ -1682,7 +1682,7 @@ InsertExtensionTuple(const char *extName, Oid extOwner,
 		recordDependencyOn(&myself, &otherext, DEPENDENCY_NORMAL);
 	}
 
-	/* Record dependency on pg_control_extension, if created from a template */
+	/* Record dependency on pg_extension_control, if created from a template */
 	if (OidIsValid(ctrlOid))
 	{
 		ObjectAddress pg_extension_control;

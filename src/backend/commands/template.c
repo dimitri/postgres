@@ -370,6 +370,17 @@ CreateExtensionUpdateTemplate(CreateTemplateStmt *stmt)
 
 		parse_statement_control_defelems(control, stmt->control);
 	}
+	else
+	{
+		/*
+		 *
+		 * To allow for ALTER command to be able to change the control
+		 * properties of the given extension for the target version (to) here,
+		 * when no control properties have been given on the command line, copy
+		 * those of the version we upgrade from (from).
+		 */
+		control = find_pg_extension_control(stmt->extname, stmt->from, false);
+	}
 
 	return InsertExtensionUpTmplTuple(owner, stmt->extname, control,
 									  stmt->from, stmt->to, stmt->script);
@@ -419,7 +430,6 @@ InsertExtensionControlTuple(Oid owner,
 	Datum		values[Natts_pg_extension_control];
 	bool		nulls[Natts_pg_extension_control];
 	HeapTuple	tuple;
-	ObjectAddress myself;
 
 	/*
 	 * Build and insert the pg_extension_control tuple
@@ -474,7 +484,7 @@ InsertExtensionControlTuple(Oid owner,
 	heap_close(rel, RowExclusiveLock);
 
 	/*
-	 * Record dependencies on owner only.
+	 * Record dependencies on owner.
 	 *
 	 * When we create the extension template and control file, the target
 	 * extension, its schema and requirements usually do not exist in the
@@ -482,10 +492,6 @@ InsertExtensionControlTuple(Oid owner,
 	 * template.
 	 */
 	recordDependencyOnOwner(ExtensionControlRelationId, extControlOid, owner);
-
-	myself.classId = ExtensionControlRelationId;
-	myself.objectId = extControlOid;
-	myself.objectSubId = 0;
 
 	/* Post creation hook for new extension control */
 	InvokeObjectAccessHook(OAT_POST_CREATE,
@@ -589,17 +595,14 @@ InsertExtensionUpTmplTuple(Oid owner,
 	Datum		values[Natts_pg_extension_uptmpl];
 	bool		nulls[Natts_pg_extension_uptmpl];
 	HeapTuple	tuple;
-	ObjectAddress myself;
+	ObjectAddress myself, ctrl;
 
 	/*
 	 * First create the companion extension control entry, if any. In the case
 	 * of an Update Template the comanion control entry is somilar in scope to
 	 * a secondary control file, and is attached to the target version.
 	 */
-	if (control)
-		extControlOid = InsertExtensionControlTuple(owner, control, to);
-	else
-		extControlOid = InvalidOid;
+	extControlOid = InsertExtensionControlTuple(owner, control, to);
 
 	/*
 	 * Build and insert the pg_extension_uptmpl tuple
@@ -639,16 +642,11 @@ InsertExtensionUpTmplTuple(Oid owner,
 	myself.objectSubId = 0;
 
 	/* record he dependency between the control row and the template row */
-	if (control)
-	{
-		ObjectAddress ctrl;
+	ctrl.classId = ExtensionControlRelationId;
+	ctrl.objectId = extControlOid;
+	ctrl.objectSubId = 0;
 
-		ctrl.classId = ExtensionControlRelationId;
-		ctrl.objectId = extControlOid;
-		ctrl.objectSubId = 0;
-
-		recordDependencyOn(&ctrl, &myself, DEPENDENCY_INTERNAL);
-	}
+	recordDependencyOn(&ctrl, &myself, DEPENDENCY_INTERNAL);
 
 	/* Post creation hook for new extension control */
 	InvokeObjectAccessHook(OAT_POST_CREATE,
@@ -1509,7 +1507,7 @@ find_default_pg_extension_control(const char *extname, bool missing_ok)
 }
 
 /*
- * read_pg_extension_uptmpl_script
+ * read_pg_extension_template_script
  *
  * Return the script from the pg_extension_template catalogs.
  */

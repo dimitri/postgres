@@ -3635,6 +3635,11 @@ create_template_control_item:
 						$$ = makeDefElem("relocatable", (Node *)makeInteger(TRUE));
 					else if (strcmp($1, "norelocatable") == 0)
 						$$ = makeDefElem("relocatable", (Node *)makeInteger(FALSE));
+					else if (strcmp($1, "requires") == 0)
+						ereport(ERROR,
+								(errcode(ERRCODE_SYNTAX_ERROR),
+								 errmsg("template option \"%s\" takes an argument", $1),
+									 parser_errposition(@1)));
 					else
 						ereport(ERROR,
 								(errcode(ERRCODE_SYNTAX_ERROR),

@@ -39,7 +39,7 @@ CATALOG(pg_extension_control,3379)
 
 #ifdef CATALOG_VARLEN			/* variable-length fields start here */
 	text		ctlversion;		/* version to install with this control */
-	text 		ctlrequires;	/* extension dependency list */
+	text 		ctlrequires[1];	/* extension dependency list */
 #endif
 } FormData_pg_extension_control;
 

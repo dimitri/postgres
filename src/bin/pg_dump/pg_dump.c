@@ -168,6 +168,7 @@ static int	collectSecLabels(Archive *fout, SecLabelItem **items);
 static void dumpDumpableObject(Archive *fout, DumpableObject *dobj);
 static void dumpNamespace(Archive *fout, NamespaceInfo *nspinfo);
 static void dumpExtension(Archive *fout, ExtensionInfo *extinfo);
+static void dumpExtensionTemplate(Archive *fout, ExtensionTemplateInfo *extinfo);
 static void dumpType(Archive *fout, TypeInfo *tyinfo);
 static void dumpBaseType(Archive *fout, TypeInfo *tyinfo);
 static void dumpEnumType(Archive *fout, TypeInfo *tyinfo);
@@ -2719,6 +2720,127 @@ findNamespace(Archive *fout, Oid nsoid, Oid objoid)
 		exit_horribly(NULL, "schema with OID %u does not exist\n", nsoid);
 
 	return nsinfo;
+}
+
+/*
+ * getExtensions:
+ *	  read all extensions in the system catalogs and return them in the
+ * ExtensionInfo* structure
+ *
+ *	numExtensions is set to the number of extensions read in
+ */
+ExtensionTemplateInfo *
+getExtensionTemplates(Archive *fout, int *numExtensionTemplates)
+{
+	PGresult   *res;
+	int			ntups;
+	int			i;
+	PQExpBuffer query;
+	ExtensionTemplateInfo *exttmplinfo;
+	int			i_tableoid;
+	int			i_oid;
+	int			i_extname;
+	int			i_namespace;
+	int			i_isdefault;
+	int			i_relocatable;
+	int			i_superuser;
+	int			i_requires;
+	int			i_install;
+	int			i_version;
+	int			i_from;
+	int			i_to;
+	int			i_script;
+
+	/*
+	 * Before 9.3, there are no extension templates.
+	 */
+	if (fout->remoteVersion < 90300)
+	{
+		*numExtensionTemplates = 0;
+		return NULL;
+	}
+
+	query = createPQExpBuffer();
+
+	/* Make sure we are in proper schema */
+	selectSourceSchema(fout, "pg_catalog");
+
+	/*
+	 * The main catalog object for an extension template is the
+	 * pg_extension_control entry, from which thanks to pg_depend we fetch
+	 * either the extension creation script or its upgrade script.
+	 */
+	appendPQExpBuffer(query, "select c.tableoid, c.oid, "
+					  "c.ctlname, c.ctldefault, c.ctlrelocatable, "
+					  "c.ctlsuperuser, c.ctlnamespace, "
+					  "array_to_string(c.ctlrequires, ',') as requires, "
+					  "true as install, t.tplversion as version, "
+					  "null as uptfrom, null as uptto, t.tplscript as script "
+					  "from pg_extension_control c "
+					  "join pg_depend d "
+					  "on d.classid = 'pg_catalog.pg_extension_control'::regclass "
+					  "and d.objid = c.oid "
+					  "and d.refclassid = 'pg_catalog.pg_extension_template'::regclass "
+					  "join pg_extension_template t on t.oid = d.refobjid "
+					  "union all  "
+					  "select c.tableoid, c.oid, "
+					  "c.ctlname, c.ctldefault, c.ctlrelocatable, "
+					  "c.ctlsuperuser, c.ctlnamespace, "
+					  "array_to_string(c.ctlrequires, ',') as requires, "
+					  "false as install, null as version, "
+					  "u.uptfrom, u.uptto, u.uptscript as script "
+					  "from pg_extension_control c "
+					  "join pg_depend d on d.classid = 'pg_catalog.pg_extension_control'::regclass "
+					  "and d.objid = c.oid "
+					  "and d.refclassid = 'pg_catalog.pg_extension_uptmpl'::regclass "
+					  "join pg_extension_uptmpl u on u.oid = d.refobjid ");
+
+	res = ExecuteSqlQuery(fout, query->data, PGRES_TUPLES_OK);
+
+	ntups = PQntuples(res);
+
+	exttmplinfo = (ExtensionTemplateInfo *)
+		pg_malloc(ntups * sizeof(ExtensionTemplateInfo));
+
+	i_tableoid = PQfnumber(res, "tableoid");
+	i_oid = PQfnumber(res, "oid");
+	i_extname = PQfnumber(res, "ctlname");
+	i_isdefault = PQfnumber(res, "ctldefault");
+	i_relocatable = PQfnumber(res, "ctlrelocatable");
+	i_namespace = PQfnumber(res, "ctlnamespace");
+	i_requires = PQfnumber(res, "requires");
+	i_superuser = PQfnumber(res, "ctlsuperuser");
+	i_install = PQfnumber(res, "install");
+	i_version = PQfnumber(res, "version");
+	i_from = PQfnumber(res, "uptfrom");
+	i_to = PQfnumber(res, "uptto");
+	i_script = PQfnumber(res, "script");
+
+	for (i = 0; i < ntups; i++)
+	{
+		exttmplinfo[i].dobj.objType = DO_EXTENSION_TEMPLATE;
+		exttmplinfo[i].dobj.catId.tableoid = atooid(PQgetvalue(res, i, i_tableoid));
+		exttmplinfo[i].dobj.catId.oid = atooid(PQgetvalue(res, i, i_oid));
+		AssignDumpId(&exttmplinfo[i].dobj);
+		exttmplinfo[i].dobj.name = pg_strdup(PQgetvalue(res, i, i_extname));
+		exttmplinfo[i].namespace = pg_strdup(PQgetvalue(res, i, i_namespace));
+		exttmplinfo[i].isdefault = *(PQgetvalue(res, i, i_isdefault)) == 't';
+		exttmplinfo[i].relocatable = *(PQgetvalue(res, i, i_relocatable)) == 't';
+		exttmplinfo[i].superuser = *(PQgetvalue(res, i, i_superuser)) == 't';
+		exttmplinfo[i].install = *(PQgetvalue(res, i, i_install)) == 't';
+		exttmplinfo[i].requires = pg_strdup(PQgetvalue(res, i, i_requires));
+		exttmplinfo[i].version = pg_strdup(PQgetvalue(res, i, i_version));
+		exttmplinfo[i].from = pg_strdup(PQgetvalue(res, i, i_from));
+		exttmplinfo[i].to = pg_strdup(PQgetvalue(res, i, i_to));
+		exttmplinfo[i].script = pg_strdup(PQgetvalue(res, i, i_script));
+	}
+
+	PQclear(res);
+	destroyPQExpBuffer(query);
+
+	*numExtensionTemplates = ntups;
+
+	return exttmplinfo;
 }
 
 /*
@@ -7280,6 +7402,9 @@ dumpDumpableObject(Archive *fout, DumpableObject *dobj)
 		case DO_NAMESPACE:
 			dumpNamespace(fout, (NamespaceInfo *) dobj);
 			break;
+		case DO_EXTENSION_TEMPLATE:
+			dumpExtensionTemplate(fout, (ExtensionTemplateInfo *) dobj);
+			break;
 		case DO_EXTENSION:
 			dumpExtension(fout, (ExtensionInfo *) dobj);
 			break;
@@ -7445,6 +7570,95 @@ dumpNamespace(Archive *fout, NamespaceInfo *nspinfo)
 			nspinfo->rolname, nspinfo->nspacl);
 
 	free(qnspname);
+
+	destroyPQExpBuffer(q);
+	destroyPQExpBuffer(delq);
+	destroyPQExpBuffer(labelq);
+}
+
+/*
+ * dumpExtensionTemplate
+ *	  writes out to fout the queries to recreate an extension
+ */
+static void
+dumpExtensionTemplate(Archive *fout, ExtensionTemplateInfo *exttmplinfo)
+{
+	PQExpBuffer q;
+	PQExpBuffer delq;
+	PQExpBuffer labelq;
+	char	   *qextname, *qversion, *qfrom, *qto;
+	bool 		pg_extension_template; /* install or upgrade script? */
+
+	/* Skip if not to be dumped */
+	if (!exttmplinfo->dobj.dump || dataOnly)
+		return;
+
+	q = createPQExpBuffer();
+	delq = createPQExpBuffer();
+	labelq = createPQExpBuffer();
+
+	qextname = pg_strdup(fmtId(exttmplinfo->dobj.name));
+	pg_extension_template = exttmplinfo->install;
+
+	if (pg_extension_template)
+	{
+		qversion = pg_strdup(fmtId(exttmplinfo->version));
+
+		appendPQExpBuffer(delq, "DROP TEMPLATE FOR EXTENSION %s VERSION %s;\n",
+						  qextname, qversion);
+	}
+	else
+	{
+		qfrom = pg_strdup(fmtId(exttmplinfo->from));
+		qto = pg_strdup(fmtId(exttmplinfo->to));
+
+		appendPQExpBuffer(delq, "DROP TEMPLATE FOR EXTENSION %s FROM %s TO %s;\n",
+						  qextname, qfrom, qto);
+	}
+
+	appendPQExpBuffer(q, "CREATE TEMPLATE FOR EXTENSION %s", qextname);
+
+	if (pg_extension_template)
+	{
+		if (exttmplinfo->isdefault)
+			appendPQExpBuffer(q, " DEFAULT");
+
+		appendPQExpBuffer(q, " VERSION %s", qversion);
+	}
+	else
+		appendPQExpBuffer(q, " FROM %s TO %s", qfrom, qto);
+
+	/* control options  */
+	appendPQExpBuffer(q, "\n  WITH (schema %s, %ssuperuser, %srelocatable",
+					  fmtId(exttmplinfo->namespace),
+					  exttmplinfo->superuser ? "" : "no",
+					  exttmplinfo->relocatable ? "" : "no");
+
+	if (exttmplinfo->requires && strlen(exttmplinfo->requires))
+		appendPQExpBuffer(q, ", requires '%s'", exttmplinfo->requires);
+	appendPQExpBuffer(q, ")\n");
+
+	/* extension script (either install or upgrade script) */
+	appendPQExpBuffer(q, " AS\n$$%s$$;\n", exttmplinfo->script);
+
+	ArchiveEntry(fout, exttmplinfo->dobj.catId, exttmplinfo->dobj.dumpId,
+				 exttmplinfo->dobj.name,
+				 NULL, NULL,
+				 "",
+				 false, "EXTENSION TEMPLATE", SECTION_PRE_DATA,
+				 q->data, delq->data, NULL,
+				 NULL, 0,
+				 NULL, NULL);
+
+	/* Dump Extension Comments and Security Labels */
+	dumpComment(fout, labelq->data,
+				NULL, "",
+				exttmplinfo->dobj.catId, 0, exttmplinfo->dobj.dumpId);
+	dumpSecLabel(fout, labelq->data,
+				 NULL, "",
+				 exttmplinfo->dobj.catId, 0, exttmplinfo->dobj.dumpId);
+
+	free(qextname);
 
 	destroyPQExpBuffer(q);
 	destroyPQExpBuffer(delq);
@@ -14411,6 +14625,7 @@ addBoundaryDependencies(DumpableObject **dobjs, int numObjs,
 		{
 			case DO_NAMESPACE:
 			case DO_EXTENSION:
+			case DO_EXTENSION_TEMPLATE:
 			case DO_TYPE:
 			case DO_SHELL_TYPE:
 			case DO_FUNC:

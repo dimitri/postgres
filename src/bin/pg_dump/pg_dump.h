@@ -79,6 +79,7 @@ typedef enum
 	/* When modifying this enum, update priority tables in pg_dump_sort.c! */
 	DO_NAMESPACE,
 	DO_EXTENSION,
+	DO_EXTENSION_TEMPLATE,
 	DO_TYPE,
 	DO_SHELL_TYPE,
 	DO_FUNC,
@@ -143,6 +144,21 @@ typedef struct _extensionInfo
 	char	   *extconfig;		/* info about configuration tables */
 	char	   *extcondition;
 } ExtensionInfo;
+
+typedef struct _extensionTemplateInfo
+{
+	DumpableObject dobj;
+	char	   *namespace;		/* schema containing extension's objects */
+	bool		isdefault;		/* from pg_extension_control */
+	bool		relocatable;	/* from pg_extension_control */
+	bool		superuser;		/* from pg_extension_control */
+	char	   *requires;		/* from pg_extension_control */
+	bool	    install;		/* true if install template (not upgrade) */
+	char	   *version;		/* from pg_extension_template */
+	char	   *from;			/* from pg_extension_uptmpl */
+	char	   *to;				/* from pg_extension_uptmpl */
+	char	   *script;			/* both from template or uptmpl */
+} ExtensionTemplateInfo;
 
 typedef struct _typeInfo
 {
@@ -536,6 +552,8 @@ extern void sortDumpableObjectsByTypeOid(DumpableObject **objs, int numObjs);
  */
 extern NamespaceInfo *getNamespaces(Archive *fout, int *numNamespaces);
 extern ExtensionInfo *getExtensions(Archive *fout, int *numExtensions);
+extern ExtensionTemplateInfo *getExtensionTemplates(Archive *fout,
+												   int *numExtensionTemplates);
 extern TypeInfo *getTypes(Archive *fout, int *numTypes);
 extern FuncInfo *getFuncs(Archive *fout, int *numFuncs);
 extern AggInfo *getAggregates(Archive *fout, int *numAggregates);
