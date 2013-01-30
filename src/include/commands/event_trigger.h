@@ -13,6 +13,7 @@
 #ifndef EVENT_TRIGGER_H
 #define EVENT_TRIGGER_H
 
+#include "catalog/dependency.h"
 #include "catalog/objectaddress.h"
 #include "catalog/pg_event_trigger.h"
 #include "nodes/parsenodes.h"
@@ -27,7 +28,7 @@
  * operation.
  */
 extern bool EventTriggerSQLDropInProgress;
-extern List *EventTriggerSQLDropList;
+extern ObjectAddresses *EventTriggerSQLDropList;
 
 typedef struct EventTriggerData
 {
