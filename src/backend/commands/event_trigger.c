@@ -25,6 +25,7 @@
 #include "commands/dbcommands.h"
 #include "commands/event_trigger.h"
 #include "commands/trigger.h"
+#include "funcapi.h"
 #include "parser/parse_func.h"
 #include "pgstat.h"
 #include "miscadmin.h"
@@ -38,6 +39,10 @@
 #include "utils/tqual.h"
 #include "utils/syscache.h"
 #include "tcop/utility.h"
+
+/* Globally visible state variables */
+bool EventTriggerSQLDropInProgress = false;
+List *EventTriggerSQLDropList = NIL;
 
 typedef struct
 {
@@ -126,7 +131,8 @@ CreateEventTrigger(CreateEventTrigStmt *stmt)
 
 	/* Validate event name. */
 	if (strcmp(stmt->eventname, "ddl_command_start") != 0 &&
-		strcmp(stmt->eventname, "ddl_command_end") != 0)
+		strcmp(stmt->eventname, "ddl_command_end") != 0 &&
+		strcmp(stmt->eventname, "sql_drop") != 0)
 		ereport(ERROR,
 			(errcode(ERRCODE_SYNTAX_ERROR),
 			 errmsg("unrecognized event name \"%s\"",
@@ -150,8 +156,13 @@ CreateEventTrigger(CreateEventTrigStmt *stmt)
 	}
 
 	/* Validate tag list, if any. */
-	if (strcmp(stmt->eventname, "ddl_command_start") == 0 && tags != NULL)
+	if ((strcmp(stmt->eventname, "ddl_command_start") == 0 ||
+		 strcmp(stmt->eventname, "ddl_command_end") == 0 ||
+		 strcmp(stmt->eventname, "sql_drop") == 0)
+		&& tags != NULL)
+	{
 		validate_ddl_tags("tag", tags);
+	}
 
 	/*
 	 * Give user a nice error message if an event trigger of the same name
@@ -824,4 +835,222 @@ EventTriggerSupportsObjectType(ObjectType obtype)
 			break;
 	}
 	return true;
+}
+
+/*
+ * SQL DROP event support functions
+ */
+void
+EventTriggerInitDropList(void)
+{
+	if (EventCacheLookup(EVT_SQLDrop))
+	{
+		EventTriggerSQLDropInProgress = true;
+		EventTriggerSQLDropList = NIL;
+	}
+}
+
+/*
+ * Push ObjectAddress to the list of deleted objects.
+ *
+ * XXX we might want to revisit the List storage and switch to a hash table
+ * here (the ordering can not be guaranteed anyway, because of sync scans of
+ * pg_depend), so that we're not O( n log n) when adding objects to the list.
+ *
+ * List of object dependencies are expected to be small enough that the N in
+ * the big-O notation would make this looping faster than setting up a hash
+ * table then calling the hash function anyway.
+ */
+List *
+EventTriggerAppendToDropList(ObjectAddress *object)
+{
+	ListCell *lc;
+	ObjectAddress *copy = (ObjectAddress *) palloc(sizeof(ObjectAddress));
+
+	copy->classId = object->classId;
+	copy->objectId = object->objectId;
+	copy->objectSubId = object->objectSubId;
+
+	/* only append if the object is not already in the list */
+	foreach(lc, EventTriggerSQLDropList)
+	{
+		ObjectAddress *member = (ObjectAddress *) lfirst(lc);
+
+		if (member->classId == copy->classId &&
+			member->objectId == copy->objectId &&
+			member->objectSubId == copy->objectSubId)
+		{
+			/* we already have it, done */
+			return EventTriggerSQLDropList;
+		}
+	}
+	EventTriggerSQLDropList = lappend(EventTriggerSQLDropList, copy);
+
+	return EventTriggerSQLDropList;
+}
+
+/*
+ * Call the Event Trigger on the "sql_drop" event
+ */
+void EventTriggerSQLDrop(Node *parsetree)
+{
+	List	   *cachelist;
+	List	   *runlist = NIL;
+	ListCell   *lc;
+	const char *tag;
+	EventTriggerData	trigdata;
+
+	/*
+	 * See EventTriggerDDLCommandStart for a discussion about why event
+	 * triggers are disabled in single user mode.
+	 */
+	if (!IsUnderPostmaster)
+		return;
+
+	/*
+	 * See EventTriggerDDLCommandStart for a discussion about why this check is
+	 * important.
+	 *
+	 */
+#ifdef USE_ASSERT_CHECKING
+	if (assert_enabled)
+	{
+		const char *dbgtag;
+
+		dbgtag = CreateCommandTag(parsetree);
+		if (check_ddl_tag(dbgtag) != EVENT_TRIGGER_COMMAND_TAG_OK)
+			elog(ERROR, "unexpected command tag \"%s\"", dbgtag);
+	}
+#endif
+
+	/* Use cache to find triggers for this event; fast exit if none. */
+	cachelist = EventCacheLookup(EVT_SQLDrop);
+	if (cachelist == NULL)
+		return;
+
+	/* Get the command tag. */
+	tag = CreateCommandTag(parsetree);
+
+	/*
+	 * Filter list of event triggers by command tag, and copy them into
+	 * our memory context.  Once we start running the command trigers, or
+	 * indeed once we do anything at all that touches the catalogs, an
+	 * invalidation might leave cachelist pointing at garbage, so we must
+	 * do this before we can do much else.
+	 */
+	foreach (lc, cachelist)
+	{
+		EventTriggerCacheItem  *item = lfirst(lc);
+
+		if (filter_event_trigger(&tag, item))
+		{
+			/* We must plan to fire this trigger. */
+			runlist = lappend_oid(runlist, item->fnoid);
+		}
+	}
+
+	/* Construct event trigger data. */
+	trigdata.type = T_EventTriggerData;
+	trigdata.event = "sql_drop";
+	trigdata.parsetree = parsetree;
+	trigdata.tag = tag;
+
+	/*
+	 * Make sure anything the main command did will be visible to the
+	 * event triggers.
+	 */
+	CommandCounterIncrement();
+
+	/* Run the triggers. */
+	EventTriggerInvoke(runlist, &trigdata);
+
+	/* Cleanup. */
+	list_free(runlist);
+	list_free(EventTriggerSQLDropList);
+
+	EventTriggerSQLDropInProgress = false;
+	EventTriggerSQLDropList = NIL;
+}
+
+/*
+ * pg_dropped_objects
+ *
+ * Make the list of dropped objects available to the user function run by the
+ * Event Trigger.
+ */
+Datum
+pg_dropped_objects(PG_FUNCTION_ARGS)
+{
+	ReturnSetInfo *rsinfo = (ReturnSetInfo *) fcinfo->resultinfo;
+	TupleDesc	tupdesc;
+	Tuplestorestate *tupstore;
+	MemoryContext per_query_ctx;
+	MemoryContext oldcontext;
+	ListCell   *lc;
+
+	/*
+	 * We only allow this to be called from an extension's SQL script. We
+	 * shouldn't need any permissions check beyond that.
+	 */
+	if (!EventTriggerSQLDropInProgress)
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("pg_dropped_objects() can only be called "
+						"from an \"sql_drop\" Event Trigger function")));
+
+	/* check to see if caller supports us returning a tuplestore */
+	if (rsinfo == NULL || !IsA(rsinfo, ReturnSetInfo))
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("set-valued function called in context that cannot accept a set")));
+	if (!(rsinfo->allowedModes & SFRM_Materialize))
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("materialize mode required, but it is not " \
+						"allowed in this context")));
+
+	/* Build a tuple descriptor for our result type */
+	if (get_call_result_type(fcinfo, NULL, &tupdesc) != TYPEFUNC_COMPOSITE)
+		elog(ERROR, "return type must be a row type");
+
+	/* Build tuplestore to hold the result rows */
+	per_query_ctx = rsinfo->econtext->ecxt_per_query_memory;
+	oldcontext = MemoryContextSwitchTo(per_query_ctx);
+
+	tupstore = tuplestore_begin_heap(true, false, work_mem);
+	rsinfo->returnMode = SFRM_Materialize;
+	rsinfo->setResult = tupstore;
+	rsinfo->setDesc = tupdesc;
+
+	MemoryContextSwitchTo(oldcontext);
+
+	foreach(lc, EventTriggerSQLDropList)
+	{
+		ObjectAddress *object = (ObjectAddress *) lfirst(lc);
+		Datum		values[3];
+		bool		nulls[3];
+
+		/* Emit result row */
+		memset(values, 0, sizeof(values));
+		memset(nulls, 0, sizeof(nulls));
+
+		/* classid */
+		values[0] = ObjectIdGetDatum(object->classId);
+
+		/* objid */
+		values[1] = ObjectIdGetDatum(object->objectId);
+
+		/* objsubid */
+		if (OidIsValid(object->objectSubId))
+			values[2] = ObjectIdGetDatum(object->objectSubId);
+		else
+			nulls[2] = true;
+
+		tuplestore_putvalues(tupstore, tupdesc, values, nulls);
+	}
+
+	/* clean up and return the tuplestore */
+	tuplestore_donestoring(tupstore);
+
+	return (Datum) 0;
 }

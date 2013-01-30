@@ -348,6 +348,13 @@ performMultipleDeletions(const ObjectAddresses *objects,
 	for (i = 0; i < targetObjects->numrefs; i++)
 	{
 		ObjectAddress *thisobj = targetObjects->refs + i;
+		ObjectClass class = getObjectClass(thisobj);
+
+		if (EventTriggerSQLDropInProgress &&
+			EventTriggerSupportsObjectType(class))
+		{
+			EventTriggerAppendToDropList(thisobj);
+		}
 
 		deleteOneObject(thisobj, &depRel, flags);
 	}

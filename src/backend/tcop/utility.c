@@ -700,7 +700,19 @@ standard_ProcessUtility(Node *parsetree,
 
 				if (isCompleteQuery
 					&& EventTriggerSupportsObjectType(stmt->removeType))
+				{
 					EventTriggerDDLCommandStart(parsetree);
+
+					/*
+					 * cater with multiple targets and cascading drops.
+					 *
+					 * Initialize that after having called the
+					 * ddl_command_start triggers so that
+					 * EventTriggerSQLDropInProgress is still false there, as
+					 * that protects pg_dropped_objects() calls.
+					 */
+					EventTriggerInitDropList();
+				}
 
 				switch (stmt->removeType)
 				{
@@ -723,8 +735,17 @@ standard_ProcessUtility(Node *parsetree,
 
 				if (isCompleteQuery
 					&& EventTriggerSupportsObjectType(stmt->removeType))
-					EventTriggerDDLCommandEnd(parsetree);
+				{
+					/*
+					 * Call sql_drop Event Trigger,
+					 * EventTriggerSQLDropInProgress is reset for us in
+					 * EventTriggerSQLDrop.
+					 */
+					EventTriggerSQLDrop(parsetree);
 
+					/* now on to the ddl_command_end triggers */
+					EventTriggerDDLCommandEnd(parsetree);
+				}
 				break;
 			}
 
