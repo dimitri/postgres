@@ -42,7 +42,7 @@
 
 /* Globally visible state variables */
 bool EventTriggerSQLDropInProgress = false;
-List *EventTriggerSQLDropList = NIL;
+ObjectAddresses *EventTriggerSQLDropList = NULL;
 
 typedef struct
 {
@@ -846,47 +846,8 @@ EventTriggerInitDropList(void)
 	if (EventCacheLookup(EVT_SQLDrop))
 	{
 		EventTriggerSQLDropInProgress = true;
-		EventTriggerSQLDropList = NIL;
+		EventTriggerSQLDropList = new_object_addresses();
 	}
-}
-
-/*
- * Push ObjectAddress to the list of deleted objects.
- *
- * XXX we might want to revisit the List storage and switch to a hash table
- * here (the ordering can not be guaranteed anyway, because of sync scans of
- * pg_depend), so that we're not O( n log n) when adding objects to the list.
- *
- * List of object dependencies are expected to be small enough that the N in
- * the big-O notation would make this looping faster than setting up a hash
- * table then calling the hash function anyway.
- */
-List *
-EventTriggerAppendToDropList(ObjectAddress *object)
-{
-	ListCell *lc;
-	ObjectAddress *copy = (ObjectAddress *) palloc(sizeof(ObjectAddress));
-
-	copy->classId = object->classId;
-	copy->objectId = object->objectId;
-	copy->objectSubId = object->objectSubId;
-
-	/* only append if the object is not already in the list */
-	foreach(lc, EventTriggerSQLDropList)
-	{
-		ObjectAddress *member = (ObjectAddress *) lfirst(lc);
-
-		if (member->classId == copy->classId &&
-			member->objectId == copy->objectId &&
-			member->objectSubId == copy->objectSubId)
-		{
-			/* we already have it, done */
-			return EventTriggerSQLDropList;
-		}
-	}
-	EventTriggerSQLDropList = lappend(EventTriggerSQLDropList, copy);
-
-	return EventTriggerSQLDropList;
 }
 
 /*
@@ -966,10 +927,10 @@ void EventTriggerSQLDrop(Node *parsetree)
 
 	/* Cleanup. */
 	list_free(runlist);
-	list_free(EventTriggerSQLDropList);
+	free_object_addresses(EventTriggerSQLDropList);
 
 	EventTriggerSQLDropInProgress = false;
-	EventTriggerSQLDropList = NIL;
+	EventTriggerSQLDropList = NULL;
 }
 
 /*
@@ -982,11 +943,11 @@ Datum
 pg_dropped_objects(PG_FUNCTION_ARGS)
 {
 	ReturnSetInfo *rsinfo = (ReturnSetInfo *) fcinfo->resultinfo;
-	TupleDesc	tupdesc;
-	Tuplestorestate *tupstore;
-	MemoryContext per_query_ctx;
-	MemoryContext oldcontext;
-	ListCell   *lc;
+	TupleDesc			 tupdesc;
+	Tuplestorestate		*tupstore;
+	MemoryContext		 per_query_ctx;
+	MemoryContext		 oldcontext;
+	int					 i;
 
 	/*
 	 * We only allow this to be called from an extension's SQL script. We
@@ -1024,9 +985,9 @@ pg_dropped_objects(PG_FUNCTION_ARGS)
 
 	MemoryContextSwitchTo(oldcontext);
 
-	foreach(lc, EventTriggerSQLDropList)
+	for (i = 0; i < EventTriggerSQLDropList->numrefs; i++)
 	{
-		ObjectAddress *object = (ObjectAddress *) lfirst(lc);
+		ObjectAddress *object = EventTriggerSQLDropList->refs + i;
 		Datum		values[3];
 		bool		nulls[3];
 

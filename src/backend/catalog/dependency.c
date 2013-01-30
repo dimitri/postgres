@@ -81,37 +81,6 @@
 #include "utils/tqual.h"
 
 
-/*
- * Deletion processing requires additional state for each ObjectAddress that
- * it's planning to delete.  For simplicity and code-sharing we make the
- * ObjectAddresses code support arrays with or without this extra state.
- */
-typedef struct
-{
-	int			flags;			/* bitmask, see bit definitions below */
-	ObjectAddress dependee;		/* object whose deletion forced this one */
-} ObjectAddressExtra;
-
-/* ObjectAddressExtra flag bits */
-#define DEPFLAG_ORIGINAL	0x0001		/* an original deletion target */
-#define DEPFLAG_NORMAL		0x0002		/* reached via normal dependency */
-#define DEPFLAG_AUTO		0x0004		/* reached via auto dependency */
-#define DEPFLAG_INTERNAL	0x0008		/* reached via internal dependency */
-#define DEPFLAG_EXTENSION	0x0010		/* reached via extension dependency */
-#define DEPFLAG_REVERSE		0x0020		/* reverse internal/extension link */
-
-
-/* expansible list of ObjectAddresses */
-struct ObjectAddresses
-{
-	ObjectAddress *refs;		/* => palloc'd array */
-	ObjectAddressExtra *extras; /* => palloc'd array, or NULL if not used */
-	int			numrefs;		/* current number of references */
-	int			maxrefs;		/* current size of palloc'd array(s) */
-};
-
-/* typedef ObjectAddresses appears in dependency.h */
-
 /* threaded list of ObjectAddresses, for recursion detection */
 typedef struct ObjectAddressStack
 {
@@ -353,7 +322,7 @@ performMultipleDeletions(const ObjectAddresses *objects,
 		if (EventTriggerSQLDropInProgress &&
 			EventTriggerSupportsObjectType(class))
 		{
-			EventTriggerAppendToDropList(thisobj);
+			add_exact_object_address(thisobj, EventTriggerSQLDropList);
 		}
 
 		deleteOneObject(thisobj, &depRel, flags);
