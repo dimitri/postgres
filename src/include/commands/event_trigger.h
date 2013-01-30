@@ -13,8 +13,21 @@
 #ifndef EVENT_TRIGGER_H
 #define EVENT_TRIGGER_H
 
+#include "catalog/objectaddress.h"
 #include "catalog/pg_event_trigger.h"
 #include "nodes/parsenodes.h"
+
+/*
+ * Global objects that we need to keep track of for benefits of Event Triggers.
+ *
+ * The EventTriggerSQLDropList is a list of ObjectAddress filled in from
+ * dependency.c doDeletion() function. Only objects that are supported as in
+ * EventTriggerSupportsObjectType() get appended here. ProcessUtility is
+ * responsible for resetting this list to NIL at the beginning of any DROP
+ * operation.
+ */
+extern bool EventTriggerSQLDropInProgress;
+extern List *EventTriggerSQLDropList;
 
 typedef struct EventTriggerData
 {
@@ -42,5 +55,10 @@ extern void AlterEventTriggerOwner_oid(Oid, Oid newOwnerId);
 extern bool EventTriggerSupportsObjectType(ObjectType obtype);
 extern void EventTriggerDDLCommandStart(Node *parsetree);
 extern void EventTriggerDDLCommandEnd(Node *parsetree);
+
+extern void EventTriggerInitDropList(void);
+extern List *EventTriggerAppendToDropList(ObjectAddress *object);
+extern void EventTriggerSQLDrop(Node *parsetree);
+
 
 #endif   /* EVENT_TRIGGER_H */

@@ -15688,9 +15688,54 @@ FOR EACH ROW EXECUTE PROCEDURE suppress_redundant_updates_trigger();
       choose a trigger name that comes after the name of any other trigger
       you might have on the table.
     </para>
-    <para>
+     <para>
        For more information about creating triggers, see
         <xref linkend="SQL-CREATETRIGGER">.
     </para>
   </sect1>
+
+  <sect1 id="functions-trigger">
+   <title>Event Trigger Functions</title>
+
+   <indexterm>
+     <primary>pg_dropped_objects</primary>
+   </indexterm>
+
+   <para>
+    Currently <productname>PostgreSQL</> provides one built in event trigger
+    helper function, <function>pg_dropped_objects</>, which will list all
+    object dropped by a <listeral>DROP</> command. That listing includes
+    multiple targets of the command, as in <command>DROP TABLE a, b,
+    c;</command> and objects dropped because of a <literal>CASCADE</>
+    dependency.
+    </para>
+
+   <para>
+    The <function>pg_dropped_objects</> function can be used in an event
+    trigger like this:
+<programlisting>
+create function test_event_trigger_for_sql_drop()
+        returns event_trigger as $$
+DECLARE
+    obj record;
+BEGIN
+    RAISE NOTICE 'test_event_trigger: % %', tg_event, tg_tag;
+
+    FOR obj IN SELECT * FROM pg_dropped_objects()
+    LOOP
+        RAISE NOTICE 'sql_drop event trigger: % % % %',
+                     obj.classId::regclass,
+                     obj.classId, obj.objid, obj.objsubid;
+    END LOOP;
+END
+$$ language plpgsql;
+</programlisting>
+    </para>
+
+     <para>
+       For more information about event triggers,
+       see <xref linkend="event-triggers">.
+    </para>
+  </sect1>
+
 </chapter>
