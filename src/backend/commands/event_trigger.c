@@ -962,16 +962,13 @@ pg_event_trigger_dropped_objects(PG_FUNCTION_ARGS)
 
 	/*
 	 * This function is meant to be called from within any Event Trigger in
-	 * order to get the list of objects dropped, but not all event triggers are
-	 * dropping objects. So as to make it simpler to use, it just returns an
-	 * empty list when not called in the right context.
-	 *
-	 * The alternative is to produce an ERROR when called from outside an event
-	 * trigger, and return an empty list when called from inside an event
-	 * trigger that didn't DROP anything.
+	 * order to get the list of objects dropped, if any.
 	 */
 	if (!EventTriggerSQLDropInProgress)
-		return (Datum) 0;
+ 		ereport(ERROR,
+ 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+ 				 errmsg("pg_dropped_objects() can only be called "
+ 						"from an Event Trigger function")));
 
 	/* check to see if caller supports us returning a tuplestore */
 	if (rsinfo == NULL || !IsA(rsinfo, ReturnSetInfo))
