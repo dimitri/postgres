@@ -750,6 +750,14 @@ EventTriggerDDLCommandEnd(Node *parsetree)
 
 	/* Cleanup. */
 	list_free(runlist);
+
+	if (EventTriggerSQLDropInProgress)
+	{
+		free_object_addresses(EventTriggerSQLDropList);
+
+		EventTriggerSQLDropInProgress = false;
+		EventTriggerSQLDropList = NULL;
+	}
 }
 
 /*
@@ -851,7 +859,9 @@ EventTriggerInitDropList(void)
 }
 
 /*
- * Call the Event Trigger on the "sql_drop" event
+ * Call "sql_drop" Event Triggers
+ *
+ * The trigger is fired separately for each dropped object.
  */
 void EventTriggerSQLDrop(Node *parsetree)
 {
@@ -859,7 +869,7 @@ void EventTriggerSQLDrop(Node *parsetree)
 	List	   *runlist = NIL;
 	ListCell   *lc;
 	const char *tag;
-	EventTriggerData	trigdata;
+	int					 i;
 
 	/*
 	 * See EventTriggerDDLCommandStart for a discussion about why event
@@ -910,12 +920,6 @@ void EventTriggerSQLDrop(Node *parsetree)
 		}
 	}
 
-	/* Construct event trigger data. */
-	trigdata.type = T_EventTriggerData;
-	trigdata.event = "sql_drop";
-	trigdata.parsetree = parsetree;
-	trigdata.tag = tag;
-
 	/*
 	 * Make sure anything the main command did will be visible to the
 	 * event triggers.
@@ -923,24 +927,31 @@ void EventTriggerSQLDrop(Node *parsetree)
 	CommandCounterIncrement();
 
 	/* Run the triggers. */
-	EventTriggerInvoke(runlist, &trigdata);
+	for (i = 0; i < EventTriggerSQLDropList->numrefs; i++)
+	{
+		EventTriggerData	trigdata;
+
+		/* Construct event trigger data. */
+		trigdata.type = T_EventTriggerData;
+		trigdata.event = "sql_drop";
+		trigdata.parsetree = parsetree;
+		trigdata.tag = tag;
+
+		EventTriggerInvoke(runlist, &trigdata);
+	}
 
 	/* Cleanup. */
 	list_free(runlist);
-	free_object_addresses(EventTriggerSQLDropList);
-
-	EventTriggerSQLDropInProgress = false;
-	EventTriggerSQLDropList = NULL;
 }
 
 /*
- * pg_dropped_objects
+ * pg_event_trigger_dropped_objects
  *
  * Make the list of dropped objects available to the user function run by the
  * Event Trigger.
  */
 Datum
-pg_dropped_objects(PG_FUNCTION_ARGS)
+pg_event_trigger_dropped_objects(PG_FUNCTION_ARGS)
 {
 	ReturnSetInfo *rsinfo = (ReturnSetInfo *) fcinfo->resultinfo;
 	TupleDesc			 tupdesc;
@@ -950,14 +961,17 @@ pg_dropped_objects(PG_FUNCTION_ARGS)
 	int					 i;
 
 	/*
-	 * We only allow this to be called from an extension's SQL script. We
-	 * shouldn't need any permissions check beyond that.
+	 * This function is meant to be called from within any Event Trigger in
+	 * order to get the list of objects dropped, but not all event triggers are
+	 * dropping objects. So as to make it simpler to use, it just returns an
+	 * empty list when not called in the right context.
+	 *
+	 * The alternative is to produce an ERROR when called from outside an event
+	 * trigger, and return an empty list when called from inside an event
+	 * trigger that didn't DROP anything.
 	 */
 	if (!EventTriggerSQLDropInProgress)
-		ereport(ERROR,
-				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				 errmsg("pg_dropped_objects() can only be called "
-						"from an \"sql_drop\" Event Trigger function")));
+		return (Datum) 0;
 
 	/* check to see if caller supports us returning a tuplestore */
 	if (rsinfo == NULL || !IsA(rsinfo, ReturnSetInfo))

@@ -49,11 +49,11 @@
    <para>
     The <literal>sql_drop</> event occurs just before
     the <literal>ddl_command_end</> event trigger for a <literal>DROP</>
-    operation, and allows to have a list of all dropped objects. Note that
-    you only get this list after the objects have been deleted, so no
-    catalog lookup is possible. To list objects that have been deleted, use
-    the Set Returning Function <literal>pg_dropped_objects()</> from your
-    event trigger code.
+    operation, once per object. Note that happens after the objects have
+    been deleted, so no catalog lookup is possible. To list all objects that
+    have been deleted, use the Set Returning
+    Function <literal>pg_event_trigger_dropped_objects()</> from
+    your <literal>ddl_command_end</> event trigger code.
    </para>
 
    <para>

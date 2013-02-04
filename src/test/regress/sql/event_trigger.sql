@@ -102,16 +102,15 @@ drop event trigger if exists regress_event_trigger2;
 drop event trigger if exists regress_event_trigger2;
 drop event trigger regress_event_trigger3;
 drop event trigger regress_event_trigger_end;
-drop function test_event_trigger();
 
 -- now test the sql_drop event trigger
-create function test_event_trigger_for_sql_drop() returns event_trigger as $$
+create function test_event_trigger_dropped_objects() returns event_trigger as $$
 DECLARE
     obj record;
 BEGIN
     RAISE NOTICE 'test_event_trigger: % %', tg_event, tg_tag;
 
-    FOR obj IN SELECT * FROM pg_dropped_objects()
+    FOR obj IN SELECT * FROM pg_event_trigger_dropped_objects()
     LOOP
         -- we can't output the full data that we have here because the OID
         -- would change each time we run the regression tests.
@@ -123,8 +122,13 @@ END
 $$ language plpgsql;
 
 -- OK
+create event trigger regress_event_trigger_drop_objects on ddl_command_end
+                when tag in ('drop table', 'drop function', 'drop view')
+   execute procedure test_event_trigger_dropped_objects();
+
+-- test the sql_drop event
 create event trigger regress_event_trigger_sql_drop on sql_drop
-   execute procedure test_event_trigger_for_sql_drop();
+   execute procedure test_event_trigger();
 
 -- a simple enough test: cascade
 create table evt_a(id serial);
@@ -137,7 +141,9 @@ create table evt_b(id serial);
 drop table evt_a, evt_b;
 
 -- cleanup the sql_drop tests
+drop event trigger if exists regress_event_trigger_drop_objects;
 drop event trigger if exists regress_event_trigger_sql_drop;
-drop function test_event_trigger_for_sql_drop();
+drop function test_event_trigger();
+drop function test_event_trigger_dropped_objects();
 
 drop role regression_bob;
