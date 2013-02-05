@@ -30,6 +30,7 @@
 #include "catalog/namespace.h"
 #include "catalog/storage.h"
 #include "commands/async.h"
+#include "commands/event_trigger.h"
 #include "commands/tablecmds.h"
 #include "commands/trigger.h"
 #include "executor/spi.h"
@@ -1955,6 +1956,7 @@ CommitTransaction(void)
 	AtEOXact_HashTables(true);
 	AtEOXact_PgStat(true);
 	AtEOXact_Snapshot(true);
+	AtEOXact_EventTrigger(true);
 	pgstat_report_xact_timestamp(0);
 
 	CurrentResourceOwner = NULL;
@@ -2208,6 +2210,7 @@ PrepareTransaction(void)
 	AtEOXact_HashTables(true);
 	/* don't call AtEOXact_PgStat here */
 	AtEOXact_Snapshot(true);
+	AtEOXact_EventTrigger(true);
 
 	CurrentResourceOwner = NULL;
 	ResourceOwnerDelete(TopTransactionResourceOwner);
@@ -2380,8 +2383,9 @@ CleanupTransaction(void)
 	/*
 	 * do abort cleanup processing
 	 */
-	AtCleanup_Portals();		/* now safe to release portal memory */
-	AtEOXact_Snapshot(false);	/* and release the transaction's snapshots */
+	AtCleanup_Portals();		  /* now safe to release portal memory */
+	AtEOXact_Snapshot(false);	  /* and release the transaction's snapshots */
+	AtEOXact_EventTrigger(false); /* and reset Event Trigger internal state */
 
 	CurrentResourceOwner = NULL;	/* and resource owner */
 	if (TopTransactionResourceOwner)

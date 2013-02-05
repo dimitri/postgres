@@ -698,6 +698,14 @@ standard_ProcessUtility(Node *parsetree,
 			{
 				DropStmt   *stmt = (DropStmt *) parsetree;
 
+				/*
+				 * don't run any event trigger when we require not to have open
+				 * a transaction
+				 */
+				if (stmt->removeType == OBJECT_INDEX && stmt->concurrent)
+					PreventTransactionChain(isTopLevel,
+											"DROP INDEX CONCURRENTLY");
+
 				if (isCompleteQuery
 					&& EventTriggerSupportsObjectType(stmt->removeType))
 				{
@@ -717,11 +725,6 @@ standard_ProcessUtility(Node *parsetree,
 				switch (stmt->removeType)
 				{
 					case OBJECT_INDEX:
-						if (stmt->concurrent)
-							PreventTransactionChain(isTopLevel,
-													"DROP INDEX CONCURRENTLY");
-						/* fall through */
-
 					case OBJECT_TABLE:
 					case OBJECT_SEQUENCE:
 					case OBJECT_VIEW:

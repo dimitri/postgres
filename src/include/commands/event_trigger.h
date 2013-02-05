@@ -61,5 +61,7 @@ extern void EventTriggerInitDropList(void);
 extern List *EventTriggerAppendToDropList(ObjectAddress *object);
 extern void EventTriggerSQLDrop(Node *parsetree);
 
+extern void AtEOXact_EventTrigger(bool isCommit);
+
 
 #endif   /* EVENT_TRIGGER_H */

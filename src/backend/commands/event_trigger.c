@@ -854,6 +854,17 @@ EventTriggerInitDropList(void)
 }
 
 /*
+ * AtEOXact_EventTrigger
+ *		Event Trigger's cleanup function for end of transaction
+ */
+void
+AtEOXact_EventTrigger(bool isCommit)
+{
+	/* even on success we want to reset EventTriggerSQLDropInProgress */
+	EventTriggerSQLDropInProgress = false;
+}
+
+/*
  * pg_event_trigger_dropped_objects
  *
  * Make the list of dropped objects available to the user function run by the
