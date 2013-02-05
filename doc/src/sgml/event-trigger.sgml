@@ -113,6 +113,7 @@
        <row>
         <entry align="left"><literal>ALTER AGGREGATE</literal></entry>
         <entry align="center"><literal>X</literal></entry>
+        <entry align="center"><literal>X</literal></entry>
        </row>
        <row>
         <entry align="left"><literal>ALTER COLLATION</literal></entry>

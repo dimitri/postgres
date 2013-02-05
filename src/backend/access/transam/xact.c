@@ -2383,8 +2383,8 @@ CleanupTransaction(void)
 	/*
 	 * do abort cleanup processing
 	 */
-	AtCleanup_Portals();		  /* now safe to release portal memory */
-	AtEOXact_Snapshot(false);	  /* and release the transaction's snapshots */
+	AtCleanup_Portals();		/* now safe to release portal memory */
+	AtEOXact_Snapshot(false);	/* and release the transaction's snapshots */
 	AtEOXact_EventTrigger(false); /* and reset Event Trigger internal state */
 
 	CurrentResourceOwner = NULL;	/* and resource owner */
