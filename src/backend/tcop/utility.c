@@ -736,14 +736,6 @@ standard_ProcessUtility(Node *parsetree,
 				if (isCompleteQuery
 					&& EventTriggerSupportsObjectType(stmt->removeType))
 				{
-					/*
-					 * Call sql_drop Event Trigger for each dropped object.
-					 */
-					EventTriggerSQLDrop(parsetree);
-
-					/* now on to the ddl_command_end triggers, which will reset
-					 * EventTriggerSQLDropInProgress for us when necessary/
-					 */
 					EventTriggerDDLCommandEnd(parsetree);
 				}
 				break;

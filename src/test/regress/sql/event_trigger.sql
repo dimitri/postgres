@@ -97,12 +97,6 @@ drop event trigger regress_event_trigger;
 -- should fail, regression_bob owns regress_event_trigger2/3
 drop role regression_bob;
 
--- these are all OK; the second one should emit a NOTICE
-drop event trigger if exists regress_event_trigger2;
-drop event trigger if exists regress_event_trigger2;
-drop event trigger regress_event_trigger3;
-drop event trigger regress_event_trigger_end;
-
 -- now test the sql_drop event trigger
 create function test_event_trigger_dropped_objects() returns event_trigger as $$
 DECLARE
@@ -126,10 +120,6 @@ create event trigger regress_event_trigger_drop_objects on ddl_command_end
                 when tag in ('drop table', 'drop function', 'drop view')
    execute procedure test_event_trigger_dropped_objects();
 
--- test the sql_drop event
-create event trigger regress_event_trigger_sql_drop on sql_drop
-   execute procedure test_event_trigger();
-
 -- a simple enough test: cascade
 create table evt_a(id serial);
 create view evt_a_v as select id from evt_a;
@@ -140,10 +130,12 @@ create table evt_a(id serial);
 create table evt_b(id serial);
 drop table evt_a, evt_b;
 
--- cleanup the sql_drop tests
+-- these are all OK; the third one should emit a NOTICE
 drop event trigger if exists regress_event_trigger_drop_objects;
-drop event trigger if exists regress_event_trigger_sql_drop;
-drop function test_event_trigger();
+drop event trigger if exists regress_event_trigger2;
+drop event trigger if exists regress_event_trigger2;
+drop event trigger regress_event_trigger3;
+drop event trigger regress_event_trigger_end;
 drop function test_event_trigger_dropped_objects();
 
 drop role regression_bob;

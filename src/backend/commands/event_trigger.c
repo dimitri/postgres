@@ -131,8 +131,7 @@ CreateEventTrigger(CreateEventTrigStmt *stmt)
 
 	/* Validate event name. */
 	if (strcmp(stmt->eventname, "ddl_command_start") != 0 &&
-		strcmp(stmt->eventname, "ddl_command_end") != 0 &&
-		strcmp(stmt->eventname, "sql_drop") != 0)
+		strcmp(stmt->eventname, "ddl_command_end") != 0)
 		ereport(ERROR,
 			(errcode(ERRCODE_SYNTAX_ERROR),
 			 errmsg("unrecognized event name \"%s\"",
@@ -157,8 +156,7 @@ CreateEventTrigger(CreateEventTrigStmt *stmt)
 
 	/* Validate tag list, if any. */
 	if ((strcmp(stmt->eventname, "ddl_command_start") == 0 ||
-		 strcmp(stmt->eventname, "ddl_command_end") == 0 ||
-		 strcmp(stmt->eventname, "sql_drop") == 0)
+		 strcmp(stmt->eventname, "ddl_command_end") == 0)
 		&& tags != NULL)
 	{
 		validate_ddl_tags("tag", tags);
@@ -851,97 +849,8 @@ EventTriggerSupportsObjectType(ObjectType obtype)
 void
 EventTriggerInitDropList(void)
 {
-	if (EventCacheLookup(EVT_SQLDrop))
-	{
-		EventTriggerSQLDropInProgress = true;
-		EventTriggerSQLDropList = new_object_addresses();
-	}
-}
-
-/*
- * Call "sql_drop" Event Triggers
- *
- * The trigger is fired separately for each dropped object.
- */
-void EventTriggerSQLDrop(Node *parsetree)
-{
-	List	   *cachelist;
-	List	   *runlist = NIL;
-	ListCell   *lc;
-	const char *tag;
-	int					 i;
-
-	/*
-	 * See EventTriggerDDLCommandStart for a discussion about why event
-	 * triggers are disabled in single user mode.
-	 */
-	if (!IsUnderPostmaster)
-		return;
-
-	/*
-	 * See EventTriggerDDLCommandStart for a discussion about why this check is
-	 * important.
-	 *
-	 */
-#ifdef USE_ASSERT_CHECKING
-	if (assert_enabled)
-	{
-		const char *dbgtag;
-
-		dbgtag = CreateCommandTag(parsetree);
-		if (check_ddl_tag(dbgtag) != EVENT_TRIGGER_COMMAND_TAG_OK)
-			elog(ERROR, "unexpected command tag \"%s\"", dbgtag);
-	}
-#endif
-
-	/* Use cache to find triggers for this event; fast exit if none. */
-	cachelist = EventCacheLookup(EVT_SQLDrop);
-	if (cachelist == NULL)
-		return;
-
-	/* Get the command tag. */
-	tag = CreateCommandTag(parsetree);
-
-	/*
-	 * Filter list of event triggers by command tag, and copy them into
-	 * our memory context.  Once we start running the command trigers, or
-	 * indeed once we do anything at all that touches the catalogs, an
-	 * invalidation might leave cachelist pointing at garbage, so we must
-	 * do this before we can do much else.
-	 */
-	foreach (lc, cachelist)
-	{
-		EventTriggerCacheItem  *item = lfirst(lc);
-
-		if (filter_event_trigger(&tag, item))
-		{
-			/* We must plan to fire this trigger. */
-			runlist = lappend_oid(runlist, item->fnoid);
-		}
-	}
-
-	/*
-	 * Make sure anything the main command did will be visible to the
-	 * event triggers.
-	 */
-	CommandCounterIncrement();
-
-	/* Run the triggers. */
-	for (i = 0; i < EventTriggerSQLDropList->numrefs; i++)
-	{
-		EventTriggerData	trigdata;
-
-		/* Construct event trigger data. */
-		trigdata.type = T_EventTriggerData;
-		trigdata.event = "sql_drop";
-		trigdata.parsetree = parsetree;
-		trigdata.tag = tag;
-
-		EventTriggerInvoke(runlist, &trigdata);
-	}
-
-	/* Cleanup. */
-	list_free(runlist);
+	EventTriggerSQLDropInProgress = true;
+	EventTriggerSQLDropList = new_object_addresses();
 }
 
 /*
