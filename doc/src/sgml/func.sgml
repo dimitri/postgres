@@ -15723,7 +15723,8 @@ BEGIN
 
     FOR obj IN SELECT * FROM pg_event_trigger_dropped_objects()
     LOOP
-        RAISE NOTICE 'sql_drop event trigger: % % % %',
+        RAISE NOTICE '% dropped object: % % % %',
+                     tg_tag,
                      obj.classId::regclass,
                      obj.classId, obj.objid, obj.objsubid;
     END LOOP;

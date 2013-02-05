@@ -97,7 +97,7 @@ drop event trigger regress_event_trigger;
 -- should fail, regression_bob owns regress_event_trigger2/3
 drop role regression_bob;
 
--- now test the sql_drop event trigger
+-- now test pg_event_trigger_dropped_objects()
 create function test_event_trigger_dropped_objects() returns event_trigger as $$
 DECLARE
     obj record;
@@ -110,7 +110,7 @@ BEGIN
         -- would change each time we run the regression tests.
         --
         -- obj.classId, obj.objid, obj.objsubid;
-        RAISE NOTICE 'sql_drop event trigger: %', obj.classId::regclass;
+        RAISE NOTICE '% dropped object: %', tg_tag, obj.classId::regclass;
     END LOOP;
 END
 $$ language plpgsql;

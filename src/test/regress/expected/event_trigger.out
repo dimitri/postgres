@@ -93,7 +93,7 @@ ERROR:  event trigger "regress_event_trigger" does not exist
 drop role regression_bob;
 ERROR:  role "regression_bob" cannot be dropped because some objects depend on it
 DETAIL:  owner of event trigger regress_event_trigger3
--- now test the sql_drop event trigger
+-- now test pg_event_trigger_dropped_objects()
 create function test_event_trigger_dropped_objects() returns event_trigger as $$
 DECLARE
     obj record;
@@ -106,7 +106,7 @@ BEGIN
         -- would change each time we run the regression tests.
         --
         -- obj.classId, obj.objid, obj.objsubid;
-        RAISE NOTICE 'sql_drop event trigger: %', obj.classId::regclass;
+        RAISE NOTICE '% dropped object: %', tg_tag, obj.classId::regclass;
     END LOOP;
 END
 $$ language plpgsql;
@@ -125,15 +125,15 @@ NOTICE:  test_event_trigger: ddl_command_end CREATE VIEW
 drop table evt_a cascade;
 NOTICE:  drop cascades to view evt_a_v
 NOTICE:  test_event_trigger: ddl_command_end DROP TABLE
-NOTICE:  sql_drop event trigger: pg_type
-NOTICE:  sql_drop event trigger: pg_type
-NOTICE:  sql_drop event trigger: pg_rewrite
-NOTICE:  sql_drop event trigger: pg_type
-NOTICE:  sql_drop event trigger: pg_type
-NOTICE:  sql_drop event trigger: pg_class
-NOTICE:  sql_drop event trigger: pg_type
-NOTICE:  sql_drop event trigger: pg_class
-NOTICE:  sql_drop event trigger: pg_class
+NOTICE:  DROP TABLE dropped object: pg_type
+NOTICE:  DROP TABLE dropped object: pg_type
+NOTICE:  DROP TABLE dropped object: pg_rewrite
+NOTICE:  DROP TABLE dropped object: pg_type
+NOTICE:  DROP TABLE dropped object: pg_type
+NOTICE:  DROP TABLE dropped object: pg_class
+NOTICE:  DROP TABLE dropped object: pg_type
+NOTICE:  DROP TABLE dropped object: pg_class
+NOTICE:  DROP TABLE dropped object: pg_class
 NOTICE:  test_event_trigger: ddl_command_end DROP TABLE
 -- another test with multiple targets
 create table evt_a(id serial);
@@ -144,16 +144,16 @@ NOTICE:  test_event_trigger: ddl_command_start CREATE TABLE
 NOTICE:  test_event_trigger: ddl_command_end CREATE TABLE
 drop table evt_a, evt_b;
 NOTICE:  test_event_trigger: ddl_command_end DROP TABLE
-NOTICE:  sql_drop event trigger: pg_type
-NOTICE:  sql_drop event trigger: pg_type
-NOTICE:  sql_drop event trigger: pg_type
-NOTICE:  sql_drop event trigger: pg_class
-NOTICE:  sql_drop event trigger: pg_class
-NOTICE:  sql_drop event trigger: pg_type
-NOTICE:  sql_drop event trigger: pg_type
-NOTICE:  sql_drop event trigger: pg_type
-NOTICE:  sql_drop event trigger: pg_class
-NOTICE:  sql_drop event trigger: pg_class
+NOTICE:  DROP TABLE dropped object: pg_type
+NOTICE:  DROP TABLE dropped object: pg_type
+NOTICE:  DROP TABLE dropped object: pg_type
+NOTICE:  DROP TABLE dropped object: pg_class
+NOTICE:  DROP TABLE dropped object: pg_class
+NOTICE:  DROP TABLE dropped object: pg_type
+NOTICE:  DROP TABLE dropped object: pg_type
+NOTICE:  DROP TABLE dropped object: pg_type
+NOTICE:  DROP TABLE dropped object: pg_class
+NOTICE:  DROP TABLE dropped object: pg_class
 NOTICE:  test_event_trigger: ddl_command_end DROP TABLE
 -- these are all OK; the third one should emit a NOTICE
 drop event trigger if exists regress_event_trigger_drop_objects;

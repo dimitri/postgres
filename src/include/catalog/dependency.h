@@ -136,7 +136,7 @@ struct ObjectAddresses
 	int			maxrefs;		/* current size of palloc'd array(s) */
 };
 
-/* ObjectAddresses is exported to be used in sql_drop Event Trigger */
+/* ObjectAddresses is exported to be used in Event Triggers */
 typedef struct ObjectAddresses ObjectAddresses;
 
 /*
