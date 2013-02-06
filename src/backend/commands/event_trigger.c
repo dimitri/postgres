@@ -881,14 +881,13 @@ pg_event_trigger_dropped_objects(PG_FUNCTION_ARGS)
 	int					 i;
 
 	/*
-	 * This function is meant to be called from within any Event Trigger in
+	 * This function is meant to be called from within an event trigger in
 	 * order to get the list of objects dropped, if any.
 	 */
 	if (!EventTriggerSQLDropInProgress)
- 		ereport(ERROR,
- 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
- 				 errmsg("pg_dropped_objects() can only be called "
- 						"from an Event Trigger function")));
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("pg_dropped_objects() can only be called from an event trigger function")));
 
 	/* check to see if caller supports us returning a tuplestore */
 	if (rsinfo == NULL || !IsA(rsinfo, ReturnSetInfo))
@@ -898,8 +897,7 @@ pg_event_trigger_dropped_objects(PG_FUNCTION_ARGS)
 	if (!(rsinfo->allowedModes & SFRM_Materialize))
 		ereport(ERROR,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				 errmsg("materialize mode required, but it is not " \
-						"allowed in this context")));
+				 errmsg("materialize mode required, but it is not allowed in this context")));
 
 	/* Build a tuple descriptor for our result type */
 	if (get_call_result_type(fcinfo, NULL, &tupdesc) != TYPEFUNC_COMPOSITE)
@@ -916,15 +914,17 @@ pg_event_trigger_dropped_objects(PG_FUNCTION_ARGS)
 
 	MemoryContextSwitchTo(oldcontext);
 
-	for (i = 0; i < EventTriggerSQLDropList->numrefs; i++)
+	for (i = 0; i < get_object_addresses_numelements(EventTriggerSQLDropList); i++)
 	{
-		ObjectAddress *object = EventTriggerSQLDropList->refs + i;
+		ObjectAddress *object;
 		Datum		values[3];
 		bool		nulls[3];
 
 		/* Emit result row */
-		memset(values, 0, sizeof(values));
-		memset(nulls, 0, sizeof(nulls));
+		object = get_object_addresses_element(EventTriggerSQLDropList, i);
+
+		MemSet(values, 0, sizeof(values));
+		MemSet(nulls, 0, sizeof(nulls));
 
 		/* classid */
 		values[0] = ObjectIdGetDatum(object->classId);

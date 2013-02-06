@@ -706,8 +706,8 @@ standard_ProcessUtility(Node *parsetree,
 					PreventTransactionChain(isTopLevel,
 											"DROP INDEX CONCURRENTLY");
 
-				if (isCompleteQuery
-					&& EventTriggerSupportsObjectType(stmt->removeType))
+				if (isCompleteQuery &&
+					EventTriggerSupportsObjectType(stmt->removeType))
 				{
 					EventTriggerDDLCommandStart(parsetree);
 
