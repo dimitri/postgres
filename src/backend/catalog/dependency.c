@@ -347,7 +347,15 @@ performMultipleDeletions(const ObjectAddresses *objects,
 	 */
 	for (i = 0; i < targetObjects->numrefs; i++)
 	{
-		ObjectAddress *thisobj = targetObjects->refs + i;
+		ObjectAddress  *thisobj;
+
+		thisobj = targetObjects->refs + i;
+
+		if (EventTriggerSQLDropInProgress &&
+			EventTriggerSupportsObjectType(getObjectClass(thisobj)))
+		{
+			add_exact_object_address(thisobj, EventTriggerSQLDropList);
+		}
 
 		deleteOneObject(thisobj, &depRel, flags);
 	}
@@ -2173,6 +2181,18 @@ record_object_address_dependencies(const ObjectAddress *depender,
 	recordMultipleDependencies(depender,
 							   referenced->refs, referenced->numrefs,
 							   behavior);
+}
+
+int
+get_object_addresses_numelements(const ObjectAddresses *addresses)
+{
+	return addresses->numrefs;
+}
+
+ObjectAddress *
+get_object_addresses_element(const ObjectAddresses *addresses, int i)
+{
+	return addresses->refs + i;
 }
 
 /*

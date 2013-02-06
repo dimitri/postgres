@@ -97,10 +97,45 @@ drop event trigger regress_event_trigger;
 -- should fail, regression_bob owns regress_event_trigger2/3
 drop role regression_bob;
 
--- these are all OK; the second one should emit a NOTICE
+-- now test pg_event_trigger_dropped_objects()
+create function test_event_trigger_dropped_objects() returns event_trigger as $$
+DECLARE
+    obj record;
+BEGIN
+    RAISE NOTICE 'test_event_trigger: % %', tg_event, tg_tag;
+
+    FOR obj IN SELECT * FROM pg_event_trigger_dropped_objects()
+    LOOP
+        -- we can't output the full data that we have here because the OID
+        -- would change each time we run the regression tests.
+        --
+        -- obj.classId, obj.objid, obj.objsubid;
+        RAISE NOTICE '% dropped object: %', tg_tag, obj.classId::regclass;
+    END LOOP;
+END
+$$ language plpgsql;
+
+-- OK
+create event trigger regress_event_trigger_drop_objects on ddl_command_end
+                when tag in ('drop table', 'drop function', 'drop view')
+   execute procedure test_event_trigger_dropped_objects();
+
+-- a simple enough test: cascade
+create table evt_a(id serial);
+create view evt_a_v as select id from evt_a;
+drop table evt_a cascade;
+
+-- another test with multiple targets
+create table evt_a(id serial);
+create table evt_b(id serial);
+drop table evt_a, evt_b;
+
+-- these are all OK; the third one should emit a NOTICE
+drop event trigger if exists regress_event_trigger_drop_objects;
 drop event trigger if exists regress_event_trigger2;
 drop event trigger if exists regress_event_trigger2;
 drop event trigger regress_event_trigger3;
 drop event trigger regress_event_trigger_end;
-drop function test_event_trigger();
+drop function test_event_trigger_dropped_objects();
+
 drop role regression_bob;

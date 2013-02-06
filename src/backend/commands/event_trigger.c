@@ -25,6 +25,7 @@
 #include "commands/dbcommands.h"
 #include "commands/event_trigger.h"
 #include "commands/trigger.h"
+#include "funcapi.h"
 #include "parser/parse_func.h"
 #include "pgstat.h"
 #include "miscadmin.h"
@@ -38,6 +39,10 @@
 #include "utils/tqual.h"
 #include "utils/syscache.h"
 #include "tcop/utility.h"
+
+/* Globally visible state variables */
+bool EventTriggerSQLDropInProgress = false;
+ObjectAddresses *EventTriggerSQLDropList = NULL;
 
 typedef struct
 {
@@ -150,8 +155,12 @@ CreateEventTrigger(CreateEventTrigStmt *stmt)
 	}
 
 	/* Validate tag list, if any. */
-	if (strcmp(stmt->eventname, "ddl_command_start") == 0 && tags != NULL)
+	if ((strcmp(stmt->eventname, "ddl_command_start") == 0 ||
+		 strcmp(stmt->eventname, "ddl_command_end") == 0)
+		&& tags != NULL)
+	{
 		validate_ddl_tags("tag", tags);
+	}
 
 	/*
 	 * Give user a nice error message if an event trigger of the same name
@@ -739,6 +748,14 @@ EventTriggerDDLCommandEnd(Node *parsetree)
 
 	/* Cleanup. */
 	list_free(runlist);
+
+	if (EventTriggerSQLDropInProgress)
+	{
+		free_object_addresses(EventTriggerSQLDropList);
+
+		EventTriggerSQLDropInProgress = false;
+		EventTriggerSQLDropList = NULL;
+	}
 }
 
 /*
@@ -824,4 +841,108 @@ EventTriggerSupportsObjectType(ObjectType obtype)
 			break;
 	}
 	return true;
+}
+
+/*
+ * SQL DROP event support functions
+ */
+void
+EventTriggerInitDropList(void)
+{
+	EventTriggerSQLDropInProgress = true;
+	EventTriggerSQLDropList = new_object_addresses();
+}
+
+/*
+ * AtEOXact_EventTrigger
+ *		Event Trigger's cleanup function for end of transaction
+ */
+void
+AtEOXact_EventTrigger(bool isCommit)
+{
+	/* even on success we want to reset EventTriggerSQLDropInProgress */
+	EventTriggerSQLDropInProgress = false;
+}
+
+/*
+ * pg_event_trigger_dropped_objects
+ *
+ * Make the list of dropped objects available to the user function run by the
+ * Event Trigger.
+ */
+Datum
+pg_event_trigger_dropped_objects(PG_FUNCTION_ARGS)
+{
+	ReturnSetInfo *rsinfo = (ReturnSetInfo *) fcinfo->resultinfo;
+	TupleDesc			 tupdesc;
+	Tuplestorestate		*tupstore;
+	MemoryContext		 per_query_ctx;
+	MemoryContext		 oldcontext;
+	int					 i;
+
+	/*
+	 * This function is meant to be called from within an event trigger in
+	 * order to get the list of objects dropped, if any.
+	 */
+	if (!EventTriggerSQLDropInProgress)
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("pg_dropped_objects() can only be called from an event trigger function")));
+
+	/* check to see if caller supports us returning a tuplestore */
+	if (rsinfo == NULL || !IsA(rsinfo, ReturnSetInfo))
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("set-valued function called in context that cannot accept a set")));
+	if (!(rsinfo->allowedModes & SFRM_Materialize))
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				 errmsg("materialize mode required, but it is not allowed in this context")));
+
+	/* Build a tuple descriptor for our result type */
+	if (get_call_result_type(fcinfo, NULL, &tupdesc) != TYPEFUNC_COMPOSITE)
+		elog(ERROR, "return type must be a row type");
+
+	/* Build tuplestore to hold the result rows */
+	per_query_ctx = rsinfo->econtext->ecxt_per_query_memory;
+	oldcontext = MemoryContextSwitchTo(per_query_ctx);
+
+	tupstore = tuplestore_begin_heap(true, false, work_mem);
+	rsinfo->returnMode = SFRM_Materialize;
+	rsinfo->setResult = tupstore;
+	rsinfo->setDesc = tupdesc;
+
+	MemoryContextSwitchTo(oldcontext);
+
+	for (i = 0; i < get_object_addresses_numelements(EventTriggerSQLDropList); i++)
+	{
+		ObjectAddress *object;
+		Datum		values[3];
+		bool		nulls[3];
+
+		/* Emit result row */
+		object = get_object_addresses_element(EventTriggerSQLDropList, i);
+
+		MemSet(values, 0, sizeof(values));
+		MemSet(nulls, 0, sizeof(nulls));
+
+		/* classid */
+		values[0] = ObjectIdGetDatum(object->classId);
+
+		/* objid */
+		values[1] = ObjectIdGetDatum(object->objectId);
+
+		/* objsubid */
+		if (OidIsValid(object->objectSubId))
+			values[2] = ObjectIdGetDatum(object->objectSubId);
+		else
+			nulls[2] = true;
+
+		tuplestore_putvalues(tupstore, tupdesc, values, nulls);
+	}
+
+	/* clean up and return the tuplestore */
+	tuplestore_donestoring(tupstore);
+
+	return (Datum) 0;
 }

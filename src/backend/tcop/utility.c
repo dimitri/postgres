@@ -698,18 +698,33 @@ standard_ProcessUtility(Node *parsetree,
 			{
 				DropStmt   *stmt = (DropStmt *) parsetree;
 
-				if (isCompleteQuery
-					&& EventTriggerSupportsObjectType(stmt->removeType))
+				/*
+				 * don't run any event trigger when we require not to have open
+				 * a transaction
+				 */
+				if (stmt->removeType == OBJECT_INDEX && stmt->concurrent)
+					PreventTransactionChain(isTopLevel,
+											"DROP INDEX CONCURRENTLY");
+
+				if (isCompleteQuery &&
+					EventTriggerSupportsObjectType(stmt->removeType))
+				{
 					EventTriggerDDLCommandStart(parsetree);
+
+					/*
+					 * cater with multiple targets and cascading drops.
+					 *
+					 * Initialize that after having called the
+					 * ddl_command_start triggers so that
+					 * EventTriggerSQLDropInProgress is still false there, as
+					 * that protects pg_dropped_objects() calls.
+					 */
+					EventTriggerInitDropList();
+				}
 
 				switch (stmt->removeType)
 				{
 					case OBJECT_INDEX:
-						if (stmt->concurrent)
-							PreventTransactionChain(isTopLevel,
-													"DROP INDEX CONCURRENTLY");
-						/* fall through */
-
 					case OBJECT_TABLE:
 					case OBJECT_SEQUENCE:
 					case OBJECT_VIEW:
@@ -723,8 +738,9 @@ standard_ProcessUtility(Node *parsetree,
 
 				if (isCompleteQuery
 					&& EventTriggerSupportsObjectType(stmt->removeType))
+				{
 					EventTriggerDDLCommandEnd(parsetree);
-
+				}
 				break;
 			}
 

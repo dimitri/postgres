@@ -27,9 +27,9 @@
    <para>
      An event trigger fires whenever the event with which it is associated
      occurs in the database in which it is defined. Currently, the only
-     supported events are <literal>ddl_command_start</>
-     and <literal>ddl_command_end</>. Support for additional events may be
-     added in future releases.
+     supported events
+     are <literal>ddl_command_start</>, <literal>ddl_command_end</>. Support
+     for additional events may be added in future releases.
    </para>
 
    <para>
@@ -43,6 +43,14 @@
      <literal>SELECT INTO</literal> command, since this is equivalent to
      <literal>CREATE TABLE AS</literal>.  The <literal>ddl_command_end</>
      event occurs just after the execution of this same set of commands.
+   </para>
+
+   <para>
+    To list all objects that have been deleted as part of executing a
+    command, use the Set Returning
+    Function <literal>pg_event_trigger_dropped_objects()</> from
+    your <literal>ddl_command_end</> event trigger code. Note that happens
+    after the objects have been deleted, so no catalog lookup is possible.
    </para>
 
    <para>

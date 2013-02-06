@@ -191,6 +191,11 @@ extern void record_object_address_dependencies(const ObjectAddress *depender,
 								   ObjectAddresses *referenced,
 								   DependencyType behavior);
 
+extern int get_object_addresses_numelements(const ObjectAddresses *addresses);
+
+extern ObjectAddress *get_object_addresses_element(const ObjectAddresses *addresses,
+						   int i);
+
 extern void free_object_addresses(ObjectAddresses *addrs);
 
 /* in pg_depend.c */
