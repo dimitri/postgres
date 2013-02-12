@@ -862,6 +862,8 @@ AtEOXact_EventTrigger(bool isCommit)
 {
 	/* even on success we want to reset EventTriggerSQLDropInProgress */
 	EventTriggerSQLDropInProgress = false;
+	/* the list is palloc()ed and has already been taken care of */
+	EventTriggerSQLDropList = NULL;
 }
 
 /*
@@ -878,7 +880,7 @@ pg_event_trigger_dropped_objects(PG_FUNCTION_ARGS)
 	Tuplestorestate		*tupstore;
 	MemoryContext		 per_query_ctx;
 	MemoryContext		 oldcontext;
-	int					 i;
+	int					 i, n;
 
 	/*
 	 * This function is meant to be called from within an event trigger in
@@ -914,7 +916,10 @@ pg_event_trigger_dropped_objects(PG_FUNCTION_ARGS)
 
 	MemoryContextSwitchTo(oldcontext);
 
-	for (i = 0; i < get_object_addresses_numelements(EventTriggerSQLDropList); i++)
+	/* only call the get_object_addresses_numelements accessor function once */
+	n = get_object_addresses_numelements(EventTriggerSQLDropList);
+
+	for (i = 0; i < n; i++)
 	{
 		ObjectAddress *object;
 		Datum		values[3];

@@ -2152,12 +2152,24 @@ record_object_address_dependencies(const ObjectAddress *depender,
 							   behavior);
 }
 
+/*
+ * get_object_addresses_numelements
+ *
+ * Return the number of object addresses in the given ObjectAddresses, allowing
+ * external modules to loop over the array.
+ */
 int
 get_object_addresses_numelements(const ObjectAddresses *addresses)
 {
 	return addresses->numrefs;
 }
 
+/*
+ * get_object_addresses_element
+ *
+ * Return the ObjectAddress at position i, allowing to fetch it from an
+ * external module.
+ */
 ObjectAddress *
 get_object_addresses_element(const ObjectAddresses *addresses, int i)
 {
