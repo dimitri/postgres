@@ -552,7 +552,7 @@ filter_event_trigger(const char **tag, EventTriggerCacheItem  *item)
 	}
 
 	/* Filter by tags, if any were specified. */
-	if (item->ntags != 0 && bsearch(&tag, item->tag,
+	if (item->ntags != 0 && bsearch(tag, item->tag,
 									item->ntags, sizeof(char *),
 									pg_qsort_strcmp) == NULL)
 		return false;
@@ -752,6 +752,9 @@ EventTriggerInvoke(List *fn_oid_list, EventTriggerData *trigdata)
 	MemoryContext	oldcontext;
 	ListCell	   *lc;
 	bool			first = true;
+
+	/* Guard against stack overflow due to recursive event trigger */
+	check_stack_depth();
 
 	/*
 	 * Let's evaluate event triggers in their own memory context, so
