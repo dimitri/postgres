@@ -25,6 +25,8 @@ ALTER TEMPLATE FOR EXTENSION <replaceable>name</replaceable> SET DEFAULT VERSION
 ALTER TEMPLATE FOR EXTENSION <replaceable>name</replaceable> VERSION <replaceable>version</replaceable> WITH [ ([ <replaceable class="parameter">control_parameter</replaceable> ] [, ... ]) ] 
 ALTER TEMPLATE FOR EXTENSION <replaceable>name</replaceable> VERSION <replaceable>version</replaceable> AS <replaceable>script</replaceable>
 ALTER TEMPLATE FOR EXTENSION <replaceable>name</replaceable> FROM <replaceable>from_version</replaceable> TO <replaceable>to_version</replaceable> AS <replaceable>script</replaceable>
+ALTER TEMPLATE FOR EXTENSION <replaceable>name</replaceable> OWNER TO <replaceable>new_owner</replaceable>
+ALTER TEMPLATE FOR EXTENSION <replaceable>name</replaceable> RENAME TO <replaceable>new_name</replaceable>
 
 <phrase>where <replaceable class="parameter">control_parameter</replaceable> is one of:
 
@@ -85,6 +87,24 @@ ALTER TEMPLATE FOR EXTENSION <replaceable>name</replaceable> FROM <replaceable>f
      <para>
       For details about the control parameters meaning, please refer
       to <xref linkend="extend-extension">.
+     </para>
+    </listitem>
+   </varlistentry>
+
+   <varlistentry>
+    <term><replaceable class="parameter">new_name</replaceable></term>
+    <listitem>
+     <para>
+      The new name of the aggregate function.
+     </para>
+    </listitem>
+   </varlistentry>
+
+   <varlistentry>
+    <term><replaceable class="parameter">new_owner</replaceable></term>
+    <listitem>
+     <para>
+      The new owner of the aggregate function.
      </para>
     </listitem>
    </varlistentry>
