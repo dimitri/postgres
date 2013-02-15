@@ -32,6 +32,7 @@
 #include "catalog/pg_extension_uptmpl.h"
 #include "catalog/pg_namespace.h"
 #include "catalog/pg_type.h"
+#include "commands/alter.h"
 #include "commands/extension.h"
 #include "commands/template.h"
 #include "funcapi.h"
@@ -80,7 +81,6 @@ static Oid modify_pg_extension_control_default(const char *extname,
 static ExtensionControl *read_pg_extension_control(const char *extname,
 												   Relation rel,
 												   HeapTuple tuple);
-
 
 /*
  * The grammar accumulates control properties into a DefElem list that we have
@@ -656,6 +656,115 @@ InsertExtensionUpTmplTuple(Oid owner,
 }
 
 /*
+ * Lookup functions
+ */
+char *
+get_extension_control_name(Oid ctrlOid)
+{
+	char	   *result;
+	Relation	rel;
+	SysScanDesc scandesc;
+	HeapTuple	tuple;
+	ScanKeyData entry[1];
+
+	rel = heap_open(ExtensionControlRelationId, AccessShareLock);
+
+	ScanKeyInit(&entry[0],
+				ObjectIdAttributeNumber,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(ctrlOid));
+
+	scandesc = systable_beginscan(rel, ExtensionControlOidIndexId, true,
+								  SnapshotNow, 1, entry);
+
+	tuple = systable_getnext(scandesc);
+
+	/* We assume that there can be at most one matching tuple */
+	if (HeapTupleIsValid(tuple))
+		result = pstrdup(
+			NameStr(((Form_pg_extension_control) GETSTRUCT(tuple))->ctlname));
+	else
+		result = NULL;
+
+	systable_endscan(scandesc);
+
+	heap_close(rel, AccessShareLock);
+
+	return result;
+}
+
+char *
+get_extension_template_name(Oid tmplOid)
+{
+	char	   *result;
+	Relation	rel;
+	SysScanDesc scandesc;
+	HeapTuple	tuple;
+	ScanKeyData entry[1];
+
+	rel = heap_open(ExtensionTemplateRelationId, AccessShareLock);
+
+	ScanKeyInit(&entry[0],
+				ObjectIdAttributeNumber,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(tmplOid));
+
+	scandesc = systable_beginscan(rel, ExtensionTemplateOidIndexId, true,
+								  SnapshotNow, 1, entry);
+
+	tuple = systable_getnext(scandesc);
+
+	/* We assume that there can be at most one matching tuple */
+	if (HeapTupleIsValid(tuple))
+		result = pstrdup(
+			NameStr(((Form_pg_extension_template) GETSTRUCT(tuple))->tplname));
+	else
+		result = NULL;
+
+	systable_endscan(scandesc);
+
+	heap_close(rel, AccessShareLock);
+
+	return result;
+}
+
+char *
+get_extension_uptmpl_name(Oid tmplOid)
+{
+	char	   *result;
+	Relation	rel;
+	SysScanDesc scandesc;
+	HeapTuple	tuple;
+	ScanKeyData entry[1];
+
+	rel = heap_open(ExtensionUpTmplRelationId, AccessShareLock);
+
+	ScanKeyInit(&entry[0],
+				ObjectIdAttributeNumber,
+				BTEqualStrategyNumber, F_OIDEQ,
+				ObjectIdGetDatum(tmplOid));
+
+	scandesc = systable_beginscan(rel, ExtensionUpTmplOidIndexId, true,
+								  SnapshotNow, 1, entry);
+
+	tuple = systable_getnext(scandesc);
+
+	/* We assume that there can be at most one matching tuple */
+	if (HeapTupleIsValid(tuple))
+		result = pstrdup(
+			NameStr(((Form_pg_extension_uptmpl) GETSTRUCT(tuple))->uptname));
+	else
+		result = NULL;
+
+	systable_endscan(scandesc);
+
+	heap_close(rel, AccessShareLock);
+
+	return result;
+}
+
+
+/*
  * ALTER TEMPLATE FOR EXTENSION name VERSION version
  *
  * This implements high level routing for sub commands.
@@ -726,6 +835,65 @@ AlterExtensionUpdateTemplate(AlterTemplateStmt *stmt)
 
 	}
 	/* make compiler happy */
+	return InvalidOid;
+}
+
+/*
+ * ALTER TEMPLATE FOR EXTENSION ... OWNER TO ...
+ *
+ * In fact we are going to change the owner of all the templates objects
+ * related to the extension name given: pg_extension_control entries,
+ * pg_extension_template entries and also pg_extension_uptmpl entries.
+ *
+ * There's no reason to be able to change the owner of only a part of an
+ * extension's template (the control but not the template, or just the upgrade
+ * script).
+ */
+Oid
+AtlerExtensionTemplateOwner(const char *extname, Oid newOwnerId)
+{
+	ListCell *lc;
+
+	/* Alter owner of all pg_extension_control entries for extname */
+	foreach(lc, list_pg_extension_control_oids_for(extname))
+	{
+		Relation		catalog;
+		Oid				objectId = lfirst_oid(lc);
+
+		elog(DEBUG1, "alter owner of pg_extension_control %u", objectId);
+
+		catalog = heap_open(ExtensionControlRelationId, RowExclusiveLock);
+		AlterObjectOwner_internal(catalog, objectId, newOwnerId);
+		heap_close(catalog, RowExclusiveLock);
+	}
+
+	/* Alter owner of all pg_extension_template entries for extname */
+	foreach(lc, list_pg_extension_template_oids_for(extname))
+	{
+		Relation		catalog;
+		Oid				objectId = lfirst_oid(lc);
+
+		elog(DEBUG1, "alter owner of pg_extension_template %u", objectId);
+
+		catalog = heap_open(ExtensionTemplateRelationId, RowExclusiveLock);
+		AlterObjectOwner_internal(catalog, objectId, newOwnerId);
+		heap_close(catalog, RowExclusiveLock);
+	}
+
+	/* Alter owner of all pg_extension_uptmpl entries for extname */
+	foreach(lc, list_pg_extension_uptmpl_oids_for(extname))
+	{
+		Relation		catalog;
+		Oid				objectId = lfirst_oid(lc);
+
+		elog(DEBUG1, "alter owner of pg_extension_uptmpl %u", objectId);
+
+		catalog = heap_open(ExtensionUpTmplRelationId, RowExclusiveLock);
+		AlterObjectOwner_internal(catalog, objectId, newOwnerId);
+		heap_close(catalog, RowExclusiveLock);
+	}
+
+	/* which Oid to return here? */
 	return InvalidOid;
 }
 
@@ -1832,4 +2000,95 @@ pg_extension_templates(void)
 	heap_close(rel, AccessShareLock);
 
 	return templates;
+}
+
+List *
+list_pg_extension_control_oids_for(const char *extname)
+{
+	List       *oids = NIL;
+	Relation	rel;
+	SysScanDesc scandesc;
+	HeapTuple	tuple;
+	ScanKeyData entry[1];
+
+	rel = heap_open(ExtensionControlRelationId, AccessShareLock);
+
+	ScanKeyInit(&entry[0],
+				Anum_pg_extension_control_ctlname,
+				BTEqualStrategyNumber, F_NAMEEQ,
+				CStringGetDatum(extname));
+
+	scandesc = systable_beginscan(rel,
+								  ExtensionControlNameVersionIndexId, true,
+								  SnapshotNow, 1, entry);
+
+	/* find all the control tuples for extname */
+	while (HeapTupleIsValid(tuple = systable_getnext(scandesc)))
+		oids = lappend_oid(oids, HeapTupleGetOid(tuple));
+
+	systable_endscan(scandesc);
+
+	heap_close(rel, AccessShareLock);
+
+	return oids;
+}
+
+List *
+list_pg_extension_template_oids_for(const char *extname)
+{
+	List        *oids = NIL;
+	Relation	 rel;
+	SysScanDesc	 scandesc;
+	HeapTuple	 tuple;
+	ScanKeyData	 entry[1];
+
+	rel = heap_open(ExtensionTemplateRelationId, AccessShareLock);
+
+	ScanKeyInit(&entry[0],
+				Anum_pg_extension_template_tplname,
+				BTEqualStrategyNumber, F_NAMEEQ,
+				CStringGetDatum(extname));
+
+	scandesc = systable_beginscan(rel,
+								  ExtensionTemplateNameVersionIndexId, true,
+								  SnapshotNow, 1, entry);
+
+	while (HeapTupleIsValid(tuple = systable_getnext(scandesc)))
+		oids = lappend_oid(oids, HeapTupleGetOid(tuple));
+
+	systable_endscan(scandesc);
+
+	heap_close(rel, AccessShareLock);
+
+	return oids;
+}
+
+List *
+list_pg_extension_uptmpl_oids_for(const char *extname)
+{
+	List        *oids = NIL;
+	Relation	 rel;
+	SysScanDesc	 scandesc;
+	HeapTuple	 tuple;
+	ScanKeyData	 entry[1];
+
+	rel = heap_open(ExtensionUpTmplRelationId, AccessShareLock);
+
+	ScanKeyInit(&entry[0],
+				Anum_pg_extension_uptmpl_uptname,
+				BTEqualStrategyNumber, F_NAMEEQ,
+				CStringGetDatum(extname));
+
+	scandesc = systable_beginscan(rel,
+								  ExtensionUpTpmlNameFromToIndexId, true,
+								  SnapshotNow, 1, entry);
+
+	while (HeapTupleIsValid(tuple = systable_getnext(scandesc)))
+		oids = lappend_oid(oids, HeapTupleGetOid(tuple));
+
+	systable_endscan(scandesc);
+
+	heap_close(rel, AccessShareLock);
+
+	return oids;
 }

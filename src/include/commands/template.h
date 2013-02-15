@@ -20,6 +20,11 @@ extern Oid CreateTemplate(CreateTemplateStmt *stmt);
 extern Oid CreateExtensionTemplate(CreateTemplateStmt *stmt);
 extern Oid CreateExtensionUpdateTemplate(CreateTemplateStmt *stmt);
 
+extern char *get_extension_control_name(Oid ctrlOid);
+extern char *get_extension_template_name(Oid tmplOid);
+extern char *get_extension_uptmpl_name(Oid tmplOid);
+
+extern Oid AtlerExtensionTemplateOwner(const char *extname, Oid newowner);
 extern Oid AlterTemplate(AlterTemplateStmt *stmt);
 extern Oid AlterExtensionTemplate(AlterTemplateStmt *stmt);
 extern Oid AlterExtensionUpdateTemplate(AlterTemplateStmt *stmt);
@@ -56,5 +61,9 @@ extern List *list_pg_extension_template_versions(const char *extname);
 extern List *list_pg_extension_update_versions(const char *extname);
 extern List *pg_extension_default_controls(void);
 extern List *pg_extension_templates(void);
+
+extern List *list_pg_extension_control_oids_for(const char *extname);
+extern List *list_pg_extension_template_oids_for(const char *extname);
+extern List *list_pg_extension_uptmpl_oids_for(const char *extname);
 
 #endif   /* TEMPLATE_H */

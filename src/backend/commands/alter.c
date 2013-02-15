@@ -46,6 +46,7 @@
 #include "commands/schemacmds.h"
 #include "commands/tablecmds.h"
 #include "commands/tablespace.h"
+#include "commands/template.h"
 #include "commands/trigger.h"
 #include "commands/typecmds.h"
 #include "commands/user.h"
@@ -691,6 +692,10 @@ ExecAlterOwnerStmt(AlterOwnerStmt *stmt)
 		case OBJECT_EVENT_TRIGGER:
 			return AlterEventTriggerOwner(strVal(linitial(stmt->object)),
 										  newowner);
+
+		case OBJECT_EXTENSION_TEMPLATE:
+			return AtlerExtensionTemplateOwner(strVal(linitial(stmt->object)),
+											   newowner);
 
 		/* Generic cases */
 		case OBJECT_AGGREGATE:

@@ -80,8 +80,6 @@ ALTER EXTENSION pair UPDATE TO '1.2';
 
 DROP EXTENSION pair;
 
--- error, we don't have control settings for 1.2
-ALTER TEMPLATE FOR EXTENSION pair SET DEFAULT VERSION '1.2';
 
 -- that's accepted
 ALTER TEMPLATE FOR EXTENSION pair SET DEFAULT VERSION '1.1';
@@ -89,6 +87,16 @@ ALTER TEMPLATE FOR EXTENSION pair SET DEFAULT VERSION '1.1';
 -- but we don't know how to apply 1.0 -- 1.1 at install yet
 CREATE EXTENSION pair;
 
-\dx pair
+-- test owner change
+CREATE ROLE regression_bob;
 
+ALTER TEMPLATE FOR EXTENSION pair OWNER TO regression_bob;
 
+select ctlname, rolname
+  from pg_extension_control c join pg_roles r on r.oid = c.ctlowner;
+
+-- cleanup
+DROP TEMPLATE FOR EXTENSION pair FROM '1.1' TO '1.2';
+DROP TEMPLATE FOR EXTENSION pair FROM '1.0' TO '1.1';
+DROP TEMPLATE FOR EXTENSION pair VERSION '1.0';
+DROP ROLE regression_bob;

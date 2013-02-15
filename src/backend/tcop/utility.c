@@ -1670,6 +1670,9 @@ AlterObjectTypeCommandTag(ObjectType objtype)
 		case OBJECT_VIEW:
 			tag = "ALTER VIEW";
 			break;
+		case OBJECT_EXTENSION_TEMPLATE:
+			tag = "ALTER TEMPLATE FOR EXTENSION";
+			break;
 		default:
 			tag = "???";
 			break;

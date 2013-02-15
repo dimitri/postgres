@@ -2961,6 +2961,42 @@ getObjectDescription(const ObjectAddress *object)
 				break;
 			}
 
+		case OCLASS_EXTENSION_CONTROL:
+			{
+				char	   *extname;
+
+				extname = get_extension_control_name(object->objectId);
+				if (!extname)
+					elog(ERROR, "cache lookup failed for control template for extension %u",
+						 object->objectId);
+				appendStringInfo(&buffer, _("control template for extension %s"), extname);
+				break;
+			}
+
+		case OCLASS_EXTENSION_TEMPLATE:
+			{
+				char	   *extname;
+
+				extname = get_extension_template_name(object->objectId);
+				if (!extname)
+					elog(ERROR, "cache lookup failed for template for creating extension %u",
+						 object->objectId);
+				appendStringInfo(&buffer, _("install template for extension %s"), extname);
+				break;
+			}
+
+		case OCLASS_EXTENSION_UPTMPL:
+			{
+				char	   *extname;
+
+				extname = get_extension_uptmpl_name(object->objectId);
+				if (!extname)
+					elog(ERROR, "cache lookup failed for template for updating extension %u",
+						 object->objectId);
+				appendStringInfo(&buffer, _("update template for extension %s"), extname);
+				break;
+			}
+
         case OCLASS_EVENT_TRIGGER:
 			{
 				HeapTuple	tup;
