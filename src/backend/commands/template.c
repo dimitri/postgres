@@ -898,6 +898,61 @@ AtlerExtensionTemplateOwner(const char *extname, Oid newOwnerId)
 }
 
 /*
+ * ALTER TEMPLATE FOR EXTENSION ... RENAME TO ...
+ *
+ * There's no reason to be able to change the name of only a part of an
+ * extension's template (the control but not the template, or just the upgrade
+ * script).
+ */
+Oid
+AtlerExtensionTemplateRename(const char *extname, const char *newname)
+{
+	ListCell *lc;
+
+	/* Rename all pg_extension_control entries for extname */
+	foreach(lc, list_pg_extension_control_oids_for(extname))
+	{
+		Relation		catalog;
+		Oid				objectId = lfirst_oid(lc);
+
+		elog(DEBUG1, "rename pg_extension_control %u", objectId);
+
+		catalog = heap_open(ExtensionControlRelationId, RowExclusiveLock);
+		AlterObjectRename_internal(catalog, objectId, newname);
+		heap_close(catalog, RowExclusiveLock);
+	}
+
+	/* Rename all pg_extension_template entries for extname */
+	foreach(lc, list_pg_extension_template_oids_for(extname))
+	{
+		Relation		catalog;
+		Oid				objectId = lfirst_oid(lc);
+
+		elog(DEBUG1, "rename pg_extension_template %u", objectId);
+
+		catalog = heap_open(ExtensionTemplateRelationId, RowExclusiveLock);
+		AlterObjectRename_internal(catalog, objectId, newname);
+		heap_close(catalog, RowExclusiveLock);
+	}
+
+	/* Rename all pg_extension_uptmpl entries for extname */
+	foreach(lc, list_pg_extension_uptmpl_oids_for(extname))
+	{
+		Relation		catalog;
+		Oid				objectId = lfirst_oid(lc);
+
+		elog(DEBUG1, "rename pg_extension_uptmpl %u", objectId);
+
+		catalog = heap_open(ExtensionUpTmplRelationId, RowExclusiveLock);
+		AlterObjectRename_internal(catalog, objectId, newname);
+		heap_close(catalog, RowExclusiveLock);
+	}
+
+	/* which Oid to return here? */
+	return InvalidOid;
+}
+
+/*
  * ALTER TEMPLATE FOR EXTENSION ... SET DEFAULT VERSION ...
  *
  * We refuse to run without a default, so we drop the current one when

@@ -95,8 +95,11 @@ ALTER TEMPLATE FOR EXTENSION pair OWNER TO regression_bob;
 select ctlname, rolname
   from pg_extension_control c join pg_roles r on r.oid = c.ctlowner;
 
+-- test renaming
+ALTER TEMPLATE FOR EXTENSION pair RENAME TO keyval;
+
 -- cleanup
-DROP TEMPLATE FOR EXTENSION pair FROM '1.1' TO '1.2';
-DROP TEMPLATE FOR EXTENSION pair FROM '1.0' TO '1.1';
-DROP TEMPLATE FOR EXTENSION pair VERSION '1.0';
+DROP TEMPLATE FOR EXTENSION keyval FROM '1.1' TO '1.2';
+DROP TEMPLATE FOR EXTENSION keyval FROM '1.0' TO '1.1';
+DROP TEMPLATE FOR EXTENSION keyval VERSION '1.0';
 DROP ROLE regression_bob;

@@ -63,6 +63,7 @@
 
 
 static Oid AlterObjectNamespace_internal(Relation rel, Oid objid, Oid nspOid);
+static HeapTuple get_catalog_object_by_oid(Relation catalog, Oid objectId);
 
 /*
  * Raise an error to the effect that an object of the given name is already
@@ -147,11 +148,10 @@ report_namespace_conflict(Oid classId, const char *name, Oid nspOid)
  * objectId: OID of object to be renamed
  * new_name: CString representation of new name
  */
-static void
+void
 AlterObjectRename_internal(Relation rel, Oid objectId, const char *new_name)
 {
 	Oid			classId = RelationGetRelid(rel);
-	int			oidCacheId = get_object_catcache_oid(classId);
 	int			nameCacheId = get_object_catcache_name(classId);
 	AttrNumber	Anum_name = get_object_attnum_name(classId);
 	AttrNumber	Anum_namespace = get_object_attnum_namespace(classId);
@@ -169,8 +169,8 @@ AlterObjectRename_internal(Relation rel, Oid objectId, const char *new_name)
 	bool	   *nulls;
 	bool	   *replaces;
 
-	oldtup = SearchSysCache1(oidCacheId, ObjectIdGetDatum(objectId));
-	if (!HeapTupleIsValid(oldtup))
+	oldtup = get_catalog_object_by_oid(rel, objectId);
+	if (oldtup == NULL)
 		elog(ERROR, "cache lookup failed for object %u of catalog \"%s\"",
 			 objectId, RelationGetRelationName(rel));
 
@@ -287,8 +287,6 @@ AlterObjectRename_internal(Relation rel, Oid objectId, const char *new_name)
 	pfree(nulls);
 	pfree(replaces);
 	heap_freetuple(newtup);
-
-	ReleaseSysCache(oldtup);
 }
 
 /*
@@ -336,6 +334,9 @@ ExecRenameStmt(RenameStmt *stmt)
 		case OBJECT_DOMAIN:
 		case OBJECT_TYPE:
 			return RenameType(stmt);
+
+		case OBJECT_EXTENSION_TEMPLATE:
+			return AtlerExtensionTemplateRename(stmt->subname, stmt->newname);
 
 		case OBJECT_AGGREGATE:
 		case OBJECT_COLLATION:
