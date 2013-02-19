@@ -431,6 +431,21 @@
      </varlistentry>
 
      <varlistentry>
+      <term><varname>default_full_version</varname> (<type>string</type>)</term>
+      <listitem>
+       <para>
+        This option allows an extension author to avoid shiping all versions
+        scripts when shipping an extension. When a version is requested and
+        the matching script does not exist on disk,
+        set <replaceable>default_full_version</replaceable> to the first
+        script you still ship and PostgreSQL will apply the intermediate
+        upgrade script as per the <command>ALTER EXTENSION UPDATE</command>
+        command.
+       </para>
+      </listitem>
+     </varlistentry>
+
+     <varlistentry>
       <term><varname>comment</varname> (<type>string</type>)</term>
       <listitem>
        <para>

@@ -492,6 +492,10 @@ parse_extension_control_file(ExtensionControl *control,
 
 			control->default_version = pstrdup(item->value);
 		}
+		else if (strcmp(item->name, "default_full_version") == 0)
+		{
+			control->default_full_version = pstrdup(item->value);
+		}
 		else if (strcmp(item->name, "module_pathname") == 0)
 		{
 			control->module_pathname = pstrdup(item->value);
@@ -1306,6 +1310,7 @@ CreateExtension(CreateExtensionStmt *stmt)
 	List	   *requiredSchemas;
 	Oid			extensionOid;
 	ListCell   *lc;
+	bool        unpackaged = false;
 
 	/* Check extension name validity before any filesystem access */
 	check_valid_extension_name(stmt->extname);
@@ -1408,40 +1413,75 @@ CreateExtension(CreateExtensionStmt *stmt)
 	/*
 	 * Determine the (unpackaged) version to update from, if any, and then
 	 * figure out what sequence of update scripts we need to apply.
+	 *
+	 * When we have a default_full_version and the target is different from it,
+	 * apply the same algorithm to find a sequence of updates. If the user did
+	 * ask for a target version that happens to be the same as the
+	 * default_full_version, just install that one directly.
 	 */
-	if (d_old_version && d_old_version->arg)
+	if ((d_old_version && d_old_version->arg) || pcontrol->default_full_version)
 	{
-		oldVersionName = strVal(d_old_version->arg);
+		unpackaged = (d_old_version && d_old_version->arg);
+
+		if (unpackaged)
+			oldVersionName = strVal(d_old_version->arg);
+		else
+			oldVersionName = pcontrol->default_full_version;
+
 		check_valid_version_name(oldVersionName);
 
 		if (strcmp(oldVersionName, versionName) == 0)
-			ereport(ERROR,
-					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-					 errmsg("FROM version must be different from installation target version \"%s\"",
-							versionName)));
-
-		updateVersions = identify_update_path(pcontrol,
-											  oldVersionName,
-											  versionName);
-
-		if (list_length(updateVersions) == 1)
 		{
-			/*
-			 * Simple case where there's just one update script to run. We
-			 * will not need any follow-on update steps.
-			 */
-			Assert(strcmp((char *) linitial(updateVersions), versionName) == 0);
-			updateVersions = NIL;
+			if (unpackaged)
+			{
+				ereport(ERROR,
+						(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+						 errmsg("FROM version must be different from installation target version \"%s\"",
+								versionName)));
+			}
+			else
+			{
+				/*
+				 * CREATE EXTENSION ... VERSION = default_full_version, just
+				 * pretend we don't have a default_full_version for the
+				 * remaining of the code here, as that's the behavior we want
+				 * to see happening.
+				 */
+				pcontrol->default_full_version = NULL;
+				oldVersionName = NULL;
+				updateVersions = NIL;
+			}
 		}
 		else
 		{
-			/*
-			 * Multi-step sequence.  We treat this as installing the version
-			 * that is the target of the first script, followed by successive
-			 * updates to the later versions.
-			 */
-			versionName = (char *) linitial(updateVersions);
-			updateVersions = list_delete_first(updateVersions);
+			/* oldVersionName != versionName */
+			updateVersions = identify_update_path(pcontrol,
+												  oldVersionName,
+												  versionName);
+		}
+
+		/* in the create from unpackaged case, reduce the update list */
+		if (unpackaged)
+		{
+			if (list_length(updateVersions) == 1)
+			{
+				/*
+				 * Simple case where there's just one update script to run. We
+				 * will not need any follow-on update steps.
+				 */
+				Assert(strcmp((char *) linitial(updateVersions), versionName) == 0);
+				updateVersions = NIL;
+			}
+			else
+			{
+				/*
+				 * Multi-step sequence.  We treat this as installing the version
+				 * that is the target of the first script, followed by successive
+				 * updates to the later versions.
+				 */
+				versionName = (char *) linitial(updateVersions);
+				updateVersions = list_delete_first(updateVersions);
+			}
 		}
 	}
 	else
@@ -1578,19 +1618,30 @@ CreateExtension(CreateExtensionStmt *stmt)
 
 	/*
 	 * Execute the installation script file
-	 */
-	execute_extension_script(extensionOid, control,
-							 oldVersionName, versionName,
-							 requiredSchemas,
-							 schemaName, schemaOid);
-
-	/*
+	 *
 	 * If additional update scripts have to be executed, apply the updates as
 	 * though a series of ALTER EXTENSION UPDATE commands were given
 	 */
-	ApplyExtensionUpdates(extensionOid, pcontrol,
-						  versionName, updateVersions);
+	if (pcontrol->default_full_version && !unpackaged)
+	{
+		execute_extension_script(extensionOid, control,
+								 NULL, oldVersionName,
+								 requiredSchemas,
+								 schemaName, schemaOid);
 
+		ApplyExtensionUpdates(extensionOid, pcontrol,
+							  oldVersionName, updateVersions);
+	}
+	else
+	{
+		execute_extension_script(extensionOid, control,
+								 oldVersionName, versionName,
+								 requiredSchemas,
+								 schemaName, schemaOid);
+
+		ApplyExtensionUpdates(extensionOid, pcontrol,
+							  versionName, updateVersions);
+	}
 	return extensionOid;
 }
 
