@@ -32,7 +32,8 @@ CATALOG(pg_extension_control,3379)
 {
 	NameData	ctlname;		/* extension name */
 	Oid			ctlowner;		/* control owner */
-	bool		ctldefault;		/* this version is the extension's default? */
+	bool		ctldefault;		/* is this version the default? */
+	bool		ctldefaultfull;	/* is this version the default full version? */
 	bool		ctlrelocatable;	/* extension is relocatable? */
 	bool		ctlsuperuser;	/* extension is superuser only? */
 	NameData	ctlnamespace;	/* namespace of contained objects */
@@ -55,15 +56,16 @@ typedef FormData_pg_extension_control *Form_pg_extension_control;
  * ----------------
  */
 
-#define Natts_pg_extension_control					8
+#define Natts_pg_extension_control					9
 #define Anum_pg_extension_control_ctlname			1
 #define Anum_pg_extension_control_ctlowner			2
 #define Anum_pg_extension_control_ctldefault		3
-#define Anum_pg_extension_control_ctlrelocatable	4
-#define Anum_pg_extension_control_ctlsuperuser		5
-#define Anum_pg_extension_control_ctlnamespace		6
-#define Anum_pg_extension_control_ctlversion		7
-#define Anum_pg_extension_control_ctlrequires		8
+#define Anum_pg_extension_control_ctldefaultfull	4
+#define Anum_pg_extension_control_ctlrelocatable	5
+#define Anum_pg_extension_control_ctlsuperuser		6
+#define Anum_pg_extension_control_ctlnamespace		7
+#define Anum_pg_extension_control_ctlversion		8
+#define Anum_pg_extension_control_ctlrequires		9
 
 /* ----------------
  *		pg_extension_control has no initial contents

@@ -63,6 +63,8 @@ static Oid InsertExtensionUpTmplTuple(Oid owner,
 									  const char *script);
 
 static Oid AlterTemplateSetDefault(const char *extname, const char *version);
+static Oid AlterTemplateSetDefaultFull(const char *extname,
+									   const char *version);
 static Oid AlterTemplateSetControl(const char *extname,
 								   const char *version,
 								   List *options);
@@ -281,6 +283,13 @@ CreateExtensionTemplate(CreateTemplateStmt *stmt)
 		control->default_version = pstrdup(stmt->version);
 	}
 
+	/*
+	 * FIXME: we need to be able to set the default full version in the control
+	 * properties and ALTER that setting, for now each time a new extension
+	 * create script is provided it's the new default full version.
+	 */
+	control->default_full_version = stmt->version;
+
 	extTemplateOid =  InsertExtensionTemplateTuple(owner,
 												   control,
 												   stmt->version,
@@ -468,6 +477,11 @@ InsertExtensionControlTuple(Oid owner,
 		values[Anum_pg_extension_control_ctldefault - 1] = false;
 	else
 		values[Anum_pg_extension_control_ctldefault - 1] = true;
+
+	if (control->default_full_version == NULL)
+		values[Anum_pg_extension_control_ctldefaultfull - 1] = false;
+	else
+		values[Anum_pg_extension_control_ctldefaultfull - 1] = true;
 
 	if (control->requires == NULL)
 		nulls[Anum_pg_extension_control_ctlrequires - 1] = true;
@@ -795,6 +809,9 @@ AlterExtensionTemplate(AlterTemplateStmt *stmt)
 		case AET_SET_DEFAULT:
 			return AlterTemplateSetDefault(stmt->extname, stmt->version);
 
+		case AET_SET_DEFAULT_FULL:
+			return AlterTemplateSetDefaultFull(stmt->extname, stmt->version);
+
 		case AET_SET_SCRIPT:
 			return AlterTemplateSetScript(stmt->extname,
 										  stmt->version,
@@ -818,6 +835,7 @@ AlterExtensionUpdateTemplate(AlterTemplateStmt *stmt)
 	switch (stmt->cmdtype)
 	{
 		case AET_SET_DEFAULT:
+		case AET_SET_DEFAULT_FULL:
 			/* shouldn't happen */
 			elog(ERROR, "pg_extension_control is associated to a specific version of an extension, not an update script.");
 			break;
@@ -982,6 +1000,15 @@ AlterTemplateSetDefault(const char *extname, const char *version)
 	}
 	/* set ctldefault to true on new default extension */
 	return modify_pg_extension_control_default(extname, version, true);
+}
+
+/*
+ * ALTER TEMPLATE FOR EXTENSION ... SET DEFAULT FULL VERSION ...
+ */
+static Oid
+AlterTemplateSetDefaultFull(const char *extname, const char *version)
+{
+	elog(ERROR, "Not Yet Implemented");
 }
 
 /*
@@ -1673,11 +1700,16 @@ find_pg_extension_control(const char *extname,
 /*
  * Find the default extension's control properties, and its OID, for internal
  * use (such as checking ACLs).
+ *
+ * In a single scan of the pg_extension_control catalog, also find out the
+ * default full version of that extension, needed in extension.c when doing
+ * multi steps CREATE EXTENSION.
  */
 ExtensionControl *
 find_default_pg_extension_control(const char *extname, bool missing_ok)
 {
 	ExtensionControl *control = NULL;
+	char *default_full_version;
 	Relation	rel;
 	SysScanDesc scandesc;
 	HeapTuple	tuple;
@@ -1697,13 +1729,17 @@ find_default_pg_extension_control(const char *extname, bool missing_ok)
 	/* find all the control tuples for extname */
 	while (HeapTupleIsValid(tuple = systable_getnext(scandesc)))
 	{
-		bool isnull;
+		bool isnull;			/* needed for the API, not expected */
 		bool ctldefault =
 			DatumGetBool(
 				fastgetattr(tuple, Anum_pg_extension_control_ctldefault,
 							RelationGetDescr(rel), &isnull));
+		bool ctldefaultfull =
+			DatumGetBool(
+				fastgetattr(tuple, Anum_pg_extension_control_ctldefaultfull,
+							RelationGetDescr(rel), &isnull));
 
-		/* only of those is the default */
+		/* only one of those is the default */
 		if (ctldefault)
 		{
 			if (control == NULL)
@@ -1713,6 +1749,28 @@ find_default_pg_extension_control(const char *extname, bool missing_ok)
 				elog(ERROR,
 					 "Extension \"%s\" has more than one default control template",
 					 extname);
+		}
+
+		/* set control->default_full_version while scanning */
+		if (ctldefaultfull)
+		{
+			Datum dvers =
+				heap_getattr(tuple, Anum_pg_extension_control_ctlversion,
+							 RelationGetDescr(rel), &isnull);
+
+			char *version =
+				isnull ? NULL : text_to_cstring(DatumGetTextPP(dvers));
+
+			if (isnull)
+			{
+				/* shouldn't happen */
+				elog(ERROR,
+					 "pg_extension_control row without version for \"%s\"",
+					 extname);
+			}
+
+			/* get the version and requires fields from here */
+			default_full_version = pstrdup(version);
 		}
 	}
 	systable_endscan(scandesc);
@@ -1725,6 +1783,9 @@ find_default_pg_extension_control(const char *extname, bool missing_ok)
 				(errcode(ERRCODE_UNDEFINED_OBJECT),
 				 errmsg("extension \"%s\" has no default control template",
 						extname)));
+
+	/* don't forget to add in the default full version */
+	control->default_full_version = default_full_version;
 
 	return control;
 }

@@ -37,6 +37,7 @@ typedef struct ExtensionControl
 	char	   *name;			/* name of the extension */
 	char	   *directory;		/* directory for script files */
 	char	   *default_version;	/* default install target version, if any */
+	char	   *default_full_version;	/* default install source version, if any */
 	char	   *module_pathname;	/* string to substitute for module_pathname */
 	char	   *comment;		/* comment, if any */
 	char	   *schema;			/* target schema (allowed if !relocatable) */

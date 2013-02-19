@@ -1660,6 +1660,7 @@ typedef struct CreateTemplateStmt
 typedef enum AlterTemplateType
 {
 	AET_SET_DEFAULT,
+	AET_SET_DEFAULT_FULL,
 	AET_SET_SCRIPT,
 	AET_UPDATE_CONTROL,
 } AlterTemplateType;
