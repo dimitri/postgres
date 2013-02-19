@@ -7659,6 +7659,16 @@ dumpExtensionTemplate(Archive *fout, ExtensionTemplateInfo *exttmplinfo)
 	/* extension script (either install or upgrade script) */
 	appendPQExpBuffer(q, " AS\n$$%s$$;\n", exttmplinfo->script);
 
+	/*
+	 * When the default version is not a create script, we need an extra ALTER
+	 * statement here.
+	 */
+	if (!pg_extension_template && exttmplinfo->isdefault)
+	{
+		appendPQExpBuffer(q, "\nALTER TEMPLATE FOR EXTENSION %s ", qextname);
+		appendPQExpBuffer(q, "SET DEFAULT VERSION %s;\n", qto);
+	}
+
 	ArchiveEntry(fout, exttmplinfo->dobj.catId, exttmplinfo->dobj.dumpId,
 				 exttmplinfo->dobj.name,
 				 NULL, NULL,

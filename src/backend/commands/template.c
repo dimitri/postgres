@@ -186,6 +186,7 @@ CreateTemplate(CreateTemplateStmt *stmt)
 Oid
 CreateExtensionTemplate(CreateTemplateStmt *stmt)
 {
+	ExtensionControl *default_version;
     Oid			 extTemplateOid;
 	Oid			 owner		   = GetUserId();
 	ExtensionControl *control;
@@ -266,10 +267,9 @@ CreateExtensionTemplate(CreateTemplateStmt *stmt)
 	 * be the default for this extension, when the statement claims to be the
 	 * default.
 	 */
+	default_version = find_default_pg_extension_control(control->name, true);
 	if (stmt->default_version)
 	{
-		ExtensionControl *default_version =
-			find_default_pg_extension_control(control->name, true);
 
 		if (default_version)
 			ereport(ERROR,
@@ -281,6 +281,16 @@ CreateExtensionTemplate(CreateTemplateStmt *stmt)
 
 		/* no pre-existing */
 		control->default_version = pstrdup(stmt->version);
+	}
+	else
+	{
+		/*
+		 * No explicit default has been given in the command, we still maintain
+		 * our invariant that we must have a single line per extension in
+		 * pg_extension_control where ctldefault is true.
+		 */
+		if (default_version == NULL)
+			control->default_version = pstrdup(stmt->version);
 	}
 
 	/*
@@ -1785,7 +1795,8 @@ find_default_pg_extension_control(const char *extname, bool missing_ok)
 						extname)));
 
 	/* don't forget to add in the default full version */
-	control->default_full_version = default_full_version;
+	if (control != NULL)
+		control->default_full_version = default_full_version;
 
 	return control;
 }
