@@ -80,6 +80,10 @@ static Oid modify_pg_extension_control_default(const char *extname,
 											   const char *version,
 											   bool value);
 
+static Oid modify_pg_extension_control_default_full(const char *extname,
+													const char *version,
+													bool value);
+
 static ExtensionControl *read_pg_extension_control(const char *extname,
 												   Relation rel,
 												   HeapTuple tuple);
@@ -268,9 +272,9 @@ CreateExtensionTemplate(CreateTemplateStmt *stmt)
 	 * default.
 	 */
 	default_version = find_default_pg_extension_control(control->name, true);
+
 	if (stmt->default_version)
 	{
-
 		if (default_version)
 			ereport(ERROR,
 					(errcode(ERRCODE_DUPLICATE_OBJECT),
@@ -285,20 +289,29 @@ CreateExtensionTemplate(CreateTemplateStmt *stmt)
 	else
 	{
 		/*
-		 * No explicit default has been given in the command, we still maintain
-		 * our invariant that we must have a single line per extension in
-		 * pg_extension_control where ctldefault is true.
+		 * No explicit default has been given in the command, and we didn't
+		 * find one in the catalogs (it must be the first time we hear about
+		 * that very extension): we maintain our invariant that we must have a
+		 * single line per extension in pg_extension_control where ctldefault
+		 * is true.
 		 */
 		if (default_version == NULL)
 			control->default_version = pstrdup(stmt->version);
 	}
 
 	/*
-	 * FIXME: we need to be able to set the default full version in the control
-	 * properties and ALTER that setting, for now each time a new extension
-	 * create script is provided it's the new default full version.
+	 * In the control structure, find_default_pg_extension_control() has
+	 * stuffed the current default full version of the extension, which might
+	 * be different from the default version.
+	 *
+	 * When creating the first template for an extension, we don't have a
+	 * default_full_version set yet. To maintain our invariant that we always
+	 * have a single version of the extension templates always as the default
+	 * full version, if no default_full_version has been found, forcibly set it
+	 * now.
 	 */
-	control->default_full_version = stmt->version;
+	if (!control->default_full_version)
+		control->default_full_version = stmt->version;
 
 	extTemplateOid =  InsertExtensionTemplateTuple(owner,
 												   control,
@@ -991,38 +1004,27 @@ AlterTemplateSetDefault(const char *extname, const char *version)
 {
 	/* we need to know who's the default */
 	ExtensionControl *current =
-		find_default_pg_extension_control(extname, true);
+		find_default_pg_extension_control(extname, false);
 
 	if (!pg_extension_control_ownercheck(current->ctrlOid, GetUserId()))
 		aclcheck_error(ACLCHECK_NOT_OWNER, ACL_KIND_EXTCONTROL,
 					   extname);
 
-	if (current)
-	{
-		if (strcmp(current->default_version, version) == 0)
-			/* silently do nothing */
-			return InvalidOid;
+	/* silently do nothing if the default is already set as wanted */
+	if (strcmp(current->default_version, version) == 0)
+		return current->ctrlOid;
 
-		/* set ctldefault to false on current default extension */
-		modify_pg_extension_control_default(current->name,
-											current->default_version,
-											false);
-	}
+	/* set ctldefault to false on current default extension */
+	modify_pg_extension_control_default(current->name,
+										current->default_version,
+										false);
+
 	/* set ctldefault to true on new default extension */
 	return modify_pg_extension_control_default(extname, version, true);
 }
 
 /*
- * ALTER TEMPLATE FOR EXTENSION ... SET DEFAULT FULL VERSION ...
- */
-static Oid
-AlterTemplateSetDefaultFull(const char *extname, const char *version)
-{
-	elog(ERROR, "Not Yet Implemented");
-}
-
-/*
- * Implement flipping the ctldefault bit from value to repl.
+ * Implement flipping the ctldefaultfull bit to given value.
  */
 static Oid
 modify_pg_extension_control_default(const char *extname,
@@ -1072,6 +1074,104 @@ modify_pg_extension_control_default(const char *extname,
 
 	values[Anum_pg_extension_control_ctldefault - 1] = BoolGetDatum(value);
 	repl[Anum_pg_extension_control_ctldefault - 1] = true;
+
+	tuple = heap_modify_tuple(tuple, RelationGetDescr(rel),
+							  values, nulls, repl);
+
+	simple_heap_update(rel, &tuple->t_self, tuple);
+	CatalogUpdateIndexes(rel, tuple);
+
+	systable_endscan(scandesc);
+
+	heap_close(rel, AccessShareLock);
+
+	return ctrlOid;
+}
+
+/*
+ * ALTER TEMPLATE FOR EXTENSION ... SET DEFAULT FULL VERSION ...
+ */
+static Oid
+AlterTemplateSetDefaultFull(const char *extname, const char *version)
+{
+	/* we need to know who's the default */
+	ExtensionControl *current =
+		find_default_pg_extension_control(extname, false);
+
+	/* the target version must be an installation script */
+	Oid target = get_template_oid(extname, version, false);
+
+	(void) target;				/* silence compiler */
+
+	/* only check the owner of one of those, as we maintain them all the same */
+	if (!pg_extension_control_ownercheck(current->ctrlOid, GetUserId()))
+		aclcheck_error(ACLCHECK_NOT_OWNER, ACL_KIND_EXTCONTROL,
+					   extname);
+
+	/* silently do nothing if the default is already set as wanted */
+	if (strcmp(current->default_full_version, version) == 0)
+		return current->ctrlOid;
+
+	/* set ctldefault to false on current default extension */
+	modify_pg_extension_control_default_full(current->name,
+											 current->default_full_version,
+											 false);
+
+	/* set ctldefault to true on new default extension */
+	return modify_pg_extension_control_default_full(extname, version, true);
+}
+
+/*
+ * Implement flipping the ctldefaultfull bit to given value.
+ */
+static Oid
+modify_pg_extension_control_default_full(const char *extname,
+										 const char *version,
+										 bool value)
+{
+	Oid         ctrlOid;
+	Relation	rel;
+	SysScanDesc scandesc;
+	HeapTuple	tuple;
+	ScanKeyData entry[2];
+	Datum		values[Natts_pg_extension_control];
+	bool		nulls[Natts_pg_extension_control];
+	bool		repl[Natts_pg_extension_control];
+
+	rel = heap_open(ExtensionControlRelationId, AccessShareLock);
+
+	ScanKeyInit(&entry[0],
+				Anum_pg_extension_control_ctlname,
+				BTEqualStrategyNumber, F_NAMEEQ,
+				CStringGetDatum(extname));
+
+	ScanKeyInit(&entry[1],
+				Anum_pg_extension_control_ctlversion,
+				BTEqualStrategyNumber, F_TEXTEQ,
+				CStringGetTextDatum(version));
+
+	scandesc = systable_beginscan(rel,
+								  ExtensionControlNameVersionIndexId, true,
+								  SnapshotNow, 2, entry);
+
+	tuple = systable_getnext(scandesc);
+
+	/* We assume that there can be at most one matching tuple */
+
+	if (!HeapTupleIsValid(tuple))		/* should not happen */
+		elog(ERROR,
+			 "pg_extension_control for extension \"%s\" version \"%s\" does not exist",
+			 extname, version);
+
+	ctrlOid = HeapTupleGetOid(tuple);
+
+	/* Modify ctldefault in the pg_extension_control tuple */
+	memset(values, 0, sizeof(values));
+	memset(nulls, 0, sizeof(nulls));
+	memset(repl, 0, sizeof(repl));
+
+	values[Anum_pg_extension_control_ctldefaultfull - 1] = BoolGetDatum(value);
+	repl[Anum_pg_extension_control_ctldefaultfull - 1] = true;
 
 	tuple = heap_modify_tuple(tuple, RelationGetDescr(rel),
 							  values, nulls, repl);
@@ -1586,6 +1686,30 @@ RemoveExtensionUpTmplById(Oid extUpTmplOid)
 }
 
 /*
+ * Internal tool to get the version string of a pg_extension_control tuple.
+ */
+static char *
+extract_ctlversion(Relation rel, HeapTuple tuple)
+{
+	bool isnull;
+
+	Datum dvers =
+		heap_getattr(tuple, Anum_pg_extension_control_ctlversion,
+					 RelationGetDescr(rel), &isnull);
+
+	char *version = isnull? NULL : text_to_cstring(DatumGetTextPP(dvers));
+
+	if (isnull)
+	{
+		/* shouldn't happen */
+		elog(ERROR,
+			 "pg_extension_control row without version for \"%u\"",
+			 HeapTupleGetOid(tuple));
+	}
+	return pstrdup(version);
+}
+
+/*
  * read_pg_extension_control
  *
  * Read a pg_extension_control row and fill in an ExtensionControl
@@ -1610,24 +1734,18 @@ read_pg_extension_control(const char *extname, Relation rel, HeapTuple tuple)
 	control->superuser = ctrl->ctlsuperuser;
 	control->schema = pstrdup(NameStr(ctrl->ctlnamespace));
 
+	/* set control->default_version */
 	if (ctrl->ctldefault)
+		control->default_version = extract_ctlversion(rel, tuple);
+
+	/* set control->default_full_version */
+	if (ctrl->ctldefaultfull)
 	{
-		Datum dvers =
-			heap_getattr(tuple, Anum_pg_extension_control_ctlversion,
-						 RelationGetDescr(rel), &isnull);
-
-		char *version = isnull? NULL : text_to_cstring(DatumGetTextPP(dvers));
-
-		if (isnull)
-		{
-			/* shouldn't happen */
-			elog(ERROR,
-				 "pg_extension_control row without version for \"%s\"",
-				 extname);
-		}
-
-		/* get the version and requires fields from here */
-		control->default_version = pstrdup(version);
+		/* avoid extracting it again if we just did so */
+		if (control->default_version)
+			control->default_full_version = control->default_version;
+		else
+			control->default_full_version = extract_ctlversion(rel, tuple);
 	}
 
 	/* now see about the dependencies array */
@@ -1761,27 +1879,9 @@ find_default_pg_extension_control(const char *extname, bool missing_ok)
 					 extname);
 		}
 
-		/* set control->default_full_version while scanning */
+		/* the default version and default full version might be different */
 		if (ctldefaultfull)
-		{
-			Datum dvers =
-				heap_getattr(tuple, Anum_pg_extension_control_ctlversion,
-							 RelationGetDescr(rel), &isnull);
-
-			char *version =
-				isnull ? NULL : text_to_cstring(DatumGetTextPP(dvers));
-
-			if (isnull)
-			{
-				/* shouldn't happen */
-				elog(ERROR,
-					 "pg_extension_control row without version for \"%s\"",
-					 extname);
-			}
-
-			/* get the version and requires fields from here */
-			default_full_version = pstrdup(version);
-		}
+			default_full_version = extract_ctlversion(rel, tuple);
 	}
 	systable_endscan(scandesc);
 

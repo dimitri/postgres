@@ -7669,6 +7669,8 @@ dumpExtensionTemplate(Archive *fout, ExtensionTemplateInfo *exttmplinfo)
 		appendPQExpBuffer(q, "SET DEFAULT VERSION %s;\n", qto);
 	}
 
+	appendPQExpBuffer(labelq, "TEMPLATE FOR EXTENSION %s", qextname);
+
 	ArchiveEntry(fout, exttmplinfo->dobj.catId, exttmplinfo->dobj.dumpId,
 				 exttmplinfo->dobj.name,
 				 NULL, NULL,

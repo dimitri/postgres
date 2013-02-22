@@ -22,6 +22,7 @@ PostgreSQL documentation
  <refsynopsisdiv>
 <synopsis>
 ALTER TEMPLATE FOR EXTENSION <replaceable>name</replaceable> SET DEFAULT VERSION <replaceable>version</replaceable>
+ALTER TEMPLATE FOR EXTENSION <replaceable>name</replaceable> SET DEFAULT FULL VERSION <replaceable>full_version</replaceable>
 ALTER TEMPLATE FOR EXTENSION <replaceable>name</replaceable> VERSION <replaceable>version</replaceable> WITH [ ([ <replaceable class="parameter">control_parameter</replaceable> ] [, ... ]) ] 
 ALTER TEMPLATE FOR EXTENSION <replaceable>name</replaceable> VERSION <replaceable>version</replaceable> AS <replaceable>script</replaceable>
 ALTER TEMPLATE FOR EXTENSION <replaceable>name</replaceable> FROM <replaceable>from_version</replaceable> TO <replaceable>to_version</replaceable> AS <replaceable>script</replaceable>
@@ -68,6 +69,23 @@ ALTER TEMPLATE FOR EXTENSION <replaceable>name</replaceable> RENAME TO <replacea
      <para>
       The version of the extension we want to install by default when using
       its template.
+     </para>
+    </listitem>
+   </varlistentry>
+
+   <varlistentry>
+    <term><replaceable class="parameter">full_version</replaceable></term>
+    <listitem>
+     <para>
+      The version of the extension we want to install from by default when
+      using its template. For example, if you have an extension installation
+      scipt for version <literal>1.0</literal> and an upgrade script
+      for <literal>1.0--1.1</literal>, you can set the
+      default <literal>full_version</literal> to <literal>1.0</literal> so
+      that <productname>PostgreSQL</productname> knows to install
+      version <literal>1.1</literal> by first using
+      the <literal>1.0</literal> creation script then
+      the <literal>1.1</literal> upgrade script.
      </para>
     </listitem>
    </varlistentry>

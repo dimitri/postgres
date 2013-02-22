@@ -3536,7 +3536,7 @@ AlterTemplateStmt:
 					n->template = TEMPLATE_CREATE_EXTENSION;
 					n->cmdtype = AET_SET_DEFAULT_FULL;
 					n->extname = $5;
-					n->version = $9;
+					n->version = $10;
 					n->missing_ok = false;
 					$$ = (Node *) n;
 				}

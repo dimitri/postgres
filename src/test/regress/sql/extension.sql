@@ -51,17 +51,24 @@ $$;
 -- test some ALTER commands
 
 -- ok
-ALTER TEMPLATE FOR EXTENSION PAIR VERSION '1.0' WITH (relocatable);
+ALTER TEMPLATE FOR EXTENSION pair VERSION '1.0' WITH (relocatable);
 
 -- we don't have a version 1.3 known yet
-ALTER TEMPLATE FOR EXTENSION PAIR VERSION '1.3' WITH (relocatable);
+ALTER TEMPLATE FOR EXTENSION pair VERSION '1.3' WITH (relocatable);
 
 -- you can't set the default on an upgrade script, only an extension's version
-ALTER TEMPLATE FOR EXTENSION PAIR FROM '1.0' TO '1.1' SET DEFAULT;
+ALTER TEMPLATE FOR EXTENSION pair FROM '1.0' TO '1.1' SET DEFAULT;
 
 -- you can't set control properties on an upgrade script, only an
 -- extension's version
-ALTER TEMPLATE FOR EXTENSION PAIR FROM '1.0' TO '1.1' WITH (relocatable);
+ALTER TEMPLATE FOR EXTENSION pair FROM '1.0' TO '1.1' WITH (relocatable);
+
+-- try to set the default full version to an unknown extension version
+ALTER TEMPLATE FOR EXTENSION pair SET DEFAULT FULL VERSION '1.1';
+
+-- now set it to the current one already, should silently do nothing
+ALTER TEMPLATE FOR EXTENSION pair SET DEFAULT FULL VERSION '1.0';
+
 
 -- you can actually change the script used to update, though
 ALTER TEMPLATE FOR EXTENSION PAIR FROM '1.1' TO '1.2'
@@ -84,8 +91,11 @@ DROP EXTENSION pair;
 -- that's accepted
 ALTER TEMPLATE FOR EXTENSION pair SET DEFAULT VERSION '1.1';
 
--- but we don't know how to apply 1.0 -- 1.1 at install yet
+-- that will install 1.0 then run the 1.0 -- 1.1 update script
 CREATE EXTENSION pair;
+
+-- cleanup
+DROP EXTENSION pair;
 
 -- test owner change
 CREATE ROLE regression_bob;
