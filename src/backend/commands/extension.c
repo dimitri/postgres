@@ -1430,7 +1430,6 @@ CreateExtension(CreateExtensionStmt *stmt)
 	 */
 	if (extension_version_is_full(pcontrol, versionName))
 	{
-		/* This code arrangement is made to make patch review easier */
 		target_version_is_full = true;
 		oldVersionName = NULL;
 		updateVersions = NIL;
