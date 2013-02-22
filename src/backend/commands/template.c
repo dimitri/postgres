@@ -310,8 +310,11 @@ CreateExtensionTemplate(CreateTemplateStmt *stmt)
 	 * full version, if no default_full_version has been found, forcibly set it
 	 * now.
 	 */
-	if (!control->default_full_version)
+	if (default_version == NULL ||
+		default_version->default_full_version == NULL)
+	{
 		control->default_full_version = stmt->version;
+	}
 
 	extTemplateOid =  InsertExtensionTemplateTuple(owner,
 												   control,

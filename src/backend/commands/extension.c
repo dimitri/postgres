@@ -417,6 +417,19 @@ get_extension_script_filename(ExtensionControl *control,
 	return result;
 }
 
+/*
+ * An extension version is said to be "full" when it has a full install script,
+ * so that we know we don't need any update sequences dances either from
+ * "unpackaged" or from "default_major_version".
+ */
+static bool
+extension_version_is_full(ExtensionControl *control, const char *version)
+{
+	char *filename = get_extension_script_filename(control, NULL, version);
+
+	return access(filename, F_OK) == 0
+		|| OidIsValid(get_template_oid(control->name, version, true));
+}
 
 /*
  * Parse contents of primary or auxiliary control file, and fill in
@@ -1310,7 +1323,7 @@ CreateExtension(CreateExtensionStmt *stmt)
 	List	   *requiredSchemas;
 	Oid			extensionOid;
 	ListCell   *lc;
-	bool        unpackaged = false;
+	bool        unpackaged = false, target_version_is_full = false;
 
 	/* Check extension name validity before any filesystem access */
 	check_valid_extension_name(stmt->extname);
@@ -1411,6 +1424,18 @@ CreateExtension(CreateExtensionStmt *stmt)
 	check_valid_version_name(versionName);
 
 	/*
+	 * If we have a full script for the target version (or a create template),
+	 * we don't need to care about unpackaged or default_major_version, nor
+	 * about upgrade sequences.
+	 */
+	if (extension_version_is_full(pcontrol, versionName))
+	{
+		/* This code arrangement is made to make patch review easier */
+		target_version_is_full = true;
+		oldVersionName = NULL;
+		updateVersions = NIL;
+	}
+	/*
 	 * Determine the (unpackaged) version to update from, if any, and then
 	 * figure out what sequence of update scripts we need to apply.
 	 *
@@ -1419,7 +1444,7 @@ CreateExtension(CreateExtensionStmt *stmt)
 	 * ask for a target version that happens to be the same as the
 	 * default_full_version, just install that one directly.
 	 */
-	if ((d_old_version && d_old_version->arg) || pcontrol->default_full_version)
+	else if ((d_old_version && d_old_version->arg) || pcontrol->default_full_version)
 	{
 		unpackaged = (d_old_version && d_old_version->arg);
 
@@ -1622,7 +1647,14 @@ CreateExtension(CreateExtensionStmt *stmt)
 	 * If additional update scripts have to be executed, apply the updates as
 	 * though a series of ALTER EXTENSION UPDATE commands were given
 	 */
-	if (pcontrol->default_full_version && !unpackaged)
+	if (target_version_is_full)
+	{
+		execute_extension_script(extensionOid, control,
+								 NULL, versionName,
+								 requiredSchemas,
+								 schemaName, schemaOid);
+	}
+	else if (pcontrol->default_full_version && !unpackaged)
 	{
 		execute_extension_script(extensionOid, control,
 								 NULL, oldVersionName,
