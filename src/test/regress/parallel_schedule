@@ -94,6 +94,7 @@ test: alter_generic misc psql async
 test: rules
 # event triggers cannot run concurrently with any test that runs DDL
 test: event_trigger
+test: extension
 
 # ----------
 # Another group of parallel tests

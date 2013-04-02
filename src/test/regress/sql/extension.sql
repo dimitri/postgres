@@ -1,4 +1,19 @@
--- first create some templates
+-- test case without an explicit schema
+create template for extension myextension version '1.0' with ()
+    as $$ create table foobar(i int4) $$;
+
+create extension myextension;
+
+-- check that it went to 'public'
+select nspname
+  from pg_class c join pg_namespace n on n.oid = c.relnamespace
+ where relname ~ 'foobar';
+
+-- cleanup
+drop extension myextension;
+drop template for extension myextension version '1.0';
+
+-- now create some templates and an upgrade path
 CREATE TEMPLATE
    FOR EXTENSION pair DEFAULT VERSION '1.0'
   WITH (superuser, norelocatable, schema public)
@@ -40,7 +55,7 @@ AS $$
                       PROCEDURE = pair);           
 $$;
 
--- and we want to test update with a cycle
+-- and we want to test update with more than 1 step
 CREATE TEMPLATE
    FOR EXTENSION pair FROM '1.1' TO '1.2'
 AS

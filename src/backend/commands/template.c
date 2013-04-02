@@ -162,6 +162,99 @@ parse_statement_control_defelems(ExtensionControl *control, List *defelems)
 }
 
 /*
+ * Check that no other extension is available on the system or as a template in
+ * the catalogs. When that's the case, we ereport() an ERROR to the user.
+ */
+static bool
+CheckExtensionAvailability(const char *extname, const char *version,
+						   bool if_not_exists)
+{
+	/*
+	 * Check for duplicate extension name in the pg_extension catalogs. Any
+	 * extension that already is known in the catalogs needs no template for
+	 * creating it in the first place.
+	 */
+	if (get_extension_oid(extname, true) != InvalidOid)
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_DUPLICATE_OBJECT),
+				 errmsg("extension \"%s\" already exists", extname)));
+	}
+
+	if (version)
+	{
+		/*
+		 * Check for duplicate template for given extension and version. The
+		 * unique index on pg_extension_template(extname, version) would catch
+		 * this anyway, and serves as a backstop in case of race conditions;
+		 * but this is a friendlier error message, and besides we need a check
+		 * to support IF NOT EXISTS.
+		 */
+		if (get_template_oid(extname, version, true) != InvalidOid)
+		{
+			if (if_not_exists)
+			{
+				ereport(NOTICE,
+						(errcode(ERRCODE_DUPLICATE_OBJECT),
+						 errmsg("template for extension \"%s\" version \"%s\" already exists, skipping",
+								extname, version)));
+				return false;
+			}
+			else
+			{
+				ereport(ERROR,
+						(errcode(ERRCODE_DUPLICATE_OBJECT),
+						 errmsg("template for extension \"%s\" version \"%s\" already exists",
+								extname, version)));
+			}
+		}
+	}
+	else
+	{
+		/*
+		 * Version is NULL here, meaning we're checking for a RENAME of the
+		 * extension, and we want to search for any pre-existing version in the
+		 * catalogs. As we have setup an invariant that we always have a single
+		 * default version, that's the lookup we make here.
+		 */
+		ExtensionControl *default_version =
+			find_default_pg_extension_control(extname, true);
+
+		if (default_version)
+				ereport(ERROR,
+						(errcode(ERRCODE_DUPLICATE_OBJECT),
+						 errmsg("template for extension \"%s\" version \"%s\" already exists",
+								extname, default_version->default_version)));
+	}
+
+	/*
+	 * Check that no control file of the same extension's name is already
+	 * available on disk, as a friendliness service to our users. Between
+	 * CREATE TEMPLATE FOR EXTENSION and CREATE EXTENSION time, some new file
+	 * might have been added to the file-system and would then be prefered, but
+	 * at least we tried to be as nice as we possibly can.
+	 */
+	PG_TRY();
+	{
+		ExtensionControl *control = read_extension_control_file(extname);
+
+		if (control)
+		{
+			ereport(ERROR,
+					(errcode(ERRCODE_DUPLICATE_OBJECT),
+					 errmsg("extension \"%s\" is already available", extname)));
+		}
+	}
+	PG_CATCH();
+	{
+		/* no control file found is good news for us */
+	}
+	PG_END_TRY();
+
+	return true;
+}
+
+/*
  * CREATE TEMPLATE FOR EXTENSION
  *
  * Routing function, the statement can be either about a template for creating
@@ -211,68 +304,11 @@ CreateExtensionTemplate(CreateExtTemplateStmt *stmt)
 	/* Check extension name validity before any filesystem access */
 	check_valid_extension_name(stmt->extname);
 
-	/*
-	 * Check for duplicate extension name in the pg_extension catalogs. Any
-	 * extension that already is known in the catalogs needs no template for
-	 * creating it in the first place.
-	 */
-	if (get_extension_oid(stmt->extname, true) != InvalidOid)
-	{
-		ereport(ERROR,
-				(errcode(ERRCODE_DUPLICATE_OBJECT),
-				 errmsg("extension \"%s\" already exists",
-						stmt->extname)));
-	}
-
-	/*
-	 * Check for duplicate template for given extension and version. The unique
-	 * index on pg_extension_template(extname, version) would catch this
-	 * anyway, and serves as a backstop in case of race conditions; but this is
-	 * a friendlier error message, and besides we need a check to support IF
-	 * NOT EXISTS.
-	 */
-	if (get_template_oid(stmt->extname, stmt->version, true) != InvalidOid)
-	{
-		if (stmt->if_not_exists)
-		{
-			ereport(NOTICE,
-					(errcode(ERRCODE_DUPLICATE_OBJECT),
-					 errmsg("template for extension \"%s\" version \"%s\" already exists, skipping",
-							stmt->extname, stmt->version)));
-			return InvalidOid;
-		}
-		else
-			ereport(ERROR,
-					(errcode(ERRCODE_DUPLICATE_OBJECT),
-					 errmsg("template for extension \"%s\" version \"%s\" already exists",
-							stmt->extname, stmt->version)));
-	}
-
-	/*
-	 * Check that no control file of the same extension's name is already
-	 * available on disk, as a friendliness service to our users. Between
-	 * CREATE TEMPLATE FOR EXTENSION and CREATE EXTENSION time, some new file
-	 * might have been added to the file-system and would then be prefered, but
-	 * at least we tried to be as nice as we possibly can.
-	 */
-	PG_TRY();
-	{
-		control = read_extension_control_file(stmt->extname);
-	}
-	PG_CATCH();
-	{
-		/* no control file found is good news for us */
-		control = NULL;
-	}
-	PG_END_TRY();
-
-	if (control)
-	{
-			ereport(ERROR,
-					(errcode(ERRCODE_DUPLICATE_OBJECT),
-					 errmsg("extension \"%s\" is already available",
-							stmt->extname)));
-	}
+	/* Check that we don't already have an extension of this name available. */
+	if (!CheckExtensionAvailability(stmt->extname, stmt->version,
+									stmt->if_not_exists))
+		/* Messages have already been sent to the client */
+		return InvalidOid;
 
 	/* Now read the control properties from the statement */
  	control = (ExtensionControl *) palloc0(sizeof(ExtensionControl));
@@ -990,6 +1026,11 @@ Oid
 AtlerExtensionTemplateRename(const char *extname, const char *newname)
 {
 	ListCell *lc;
+
+	/* Check that we don't already have an extension of this name available. */
+	if (!CheckExtensionAvailability(newname, NULL, false))
+		/* Messages have already been sent to the client */
+		return InvalidOid;
 
 	/* Rename all pg_extension_control entries for extname */
 	foreach(lc, list_pg_extension_control_oids_for(extname))
