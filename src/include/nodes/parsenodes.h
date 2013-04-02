@@ -1196,6 +1196,8 @@ typedef enum ObjectType
 	OBJECT_DOMAIN,
 	OBJECT_EVENT_TRIGGER,
 	OBJECT_EXTENSION,
+	OBJECT_EXTENSION_TEMPLATE,
+	OBJECT_EXTENSION_UPTMPL,
 	OBJECT_FDW,
 	OBJECT_FOREIGN_SERVER,
 	OBJECT_FOREIGN_TABLE,
@@ -1714,6 +1716,49 @@ typedef struct AlterExtensionContentsStmt
 	List	   *objname;		/* Qualified name of the object */
 	List	   *objargs;		/* Arguments if needed (eg, for functions) */
 } AlterExtensionContentsStmt;
+
+typedef enum ExtTemplateType
+{
+	TEMPLATE_CREATE_EXTENSION,
+	TEMPLATE_UPDATE_EXTENSION
+} ExtTemplateType;
+
+typedef struct CreateExtTemplateStmt
+{
+	NodeTag		type;
+	ExtTemplateType tmpltype;
+	char	   *extname;		/* Extension's name */
+	char	   *version;		/* Version to create from the template */
+	char	   *from;			/*   In case of an update template, we update */
+	char	   *to;				/*   from version to version */
+	List	   *control;		/* List of DefElem nodes */
+	char	   *script;			/* Extension's install script */
+	bool		if_not_exists;	/* just do nothing if it already exists? */
+	bool        default_version; /* default version of this extension */
+} CreateExtTemplateStmt;
+
+typedef enum AlterExtTemplateType
+{
+	AET_SET_DEFAULT,
+	AET_SET_DEFAULT_FULL,
+	AET_SET_SCRIPT,
+	AET_UPDATE_CONTROL,
+} AlterExtTemplateType;
+
+typedef struct AlterExtTemplateStmt
+{
+	NodeTag		type;
+	ExtTemplateType tmpltype;
+	AlterExtTemplateType cmdtype; /* Type of command */
+	char	   *extname;				/* Extension's name */
+	char       *version;				/* Extension's version */
+	char	   *from;			/*   In case of an update template, we update */
+	char	   *to;				/*   from version to version */
+	List	   *control;		/* List of DefElem nodes */
+	char	   *script;			/* Extension's install script */
+	bool		missing_ok;		/* skip error if missing? */
+
+} AlterExtTemplateStmt;
 
 /* ----------------------
  *		Create/Alter FOREIGN DATA WRAPPER Statements

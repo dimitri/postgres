@@ -309,6 +309,23 @@ DECLARE_UNIQUE_INDEX(pg_extension_oid_index, 3080, on pg_extension using btree(o
 
 DECLARE_UNIQUE_INDEX(pg_extension_name_index, 3081, on pg_extension using btree(extname name_ops));
 #define ExtensionNameIndexId 3081
+DECLARE_UNIQUE_INDEX(pg_extension_template_oid_index, 3180, on pg_extension_template using btree(oid oid_ops));
+#define ExtensionTemplateOidIndexId 3180
+
+DECLARE_UNIQUE_INDEX(pg_extension_template_name_version_index, 3481, on pg_extension_template using btree(tplname name_ops, tplversion text_ops));
+#define ExtensionTemplateNameVersionIndexId 3481
+
+DECLARE_UNIQUE_INDEX(pg_extension_uptmpl_oid_index, 3280, on pg_extension_uptmpl using btree(oid oid_ops));
+#define ExtensionUpTmplOidIndexId 3280
+
+DECLARE_UNIQUE_INDEX(pg_extension_uptmpl_name_from_to_index, 3281, on pg_extension_uptmpl using btree(uptname name_ops, uptfrom text_ops, uptto text_ops));
+#define ExtensionUpTpmlNameFromToIndexId 3281
+
+DECLARE_UNIQUE_INDEX(pg_extension_control_oid_index, 3380, on pg_extension_control using btree(oid oid_ops));
+#define ExtensionControlOidIndexId 3380
+
+DECLARE_UNIQUE_INDEX(pg_extension_control_name_version_index, 3381, on pg_extension_control using btree(ctlname name_ops, ctlversion text_ops));
+#define ExtensionControlNameVersionIndexId 3381
 
 DECLARE_UNIQUE_INDEX(pg_range_rngtypid_index, 3542, on pg_range using btree(rngtypid oid_ops));
 #define RangeTypidIndexId					3542

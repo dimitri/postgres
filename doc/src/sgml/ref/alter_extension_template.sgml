@@ -1,0 +1,149 @@
+<!--
+doc/src/sgml/ref/alter_extension_template.sgml
+PostgreSQL documentation
+-->
+
+<refentry id="SQL-ALTEREXTENSIONTEMPLATE">
+ <refmeta>
+  <refentrytitle>ALTER TEMPLATE FOR EXTENSION</refentrytitle>
+  <manvolnum>7</manvolnum>
+  <refmiscinfo>SQL - Language Statements</refmiscinfo>
+ </refmeta>
+
+ <refnamediv>
+  <refname>ALTER TEMPLATE FOR EXTENSION</refname>
+  <refpurpose>change the definition of a template for an extension</refpurpose>
+ </refnamediv>
+
+ <indexterm zone="sql-alterextensiontemplate">
+  <primary>ALTER TEMPLATE FOR EXTENSION</primary>
+ </indexterm>
+
+ <refsynopsisdiv>
+<synopsis>
+ALTER TEMPLATE FOR EXTENSION <replaceable>name</replaceable> SET DEFAULT VERSION <replaceable>version</replaceable>
+ALTER TEMPLATE FOR EXTENSION <replaceable>name</replaceable> SET DEFAULT FULL VERSION <replaceable>full_version</replaceable>
+ALTER TEMPLATE FOR EXTENSION <replaceable>name</replaceable> VERSION <replaceable>version</replaceable> WITH [ ([ <replaceable class="parameter">control_parameter</replaceable> ] [, ... ]) ] 
+ALTER TEMPLATE FOR EXTENSION <replaceable>name</replaceable> VERSION <replaceable>version</replaceable> AS <replaceable>script</replaceable>
+ALTER TEMPLATE FOR EXTENSION <replaceable>name</replaceable> FROM <replaceable>from_version</replaceable> TO <replaceable>to_version</replaceable> AS <replaceable>script</replaceable>
+ALTER TEMPLATE FOR EXTENSION <replaceable>name</replaceable> OWNER TO <replaceable>new_owner</replaceable>
+ALTER TEMPLATE FOR EXTENSION <replaceable>name</replaceable> RENAME TO <replaceable>new_name</replaceable>
+
+<phrase>where <replaceable class="parameter">control_parameter</replaceable> is one of:
+
+ SCHEMA <replaceable class="parameter">schema_name</replaceable>
+ SUPERUSER
+ NOSUPERUSER
+ RELOCATABLE
+ NORELOCATABLE
+ REQUIRES <replaceable class="parameter">requirements</replaceable>
+
+</synopsis>
+ </refsynopsisdiv>
+ <refsect1>
+  <title>Description</title>
+
+  <para>
+   <command>ALTER TEMPLATE FOR EXTENSION</command> changes the definition of
+   an extension template. Currently, the only supported functionality is to
+   change the template's default version.
+  </para>
+ </refsect1>
+
+ <refsect1>
+  <title>Parameters</title>
+
+  <variablelist>
+   <varlistentry>
+    <term><replaceable class="parameter">name</replaceable></term>
+    <listitem>
+     <para>
+      The name of an extension that already has templates.
+     </para>
+    </listitem>
+   </varlistentry>
+
+   <varlistentry>
+    <term><replaceable class="parameter">version</replaceable></term>
+    <listitem>
+     <para>
+      The version of the extension we want to install by default when using
+      its template.
+     </para>
+    </listitem>
+   </varlistentry>
+
+   <varlistentry>
+    <term><replaceable class="parameter">full_version</replaceable></term>
+    <listitem>
+     <para>
+      The version of the extension we want to install from by default when
+      using its template. For example, if you have an extension installation
+      scipt for version <literal>1.0</literal> and an upgrade script
+      for <literal>1.0--1.1</literal>, you can set the
+      default <literal>full_version</literal> to <literal>1.0</literal> so
+      that <productname>PostgreSQL</productname> knows to install
+      version <literal>1.1</literal> by first using
+      the <literal>1.0</literal> creation script then
+      the <literal>1.1</literal> upgrade script.
+     </para>
+    </listitem>
+   </varlistentry>
+
+   <varlistentry>
+    <term><replaceable class="parameter">script</replaceable></term>
+    <listitem>
+     <para>
+      The script to run when installing this version of the extension.
+     </para>
+    </listitem>
+   </varlistentry>
+
+   <varlistentry>
+    <term><replaceable class="parameter">control_parameters</replaceable></term>
+    <listitem>
+     <para>
+      For details about the control parameters meaning, please refer
+      to <xref linkend="extend-extension">.
+     </para>
+    </listitem>
+   </varlistentry>
+
+   <varlistentry>
+    <term><replaceable class="parameter">new_name</replaceable></term>
+    <listitem>
+     <para>
+      The new name of the aggregate function.
+     </para>
+    </listitem>
+   </varlistentry>
+
+   <varlistentry>
+    <term><replaceable class="parameter">new_owner</replaceable></term>
+    <listitem>
+     <para>
+      The new owner of the aggregate function.
+     </para>
+    </listitem>
+   </varlistentry>
+ </variablelist>
+ </refsect1>
+
+ <refsect1>
+  <title>Compatibility</title>
+
+  <para>
+   There is no <command>ALTER TEMPLATE FOR EXTENSION</command> statement in
+   the SQL standard.
+  </para>
+ </refsect1>
+
+ <refsect1>
+  <title>See Also</title>
+
+  <simplelist type="inline">
+   <member><xref linkend="sql-createextensiontemplate"></member>
+   <member><xref linkend="sql-dropextensiontemplate"></member>
+  </simplelist>
+ </refsect1>
+</refentry>

@@ -60,6 +60,7 @@
    &alterServer;
    &alterTable;
    &alterTableSpace;
+   &alterTemplateForExtension;
    &alterTSConfig;
    &alterTSDictionary;
    &alterTSParser;
@@ -104,6 +105,7 @@
    &createTable;
    &createTableAs;
    &createTableSpace;
+   &createTemplateForExtension;
    &createTSConfig;
    &createTSDictionary;
    &createTSParser;
@@ -144,6 +146,7 @@
    &dropServer;
    &dropTable;
    &dropTableSpace;
+   &dropTemplateForExtension;
    &dropTSConfig;
    &dropTSDictionary;
    &dropTSParser;

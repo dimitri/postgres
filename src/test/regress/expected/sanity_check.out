@@ -105,6 +105,9 @@ pg_description|t
 pg_enum|t
 pg_event_trigger|t
 pg_extension|t
+pg_extension_control|t
+pg_extension_template|t
+pg_extension_uptmpl|t
 pg_foreign_data_wrapper|t
 pg_foreign_server|t
 pg_foreign_table|t

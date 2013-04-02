@@ -35,6 +35,9 @@
 #include "catalog/pg_depend.h"
 #include "catalog/pg_event_trigger.h"
 #include "catalog/pg_extension.h"
+#include "catalog/pg_extension_control.h"
+#include "catalog/pg_extension_template.h"
+#include "catalog/pg_extension_uptmpl.h"
 #include "catalog/pg_foreign_data_wrapper.h"
 #include "catalog/pg_foreign_server.h"
 #include "catalog/pg_language.h"
@@ -60,6 +63,7 @@
 #include "commands/proclang.h"
 #include "commands/schemacmds.h"
 #include "commands/seclabel.h"
+#include "commands/template.h"
 #include "commands/trigger.h"
 #include "commands/typecmds.h"
 #include "nodes/nodeFuncs.h"
@@ -1245,6 +1249,18 @@ doDeletion(const ObjectAddress *object, int flags)
 			RemoveExtensionById(object->objectId);
 			break;
 
+		case OCLASS_EXTENSION_CONTROL:
+			RemoveExtensionControlById(object->objectId);
+			break;
+
+		case OCLASS_EXTENSION_TEMPLATE:
+			RemoveExtensionTemplateById(object->objectId);
+			break;
+
+		case OCLASS_EXTENSION_UPTMPL:
+			RemoveExtensionUpTmplById(object->objectId);
+			break;
+
 		case OCLASS_EVENT_TRIGGER:
 			RemoveEventTriggerById(object->objectId);
 			break;
@@ -2313,6 +2329,15 @@ getObjectClass(const ObjectAddress *object)
 
 		case ExtensionRelationId:
 			return OCLASS_EXTENSION;
+
+		case ExtensionControlRelationId:
+			return OCLASS_EXTENSION_CONTROL;
+
+		case ExtensionTemplateRelationId:
+			return OCLASS_EXTENSION_TEMPLATE;
+
+		case ExtensionUpTmplRelationId:
+			return OCLASS_EXTENSION_UPTMPL;
 
 		case EventTriggerRelationId:
 			return OCLASS_EVENT_TRIGGER;

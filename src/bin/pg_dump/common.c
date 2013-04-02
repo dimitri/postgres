@@ -84,6 +84,7 @@ getSchemaData(Archive *fout, int *numTablesPtr)
 	InhInfo    *inhinfo;
 	CollInfo   *collinfo;
 	int			numExtensions;
+	int			numExtensionTemplates;
 	int			numAggregates;
 	int			numInherits;
 	int			numRules;
@@ -119,6 +120,10 @@ getSchemaData(Archive *fout, int *numTablesPtr)
 
 	/* Do this after we've built tblinfoindex */
 	getOwnedSeqs(fout, tblinfo, numTables);
+
+	if (g_verbose)
+		write_msg(NULL, "reading extension templates\n");
+	getExtensionTemplates(fout, &numExtensionTemplates);
 
 	if (g_verbose)
 		write_msg(NULL, "reading extensions\n");

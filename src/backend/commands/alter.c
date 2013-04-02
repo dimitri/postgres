@@ -47,6 +47,7 @@
 #include "commands/schemacmds.h"
 #include "commands/tablecmds.h"
 #include "commands/tablespace.h"
+#include "commands/template.h"
 #include "commands/trigger.h"
 #include "commands/typecmds.h"
 #include "commands/user.h"
@@ -147,11 +148,10 @@ report_namespace_conflict(Oid classId, const char *name, Oid nspOid)
  * objectId: OID of object to be renamed
  * new_name: CString representation of new name
  */
-static void
+void
 AlterObjectRename_internal(Relation rel, Oid objectId, const char *new_name)
 {
 	Oid			classId = RelationGetRelid(rel);
-	int			oidCacheId = get_object_catcache_oid(classId);
 	int			nameCacheId = get_object_catcache_name(classId);
 	AttrNumber	Anum_name = get_object_attnum_name(classId);
 	AttrNumber	Anum_namespace = get_object_attnum_namespace(classId);
@@ -170,8 +170,8 @@ AlterObjectRename_internal(Relation rel, Oid objectId, const char *new_name)
 	bool	   *replaces;
 	NameData	nameattrdata;
 
-	oldtup = SearchSysCache1(oidCacheId, ObjectIdGetDatum(objectId));
-	if (!HeapTupleIsValid(oldtup))
+	oldtup = get_catalog_object_by_oid(rel, objectId);
+	if (oldtup == NULL)
 		elog(ERROR, "cache lookup failed for object %u of catalog \"%s\"",
 			 objectId, RelationGetRelationName(rel));
 
@@ -291,8 +291,6 @@ AlterObjectRename_internal(Relation rel, Oid objectId, const char *new_name)
 	pfree(nulls);
 	pfree(replaces);
 	heap_freetuple(newtup);
-
-	ReleaseSysCache(oldtup);
 }
 
 /*
@@ -341,6 +339,9 @@ ExecRenameStmt(RenameStmt *stmt)
 		case OBJECT_DOMAIN:
 		case OBJECT_TYPE:
 			return RenameType(stmt);
+
+		case OBJECT_EXTENSION_TEMPLATE:
+			return AtlerExtensionTemplateRename(stmt->subname, stmt->newname);
 
 		case OBJECT_AGGREGATE:
 		case OBJECT_COLLATION:
@@ -701,7 +702,11 @@ ExecAlterOwnerStmt(AlterOwnerStmt *stmt)
 			return AlterEventTriggerOwner(strVal(linitial(stmt->object)),
 										  newowner);
 
-			/* Generic cases */
+		case OBJECT_EXTENSION_TEMPLATE:
+			return AtlerExtensionTemplateOwner(strVal(linitial(stmt->object)),
+											   newowner);
+
+		/* Generic cases */
 		case OBJECT_AGGREGATE:
 		case OBJECT_COLLATION:
 		case OBJECT_CONVERSION:

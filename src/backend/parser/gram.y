@@ -219,7 +219,7 @@ static Node *makeRecursiveViewSelect(char *relname, List *aliases, Node *query);
 		AlterObjectSchemaStmt AlterOwnerStmt AlterSeqStmt AlterTableStmt
 		AlterExtensionStmt AlterExtensionContentsStmt AlterForeignTableStmt
 		AlterCompositeTypeStmt AlterUserStmt AlterUserMappingStmt AlterUserSetStmt
-		AlterRoleStmt AlterRoleSetStmt
+		AlterRoleStmt AlterRoleSetStmt AlterExtTemplateStmt
 		AlterDefaultPrivilegesStmt DefACLAction
 		AnalyzeStmt ClosePortalStmt ClusterStmt CommentStmt
 		ConstraintsSetStmt CopyStmt CreateAsStmt CreateCastStmt
@@ -228,11 +228,11 @@ static Node *makeRecursiveViewSelect(char *relname, List *aliases, Node *query);
 		CreateSchemaStmt CreateSeqStmt CreateStmt CreateTableSpaceStmt
 		CreateFdwStmt CreateForeignServerStmt CreateForeignTableStmt
 		CreateAssertStmt CreateTrigStmt CreateEventTrigStmt
-		CreateUserStmt CreateUserMappingStmt CreateRoleStmt
+		CreateUserStmt CreateUserMappingStmt CreateRoleStmt CreateExtTemplateStmt
 		CreatedbStmt DeclareCursorStmt DefineStmt DeleteStmt DiscardStmt DoStmt
 		DropGroupStmt DropOpClassStmt DropOpFamilyStmt DropPLangStmt DropStmt
 		DropAssertStmt DropTrigStmt DropRuleStmt DropCastStmt DropRoleStmt
-		DropUserStmt DropdbStmt DropTableSpaceStmt DropFdwStmt
+		DropTemplateStmt DropUserStmt DropdbStmt DropTableSpaceStmt DropFdwStmt
 		DropForeignServerStmt DropUserMappingStmt ExplainStmt FetchStmt
 		GrantStmt GrantRoleStmt IndexStmt InsertStmt ListenStmt LoadStmt
 		LockStmt NotifyStmt ExplainableStmt PreparableStmt
@@ -266,6 +266,9 @@ static Node *makeRecursiveViewSelect(char *relname, List *aliases, Node *query);
 %type <defelt>	createdb_opt_item alterdb_opt_item copy_opt_item
 				transaction_mode_item
 				create_extension_opt_item alter_extension_opt_item
+
+%type <list>    create_template_control create_template_control_plist
+%type <defelt>  create_template_control_item
 
 %type <ival>	opt_lock lock_type cast_context
 %type <ival>	vacuum_option_list vacuum_option_elem
@@ -728,6 +731,7 @@ stmt :
 			| AlterCompositeTypeStmt
 			| AlterRoleSetStmt
 			| AlterRoleStmt
+			| AlterExtTemplateStmt
 			| AlterTSConfigurationStmt
 			| AlterTSDictionaryStmt
 			| AlterUserMappingStmt
@@ -766,6 +770,7 @@ stmt :
 			| CreateUserStmt
 			| CreateUserMappingStmt
 			| CreatedbStmt
+			| CreateExtTemplateStmt
 			| DeallocateStmt
 			| DeclareCursorStmt
 			| DefineStmt
@@ -789,6 +794,7 @@ stmt :
 			| DropUserStmt
 			| DropUserMappingStmt
 			| DropdbStmt
+			| DropTemplateStmt
 			| ExecuteStmt
 			| ExplainStmt
 			| FetchStmt
@@ -3617,6 +3623,232 @@ DropTableSpaceStmt: DROP TABLESPACE name
 					n->tablespacename = $5;
 					n->missing_ok = true;
 					$$ = (Node *) n;
+				}
+		;
+
+/*****************************************************************************
+ *
+ *		QUERY:
+ *             CREATE TEMPLATE FOR EXTENSION name
+ *
+ *****************************************************************************/
+
+CreateExtTemplateStmt:
+            CREATE TEMPLATE FOR EXTENSION name VERSION_P NonReservedWord_or_Sconst
+            WITH create_template_control AS Sconst
+				{
+					CreateExtTemplateStmt *n = makeNode(CreateExtTemplateStmt);
+					n->tmpltype = TEMPLATE_CREATE_EXTENSION;
+					n->extname = $5;
+					n->version = $7;
+					n->control = $9;
+					n->script = $11;
+					n->if_not_exists = false;
+					n->default_version = false;
+					$$ = (Node *) n;
+				}
+            | CREATE TEMPLATE FOR EXTENSION name
+			  DEFAULT VERSION_P NonReservedWord_or_Sconst
+              WITH create_template_control AS Sconst
+				{
+					CreateExtTemplateStmt *n = makeNode(CreateExtTemplateStmt);
+					n->tmpltype = TEMPLATE_CREATE_EXTENSION;
+					n->extname = $5;
+					n->version = $8;
+					n->control = $10;
+					n->script = $12;
+					n->if_not_exists = false;
+					n->default_version = true;
+					$$ = (Node *) n;
+				}
+            | CREATE TEMPLATE FOR EXTENSION name
+              FROM NonReservedWord_or_Sconst TO NonReservedWord_or_Sconst AS Sconst
+				{
+					CreateExtTemplateStmt *n = makeNode(CreateExtTemplateStmt);
+					n->tmpltype = TEMPLATE_UPDATE_EXTENSION;
+					n->extname = $5;
+					n->from = $7;
+					n->to = $9;
+					n->control = NIL;
+					n->script = $11;
+					n->if_not_exists = false;
+					$$ = (Node *) n;
+				}
+            | CREATE TEMPLATE FOR EXTENSION name
+              FROM NonReservedWord_or_Sconst TO NonReservedWord_or_Sconst
+              WITH create_template_control AS Sconst
+				{
+					CreateExtTemplateStmt *n = makeNode(CreateExtTemplateStmt);
+					n->tmpltype = TEMPLATE_UPDATE_EXTENSION;
+					n->extname = $5;
+					n->from = $7;
+					n->to = $9;
+					n->control = $11;
+					n->script = $13;
+					n->if_not_exists = false;
+					$$ = (Node *) n;
+				}
+		;
+
+/*****************************************************************************
+ *
+ *		QUERY:
+ *             ALTER TEMPLATE FOR EXTENSION name
+ *
+ * We only allow a single subcommand per command here.
+ *
+ *****************************************************************************/
+AlterExtTemplateStmt:
+			ALTER TEMPLATE FOR EXTENSION name
+			SET DEFAULT VERSION_P NonReservedWord_or_Sconst
+				{
+					AlterExtTemplateStmt *n = makeNode(AlterExtTemplateStmt);
+					n->tmpltype = TEMPLATE_CREATE_EXTENSION;
+					n->cmdtype = AET_SET_DEFAULT;
+					n->extname = $5;
+					n->version = $9;
+					n->missing_ok = false;
+					$$ = (Node *) n;
+				}
+			| ALTER TEMPLATE FOR EXTENSION name
+			  SET DEFAULT FULL VERSION_P NonReservedWord_or_Sconst
+				{
+					AlterExtTemplateStmt *n = makeNode(AlterExtTemplateStmt);
+					n->tmpltype = TEMPLATE_CREATE_EXTENSION;
+					n->cmdtype = AET_SET_DEFAULT_FULL;
+					n->extname = $5;
+					n->version = $10;
+					n->missing_ok = false;
+					$$ = (Node *) n;
+				}
+			| ALTER TEMPLATE FOR EXTENSION name VERSION_P NonReservedWord_or_Sconst
+			  AS Sconst
+				{
+					AlterExtTemplateStmt *n = makeNode(AlterExtTemplateStmt);
+					n->tmpltype = TEMPLATE_CREATE_EXTENSION;
+					n->cmdtype = AET_SET_SCRIPT;
+					n->extname = $5;
+					n->version = $7;
+					n->script = $9;
+					n->missing_ok = false;
+					$$ = (Node *) n;
+				}
+			| ALTER TEMPLATE FOR EXTENSION name VERSION_P NonReservedWord_or_Sconst
+			  WITH create_template_control
+				{
+					AlterExtTemplateStmt *n = makeNode(AlterExtTemplateStmt);
+					n->tmpltype = TEMPLATE_CREATE_EXTENSION;
+					n->cmdtype = AET_UPDATE_CONTROL;
+					n->extname = $5;
+					n->version = $7;
+					n->control = $9;
+					n->missing_ok = false;
+					$$ = (Node *) n;
+				}
+			| ALTER TEMPLATE FOR EXTENSION name
+			  FROM NonReservedWord_or_Sconst TO NonReservedWord_or_Sconst
+			  AS Sconst
+				{
+					AlterExtTemplateStmt *n = makeNode(AlterExtTemplateStmt);
+					n->tmpltype = TEMPLATE_UPDATE_EXTENSION;
+					n->cmdtype = AET_SET_SCRIPT;
+					n->extname = $5;
+					n->from = $7;
+					n->to = $9;
+					n->script = $11;
+					n->missing_ok = false;
+					$$ = (Node *) n;
+				}
+		;
+
+/*****************************************************************************
+ *
+ *		QUERY:
+ *             DROP TEMPLATE FOR EXTENSION name
+ *
+ *****************************************************************************/
+DropTemplateStmt:
+			DROP TEMPLATE FOR EXTENSION name
+			VERSION_P NonReservedWord_or_Sconst opt_drop_behavior
+				{
+					DropStmt *n = makeNode(DropStmt);
+					n->removeType = OBJECT_EXTENSION_TEMPLATE;
+					n->objects = list_make1(list_make1(makeString($5)));
+					n->arguments = list_make1(list_make1(makeString($7)));
+					n->behavior = $8;
+					n->missing_ok = false;
+					n->concurrent = false;
+					$$ = (Node *)n;
+				}
+			| DROP TEMPLATE FOR EXTENSION name
+			FROM NonReservedWord_or_Sconst TO NonReservedWord_or_Sconst opt_drop_behavior
+				{
+					DropStmt *n = makeNode(DropStmt);
+					n->removeType = OBJECT_EXTENSION_UPTMPL;
+					n->objects = list_make1(list_make1(makeString($5)));
+					n->arguments = list_make1(list_make2(makeString($7),
+														 makeString($9)));
+					n->behavior = $10;
+					n->missing_ok = false;
+					n->concurrent = false;
+					$$ = (Node *)n;
+				}
+		;
+
+create_template_control:
+			'(' create_template_control_plist ')'		{ $$ = $2; }
+		;
+
+
+create_template_control_plist:
+			create_template_control_item
+				{ $$ = list_make1($1); }
+			| create_template_control_plist ',' create_template_control_item
+				{ $$ = lappend($1, $3); }
+			| /* EMPTY */
+				{ $$ = NIL; }
+		;
+
+create_template_control_item:
+			SCHEMA name
+				{
+					$$ = makeDefElem("schema", (Node *)makeString($2));
+				}
+			| IDENT
+				{
+					/*
+					 * We handle identifiers that aren't parser keywords with
+					 * the following special-case codes, to avoid bloating the
+					 * size of the main parser.
+					 */
+					if (strcmp($1, "superuser") == 0)
+						$$ = makeDefElem("superuser", (Node *)makeInteger(TRUE));
+					else if (strcmp($1, "nosuperuser") == 0)
+						$$ = makeDefElem("superuser", (Node *)makeInteger(FALSE));
+					else if (strcmp($1, "relocatable") == 0)
+						$$ = makeDefElem("relocatable", (Node *)makeInteger(TRUE));
+					else if (strcmp($1, "norelocatable") == 0)
+						$$ = makeDefElem("relocatable", (Node *)makeInteger(FALSE));
+					else if (strcmp($1, "requires") == 0)
+						ereport(ERROR,
+								(errcode(ERRCODE_SYNTAX_ERROR),
+								 errmsg("template option \"%s\" takes an argument", $1),
+									 parser_errposition(@1)));
+					else
+						ereport(ERROR,
+								(errcode(ERRCODE_SYNTAX_ERROR),
+								 errmsg("unrecognized template option \"%s\"", $1),
+									 parser_errposition(@1)));
+				}
+			| IDENT Sconst
+				{
+					if (strcmp($1, "requires") == 0)
+						$$ = makeDefElem("requires", (Node *)makeString($2));
+					else
+						ereport(ERROR,
+								(errcode(ERRCODE_SYNTAX_ERROR),
+								 errmsg("unrecognized template option \"%s\"", $1),
+									 parser_errposition(@1)));
 				}
 		;
 
@@ -7343,6 +7575,15 @@ RenameStmt: ALTER AGGREGATE func_name aggr_args RENAME TO name
 					n->missing_ok = false;
 					$$ = (Node *)n;
 				}
+			| ALTER TEMPLATE FOR EXTENSION name RENAME TO name
+				{
+					RenameStmt *n = makeNode(RenameStmt);
+					n->renameType = OBJECT_EXTENSION_TEMPLATE;
+					n->subname = $5;
+					n->newname = $8;
+					n->missing_ok = false;
+					$$ = (Node *)n;
+				}
 		;
 
 opt_column: COLUMN									{ $$ = COLUMN; }
@@ -7744,6 +7985,14 @@ AlterOwnerStmt: ALTER AGGREGATE func_name aggr_args OWNER TO RoleId
 					n->objectType = OBJECT_EVENT_TRIGGER;
 					n->object = list_make1(makeString($4));
 					n->newowner = $7;
+					$$ = (Node *)n;
+				}
+			| ALTER TEMPLATE FOR EXTENSION name OWNER TO RoleId
+				{
+					AlterOwnerStmt *n = makeNode(AlterOwnerStmt);
+					n->objectType = OBJECT_EXTENSION_TEMPLATE;
+					n->object = list_make1(makeString($5));
+					n->newowner = $8;
 					$$ = (Node *)n;
 				}
 		;

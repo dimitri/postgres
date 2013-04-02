@@ -67,40 +67,41 @@ typedef enum
 } event_trigger_command_tag_check_result;
 
 static event_trigger_support_data event_trigger_support[] = {
-	{"AGGREGATE", true},
-	{"CAST", true},
-	{"CONSTRAINT", true},
-	{"COLLATION", true},
-	{"CONVERSION", true},
-	{"DATABASE", false},
-	{"DOMAIN", true},
-	{"EXTENSION", true},
-	{"EVENT TRIGGER", false},
-	{"FOREIGN DATA WRAPPER", true},
-	{"FOREIGN TABLE", true},
-	{"FUNCTION", true},
-	{"INDEX", true},
-	{"LANGUAGE", true},
-	{"MATERIALIZED VIEW", true},
-	{"OPERATOR", true},
-	{"OPERATOR CLASS", true},
-	{"OPERATOR FAMILY", true},
-	{"ROLE", false},
-	{"RULE", true},
-	{"SCHEMA", true},
-	{"SEQUENCE", true},
-	{"SERVER", true},
-	{"TABLE", true},
-	{"TABLESPACE", false},
-	{"TRIGGER", true},
-	{"TEXT SEARCH CONFIGURATION", true},
-	{"TEXT SEARCH DICTIONARY", true},
-	{"TEXT SEARCH PARSER", true},
-	{"TEXT SEARCH TEMPLATE", true},
-	{"TYPE", true},
-	{"USER MAPPING", true},
-	{"VIEW", true},
-	{NULL, false}
+	{ "AGGREGATE", true },
+	{ "CAST", true },
+	{ "CONSTRAINT", true },
+	{ "COLLATION", true },
+	{ "CONVERSION", true },
+	{ "DATABASE", false },
+	{ "DOMAIN", true },
+	{ "EXTENSION", true },
+	{ "EVENT TRIGGER", false },
+	{ "FOREIGN DATA WRAPPER", true },
+	{ "FOREIGN TABLE", true },
+	{ "FUNCTION", true },
+	{ "INDEX", true },
+	{ "LANGUAGE", true },
+	{ "MATERIALIZED VIEW", true },
+	{ "OPERATOR", true },
+	{ "OPERATOR CLASS", true },
+	{ "OPERATOR FAMILY", true },
+	{ "ROLE", false },
+	{ "RULE", true },
+	{ "SCHEMA", true },
+	{ "SEQUENCE", true },
+	{ "SERVER", true },
+	{ "TABLE", true },
+	{ "TABLESPACE", false},
+	{ "TRIGGER", true },
+	{ "TEXT SEARCH CONFIGURATION", true },
+	{ "TEXT SEARCH DICTIONARY", true },
+	{ "TEXT SEARCH PARSER", true },
+	{ "TEXT SEARCH TEMPLATE", true },
+	{ "TYPE", true },
+	{ "USER MAPPING", true },
+	{ "TEMPLATE FOR EXTENSION", true },
+	{ "VIEW", true },
+	{ NULL, false }
 };
 
 /* Support for dropped objects */
@@ -922,6 +923,8 @@ EventTriggerSupportsObjectType(ObjectType obtype)
 		case OBJECT_CONVERSION:
 		case OBJECT_DOMAIN:
 		case OBJECT_EXTENSION:
+	    case OBJECT_EXTENSION_TEMPLATE:
+	    case OBJECT_EXTENSION_UPTMPL:
 		case OBJECT_FDW:
 		case OBJECT_FOREIGN_SERVER:
 		case OBJECT_FOREIGN_TABLE:
@@ -992,6 +995,9 @@ EventTriggerSupportsObjectClass(ObjectClass objclass)
 		case OCLASS_USER_MAPPING:
 		case OCLASS_DEFACL:
 		case OCLASS_EXTENSION:
+	    case OCLASS_EXTENSION_CONTROL:
+	    case OCLASS_EXTENSION_TEMPLATE:
+	    case OCLASS_EXTENSION_UPTMPL:
 			return true;
 
 		case MAX_OCLASS:

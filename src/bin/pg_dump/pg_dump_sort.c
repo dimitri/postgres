@@ -38,6 +38,7 @@ static const int oldObjectTypePriority[] =
 {
 	1,							/* DO_NAMESPACE */
 	1,							/* DO_EXTENSION */
+	1,							/* DO_EXTENSION_TEMPLATE */
 	2,							/* DO_TYPE */
 	2,							/* DO_SHELL_TYPE */
 	2,							/* DO_FUNC */
@@ -86,6 +87,7 @@ static const int newObjectTypePriority[] =
 {
 	1,							/* DO_NAMESPACE */
 	4,							/* DO_EXTENSION */
+	4,							/* DO_EXTENSION_TEMPLATE */
 	5,							/* DO_TYPE */
 	5,							/* DO_SHELL_TYPE */
 	6,							/* DO_FUNC */
@@ -1176,6 +1178,11 @@ describeDumpableObject(DumpableObject *obj, char *buf, int bufsize)
 		case DO_NAMESPACE:
 			snprintf(buf, bufsize,
 					 "SCHEMA %s  (ID %d OID %u)",
+					 obj->name, obj->dumpId, obj->catId.oid);
+			return;
+		case DO_EXTENSION_TEMPLATE:
+			snprintf(buf, bufsize,
+					 "EXTENSION TEMPLATE %s  (ID %d OID %u)",
 					 obj->name, obj->dumpId, obj->catId.oid);
 			return;
 		case DO_EXTENSION:

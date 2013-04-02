@@ -350,6 +350,14 @@
    </para>
 
    <para>
+    When an extension only uses SQL definitions (and does not need to ship
+    compiled binary code, usually from C source), then it can use
+    the <firstterm>template</> facility in order to upload the necessary
+    script to the <productname>PostgreSQL</> server, all using the usual
+    clients and protocol.
+   </para>
+
+   <para>
     The kinds of SQL objects that can be members of an extension are shown in
     the description of <xref linkend="sql-alterextension">.  Notably, objects
     that are database-cluster-wide, such as databases, roles, and tablespaces,
@@ -424,6 +432,21 @@
         this can be omitted, that will result in <command>CREATE EXTENSION</>
         failing if no <literal>VERSION</> option appears, so you generally
         don't want to do that.
+       </para>
+      </listitem>
+     </varlistentry>
+
+     <varlistentry>
+      <term><varname>default_full_version</varname> (<type>string</type>)</term>
+      <listitem>
+       <para>
+        This option allows an extension author to avoid shiping all versions
+        scripts when shipping an extension. When a version is requested and
+        the matching script does not exist on disk,
+        set <replaceable>default_full_version</replaceable> to the first
+        script you still ship and PostgreSQL will apply the intermediate
+        upgrade script as per the <command>ALTER EXTENSION UPDATE</command>
+        command.
        </para>
       </listitem>
      </varlistentry>

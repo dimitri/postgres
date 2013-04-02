@@ -47,6 +47,7 @@
 #include "commands/sequence.h"
 #include "commands/tablecmds.h"
 #include "commands/tablespace.h"
+#include "commands/template.h"
 #include "commands/trigger.h"
 #include "commands/typecmds.h"
 #include "commands/user.h"
@@ -235,6 +236,8 @@ check_xact_readonly(Node *parsetree)
 		case T_CreateExtensionStmt:
 		case T_AlterExtensionStmt:
 		case T_AlterExtensionContentsStmt:
+		case T_CreateExtTemplateStmt:
+		case T_AlterExtTemplateStmt:
 		case T_CreateFdwStmt:
 		case T_AlterFdwStmt:
 		case T_CreateForeignServerStmt:
@@ -1676,6 +1679,9 @@ AlterObjectTypeCommandTag(ObjectType objtype)
 		case OBJECT_MATVIEW:
 			tag = "ALTER MATERIALIZED VIEW";
 			break;
+		case OBJECT_EXTENSION_TEMPLATE:
+			tag = "ALTER TEMPLATE FOR EXTENSION";
+			break;
 		default:
 			tag = "???";
 			break;
@@ -1829,6 +1835,14 @@ CreateCommandTag(Node *parsetree)
 			tag = "ALTER EXTENSION";
 			break;
 
+		case T_CreateExtTemplateStmt:
+			tag = "CREATE TEMPLATE FOR EXTENSION";
+			break;
+
+		case T_AlterExtTemplateStmt:
+			tag = "ALTER TEMPLATE FOR EXTENSION";
+			break;
+
 		case T_CreateFdwStmt:
 			tag = "CREATE FOREIGN DATA WRAPPER";
 			break;
@@ -1911,6 +1925,12 @@ CreateCommandTag(Node *parsetree)
 					break;
 				case OBJECT_EXTENSION:
 					tag = "DROP EXTENSION";
+					break;
+				case OBJECT_EXTENSION_TEMPLATE:
+					tag = "DROP TEMPLATE FOR EXTENSION";
+					break;
+				case OBJECT_EXTENSION_UPTMPL:
+					tag = "DROP TEMPLATE FOR EXTENSION";
 					break;
 				case OBJECT_FUNCTION:
 					tag = "DROP FUNCTION";
@@ -2508,6 +2528,11 @@ GetCommandLogLevel(Node *parsetree)
 		case T_CreateExtensionStmt:
 		case T_AlterExtensionStmt:
 		case T_AlterExtensionContentsStmt:
+			lev = LOGSTMT_DDL;
+			break;
+
+		case T_CreateExtTemplateStmt:
+		case T_AlterExtTemplateStmt:
 			lev = LOGSTMT_DDL;
 			break;
 

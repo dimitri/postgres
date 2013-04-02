@@ -32,6 +32,7 @@ Complete list of usable sgml source files in this directory.
 <!ENTITY alterSequence      SYSTEM "alter_sequence.sgml">
 <!ENTITY alterTable         SYSTEM "alter_table.sgml">
 <!ENTITY alterTableSpace    SYSTEM "alter_tablespace.sgml">
+<!ENTITY alterTemplateForExtension SYSTEM "alter_extension_template.sgml">
 <!ENTITY alterTSConfig      SYSTEM "alter_tsconfig.sgml">
 <!ENTITY alterTSDictionary  SYSTEM "alter_tsdictionary.sgml">
 <!ENTITY alterTSParser      SYSTEM "alter_tsparser.sgml">
@@ -76,6 +77,7 @@ Complete list of usable sgml source files in this directory.
 <!ENTITY createTable        SYSTEM "create_table.sgml">
 <!ENTITY createTableAs      SYSTEM "create_table_as.sgml">
 <!ENTITY createTableSpace   SYSTEM "create_tablespace.sgml">
+<!ENTITY createTemplateForExtension SYSTEM "create_extension_template.sgml">
 <!ENTITY createTrigger      SYSTEM "create_trigger.sgml">
 <!ENTITY createTSConfig     SYSTEM "create_tsconfig.sgml">
 <!ENTITY createTSDictionary SYSTEM "create_tsdictionary.sgml">
@@ -116,6 +118,7 @@ Complete list of usable sgml source files in this directory.
 <!ENTITY dropServer         SYSTEM "drop_server.sgml">
 <!ENTITY dropTable          SYSTEM "drop_table.sgml">
 <!ENTITY dropTableSpace     SYSTEM "drop_tablespace.sgml">
+<!ENTITY dropTemplateForExtension SYSTEM "drop_extension_template.sgml">
 <!ENTITY dropTrigger        SYSTEM "drop_trigger.sgml">
 <!ENTITY dropTSConfig       SYSTEM "drop_tsconfig.sgml">
 <!ENTITY dropTSDictionary   SYSTEM "drop_tsdictionary.sgml">
