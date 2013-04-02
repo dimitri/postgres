@@ -195,6 +195,19 @@ CreateExtensionTemplate(CreateExtTemplateStmt *stmt)
 	Oid			 owner		   = GetUserId();
 	ExtensionControl *control;
 
+	/*
+	 * It would be nice to allow database owners or even regular users to do
+	 * this, but then an evil user could create his own template for a known
+	 * extension and then provide malicious features if an extension was
+	 * created from that template.
+	 */
+	if (!superuser())
+		ereport(ERROR,
+			(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
+			 errmsg("permission denied to create template for extension \"%s\"",
+					stmt->extname),
+			 errhint("Must be superuser to create a template for an extension.")));
+
 	/* Check extension name validity before any filesystem access */
 	check_valid_extension_name(stmt->extname);
 
@@ -357,6 +370,13 @@ CreateExtensionUpdateTemplate(CreateExtTemplateStmt *stmt)
 {
 	Oid			 owner = GetUserId();
 	ExtensionControl *control;
+
+	if (!superuser())
+		ereport(ERROR,
+			(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
+			 errmsg("permission denied to create template for extension \"%s\"",
+					stmt->extname),
+			 errhint("Must be superuser to create a template for an extension.")));
 
 	/* Check extension name validity before any filesystem access */
 	check_valid_extension_name(stmt->extname);
