@@ -263,8 +263,29 @@ CreateExtensionTemplate(CreateExtTemplateStmt *stmt)
 
 	/* Now read the control properties from the statement */
  	control = (ExtensionControl *) palloc0(sizeof(ExtensionControl));
+	control->ctrlOid = InvalidOid;
 	control->name = pstrdup(stmt->extname);
+
 	parse_statement_control_defelems(control, stmt->control);
+
+	if (control->schema == NULL)
+	{
+		/*
+		 * Use the current default creation namespace, which is the
+		 * first explicit entry in the search_path.
+		 */
+		Oid			schemaOid;
+		List	   *search_path = fetch_search_path(false);
+
+		if (search_path == NIL) /* probably can't happen */
+			elog(ERROR, "there is no default creation target");
+		schemaOid = linitial_oid(search_path);
+		control->schema = get_namespace_name(schemaOid);
+		if (control->schema == NULL) /* recently-deleted namespace? */
+			elog(ERROR, "there is no default creation target");
+
+		list_free(search_path);
+	}
 
 	/*
 	 * Check that there's no other pg_extension_control row already claiming to
