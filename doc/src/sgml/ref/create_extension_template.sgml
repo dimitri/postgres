@@ -23,20 +23,15 @@ PostgreSQL documentation
 <synopsis>
 CREATE TEMPLATE FOR EXTENSION <replaceable class="parameter">name</replaceable>
 [ DEFAULT ] VERSION <replaceable class="parameter">version</replaceable>
-[ WITH <replaceable class="parameter"> [ (
-  [ <replaceable class="parameter">control_parameter</replaceable> ] [, ... ]
-) ] ]
+[ WITH ( [ <replaceable class="parameter">control_parameter</replaceable> ] [, ... ] ) ]
 AS <replaceable class="parameter">script</replaceable>
 
 CREATE TEMPLATE FOR EXTENSION <replaceable class="parameter">name</replaceable>
   FROM <replaceable class="parameter">old_version</replaceable> TO <replaceable class="parameter">new_version</replaceable>
-[ WITH <replaceable class="parameter"> [ (
-  [ <replaceable class="parameter">control_parameter</replaceable> ] [, ... ]
-) ] ]
+[ WITH ( [ <replaceable class="parameter">control_parameter</replaceable> ] [, ... ] ) ]
 AS <replaceable class="parameter">script</replaceable>
 
-
-<phrase>where <replaceable class="parameter">control_parameter</replaceable> is one of:
+<phrase>where <replaceable class="parameter">control_parameter</replaceable> is one of:</phrase>
 
  SCHEMA <replaceable class="parameter">schema_name</replaceable>
  SUPERUSER
@@ -66,7 +61,7 @@ AS <replaceable class="parameter">script</replaceable>
   </para>
 
   <para>
-   Refer to <xref linkend="extend-extension"> for further information.
+   Refer to <xref linkend="extend-extensions"> for further information.
   </para>
  </refsect1>
 
@@ -75,7 +70,7 @@ AS <replaceable class="parameter">script</replaceable>
 
   <para>
    For details about the control parameters meaning, please refer
-   to <xref linkend="extend-extension">.
+   to <xref linkend="extend-extensions">.
   </para>
 
   <para>

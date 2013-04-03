@@ -3,7 +3,7 @@ doc/src/sgml/ref/drop_extension_template.sgml
 PostgreSQL documentation
 -->
 
-<refentry id="SQL-DROPTSTEMPLATE">
+<refentry id="SQL-DROPEXTENSIONTEMPLATE">
  <refmeta>
   <refentrytitle>DROP TEMPLATE FOR EXTENSION</refentrytitle>
   <manvolnum>7</manvolnum>

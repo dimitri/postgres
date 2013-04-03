@@ -21,15 +21,15 @@ PostgreSQL documentation
 
  <refsynopsisdiv>
 <synopsis>
-ALTER TEMPLATE FOR EXTENSION <replaceable>name</replaceable> SET DEFAULT VERSION <replaceable>version</replaceable>
-ALTER TEMPLATE FOR EXTENSION <replaceable>name</replaceable> SET DEFAULT FULL VERSION <replaceable>full_version</replaceable>
-ALTER TEMPLATE FOR EXTENSION <replaceable>name</replaceable> VERSION <replaceable>version</replaceable> WITH [ ([ <replaceable class="parameter">control_parameter</replaceable> ] [, ... ]) ] 
-ALTER TEMPLATE FOR EXTENSION <replaceable>name</replaceable> VERSION <replaceable>version</replaceable> AS <replaceable>script</replaceable>
-ALTER TEMPLATE FOR EXTENSION <replaceable>name</replaceable> FROM <replaceable>from_version</replaceable> TO <replaceable>to_version</replaceable> AS <replaceable>script</replaceable>
-ALTER TEMPLATE FOR EXTENSION <replaceable>name</replaceable> OWNER TO <replaceable>new_owner</replaceable>
-ALTER TEMPLATE FOR EXTENSION <replaceable>name</replaceable> RENAME TO <replaceable>new_name</replaceable>
+ALTER TEMPLATE FOR EXTENSION <replaceable class="parameter">name</replaceable> SET DEFAULT VERSION <replaceable class="parameter">version</replaceable>
+ALTER TEMPLATE FOR EXTENSION <replaceable class="parameter">name</replaceable> SET DEFAULT FULL VERSION <replaceable class="parameter">full_version</replaceable>
+ALTER TEMPLATE FOR EXTENSION <replaceable class="parameter">name</replaceable> VERSION <replaceable class="parameter">version</replaceable> WITH [ ([ <replaceable class="parameter">control_parameter</replaceable> ] [, ... ]) ] 
+ALTER TEMPLATE FOR EXTENSION <replaceable class="parameter">name</replaceable> VERSION <replaceable class="parameter">version</replaceable> AS <replaceable class="parameter">script</replaceable>
+ALTER TEMPLATE FOR EXTENSION <replaceable class="parameter">name</replaceable> FROM <replaceable class="parameter">from_version</replaceable> TO <replaceable class="parameter">to_version</replaceable> AS <replaceable class="parameter">script</replaceable>
+ALTER TEMPLATE FOR EXTENSION <replaceable class="parameter">name</replaceable> OWNER TO <replaceable class="parameter">new_owner</replaceable>
+ALTER TEMPLATE FOR EXTENSION <replaceable class="parameter">name</replaceable> RENAME TO <replaceable class="parameter">new_name</replaceable>
 
-<phrase>where <replaceable class="parameter">control_parameter</replaceable> is one of:
+<phrase>where <replaceable class="parameter">control_parameter</replaceable> is one of:</phrase>
 
  SCHEMA <replaceable class="parameter">schema_name</replaceable>
  SUPERUSER
@@ -104,7 +104,7 @@ ALTER TEMPLATE FOR EXTENSION <replaceable>name</replaceable> RENAME TO <replacea
     <listitem>
      <para>
       For details about the control parameters meaning, please refer
-      to <xref linkend="extend-extension">.
+      to <xref linkend="extend-extensions">.
      </para>
     </listitem>
    </varlistentry>
