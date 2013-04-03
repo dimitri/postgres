@@ -376,6 +376,41 @@
    </para>
 
    <sect2>
+    <title>Extension Templates</title>
+
+   <indexterm>
+    <primary>template for extension</primary>
+   </indexterm>
+
+    <para>
+     The <xref linkend="sql-createextensiontemplate"> command allows a
+     superuser to create an <firstterm>Extension's Template</>, that users
+     will then be able to use as the source for their script and control
+     parameters. Upgrade scripts can be provided with the same command, and
+     those upgrade scripts can include parameters update too, as would a
+     secondary control file.
+    </para>
+
+    <para>
+     Here's a very simple example at using a template for an extension:
+<programlisting>
+create template for extension myextension version '1.0' with (nosuperuser) as
+$script$
+  create function identity(i int)
+    returns int
+    language sql
+  as $$
+    select $1;
+  $$;
+$script$;
+
+create extension myextension;
+</programlisting>
+    </para>
+
+   </sect2>
+
+   <sect2>
     <title>Extension Files</title>
 
    <indexterm>
