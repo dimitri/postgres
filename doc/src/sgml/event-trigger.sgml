@@ -607,4 +607,255 @@
    </table>
   </sect1>
 
+  <sect1 id="event-trigger-interface">
+   <title>Writing Event Trigger Functions in C</title>
+
+   <indexterm zone="event-trigger-interface">
+    <primary>event trigger</primary>
+    <secondary>in C</secondary>
+   </indexterm>
+
+   <para>
+    This section describes the low-level details of the interface to an
+    event trigger function. This information is only needed when writing
+    event trigger functions in C. If you are using a higher-level language
+    then these details are handled for you. In most cases you should
+    consider using a procedural language before writing your event triggers
+    in C. The documentation of each procedural language explains how to
+    write an event trigger in that language.
+   </para>
+
+   <para>
+    Event trigger functions must use the <quote>version 1</> function
+    manager interface.
+   </para>
+
+   <para>
+    When a function is called by the event trigger manager, it is not passed
+    any normal arguments, but it is passed a <quote>context</> pointer
+    pointing to a <structname>EventTriggerData</> structure. C functions can
+    check whether they were called from the event trigger manager or not by
+    executing the macro:
+<programlisting>
+CALLED_AS_EVENT_TRIGGER(fcinfo)
+</programlisting>
+    which expands to:
+<programlisting>
+((fcinfo)-&gt;context != NULL &amp;&amp; IsA((fcinfo)-&gt;context, EventTriggerData))
+</programlisting>
+    If this returns true, then it is safe to cast
+    <literal>fcinfo-&gt;context</> to type <literal>EventTriggerData
+    *</literal> and make use of the pointed-to
+    <structname>EventTriggerData</> structure.  The function must
+    <emphasis>not</emphasis> alter the <structname>EventTriggerData</>
+    structure or any of the data it points to.
+   </para>
+
+   <para>
+    <structname>struct EventTriggerData</structname> is defined in
+    <filename>commands/event_trigger.h</filename>:
+
+<programlisting>
+typedef struct EventTriggerData
+{
+	NodeTag		type;
+	const char     *event;				/* event name */
+	Node	       *parsetree;			/* parse tree */
+	const char     *tag;				/* command tag */
+} EventTriggerData;
+</programlisting>
+
+    where the members are defined as follows:
+
+    <variablelist>
+     <varlistentry>
+      <term><structfield>type</></term>
+      <listitem>
+       <para>
+        Always <literal>T_EventTriggerData</literal>.
+       </para>
+      </listitem>
+     </varlistentry>
+
+     <varlistentry>
+      <term><structfield>tg_event</></term>
+      <listitem>
+       <para>
+        Describes the event for which the function is called. On of:
+
+        <variablelist>
+         <varlistentry>
+          <term><literal>"ddl_command_start"</literal></term>
+          <listitem>
+           <para>
+            The event trigger is run first thing in the command
+            implementation, nothing did happen yet (no object is locked, the
+            system didn't check if the object(s) still exist, etc).
+           </para>
+          </listitem>
+         </varlistentry>
+
+         <varlistentry>
+          <term><literal>"ddl_command_end"</literal></term>
+          <listitem>
+           <para>
+            The event trigger is run as the last step in the command
+            implementation, while the locks are still kept when locks have
+            been taken.
+           </para>
+          </listitem>
+         </varlistentry>
+
+         <varlistentry>
+          <term><literal>"sql_drop"</literal></term>
+          <listitem>
+           <para>
+            The event trigger is run at the last step in the command
+            implementation, unless there's
+            a <literal>"ddl_command_end"</literal> event trigger registered
+            against the same command too. This event is only fired when
+            a <literal>DROP</literal> command did occur.
+           </para>
+          </listitem>
+         </varlistentry>
+
+        </variablelist>
+       </para>
+      </listitem>
+     </varlistentry>
+
+     <varlistentry>
+      <term><structfield>parsetree</></term>
+      <listitem>
+       <para>
+        A pointer to a structure describing the relation that the trigger fired for.
+        Look at <filename>utils/rel.h</> for details about
+        this structure.  The most interesting things are
+        <literal>tg_relation-&gt;rd_att</> (descriptor of the relation
+        tuples) and <literal>tg_relation-&gt;rd_rel-&gt;relname</>
+        (relation name; the type is not <type>char*</> but
+        <type>NameData</>; use
+        <literal>SPI_getrelname(tg_relation)</> to get a <type>char*</> if you
+        need a copy of the name).
+       </para>
+      </listitem>
+     </varlistentry>
+
+     <varlistentry>
+      <term><structfield>tag</></term>
+      <listitem>
+       <para>
+        The command tag against which the Event Trigger is run.
+       </para>
+      </listitem>
+     </varlistentry>
+
+    </variablelist>
+   </para>
+
+   <para>
+    An event trigger function must return a <symbol>NULL</> pointer
+    (<emphasis>not</> an SQL null value, that is, do not
+    set <parameter>isNull</parameter> true).
+   </para>
+  </sect1>
+
+  <sect1 id="event-trigger-example">
+   <title>A Complete Event Trigger Example</title>
+
+   <para>
+    Here is a very simple example of an event trigger function written in C.
+    (Examples of triggers written in procedural languages can be found in
+    the documentation of the procedural languages.)
+   </para>
+
+   <para>
+    The function <function>noddl</> raises an exception each time it's
+    called, preventing the <literal>command</literal> to run, whatever the
+    command is.
+   </para>
+
+   <para>
+    This is the source code of the trigger function:
+<programlisting><![CDATA[
+/*
+ *	PostgreSQL definitions for noddl event trigger extension.
+ *
+ *	contrib/noddl/noddl.c
+ */
+
+#include "postgres.h"
+#include "commands/event_trigger.h"
+
+
+PG_MODULE_MAGIC;
+
+/* forward declarations */
+Datum		noddl(PG_FUNCTION_ARGS);
+
+
+/*
+ * This is the trigger that protects us from orphaned large objects
+ */
+PG_FUNCTION_INFO_V1(noddl);
+
+Datum
+noddl(PG_FUNCTION_ARGS)
+{
+	EventTriggerData *trigdata = (EventTriggerData *) fcinfo->context;
+
+	if (!CALLED_AS_EVENT_TRIGGER(fcinfo))		/* internal error */
+		elog(ERROR, "not fired by event trigger manager");
+
+	ereport(ERROR,
+			(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),
+			 errmsg("command %s denied", trigdata->tag)));
+
+    PG_RETURN_NULL();
+}
+]]>
+</programlisting>
+   </para>
+
+   <para>
+    After you have compiled the source code (see <xref
+    linkend="dfunc">), declare the function and the triggers:
+<programlisting>
+CREATE FUNCTION noddl()
+        RETURNS pg_catalog.event_trigger
+             AS 'noddl'
+             LANGUAGE C;
+
+CREATE EVENT TRIGGER noddl on ddl_command_start
+   execute procedure noddl();
+</programlisting>
+   </para>
+
+   <para>
+    Now you can test the operation of the trigger:
+<screen>
+=# \dy
+                     List of event triggers
+ Name  |       Event       | Owner | Enabled | Procedure | Tags 
+-------+-------------------+-------+---------+-----------+------
+ noddl | ddl_command_start | dim   | enabled | noddl     | 
+(1 row)
+
+=# CREATE TABLE foo(id serial);
+ERROR:  command CREATE TABLE denied
+</screen>
+   </para>
+
+   <para>
+    In order to be able to run some DDL commands when you need to do so,
+    either <literal>DROP</literal> the event trigger or just disable it in
+    the DDL transaction, like so:
+<programlisting>
+BEGIN;
+ALTER EVENT TRIGGER noddl DISABLE;
+CREATE TABLE foo(id serial);
+COMMIT;
+</programlisting>
+   </para>
+  </sect1>
 </chapter>

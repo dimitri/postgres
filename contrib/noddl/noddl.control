@@ -1,0 +1,4 @@
+# noddl extension
+comment = 'Event Trigger to deny DDL operations'
+default_version = '1.0'
+relocatable = true
