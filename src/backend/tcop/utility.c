@@ -1184,6 +1184,14 @@ ProcessUtilitySlow(Node *parsetree,
 				ExecAlterExtensionContentsStmt((AlterExtensionContentsStmt *) parsetree);
 				break;
 
+			case T_CreateExtTemplateStmt:
+				CreateTemplate((CreateExtTemplateStmt *) parsetree);
+				break;
+
+			case T_AlterExtTemplateStmt:
+				AlterTemplate((AlterExtTemplateStmt *) parsetree);
+				break;
+
 			case T_CreateFdwStmt:
 				CreateForeignDataWrapper((CreateFdwStmt *) parsetree);
 				break;
