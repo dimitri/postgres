@@ -3043,11 +3043,11 @@ findNamespace(Archive *fout, Oid nsoid, Oid objoid)
 }
 
 /*
- * getExtensions:
- *	  read all extensions in the system catalogs and return them in the
- * ExtensionInfo* structure
+ * getExtensionTemplates:
+ *	  read all extension template in the system catalogs and return them in the
+ * ExtensionTemplateInfo* structure
  *
- *	numExtensions is set to the number of extensions read in
+ *	numExtensionTemplates is set to the number of extensions templates read in
  */
 ExtensionTemplateInfo *
 getExtensionTemplates(Archive *fout, int *numExtensionTemplates)
@@ -3060,6 +3060,7 @@ getExtensionTemplates(Archive *fout, int *numExtensionTemplates)
 	int			i_tableoid;
 	int			i_oid;
 	int			i_extname;
+	int			i_rolname;
 	int			i_namespace;
 	int			i_isdefault;
 	int			i_relocatable;
@@ -3091,6 +3092,7 @@ getExtensionTemplates(Archive *fout, int *numExtensionTemplates)
 	 * either the extension creation script or its upgrade script.
 	 */
 	appendPQExpBuffer(query, "select c.tableoid, c.oid, "
+					  "(%s ctlowner) AS rolname, "
 					  "c.ctlname, c.ctldefault, c.ctlrelocatable, "
 					  "c.ctlsuperuser, c.ctlnamespace, "
 					  "array_to_string(c.ctlrequires, ',') as requires, "
@@ -3104,6 +3106,7 @@ getExtensionTemplates(Archive *fout, int *numExtensionTemplates)
 					  "join pg_extension_template t on t.oid = d.refobjid "
 					  "union all  "
 					  "select c.tableoid, c.oid, "
+					  "(%s ctlowner) AS rolname, "
 					  "c.ctlname, c.ctldefault, c.ctlrelocatable, "
 					  "c.ctlsuperuser, c.ctlnamespace, "
 					  "array_to_string(c.ctlrequires, ',') as requires, "
@@ -3113,7 +3116,9 @@ getExtensionTemplates(Archive *fout, int *numExtensionTemplates)
 					  "join pg_depend d on d.classid = 'pg_catalog.pg_extension_control'::regclass "
 					  "and d.objid = c.oid "
 					  "and d.refclassid = 'pg_catalog.pg_extension_uptmpl'::regclass "
-					  "join pg_extension_uptmpl u on u.oid = d.refobjid ");
+					  "join pg_extension_uptmpl u on u.oid = d.refobjid ",
+					  username_subquery,
+					  username_subquery);
 
 	res = ExecuteSqlQuery(fout, query->data, PGRES_TUPLES_OK);
 
@@ -3125,6 +3130,7 @@ getExtensionTemplates(Archive *fout, int *numExtensionTemplates)
 	i_tableoid = PQfnumber(res, "tableoid");
 	i_oid = PQfnumber(res, "oid");
 	i_extname = PQfnumber(res, "ctlname");
+	i_rolname = PQfnumber(res, "rolname");
 	i_isdefault = PQfnumber(res, "ctldefault");
 	i_relocatable = PQfnumber(res, "ctlrelocatable");
 	i_namespace = PQfnumber(res, "ctlnamespace");
@@ -3143,6 +3149,7 @@ getExtensionTemplates(Archive *fout, int *numExtensionTemplates)
 		exttmplinfo[i].dobj.catId.oid = atooid(PQgetvalue(res, i, i_oid));
 		AssignDumpId(&exttmplinfo[i].dobj);
 		exttmplinfo[i].dobj.name = pg_strdup(PQgetvalue(res, i, i_extname));
+		exttmplinfo[i].rolname = pg_strdup(PQgetvalue(res, i, i_rolname));
 		exttmplinfo[i].namespace = pg_strdup(PQgetvalue(res, i, i_namespace));
 		exttmplinfo[i].isdefault = *(PQgetvalue(res, i, i_isdefault)) == 't';
 		exttmplinfo[i].relocatable = *(PQgetvalue(res, i, i_relocatable)) == 't';
@@ -8140,7 +8147,7 @@ dumpExtensionTemplate(Archive *fout, ExtensionTemplateInfo *exttmplinfo)
 	ArchiveEntry(fout, exttmplinfo->dobj.catId, exttmplinfo->dobj.dumpId,
 				 exttmplinfo->dobj.name,
 				 NULL, NULL,
-				 "",
+				 exttmplinfo->rolname,
 				 false, "EXTENSION TEMPLATE", SECTION_PRE_DATA,
 				 q->data, delq->data, NULL,
 				 NULL, 0,

@@ -149,6 +149,7 @@ typedef struct _extensionInfo
 typedef struct _extensionTemplateInfo
 {
 	DumpableObject dobj;
+	char	   *rolname;		/* name of owner, or empty string */
 	char	   *namespace;		/* schema containing extension's objects */
 	bool		isdefault;		/* from pg_extension_control */
 	bool		relocatable;	/* from pg_extension_control */

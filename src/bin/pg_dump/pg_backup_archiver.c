@@ -2903,6 +2903,7 @@ _getObjectDescription(PQExpBuffer buf, TocEntry *te, ArchiveHandle *AH)
 	if (strcmp(type, "COLLATION") == 0 ||
 		strcmp(type, "CONVERSION") == 0 ||
 		strcmp(type, "DOMAIN") == 0 ||
+		strcmp(type, "EXTENSION TEMPLATE") == 0 ||
 		strcmp(type, "TABLE") == 0 ||
 		strcmp(type, "TYPE") == 0 ||
 		strcmp(type, "FOREIGN TABLE") == 0 ||
@@ -2916,6 +2917,10 @@ _getObjectDescription(PQExpBuffer buf, TocEntry *te, ArchiveHandle *AH)
 		strcmp(type, "SERVER") == 0 ||
 		strcmp(type, "USER MAPPING") == 0)
 	{
+		/* use ALTER TEMPLATE FOR EXTENSION for extension templates */
+		if (strcmp(type, "EXTENSION TEMPLATE") == 0)
+			type = "TEMPLATE FOR EXTENSION";
+
 		/* We already know that search_path was set properly */
 		appendPQExpBuffer(buf, "%s %s", type, fmtId(te->tag));
 		return;
@@ -3100,6 +3105,7 @@ _printTocEntry(ArchiveHandle *AH, TocEntry *te, RestoreOptions *ropt, bool isDat
 			strcmp(te->desc, "CONVERSION") == 0 ||
 			strcmp(te->desc, "DATABASE") == 0 ||
 			strcmp(te->desc, "DOMAIN") == 0 ||
+			strcmp(te->desc, "EXTENSION TEMPLATE") == 0 ||
 			strcmp(te->desc, "FUNCTION") == 0 ||
 			strcmp(te->desc, "OPERATOR") == 0 ||
 			strcmp(te->desc, "OPERATOR CLASS") == 0 ||
