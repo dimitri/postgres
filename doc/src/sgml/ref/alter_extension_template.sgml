@@ -3,7 +3,7 @@ doc/src/sgml/ref/alter_extension_template.sgml
 PostgreSQL documentation
 -->
 
-<refentry id="SQL-ALTEREXTENSIONTEMPLATE">
+<refentry id="SQL-ALTER-TEMPLATE-FOR-EXTENSION">
  <refmeta>
   <refentrytitle>ALTER TEMPLATE FOR EXTENSION</refentrytitle>
   <manvolnum>7</manvolnum>
@@ -15,7 +15,7 @@ PostgreSQL documentation
   <refpurpose>change the definition of a template for an extension</refpurpose>
  </refnamediv>
 
- <indexterm zone="sql-alterextensiontemplate">
+ <indexterm zone="sql-alter-template-for-extension">
   <primary>ALTER TEMPLATE FOR EXTENSION</primary>
  </indexterm>
 
@@ -142,8 +142,8 @@ ALTER TEMPLATE FOR EXTENSION <replaceable class="parameter">name</replaceable> R
   <title>See Also</title>
 
   <simplelist type="inline">
-   <member><xref linkend="sql-createextensiontemplate"></member>
-   <member><xref linkend="sql-dropextensiontemplate"></member>
+   <member><xref linkend="sql-create-template-for-extension"></member>
+   <member><xref linkend="sql-drop-template-for-extension"></member>
   </simplelist>
  </refsect1>
 </refentry>

@@ -340,7 +340,10 @@ get_extension_control_directory(void)
 	return result;
 }
 
-static char *
+/*
+ * We need that function in template.c
+ */
+char *
 get_extension_control_filename(const char *extname)
 {
 	char		sharepath[MAXPGPATH];
@@ -658,8 +661,22 @@ read_extension_control(const char *extname)
 
 	if (access(filename, F_OK) == -1 && errno == ENOENT)
 	{
-		/* ENOENT: let's look at the control templates */
-		return find_default_pg_extension_control(extname, false);
+		/* ENOENT: let's look at the control templates
+		 *
+		 * We pass in missing_ok as true so as to be able to offer a better
+		 * error message.
+		 */
+		ExtensionControl *c = find_default_pg_extension_control(extname, true);
+
+		if (c == NULL)
+		{
+			ereport(ERROR,
+					(errcode(ERRCODE_UNDEFINED_OBJECT),
+					 errmsg("Extension \"%s\" is not available from \"%s\" nor as a template",
+							extname, get_extension_control_directory())));
+			return NULL;
+		}
+		return c;
 	}
 	else
 		/* we let the file specific routines deal with any other error */

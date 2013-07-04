@@ -17,6 +17,8 @@
  */
 #include "postgres.h"
 
+#include <unistd.h>
+
 #include "access/heapam.h"
 #include "access/htup_details.h"
 #include "access/sysattr.h"
@@ -234,22 +236,12 @@ CheckExtensionAvailability(const char *extname, const char *version,
 	 * might have been added to the file-system and would then be prefered, but
 	 * at least we tried to be as nice as we possibly can.
 	 */
-	PG_TRY();
+	if (access(get_extension_control_filename(extname), F_OK) == 0)
 	{
-		ExtensionControl *control = read_extension_control_file(extname);
-
-		if (control)
-		{
-			ereport(ERROR,
-					(errcode(ERRCODE_DUPLICATE_OBJECT),
-					 errmsg("extension \"%s\" is already available", extname)));
-		}
+		ereport(ERROR,
+				(errcode(ERRCODE_DUPLICATE_OBJECT),
+				 errmsg("extension \"%s\" is already available", extname)));
 	}
-	PG_CATCH();
-	{
-		/* no control file found is good news for us */
-	}
-	PG_END_TRY();
 
 	return true;
 }
@@ -320,18 +312,22 @@ CreateExtensionTemplate(CreateExtTemplateStmt *stmt)
 	if (control->schema == NULL)
 	{
 		/*
-		 * Use the current default creation namespace, which is the
+		 * Else, use the current default creation namespace, which is the
 		 * first explicit entry in the search_path.
 		 */
 		Oid			schemaOid;
 		List	   *search_path = fetch_search_path(false);
 
-		if (search_path == NIL) /* probably can't happen */
-			elog(ERROR, "there is no default creation target");
+		if (search_path == NIL)	/* nothing valid in search_path? */
+			ereport(ERROR,
+					(errcode(ERRCODE_UNDEFINED_SCHEMA),
+					 errmsg("no schema has been selected to create in")));
 		schemaOid = linitial_oid(search_path);
 		control->schema = get_namespace_name(schemaOid);
 		if (control->schema == NULL) /* recently-deleted namespace? */
-			elog(ERROR, "there is no default creation target");
+			ereport(ERROR,
+					(errcode(ERRCODE_UNDEFINED_SCHEMA),
+					 errmsg("no schema has been selected to create in")));
 
 		list_free(search_path);
 	}
@@ -455,44 +451,27 @@ CreateExtensionUpdateTemplate(CreateExtTemplateStmt *stmt)
 	 * might have been added to the file-system and would then be prefered, but
 	 * at least we tried to be as nice as we possibly can.
 	 */
-	PG_TRY();
+	if (access(get_extension_control_filename(stmt->extname), F_OK) == 0)
 	{
-		control = read_extension_control_file(stmt->extname);
+		ereport(ERROR,
+				(errcode(ERRCODE_DUPLICATE_OBJECT),
+				 errmsg("extension \"%s\" is already available", stmt->extname)));
 	}
-	PG_CATCH();
-	{
-		/* no control file found is good news for us */
-		control = NULL;
-	}
-	PG_END_TRY();
 
-	if (control)
-	{
-			ereport(ERROR,
-					(errcode(ERRCODE_DUPLICATE_OBJECT),
-					 errmsg("extension \"%s\" is already available",
-							stmt->extname)));
-	}
+	/*
+	 * The update template can change any control properties of the extension,
+	 * so first duplicate the properties of the version we are upgrading from
+	 * and then override that with the properties given in the command, if any.
+	 */
+	control = find_pg_extension_control(stmt->extname, stmt->from, false);
+
+	/* Now reset ctldefault and defaultfull, don't blindly copy them */
+	control->default_version = NULL;
+	control->default_full_version = NULL;
 
 	/* Now read the (optional) control properties from the statement */
 	if (stmt->control)
-	{
- 	    control = (ExtensionControl *) palloc0(sizeof(ExtensionControl));
-	    control->name = pstrdup(stmt->extname);
-
 		parse_statement_control_defelems(control, stmt->control);
-	}
-	else
-	{
-		/*
-		 *
-		 * To allow for ALTER command to be able to change the control
-		 * properties of the given extension for the target version (to) here,
-		 * when no control properties have been given on the command line, copy
-		 * those of the version we upgrade from (from).
-		 */
-		control = find_pg_extension_control(stmt->extname, stmt->from, false);
-	}
 
 	return InsertExtensionUpTmplTuple(owner, stmt->extname, control,
 									  stmt->from, stmt->to, stmt->script);
@@ -542,6 +521,7 @@ InsertExtensionControlTuple(Oid owner,
 	Datum		values[Natts_pg_extension_control];
 	bool		nulls[Natts_pg_extension_control];
 	HeapTuple	tuple;
+	ObjectAddress myself;
 
 	/*
 	 * Build and insert the pg_extension_control tuple
@@ -610,9 +590,16 @@ InsertExtensionControlTuple(Oid owner,
 	 */
 	recordDependencyOnOwner(ExtensionControlRelationId, extControlOid, owner);
 
+	/* dependency on extension */
+	myself.classId = ExtensionControlRelationId;
+	myself.objectId = extControlOid;
+	myself.objectSubId = 0;
+
+	recordDependencyOnCurrentExtension(&myself, false);
+
 	/* Post creation hook for new extension control */
 	InvokeObjectPostCreateHook(ExtensionControlRelationId, extControlOid, 0);
-;
+
 	return extControlOid;
 }
 
@@ -684,6 +671,9 @@ InsertExtensionTemplateTuple(Oid owner, ExtensionControl *control,
 	ctrl.objectSubId = 0;
 
 	recordDependencyOn(&ctrl, &myself, DEPENDENCY_INTERNAL);
+
+	/* dependency on extension */
+	recordDependencyOnCurrentExtension(&myself, false);
 
 	/* Post creation hook for new extension control */
 	InvokeObjectPostCreateHook(ExtensionTemplateRelationId, extTemplateOid, 0);
@@ -762,6 +752,9 @@ InsertExtensionUpTmplTuple(Oid owner,
 	ctrl.objectSubId = 0;
 
 	recordDependencyOn(&ctrl, &myself, DEPENDENCY_INTERNAL);
+
+	/* dependency on extension */
+	recordDependencyOnCurrentExtension(&myself, false);
 
 	/* Post creation hook for new extension control */
 	InvokeObjectPostCreateHook(ExtensionUpTmplRelationId, extUpTmplOid, 0);
@@ -968,7 +961,7 @@ AlterExtensionUpdateTemplate(AlterExtTemplateStmt *stmt)
  * script).
  */
 Oid
-AtlerExtensionTemplateOwner(const char *extname, Oid newOwnerId)
+AlterExtensionTemplateOwner(const char *extname, Oid newOwnerId)
 {
 	ListCell *lc;
 
@@ -1023,7 +1016,7 @@ AtlerExtensionTemplateOwner(const char *extname, Oid newOwnerId)
  * script).
  */
 Oid
-AtlerExtensionTemplateRename(const char *extname, const char *newname)
+AlterExtensionTemplateRename(const char *extname, const char *newname)
 {
 	ListCell *lc;
 

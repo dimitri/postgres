@@ -5174,7 +5174,7 @@ pg_extension_uptmpl_ownercheck(Oid ext_uptmpl_oid, Oid roleid)
 	if (!HeapTupleIsValid(tuple))
 		ereport(ERROR,
 				(errcode(ERRCODE_UNDEFINED_OBJECT),
-				 errmsg("extension uptmpl with OID %u does not exist",
+				 errmsg("extension template for update with OID %u does not exist",
 						ext_uptmpl_oid)));
 
 	ownerId = ((Form_pg_extension_uptmpl) GETSTRUCT(tuple))->uptowner;

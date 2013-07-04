@@ -24,8 +24,8 @@ extern char *get_extension_control_name(Oid ctrlOid);
 extern char *get_extension_template_name(Oid tmplOid);
 extern char *get_extension_uptmpl_name(Oid tmplOid);
 
-extern Oid AtlerExtensionTemplateOwner(const char *extname, Oid newowner);
-extern Oid AtlerExtensionTemplateRename(const char *extname,
+extern Oid AlterExtensionTemplateOwner(const char *extname, Oid newowner);
+extern Oid AlterExtensionTemplateRename(const char *extname,
 										const char *newname);
 
 extern Oid AlterTemplate(AlterExtTemplateStmt *stmt);

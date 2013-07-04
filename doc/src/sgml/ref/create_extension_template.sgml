@@ -3,7 +3,7 @@ doc/src/sgml/ref/create_extension_template.sgml
 PostgreSQL documentation
 -->
 
-<refentry id="SQL-CREATEEXTENSIONTEMPLATE">
+<refentry id="SQL-CREATE-TEMPLATE-FOR-EXTENSION">
  <refmeta>
   <refentrytitle>CREATE TEMPLATE FOR EXTENSION</refentrytitle>
   <manvolnum>7</manvolnum>
@@ -15,7 +15,7 @@ PostgreSQL documentation
   <refpurpose>define a new template for extension</refpurpose>
  </refnamediv>
 
- <indexterm zone="sql-createtstemplate">
+ <indexterm zone="sql-create-template-for-extension">
   <primary>CREATE TEMPLATE FOR EXTENSION</primary>
  </indexterm>
 
@@ -127,8 +127,8 @@ $$;
   <title>See Also</title>
 
   <simplelist type="inline">
-   <member><xref linkend="sql-alterextensiontemplate"></member>
-   <member><xref linkend="sql-dropextensiontemplate"></member>
+   <member><xref linkend="sql-alter-template-for-extension"></member>
+   <member><xref linkend="sql-drop-template-for-extension"></member>
   </simplelist>
  </refsect1>
 </refentry>

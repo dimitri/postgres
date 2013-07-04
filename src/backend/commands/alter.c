@@ -341,7 +341,7 @@ ExecRenameStmt(RenameStmt *stmt)
 			return RenameType(stmt);
 
 		case OBJECT_EXTENSION_TEMPLATE:
-			return AtlerExtensionTemplateRename(stmt->subname, stmt->newname);
+			return AlterExtensionTemplateRename(stmt->subname, stmt->newname);
 
 		case OBJECT_AGGREGATE:
 		case OBJECT_COLLATION:
@@ -703,7 +703,7 @@ ExecAlterOwnerStmt(AlterOwnerStmt *stmt)
 										  newowner);
 
 		case OBJECT_EXTENSION_TEMPLATE:
-			return AtlerExtensionTemplateOwner(strVal(linitial(stmt->object)),
+			return AlterExtensionTemplateOwner(strVal(linitial(stmt->object)),
 											   newowner);
 
 		/* Generic cases */

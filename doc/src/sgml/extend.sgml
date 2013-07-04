@@ -383,7 +383,7 @@
    </indexterm>
 
     <para>
-     The <xref linkend="sql-createextensiontemplate"> command allows a
+     The <xref linkend="sql-create-template-for-extension"> command allows a
      superuser to create an <firstterm>Extension's Template</>, that users
      will then be able to use as the source for their script and control
      parameters. Upgrade scripts can be provided with the same command, and

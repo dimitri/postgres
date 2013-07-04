@@ -48,6 +48,7 @@ typedef struct ExtensionControl
 	bool		is_template;	/* true if we're using catalog templates */
 } ExtensionControl;
 
+extern char *get_extension_control_filename(const char *extname);
 extern ExtensionControl *read_extension_control_file(const char *extname);
 extern void check_valid_extension_name(const char *extensionname);
 

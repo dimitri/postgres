@@ -2273,6 +2273,42 @@ getObjectDescription(const ObjectAddress *object)
 				break;
 			}
 
+		case OCLASS_EXTENSION_CONTROL:
+			{
+				char	   *extname;
+
+				extname = get_extension_control_name(object->objectId);
+				if (!extname)
+					elog(ERROR, "cache lookup failed for control template for extension %u",
+						 object->objectId);
+				appendStringInfo(&buffer, _("control template for extension %s"), extname);
+				break;
+			}
+
+		case OCLASS_EXTENSION_TEMPLATE:
+			{
+				char	   *extname;
+
+				extname = get_extension_template_name(object->objectId);
+				if (!extname)
+					elog(ERROR, "cache lookup failed for create template for extension %u",
+						 object->objectId);
+				appendStringInfo(&buffer, _("create template for extension %s"), extname);
+				break;
+			}
+
+		case OCLASS_EXTENSION_UPTMPL:
+			{
+				char	   *extname;
+
+				extname = get_extension_uptmpl_name(object->objectId);
+				if (!extname)
+					elog(ERROR, "cache lookup failed for update template for extension %u",
+						 object->objectId);
+				appendStringInfo(&buffer, _("update template for extension %s"), extname);
+				break;
+			}
+
 		default:
 			appendStringInfo(&buffer, "unrecognized object %u %u %d",
 							 object->classId,

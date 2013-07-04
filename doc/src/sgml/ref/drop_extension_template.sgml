@@ -3,7 +3,7 @@ doc/src/sgml/ref/drop_extension_template.sgml
 PostgreSQL documentation
 -->
 
-<refentry id="SQL-DROPEXTENSIONTEMPLATE">
+<refentry id="SQL-DROP-TEMPLATE-FOR-EXTENSION">
  <refmeta>
   <refentrytitle>DROP TEMPLATE FOR EXTENSION</refentrytitle>
   <manvolnum>7</manvolnum>
@@ -15,7 +15,7 @@ PostgreSQL documentation
   <refpurpose>remove a template for an extension</refpurpose>
  </refnamediv>
 
- <indexterm zone="sql-droptstemplate">
+ <indexterm zone="sql-drop-template-for-extension">
   <primary>DROP TEMPLATE FOR EXTENSION</primary>
  </indexterm>
 
@@ -73,8 +73,8 @@ PostgreSQL documentation
   <title>See Also</title>
 
   <simplelist type="inline">
-   <member><xref linkend="sql-alterextensiontemplate"></member>
-   <member><xref linkend="sql-createextensiontemplate"></member>
+   <member><xref linkend="sql-alter-template-for-extension"></member>
+   <member><xref linkend="sql-create-template-for-extension"></member>
   </simplelist>
  </refsect1>
 

@@ -1,5 +1,5 @@
 -- test case without an explicit schema
-create template for extension myextension version '1.0' with ()
+create template for extension myextension version '1.0'
     as $$ create table foobar(i int4) $$;
 
 create extension myextension;
@@ -12,6 +12,32 @@ select nspname
 -- cleanup
 drop extension myextension;
 drop template for extension myextension version '1.0';
+
+-- test case without an explicit schema in an upgrade path
+create template for extension test version 'abc' with (nosuperuser) as $$
+  create function f1(i int) returns int language sql as $_$ select 1; $_$;
+$$;
+
+create template for extension test from 'abc' to 'xyz' with (nosuperuser) as $$
+  create function f2(i int) returns int language sql as $_$ select 1; $_$;
+$$;
+
+create template for extension test from 'xyz' to '123' with (nosuperuser) as $$
+  create function f3(i int) returns int language sql as $_$ select 1; $_$;
+$$;
+
+create extension test version '123';
+
+\dx+ test
+drop extension test;
+drop template for extension test from 'xyz' to '123';
+drop template for extension test from 'abc' to 'xyz';
+drop template for extension test version 'abc';
+
+-- check that we no longer have control entries
+select * from pg_extension_control;
+
+-- cleanup
 
 -- now create some templates and an upgrade path
 CREATE TEMPLATE

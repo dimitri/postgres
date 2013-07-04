@@ -3635,6 +3635,19 @@ DropTableSpaceStmt: DROP TABLESPACE name
 
 CreateExtTemplateStmt:
             CREATE TEMPLATE FOR EXTENSION name VERSION_P NonReservedWord_or_Sconst
+            AS Sconst
+				{
+					CreateExtTemplateStmt *n = makeNode(CreateExtTemplateStmt);
+					n->tmpltype = TEMPLATE_CREATE_EXTENSION;
+					n->extname = $5;
+					n->version = $7;
+					n->control = NIL;
+					n->script = $9;
+					n->if_not_exists = false;
+					n->default_version = false;
+					$$ = (Node *) n;
+				}
+          | CREATE TEMPLATE FOR EXTENSION name VERSION_P NonReservedWord_or_Sconst
             WITH create_template_control AS Sconst
 				{
 					CreateExtTemplateStmt *n = makeNode(CreateExtTemplateStmt);
@@ -3645,6 +3658,19 @@ CreateExtTemplateStmt:
 					n->script = $11;
 					n->if_not_exists = false;
 					n->default_version = false;
+					$$ = (Node *) n;
+				}
+            | CREATE TEMPLATE FOR EXTENSION name
+			  DEFAULT VERSION_P NonReservedWord_or_Sconst AS Sconst
+				{
+					CreateExtTemplateStmt *n = makeNode(CreateExtTemplateStmt);
+					n->tmpltype = TEMPLATE_CREATE_EXTENSION;
+					n->extname = $5;
+					n->version = $8;
+					n->control = NIL;
+					n->script = $10;
+					n->if_not_exists = false;
+					n->default_version = true;
 					$$ = (Node *) n;
 				}
             | CREATE TEMPLATE FOR EXTENSION name
@@ -3781,7 +3807,8 @@ DropTemplateStmt:
 					$$ = (Node *)n;
 				}
 			| DROP TEMPLATE FOR EXTENSION name
-			FROM NonReservedWord_or_Sconst TO NonReservedWord_or_Sconst opt_drop_behavior
+			  FROM NonReservedWord_or_Sconst
+              TO NonReservedWord_or_Sconst opt_drop_behavior
 				{
 					DropStmt *n = makeNode(DropStmt);
 					n->removeType = OBJECT_EXTENSION_UPTMPL;
