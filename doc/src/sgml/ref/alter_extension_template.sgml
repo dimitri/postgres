@@ -45,8 +45,7 @@ ALTER TEMPLATE FOR EXTENSION <replaceable class="parameter">name</replaceable> R
 
   <para>
    <command>ALTER TEMPLATE FOR EXTENSION</command> changes the definition of
-   an extension template. Currently, the only supported functionality is to
-   change the template's default version.
+   an extension template.
   </para>
  </refsect1>
 
