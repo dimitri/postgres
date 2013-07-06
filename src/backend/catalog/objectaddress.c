@@ -811,6 +811,11 @@ get_object_address_unqualified(ObjectType objtype,
 			address.objectId = get_extension_oid(name, missing_ok);
 			address.objectSubId = 0;
 			break;
+		case OBJECT_TABLESPACE:
+			address.classId = TableSpaceRelationId;
+			address.objectId = get_tablespace_oid(name, missing_ok);
+			address.objectSubId = 0;
+			break;
 		case OBJECT_ROLE:
 			address.classId = AuthIdRelationId;
 			address.objectId = get_role_oid(name, missing_ok);
@@ -841,11 +846,6 @@ get_object_address_unqualified(ObjectType objtype,
 			address.objectId = get_event_trigger_oid(name, missing_ok);
 			address.objectSubId = 0;
 			break;
- 		case OBJECT_TABLESPACE:
- 			address.classId = TableSpaceRelationId;
- 			address.objectId = get_tablespace_oid(name, missing_ok);
- 			address.objectSubId = 0;
- 			break;
 		default:
 			elog(ERROR, "unrecognized objtype: %d", (int) objtype);
 			/* placate compiler, which doesn't know elog won't return */
