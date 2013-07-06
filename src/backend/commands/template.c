@@ -963,6 +963,7 @@ AlterExtensionUpdateTemplate(AlterExtTemplateStmt *stmt)
 Oid
 AlterExtensionTemplateOwner(const char *extname, Oid newOwnerId)
 {
+	int       controls = 0;
 	ListCell *lc;
 
 	/* Alter owner of all pg_extension_control entries for extname */
@@ -977,6 +978,11 @@ AlterExtensionTemplateOwner(const char *extname, Oid newOwnerId)
 		AlterObjectOwner_internal(catalog, objectId, newOwnerId);
 		heap_close(catalog, RowExclusiveLock);
 	}
+
+	if (controls == 0)
+		ereport(ERROR,
+				(errcode(ERRCODE_UNDEFINED_OBJECT),
+				 errmsg("template for extension \"%s\" does not exist", extname)));
 
 	/* Alter owner of all pg_extension_template entries for extname */
 	foreach(lc, list_pg_extension_template_oids_for(extname))
@@ -1018,6 +1024,7 @@ AlterExtensionTemplateOwner(const char *extname, Oid newOwnerId)
 Oid
 AlterExtensionTemplateRename(const char *extname, const char *newname)
 {
+	int       controls = 0;
 	ListCell *lc;
 
 	/* Check that we don't already have an extension of this name available. */
@@ -1031,12 +1038,18 @@ AlterExtensionTemplateRename(const char *extname, const char *newname)
 		Relation		catalog;
 		Oid				objectId = lfirst_oid(lc);
 
+		controls++;
 		elog(DEBUG1, "rename pg_extension_control %u", objectId);
 
 		catalog = heap_open(ExtensionControlRelationId, RowExclusiveLock);
 		AlterObjectRename_internal(catalog, objectId, newname);
 		heap_close(catalog, RowExclusiveLock);
 	}
+
+	if (controls == 0)
+		ereport(ERROR,
+				(errcode(ERRCODE_UNDEFINED_OBJECT),
+				 errmsg("template for extension \"%s\" does not exist", extname)));
 
 	/* Rename all pg_extension_template entries for extname */
 	foreach(lc, list_pg_extension_template_oids_for(extname))
