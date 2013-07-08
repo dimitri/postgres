@@ -29,6 +29,8 @@ $$;
 create extension test version '123';
 
 \dx+ test
+
+-- cleanup
 drop extension test;
 drop template for extension test from 'xyz' to '123';
 drop template for extension test from 'abc' to 'xyz';
@@ -37,7 +39,13 @@ drop template for extension test version 'abc';
 -- check that we no longer have control entries
 select * from pg_extension_control;
 
--- cleanup
+-- test that we can not rename a template in use
+create template for extension foo version 'v' AS '';
+create extension foo;
+alter template for extension foo rename to bar;
+
+drop extension foo;
+drop template for extension foo version 'v';
 
 -- now create some templates and an upgrade path
 CREATE TEMPLATE
