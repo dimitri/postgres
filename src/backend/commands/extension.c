@@ -1168,6 +1168,7 @@ get_ext_ver_list_from_catalog(ExtensionControl *control)
 		char					*vername = (char *) lfirst(lc);
 
 		evi = get_ext_ver_info(vername, &evi_list);
+		(void) evi; 			/* silence a compiler warning */
 	}
 
 	/* pg_extension_uptmpl contains upgrade scripts */
