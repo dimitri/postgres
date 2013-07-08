@@ -972,6 +972,7 @@ AlterExtensionTemplateOwner(const char *extname, Oid newOwnerId)
 		Relation		catalog;
 		Oid				objectId = lfirst_oid(lc);
 
+		controls++;
 		elog(DEBUG1, "alter owner of pg_extension_control %u", objectId);
 
 		catalog = heap_open(ExtensionControlRelationId, RowExclusiveLock);
