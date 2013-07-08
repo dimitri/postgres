@@ -1028,6 +1028,18 @@ AlterExtensionTemplateRename(const char *extname, const char *newname)
 	int       controls = 0;
 	ListCell *lc;
 
+	/*
+	 * Forbid renaming a template that's already in use: we wouldn't be able to
+	 * pg_restore after that.
+	 */
+	if (get_extension_oid(extname, true) != InvalidOid)
+	{
+		ereport(ERROR,
+				(errcode(ERRCODE_OBJECT_IN_USE),
+				 errmsg("template for extension \"%s\" is in use", extname),
+				 errdetail("extension \"%s\" already exists", extname)));
+	}
+
 	/* Check that we don't already have an extension of this name available. */
 	if (!CheckExtensionAvailability(newname, NULL, false))
 		/* Messages have already been sent to the client */
