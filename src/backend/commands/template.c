@@ -506,6 +506,105 @@ construct_control_requires_datum(List *requires)
 }
 
 /*
+ * Utility function to check control parameters conflicts when providing
+ * another path to get to an extension's version (e.g. adding a upgrade
+ * script).
+ */
+static Oid
+check_for_control_conflicts(const ExtensionControl *new_control,
+							const char *version)
+{
+	ExtensionControl *old_control;
+
+	old_control = find_pg_extension_control(new_control->name, version, true);
+
+	if (old_control)
+	{
+		/*
+		 * It must be possible to change default_version and
+		 * default_full_version when installing a full script install for an
+		 * extension already having a upgrade path to that version.
+		 */
+
+		if (strcmp(new_control->schema,
+				   old_control->schema) != 0)
+			ereport(ERROR,
+					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+					 errmsg("invalid setting for \"schema\""),
+					 errdetail("Template for extension \"%s\" version \"%s\" is set already with \"schema\" = \"%s\".",
+							   new_control->name, version,
+							   old_control->schema)));
+
+		if (new_control->relocatable != old_control->relocatable)
+			ereport(ERROR,
+					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+					 errmsg("invalid setting for \"relocatable\""),
+					 errdetail("Template for extension \"%s\" version \"%s\" is already set with \"relocatable\" = \"%s\".",
+							   new_control->name, version,
+							   old_control->relocatable ? "true" : "false")));
+
+		if (new_control->superuser != old_control->superuser)
+			ereport(ERROR,
+					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+					 errmsg("invalid setting for \"superuser\""),
+					 errdetail("Template for extension \"%s\" version \"%s\" is a;ready set with \"superuser\" = \"%s\".",
+							   new_control->name, version,
+							   old_control->superuser ? "true" : "false")));
+
+		/*
+		 * control->requires is a List * of char * extension names.
+		 * It's usually empty, or very short.
+		 */
+		if ((new_control->requires == NIL && old_control->requires != NIL)
+			|| (new_control->requires != NIL && old_control->requires == NIL)
+			|| (list_length(new_control->requires)
+				!= list_length(old_control->requires)))
+			ereport(ERROR,
+					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+					 errmsg("invalid setting for \"requires\""),
+					 errdetail("Template for extension \"%s\" version \"%s\" is already set with a different \"requires\" list.",
+							   new_control->name, version)));
+
+		else if (new_control->requires != NIL && old_control->requires != NIL)
+		{
+			/* we have to compare two non empty lists of the same size */
+			ListCell   *lc1, *lc2;
+
+			foreach(lc1, new_control->requires)
+			{
+				char *req1 = (char *) lfirst(lc1);
+				bool found = false;
+
+				foreach(lc2, old_control->requires)
+				{
+					char *req2 = (char *) lfirst(lc2);
+
+					if (strcmp(req1, req2) != 0)
+					{
+						found = true;
+						break;
+					}
+				}
+				if (!found)
+					ereport(ERROR,
+							(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+							 errmsg("invalid setting for \"requires\""),
+							 errdetail("Template for extension \"%s\" version \"%s\" is already set with a different \"requires\" list.",
+									   new_control->name, version)));
+			}
+			/*
+			 * As lists are of the same size, there's no need to check about
+			 * elements in the second list not present in the first one, which
+			 * means we're done now.
+			 */
+		}
+
+		return old_control->ctrlOid;
+	}
+	return InvalidOid;
+}
+
+/*
  * InsertExtensionControlTuple
  *
  * Insert the new pg_extension_control row and register its dependency to its
@@ -620,8 +719,16 @@ InsertExtensionTemplateTuple(Oid owner, ExtensionControl *control,
 	HeapTuple	tuple;
 	ObjectAddress myself, ctrl;
 
-	/* First create the companion extension control entry */
-	extControlOid = InsertExtensionControlTuple(owner, control, version);
+	/*
+	 * Check that no pre-existing control entry exists for our version. That
+	 * happens when adding a new full script for a version where you already
+	 * have an upgrade path from a previous version.
+	 */
+	extControlOid = check_for_control_conflicts(control, version);
+
+	if (!OidIsValid(extControlOid))
+		/* Then create the companion extension control entry */
+		extControlOid = InsertExtensionControlTuple(owner, control, version);
 
 	/*
 	 * Build and insert the pg_extension_template tuple
@@ -703,11 +810,18 @@ InsertExtensionUpTmplTuple(Oid owner,
 	ObjectAddress myself, ctrl;
 
 	/*
-	 * First create the companion extension control entry, if any. In the case
-	 * of an Update Template the comanion control entry is somilar in scope to
-	 * a secondary control file, and is attached to the target version.
+	 * First create the companion extension control entry. In the case of an
+	 * Update Template the companion control entry is somilar in scope to a
+	 * secondary control file, and is attached to the target version.
+	 *
+	 * Check that no pre-existing control entry exists for the target version
+	 * of the upgrade script.
 	 */
-	extControlOid = InsertExtensionControlTuple(owner, control, to);
+	extControlOid = check_for_control_conflicts(control, to);
+
+	if (!OidIsValid(extControlOid))
+		/* Then create the companion extension control entry */
+		extControlOid = InsertExtensionControlTuple(owner, control, to);
 
 	/*
 	 * Build and insert the pg_extension_uptmpl tuple

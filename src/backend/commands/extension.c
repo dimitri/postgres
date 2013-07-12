@@ -1321,6 +1321,28 @@ find_update_path(List *evi_list,
 }
 
 /*
+ * Add a dependency from the extension on a given pg_extension_control entry.
+ */
+static void
+record_control_dependency(Oid extensionOid, Oid ctrlOid)
+{
+	if (OidIsValid(ctrlOid))
+	{
+		ObjectAddress myself, pg_extension_control;
+
+		myself.classId = ExtensionRelationId;
+		myself.objectId = extensionOid;
+		myself.objectSubId = 0;
+
+		pg_extension_control.classId = ExtensionControlRelationId;
+		pg_extension_control.objectId = ctrlOid;
+		pg_extension_control.objectSubId = 0;
+
+		recordDependencyOn(&myself, &pg_extension_control, DEPENDENCY_NORMAL);
+	}
+}
+
+/*
  * CREATE EXTENSION
  */
 Oid
@@ -1670,6 +1692,7 @@ CreateExtension(CreateExtensionStmt *stmt)
 	 */
 	if (target_version_is_full)
 	{
+		/* InsertExtensionTuple set the template control dependency */
 		execute_extension_script(extensionOid, control,
 								 NULL, versionName,
 								 requiredSchemas,
@@ -1677,6 +1700,16 @@ CreateExtension(CreateExtensionStmt *stmt)
 	}
 	else if (pcontrol->default_full_version && !unpackaged)
 	{
+		/* Set the pg_extension_control dependency, when relevant. */
+		if (pcontrol->is_template)
+		{
+			ExtensionControl *old =
+				find_pg_extension_control(stmt->extname,
+										  pcontrol->default_full_version,
+										  false);
+
+			record_control_dependency(extensionOid, old->ctrlOid);
+		}
 		execute_extension_script(extensionOid, control,
 								 NULL, oldVersionName,
 								 requiredSchemas,
@@ -1687,6 +1720,14 @@ CreateExtension(CreateExtensionStmt *stmt)
 	}
 	else
 	{
+		/* Set the pg_extension_control dependency, when relevant. */
+		if (pcontrol->is_template && oldVersionName)
+		{
+			ExtensionControl *old =
+				find_pg_extension_control(stmt->extname, oldVersionName, false);
+
+			record_control_dependency(extensionOid, old->ctrlOid);
+		}
 		execute_extension_script(extensionOid, control,
 								 oldVersionName, versionName,
 								 requiredSchemas,
@@ -1787,16 +1828,7 @@ InsertExtensionTuple(const char *extName, Oid extOwner,
 	}
 
 	/* Record dependency on pg_extension_control, if created from a template */
-	if (OidIsValid(ctrlOid))
-	{
-		ObjectAddress pg_extension_control;
-
-		pg_extension_control.classId = ExtensionControlRelationId;
-		pg_extension_control.objectId = ctrlOid;
-		pg_extension_control.objectSubId = 0;
-
-		recordDependencyOn(&myself, &pg_extension_control, DEPENDENCY_NORMAL);
-	}
+	record_control_dependency(extensionOid, ctrlOid);
 
 	/* Post creation hook for new extension */
 	InvokeObjectPostCreateHook(ExtensionRelationId, extensionOid, 0);
@@ -3119,6 +3151,9 @@ ApplyExtensionUpdates(Oid extensionOid,
 
 			recordDependencyOn(&myself, &otherext, DEPENDENCY_NORMAL);
 		}
+
+		/* Record dependency on pg_extension_control, if created from a template */
+		record_control_dependency(extensionOid, control->ctrlOid);
 
 		InvokeObjectPostAlterHook(ExtensionRelationId, extensionOid, 0);
 
