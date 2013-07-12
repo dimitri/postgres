@@ -8130,7 +8130,8 @@ dumpExtensionTemplate(Archive *fout, ExtensionTemplateInfo *exttmplinfo)
 	appendPQExpBuffer(q, ")\n");
 
 	/* extension script (either install or upgrade script) */
-	appendPQExpBuffer(q, " AS\n$$%s$$;\n", exttmplinfo->script);
+	appendPQExpBuffer(q, " AS\n$%s$%s$%s$;\n",
+					  qextname, exttmplinfo->script, qextname);
 
 	/*
 	 * When the default version is not a create script, we need an extra ALTER
