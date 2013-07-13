@@ -36,6 +36,39 @@ drop template for extension test from 'xyz' to '123';
 drop template for extension test from 'abc' to 'xyz';
 drop template for extension test version 'abc';
 
+-- testing dependency in between template and instanciated extensions
+create template for extension deps version 'a' as '';
+create template for extension deps from 'a' to 'b' as '';
+alter template for extension deps set default version 'b';
+create extension deps;
+\dx
+-- that should be an error
+drop template for extension deps version 'a';
+-- that too should be an error
+drop template for extension deps from 'a' to 'b';
+
+-- check that we can add a new template for directly installing version 'b'
+create template for extension deps version 'b' as '';
+
+-- and test some control parameters conflicts now
+create template for extension deps from 'b' to 'c' as '';
+
+-- those should all fail
+create template for extension deps version 'c' with (schema foo) as '';
+create template for extension deps version 'c' with (superuser) as '';
+create template for extension deps version 'c' with (relocatable) as '';
+create template for extension deps version 'c' with (requires 'x, y') as '';
+
+-- that one should succeed: no conflict
+create template for extension deps version 'c'
+  with (schema public, nosuperuser, norelocatable) as '';
+
+-- cleanup
+drop extension deps;
+drop template for extension deps version 'a' cascade;
+drop template for extension deps version 'b' cascade;
+drop template for extension deps version 'c' cascade;
+
 -- check that we no longer have control entries
 select * from pg_extension_control;
 

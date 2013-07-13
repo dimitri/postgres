@@ -171,26 +171,13 @@ static bool
 CheckExtensionAvailability(const char *extname, const char *version,
 						   bool if_not_exists)
 {
-	/*
-	 * Check for duplicate extension name in the pg_extension catalogs. Any
-	 * extension that already is known in the catalogs needs no template for
-	 * creating it in the first place.
-	 */
-	if (get_extension_oid(extname, true) != InvalidOid)
-	{
-		ereport(ERROR,
-				(errcode(ERRCODE_DUPLICATE_OBJECT),
-				 errmsg("extension \"%s\" already exists", extname)));
-	}
-
 	if (version)
 	{
 		/*
 		 * Check for duplicate template for given extension and version. The
 		 * unique index on pg_extension_template(extname, version) would catch
 		 * this anyway, and serves as a backstop in case of race conditions;
-		 * but this is a friendlier error message, and besides we need a check
-		 * to support IF NOT EXISTS.
+		 * but this is a friendlier error message.
 		 */
 		if (get_template_oid(extname, version, true) != InvalidOid)
 		{
@@ -547,7 +534,7 @@ check_for_control_conflicts(const ExtensionControl *new_control,
 			ereport(ERROR,
 					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 					 errmsg("invalid setting for \"superuser\""),
-					 errdetail("Template for extension \"%s\" version \"%s\" is a;ready set with \"superuser\" = \"%s\".",
+					 errdetail("Template for extension \"%s\" version \"%s\" is already set with \"superuser\" = \"%s\".",
 							   new_control->name, version,
 							   old_control->superuser ? "true" : "false")));
 
