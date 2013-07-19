@@ -84,6 +84,8 @@ static List *find_update_path(List *evi_list,
 static void get_available_versions_for_extension(ExtensionControl *pcontrol,
 									 Tuplestorestate *tupstore,
 									 TupleDesc tupdesc);
+static void get_available_versions_for_extension_templates(Tuplestorestate *tupstore,
+														   TupleDesc tupdesc);
 static void ApplyExtensionUpdates(Oid extensionOid,
 					  ExtensionControl *pcontrol,
 					  const char *initialVersion,
@@ -2107,10 +2109,75 @@ pg_available_extension_versions(PG_FUNCTION_ARGS)
 		FreeDir(dir);
 	}
 
+	get_available_versions_for_extension_templates(tupstore, tupdesc);
+
 	/* clean up and return the tuplestore */
 	tuplestore_donestoring(tupstore);
 
 	return (Datum) 0;
+}
+
+/*
+ * Helper function to fill in the pg_available_extension_versions tuplestore.
+ */
+static void
+tuplestore_put_extension_control(ExtensionControl *control,
+								 Tuplestorestate *tupstore,
+								 TupleDesc tupdesc)
+{
+	Datum		values[7];
+	bool		nulls[7];
+
+	memset(values, 0, sizeof(values));
+	memset(nulls, 0, sizeof(nulls));
+
+	/* name */
+	values[0] = DirectFunctionCall1(namein,
+									CStringGetDatum(control->name));
+	/* version */
+	values[1] = CStringGetTextDatum(control->version);
+	/* superuser */
+	values[2] = BoolGetDatum(control->superuser);
+	/* relocatable */
+	values[3] = BoolGetDatum(control->relocatable);
+	/* schema */
+	if (control->schema == NULL)
+		nulls[4] = true;
+	else
+		values[4] = DirectFunctionCall1(namein,
+										CStringGetDatum(control->schema));
+	/* requires */
+	if (control->requires == NIL)
+		nulls[5] = true;
+	else
+	{
+		Datum	   *datums;
+		int			ndatums;
+		ArrayType  *a;
+		ListCell   *lc;
+
+		ndatums = list_length(control->requires);
+		datums = (Datum *) palloc(ndatums * sizeof(Datum));
+		ndatums = 0;
+		foreach(lc, control->requires)
+		{
+			char	   *curreq = (char *) lfirst(lc);
+
+			datums[ndatums++] =
+				DirectFunctionCall1(namein, CStringGetDatum(curreq));
+		}
+		a = construct_array(datums, ndatums,
+							NAMEOID,
+							NAMEDATALEN, false, 'c');
+		values[5] = PointerGetDatum(a);
+	}
+	/* comment */
+	if (control->comment == NULL)
+		nulls[6] = true;
+	else
+		values[6] = CStringGetTextDatum(control->comment);
+
+	tuplestore_putvalues(tupstore, tupdesc, values, nulls);
 }
 
 /*
@@ -2134,8 +2201,6 @@ get_available_versions_for_extension(ExtensionControl *pcontrol,
 	{
 		ExtensionControl *control;
 		char	   *vername;
-		Datum		values[7];
-		bool		nulls[7];
 
 		/* must be a .sql file ... */
 		if (!is_extension_script_filename(de->d_name))
@@ -2159,60 +2224,33 @@ get_available_versions_for_extension(ExtensionControl *pcontrol,
 		 * Fetch parameters for specific version (pcontrol is not changed)
 		 */
 		control = read_extension_aux_control_file(pcontrol, vername);
+		control->version = pstrdup(vername);
 
-		memset(values, 0, sizeof(values));
-		memset(nulls, 0, sizeof(nulls));
-
-		/* name */
-		values[0] = DirectFunctionCall1(namein,
-										CStringGetDatum(control->name));
-		/* version */
-		values[1] = CStringGetTextDatum(vername);
-		/* superuser */
-		values[2] = BoolGetDatum(control->superuser);
-		/* relocatable */
-		values[3] = BoolGetDatum(control->relocatable);
-		/* schema */
-		if (control->schema == NULL)
-			nulls[4] = true;
-		else
-			values[4] = DirectFunctionCall1(namein,
-											CStringGetDatum(control->schema));
-		/* requires */
-		if (control->requires == NIL)
-			nulls[5] = true;
-		else
-		{
-			Datum	   *datums;
-			int			ndatums;
-			ArrayType  *a;
-			ListCell   *lc;
-
-			ndatums = list_length(control->requires);
-			datums = (Datum *) palloc(ndatums * sizeof(Datum));
-			ndatums = 0;
-			foreach(lc, control->requires)
-			{
-				char	   *curreq = (char *) lfirst(lc);
-
-				datums[ndatums++] =
-					DirectFunctionCall1(namein, CStringGetDatum(curreq));
-			}
-			a = construct_array(datums, ndatums,
-								NAMEOID,
-								NAMEDATALEN, false, 'c');
-			values[5] = PointerGetDatum(a);
-		}
-		/* comment */
-		if (control->comment == NULL)
-			nulls[6] = true;
-		else
-			values[6] = CStringGetTextDatum(control->comment);
-
-		tuplestore_putvalues(tupstore, tupdesc, values, nulls);
+		tuplestore_put_extension_control(control, tupstore, tupdesc);
 	}
 
 	FreeDir(dir);
+}
+
+/*
+ * Inner loop for pg_available_extension_versions:
+ *		read versions of one extension from templates, add rows to tupstore
+ */
+static void
+get_available_versions_for_extension_templates(Tuplestorestate *tupstore,
+											   TupleDesc tupdesc)
+{
+	List				*controls;
+	ListCell			*lc;
+
+	controls = pg_extension_controls();
+
+	foreach(lc, controls)
+	{
+		ExtensionControl *control = (ExtensionControl *)lfirst(lc);
+
+		tuplestore_put_extension_control(control, tupstore, tupdesc);
+	}
 }
 
 /*

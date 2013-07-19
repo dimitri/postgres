@@ -1923,11 +1923,19 @@ read_pg_extension_control(const char *extname, Relation rel, HeapTuple tuple)
 
 	/* Those fields are not null */
 	control->ctrlOid = HeapTupleGetOid(tuple);
-	control->name = pstrdup(extname);
+
+	if (extname)
+		control->name = pstrdup(extname);
+	else
+		control->name = pstrdup(NameStr(ctrl->ctlname));
+
 	control->is_template = true;
 	control->relocatable = ctrl->ctlrelocatable;
 	control->superuser = ctrl->ctlsuperuser;
 	control->schema = pstrdup(NameStr(ctrl->ctlnamespace));
+
+	/* set control->version */
+	control->version = extract_ctlversion(rel, tuple);
 
 	/* set control->default_version */
 	if (ctrl->ctldefault)
@@ -2378,6 +2386,41 @@ pg_extension_default_controls(void)
 								 list_make2(pstrdup(NameStr(ctrl->ctlname)),
 											version));
 		}
+	}
+
+	systable_endscan(scandesc);
+
+	heap_close(rel, AccessShareLock);
+
+	return extensions;
+}
+
+/*
+ * pg_extension_controls
+ *
+ * List all extensions for which we have a default control entry. Returns a
+ * sorted list of ExtensionControl *.
+ */
+List *
+pg_extension_controls(void)
+{
+	List		*extensions = NIL;
+	Relation	 rel;
+	SysScanDesc	 scandesc;
+	HeapTuple	 tuple;
+
+	rel = heap_open(ExtensionControlRelationId, AccessShareLock);
+
+	scandesc = systable_beginscan(rel,
+								  ExtensionControlNameVersionIndexId, true,
+								  SnapshotNow, 0, NULL);
+
+	/* find all the control tuples for extname */
+	while (HeapTupleIsValid(tuple = systable_getnext(scandesc)))
+	{
+		ExtensionControl *control = read_pg_extension_control(NULL, rel, tuple);
+
+		extensions = lappend(extensions, control);
 	}
 
 	systable_endscan(scandesc);

@@ -63,6 +63,7 @@ extern char *read_extension_template_script(const char *extname,
 extern List *list_pg_extension_template_versions(const char *extname);
 extern List *list_pg_extension_update_versions(const char *extname);
 extern List *pg_extension_default_controls(void);
+extern List *pg_extension_controls(void);
 extern List *pg_extension_templates(void);
 
 extern List *list_pg_extension_control_oids_for(const char *extname);

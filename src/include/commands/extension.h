@@ -35,6 +35,7 @@ typedef struct ExtensionControl
 {
 	Oid         ctrlOid;		 /* pg_control_extension oid, or invalidoid */
 	char	   *name;			/* name of the extension */
+	char	   *version;		/* version name of this extension's control */
 	char	   *directory;		/* directory for script files */
 	char	   *default_version;	/* default install target version, if any */
 	char	   *default_full_version;	/* default install source version, if any */
