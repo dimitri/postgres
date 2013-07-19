@@ -2001,6 +2001,7 @@ pg_available_extensions(PG_FUNCTION_ARGS)
 	{
 		char	*name = (char *)linitial(lfirst(lc));
 		char	*vers = (char *)lsecond(lfirst(lc));
+		char    *comm = (char *)lthird(lfirst(lc));
 		Datum	 values[3];
 		bool	 nulls[3];
 
@@ -2012,7 +2013,10 @@ pg_available_extensions(PG_FUNCTION_ARGS)
 		/* default_version */
 		values[1] = CStringGetTextDatum(vers);
 		/* comment */
-		nulls[2] = true;
+		if (comm)
+			values[2] = CStringGetTextDatum(comm);
+		else
+			nulls[2] = true;
 
 		tuplestore_putvalues(tupstore, tupdesc, values, nulls);
 	}
@@ -2248,6 +2252,10 @@ get_available_versions_for_extension_templates(Tuplestorestate *tupstore,
 	foreach(lc, controls)
 	{
 		ExtensionControl *control = (ExtensionControl *)lfirst(lc);
+
+		/* add-in the comment */
+		control->comment = GetComment(control->ctrlOid,
+									  ExtensionControlRelationId, 0);
 
 		tuplestore_put_extension_control(control, tupstore, tupdesc);
 	}

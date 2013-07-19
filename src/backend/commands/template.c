@@ -35,6 +35,7 @@
 #include "catalog/pg_namespace.h"
 #include "catalog/pg_type.h"
 #include "commands/alter.h"
+#include "commands/comment.h"
 #include "commands/extension.h"
 #include "commands/template.h"
 #include "funcapi.h"
@@ -99,6 +100,7 @@ parse_statement_control_defelems(ExtensionControl *control, List *defelems)
 {
 	ListCell	*lc;
 	DefElem		*d_schema	   = NULL;
+	DefElem		*d_comment	   = NULL;
 	DefElem		*d_superuser   = NULL;
 	DefElem		*d_relocatable = NULL;
 	DefElem		*d_requires	   = NULL;
@@ -119,6 +121,16 @@ parse_statement_control_defelems(ExtensionControl *control, List *defelems)
 			d_schema = defel;
 
 			control->schema = strVal(d_schema->arg);
+		}
+		else if (strcmp(defel->defname, "comment") == 0)
+		{
+			if (d_comment)
+				ereport(ERROR,
+						(errcode(ERRCODE_SYNTAX_ERROR),
+						 errmsg("conflicting or redundant options")));
+			d_comment = defel;
+
+			control->comment = strVal(d_comment->arg);
 		}
 		else if (strcmp(defel->defname, "superuser") == 0)
 		{
@@ -686,6 +698,13 @@ InsertExtensionControlTuple(Oid owner,
 	/* Post creation hook for new extension control */
 	InvokeObjectPostCreateHook(ExtensionControlRelationId, extControlOid, 0);
 
+	/*
+	 * Apply any control-file comment on extension control
+	 */
+	if (control->comment != NULL)
+		CreateComments(extControlOid, ExtensionControlRelationId, 0,
+					   control->comment);
+
 	return extControlOid;
 }
 
@@ -798,7 +817,7 @@ InsertExtensionUpTmplTuple(Oid owner,
 
 	/*
 	 * First create the companion extension control entry. In the case of an
-	 * Update Template the companion control entry is somilar in scope to a
+	 * Update Template the companion control entry is similar in scope to a
 	 * secondary control file, and is attached to the target version.
 	 *
 	 * Check that no pre-existing control entry exists for the target version
@@ -2025,6 +2044,11 @@ find_pg_extension_control(const char *extname,
 				 errmsg("extension \"%s\" has no control template for version \"%s\"",
 						extname, version)));
 
+	/* Don't forget the comments! */
+	if (control != NULL)
+		control->comment = GetComment(control->ctrlOid,
+									  ExtensionControlRelationId, 0);
+
 	return control;
 }
 
@@ -2109,6 +2133,11 @@ find_default_pg_extension_control(const char *extname, bool missing_ok)
 	/* don't forget to add in the default full version */
 	if (control != NULL && default_full_version)
 		control->default_full_version = default_full_version;
+
+	/* Don't forget the comments! */
+	if (control != NULL)
+		control->comment = GetComment(control->ctrlOid,
+									  ExtensionControlRelationId, 0);
 
 	return control;
 }
@@ -2345,7 +2374,7 @@ list_pg_extension_update_versions(const char *extname)
  * pg_extension_controls
  *
  * List all extensions for which we have a default control entry. Returns a
- * sorted list of name, version of such extensions.
+ * sorted list of name, version, comment of such extensions.
  */
 List *
 pg_extension_default_controls(void)
@@ -2381,10 +2410,13 @@ pg_extension_default_controls(void)
 							 RelationGetDescr(rel), &isnull);
 
 			char *version = isnull? NULL:text_to_cstring(DatumGetTextPP(dvers));
+			char *comment = GetComment(HeapTupleGetOid(tuple),
+									   ExtensionControlRelationId, 0);
 
 			extensions = lappend(extensions,
-								 list_make2(pstrdup(NameStr(ctrl->ctlname)),
-											version));
+								 list_make3(pstrdup(NameStr(ctrl->ctlname)),
+											version,
+											comment));
 		}
 	}
 

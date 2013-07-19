@@ -3841,6 +3841,10 @@ create_template_control_item:
 				{
 					$$ = makeDefElem("schema", (Node *)makeString($2));
 				}
+			| COMMENT Sconst
+				{
+					$$ = makeDefElem("comment", (Node *)makeString($2));
+				}
 			| IDENT
 				{
 					/*
