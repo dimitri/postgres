@@ -3687,30 +3687,30 @@ CreateExtTemplateStmt:
 					n->default_version = true;
 					$$ = (Node *) n;
 				}
-            | CREATE TEMPLATE FOR EXTENSION name
+            | CREATE TEMPLATE FOR EXTENSION name FOR UPDATE
               FROM NonReservedWord_or_Sconst TO NonReservedWord_or_Sconst AS Sconst
 				{
 					CreateExtTemplateStmt *n = makeNode(CreateExtTemplateStmt);
 					n->tmpltype = TEMPLATE_UPDATE_EXTENSION;
 					n->extname = $5;
-					n->from = $7;
-					n->to = $9;
+					n->from = $9;
+					n->to = $11;
 					n->control = NIL;
-					n->script = $11;
+					n->script = $13;
 					n->if_not_exists = false;
 					$$ = (Node *) n;
 				}
-            | CREATE TEMPLATE FOR EXTENSION name
+            | CREATE TEMPLATE FOR EXTENSION name FOR UPDATE
               FROM NonReservedWord_or_Sconst TO NonReservedWord_or_Sconst
               WITH create_template_control AS Sconst
 				{
 					CreateExtTemplateStmt *n = makeNode(CreateExtTemplateStmt);
 					n->tmpltype = TEMPLATE_UPDATE_EXTENSION;
 					n->extname = $5;
-					n->from = $7;
-					n->to = $9;
-					n->control = $11;
-					n->script = $13;
+					n->from = $9;
+					n->to = $11;
+					n->control = $13;
+					n->script = $15;
 					n->if_not_exists = false;
 					$$ = (Node *) n;
 				}
@@ -3771,7 +3771,7 @@ AlterExtTemplateStmt:
 					n->missing_ok = false;
 					$$ = (Node *) n;
 				}
-			| ALTER TEMPLATE FOR EXTENSION name
+			| ALTER TEMPLATE FOR EXTENSION name FOR UPDATE
 			  FROM NonReservedWord_or_Sconst TO NonReservedWord_or_Sconst
 			  AS Sconst
 				{
@@ -3779,9 +3779,9 @@ AlterExtTemplateStmt:
 					n->tmpltype = TEMPLATE_UPDATE_EXTENSION;
 					n->cmdtype = AET_SET_SCRIPT;
 					n->extname = $5;
-					n->from = $7;
-					n->to = $9;
-					n->script = $11;
+					n->from = $9;
+					n->to = $11;
+					n->script = $13;
 					n->missing_ok = false;
 					$$ = (Node *) n;
 				}
@@ -3807,15 +3807,15 @@ DropTemplateStmt:
 					$$ = (Node *)n;
 				}
 			| DROP TEMPLATE FOR EXTENSION name
-			  FROM NonReservedWord_or_Sconst
+			  FOR UPDATE FROM NonReservedWord_or_Sconst
               TO NonReservedWord_or_Sconst opt_drop_behavior
 				{
 					DropStmt *n = makeNode(DropStmt);
 					n->removeType = OBJECT_EXTENSION_UPTMPL;
 					n->objects = list_make1(list_make1(makeString($5)));
-					n->arguments = list_make1(list_make2(makeString($7),
-														 makeString($9)));
-					n->behavior = $10;
+					n->arguments = list_make1(list_make2(makeString($9),
+														 makeString($11)));
+					n->behavior = $12;
 					n->missing_ok = false;
 					n->concurrent = false;
 					$$ = (Node *)n;

@@ -18,11 +18,11 @@ create template for extension test version 'abc' with (nosuperuser) as $$
   create function f1(i int) returns int language sql as $_$ select 1; $_$;
 $$;
 
-create template for extension test from 'abc' to 'xyz' with (nosuperuser) as $$
+create template for extension test for update from 'abc' to 'xyz' with (nosuperuser) as $$
   create function f2(i int) returns int language sql as $_$ select 1; $_$;
 $$;
 
-create template for extension test from 'xyz' to '123' with (nosuperuser) as $$
+create template for extension test for update from 'xyz' to '123' with (nosuperuser) as $$
   create function f3(i int) returns int language sql as $_$ select 1; $_$;
 $$;
 
@@ -32,26 +32,26 @@ create extension test version '123';
 
 -- cleanup
 drop extension test;
-drop template for extension test from 'xyz' to '123';
-drop template for extension test from 'abc' to 'xyz';
+drop template for extension test for update from 'xyz' to '123';
+drop template for extension test for update from 'abc' to 'xyz';
 drop template for extension test version 'abc';
 
 -- testing dependency in between template and instanciated extensions
 create template for extension deps version 'a' as '';
-create template for extension deps from 'a' to 'b' as '';
+create template for extension deps for update from 'a' to 'b' as '';
 alter template for extension deps set default version 'b';
 create extension deps;
 \dx
 -- that should be an error
 drop template for extension deps version 'a';
 -- that too should be an error
-drop template for extension deps from 'a' to 'b';
+drop template for extension deps for update from 'a' to 'b';
 
 -- check that we can add a new template for directly installing version 'b'
 create template for extension deps version 'b' as '';
 
 -- and test some control parameters conflicts now
-create template for extension deps from 'b' to 'c' as '';
+create template for extension deps for update from 'b' to 'c' as '';
 
 -- those should all fail
 create template for extension deps version 'c' with (schema foo) as '';
@@ -101,8 +101,8 @@ AS $$
 $$;
 
 -- we want to test alter extension update
-CREATE TEMPLATE
-   FOR EXTENSION pair FROM '1.0' TO '1.1'
+CREATE TEMPLATE FOR EXTENSION pair
+    FOR UPDATE FROM '1.0' TO '1.1'
   WITH (superuser, norelocatable, schema public)
 AS $$
   CREATE OPERATOR ~> (LEFTARG = text,
@@ -123,8 +123,8 @@ AS $$
 $$;
 
 -- and we want to test update with more than 1 step
-CREATE TEMPLATE
-   FOR EXTENSION pair FROM '1.1' TO '1.2'
+CREATE TEMPLATE FOR EXTENSION pair
+    FOR UPDATE FROM '1.1' TO '1.2'
 AS
  $$
   COMMENT ON EXTENSION pair IS 'Simple Key Value Text Type';
@@ -139,11 +139,12 @@ ALTER TEMPLATE FOR EXTENSION pair VERSION '1.0' WITH (relocatable);
 ALTER TEMPLATE FOR EXTENSION pair VERSION '1.3' WITH (relocatable);
 
 -- you can't set the default on an upgrade script, only an extension's version
-ALTER TEMPLATE FOR EXTENSION pair FROM '1.0' TO '1.1' SET DEFAULT;
+ALTER TEMPLATE FOR EXTENSION pair FOR UPDATE FROM '1.0' TO '1.1' SET DEFAULT;
 
 -- you can't set control properties on an upgrade script, only an
 -- extension's version
-ALTER TEMPLATE FOR EXTENSION pair FROM '1.0' TO '1.1' WITH (relocatable);
+ALTER TEMPLATE FOR EXTENSION pair
+             FOR UPDATE FROM '1.0' TO '1.1' WITH (relocatable);
 
 -- try to set the default full version to an unknown extension version
 ALTER TEMPLATE FOR EXTENSION pair SET DEFAULT FULL VERSION '1.1';
@@ -152,7 +153,7 @@ ALTER TEMPLATE FOR EXTENSION pair SET DEFAULT FULL VERSION '1.1';
 ALTER TEMPLATE FOR EXTENSION pair SET DEFAULT FULL VERSION '1.0';
 
 -- you can actually change the script used to update, though
-ALTER TEMPLATE FOR EXTENSION pair FROM '1.1' TO '1.2'
+ALTER TEMPLATE FOR EXTENSION pair FOR UPDATE FROM '1.1' TO '1.2'
 AS $$
   COMMENT ON EXTENSION pair IS 'A Toy Key Value Text Type';
 $$;
@@ -246,8 +247,8 @@ select ctlname, rolname
 ALTER TEMPLATE FOR EXTENSION pair RENAME TO keyval;
 
 -- cleanup
-DROP TEMPLATE FOR EXTENSION keyval FROM '1.1' TO '1.2';
-DROP TEMPLATE FOR EXTENSION keyval FROM '1.0' TO '1.1';
+DROP TEMPLATE FOR EXTENSION keyval FOR UPDATE FROM '1.1' TO '1.2';
+DROP TEMPLATE FOR EXTENSION keyval FOR UPDATE FROM '1.0' TO '1.1';
 DROP TEMPLATE FOR EXTENSION keyval VERSION '1.0';
 DROP TEMPLATE FOR EXTENSION keyval VERSION '1.3';
 DROP ROLE regression_bob;

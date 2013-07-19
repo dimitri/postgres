@@ -27,13 +27,14 @@ CREATE TEMPLATE FOR EXTENSION <replaceable class="parameter">name</replaceable>
 AS <replaceable class="parameter">script</replaceable>
 
 CREATE TEMPLATE FOR EXTENSION <replaceable class="parameter">name</replaceable>
-  FROM <replaceable class="parameter">old_version</replaceable> TO <replaceable class="parameter">new_version</replaceable>
+  FOR UPDATE FROM <replaceable class="parameter">old_version</replaceable> TO <replaceable class="parameter">new_version</replaceable>
 [ WITH ( [ <replaceable class="parameter">control_parameter</replaceable> ] [, ... ] ) ]
 AS <replaceable class="parameter">script</replaceable>
 
 <phrase>where <replaceable class="parameter">control_parameter</replaceable> is one of:</phrase>
 
  SCHEMA <replaceable class="parameter">schema_name</replaceable>
+ COMMENT <replaceable class="parameter">comment</replaceable>
  SUPERUSER
  NOSUPERUSER
  RELOCATABLE

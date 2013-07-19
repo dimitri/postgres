@@ -18,10 +18,10 @@ drop template for extension myextension version '1.0';
 create template for extension test version 'abc' with (nosuperuser) as $$
   create function f1(i int) returns int language sql as $_$ select 1; $_$;
 $$;
-create template for extension test from 'abc' to 'xyz' with (nosuperuser) as $$
+create template for extension test for update from 'abc' to 'xyz' with (nosuperuser) as $$
   create function f2(i int) returns int language sql as $_$ select 1; $_$;
 $$;
-create template for extension test from 'xyz' to '123' with (nosuperuser) as $$
+create template for extension test for update from 'xyz' to '123' with (nosuperuser) as $$
   create function f3(i int) returns int language sql as $_$ select 1; $_$;
 $$;
 create extension test version '123';
@@ -36,9 +36,59 @@ Objects in extension "test"
 
 -- cleanup
 drop extension test;
-drop template for extension test from 'xyz' to '123';
-drop template for extension test from 'abc' to 'xyz';
+drop template for extension test for update from 'xyz' to '123';
+drop template for extension test for update from 'abc' to 'xyz';
 drop template for extension test version 'abc';
+-- testing dependency in between template and instanciated extensions
+create template for extension deps version 'a' as '';
+create template for extension deps for update from 'a' to 'b' as '';
+alter template for extension deps set default version 'b';
+create extension deps;
+\dx
+                 List of installed extensions
+  Name   | Version |   Schema   |         Description          
+---------+---------+------------+------------------------------
+ deps    | b       | public     | 
+ plpgsql | 1.0     | pg_catalog | PL/pgSQL procedural language
+(2 rows)
+
+-- that should be an error
+drop template for extension deps version 'a';
+ERROR:  cannot drop create template for extension deps because other objects depend on it
+DETAIL:  extension deps depends on control template for extension deps
+HINT:  Use DROP ... CASCADE to drop the dependent objects too.
+-- that too should be an error
+drop template for extension deps for update from 'a' to 'b';
+ERROR:  cannot drop update template for extension deps because other objects depend on it
+DETAIL:  extension deps depends on control template for extension deps
+HINT:  Use DROP ... CASCADE to drop the dependent objects too.
+-- check that we can add a new template for directly installing version 'b'
+create template for extension deps version 'b' as '';
+-- and test some control parameters conflicts now
+create template for extension deps for update from 'b' to 'c' as '';
+-- those should all fail
+create template for extension deps version 'c' with (schema foo) as '';
+ERROR:  invalid setting for "schema"
+DETAIL:  Template for extension "deps" version "c" is set already with "schema" = "public".
+create template for extension deps version 'c' with (superuser) as '';
+ERROR:  invalid setting for "superuser"
+DETAIL:  Template for extension "deps" version "c" is already set with "superuser" = "false".
+create template for extension deps version 'c' with (relocatable) as '';
+ERROR:  invalid setting for "relocatable"
+DETAIL:  Template for extension "deps" version "c" is already set with "relocatable" = "false".
+create template for extension deps version 'c' with (requires 'x, y') as '';
+ERROR:  invalid setting for "requires"
+DETAIL:  Template for extension "deps" version "c" is already set with a different "requires" list.
+-- that one should succeed: no conflict
+create template for extension deps version 'c'
+  with (schema public, nosuperuser, norelocatable) as '';
+-- cleanup
+drop extension deps;
+drop template for extension deps version 'a' cascade;
+drop template for extension deps version 'b' cascade;
+NOTICE:  drop cascades to update template for extension deps
+drop template for extension deps version 'c' cascade;
+NOTICE:  drop cascades to update template for extension deps
 -- check that we no longer have control entries
 select * from pg_extension_control;
  ctlname | ctlowner | ctldefault | ctldefaultfull | ctlrelocatable | ctlsuperuser | ctlnamespace | ctlversion | ctlrequires 
@@ -73,8 +123,8 @@ AS $$
   RETURNS pair LANGUAGE SQL AS 'SELECT ROW($1, $2)::pair;';      
 $$;
 -- we want to test alter extension update
-CREATE TEMPLATE
-   FOR EXTENSION pair FROM '1.0' TO '1.1'
+CREATE TEMPLATE FOR EXTENSION pair
+    FOR UPDATE FROM '1.0' TO '1.1'
   WITH (superuser, norelocatable, schema public)
 AS $$
   CREATE OPERATOR ~> (LEFTARG = text,
@@ -94,8 +144,8 @@ AS $$
                       PROCEDURE = pair);           
 $$;
 -- and we want to test update with more than 1 step
-CREATE TEMPLATE
-   FOR EXTENSION pair FROM '1.1' TO '1.2'
+CREATE TEMPLATE FOR EXTENSION pair
+    FOR UPDATE FROM '1.1' TO '1.2'
 AS
  $$
   COMMENT ON EXTENSION pair IS 'Simple Key Value Text Type';
@@ -107,23 +157,24 @@ ALTER TEMPLATE FOR EXTENSION pair VERSION '1.0' WITH (relocatable);
 ALTER TEMPLATE FOR EXTENSION pair VERSION '1.3' WITH (relocatable);
 ERROR:  pg_extension_control for extension "pair" version "1.3" does not exist
 -- you can't set the default on an upgrade script, only an extension's version
-ALTER TEMPLATE FOR EXTENSION pair FROM '1.0' TO '1.1' SET DEFAULT;
+ALTER TEMPLATE FOR EXTENSION pair FOR UPDATE FROM '1.0' TO '1.1' SET DEFAULT;
 ERROR:  syntax error at or near "SET"
-LINE 1: ...R TEMPLATE FOR EXTENSION pair FROM '1.0' TO '1.1' SET DEFAUL...
+LINE 1: ...FOR EXTENSION pair FOR UPDATE FROM '1.0' TO '1.1' SET DEFAUL...
                                                              ^
 -- you can't set control properties on an upgrade script, only an
 -- extension's version
-ALTER TEMPLATE FOR EXTENSION pair FROM '1.0' TO '1.1' WITH (relocatable);
+ALTER TEMPLATE FOR EXTENSION pair
+             FOR UPDATE FROM '1.0' TO '1.1' WITH (relocatable);
 ERROR:  syntax error at or near "WITH ("
-LINE 1: ...R TEMPLATE FOR EXTENSION pair FROM '1.0' TO '1.1' WITH (relo...
-                                                             ^
+LINE 2:              FOR UPDATE FROM '1.0' TO '1.1' WITH (relocatabl...
+                                                    ^
 -- try to set the default full version to an unknown extension version
 ALTER TEMPLATE FOR EXTENSION pair SET DEFAULT FULL VERSION '1.1';
 ERROR:  template for extension "pair" version "1.1" does not exist
 -- now set it to the current one already, should silently do nothing
 ALTER TEMPLATE FOR EXTENSION pair SET DEFAULT FULL VERSION '1.0';
 -- you can actually change the script used to update, though
-ALTER TEMPLATE FOR EXTENSION pair FROM '1.1' TO '1.2'
+ALTER TEMPLATE FOR EXTENSION pair FOR UPDATE FROM '1.1' TO '1.2'
 AS $$
   COMMENT ON EXTENSION pair IS 'A Toy Key Value Text Type';
 $$;
@@ -262,8 +313,8 @@ select ctlname, rolname
 -- test renaming
 ALTER TEMPLATE FOR EXTENSION pair RENAME TO keyval;
 -- cleanup
-DROP TEMPLATE FOR EXTENSION keyval FROM '1.1' TO '1.2';
-DROP TEMPLATE FOR EXTENSION keyval FROM '1.0' TO '1.1';
+DROP TEMPLATE FOR EXTENSION keyval FOR UPDATE FROM '1.1' TO '1.2';
+DROP TEMPLATE FOR EXTENSION keyval FOR UPDATE FROM '1.0' TO '1.1';
 DROP TEMPLATE FOR EXTENSION keyval VERSION '1.0';
 DROP TEMPLATE FOR EXTENSION keyval VERSION '1.3';
 DROP ROLE regression_bob;

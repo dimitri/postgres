@@ -22,7 +22,7 @@ PostgreSQL documentation
  <refsynopsisdiv>
 <synopsis>
  DROP TEMPLATE FOR EXTENSION <replaceable class="PARAMETER">name</replaceable> VERSION <replaceable class="PARAMETER">version</replaceable> [ CASCADE | RESTRICT ]
- DROP TEMPLATE FOR EXTENSION <replaceable class="PARAMETER">name</replaceable> FROM <replaceable class="PARAMETER">old_version</replaceable> TO <replaceable class="PARAMETER">new_version</replaceable> [ CASCADE | RESTRICT ]
+ DROP TEMPLATE FOR EXTENSION <replaceable class="PARAMETER">name</replaceable> FOR UPDATE FROM <replaceable class="PARAMETER">old_version</replaceable> TO <replaceable class="PARAMETER">new_version</replaceable> [ CASCADE | RESTRICT ]
 </synopsis>
  </refsynopsisdiv>
 
