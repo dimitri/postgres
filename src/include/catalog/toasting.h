@@ -48,6 +48,8 @@ DECLARE_TOAST(pg_rewrite, 2838, 2839);
 DECLARE_TOAST(pg_seclabel, 3598, 3599);
 DECLARE_TOAST(pg_statistic, 2840, 2841);
 DECLARE_TOAST(pg_trigger, 2336, 2337);
+DECLARE_TOAST(pg_extension_template, 3182, 3183);
+DECLARE_TOAST(pg_extension_uptmpl, 3184, 3185);
 
 /* shared catalogs */
 DECLARE_TOAST(pg_shdescription, 2846, 2847);
