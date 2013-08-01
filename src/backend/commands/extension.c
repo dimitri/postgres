@@ -651,8 +651,7 @@ read_extension_aux_control_file(const ExtensionControl *pcontrol,
  * we found the current default version to install, we don't need to read and
  * another set of properties and override them.
  *
- * In both cases we return the structure ExtensionControl, which maybe
- * should get renamed now.
+ * In both cases we return the structure ExtensionControl.
  */
 static ExtensionControl *
 read_extension_control(const char *extname)

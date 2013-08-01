@@ -508,6 +508,12 @@ construct_control_requires_datum(List *requires)
  * Utility function to check control parameters conflicts when providing
  * another path to get to an extension's version (e.g. adding a upgrade
  * script).
+ *
+ * In details, we allow to create a template for version '1.2' of an extension
+ * even if we already had one for '1.1' and an upgrade script from '1.1' to
+ * '1.2', but we insist on the setup (control properties) for '1.2' to not be
+ * changed in that case. If you want to also change them, use an ALTER command
+ * first, then install the new template.
  */
 static Oid
 check_for_control_conflicts(const ExtensionControl *new_control,
@@ -688,7 +694,7 @@ InsertExtensionControlTuple(Oid owner,
 	 */
 	recordDependencyOnOwner(ExtensionControlRelationId, extControlOid, owner);
 
-	/* dependency on extension */
+	/* if created from within an extension script, register dependency */
 	myself.classId = ExtensionControlRelationId;
 	myself.objectId = extControlOid;
 	myself.objectSubId = 0;
@@ -785,7 +791,7 @@ InsertExtensionTemplateTuple(Oid owner, ExtensionControl *control,
 
 	recordDependencyOn(&ctrl, &myself, DEPENDENCY_INTERNAL);
 
-	/* dependency on extension */
+	/* if created from within an extension script, register dependency */
 	recordDependencyOnCurrentExtension(&myself, false);
 
 	/* Post creation hook for new extension control */
@@ -873,7 +879,7 @@ InsertExtensionUpTmplTuple(Oid owner,
 
 	recordDependencyOn(&ctrl, &myself, DEPENDENCY_INTERNAL);
 
-	/* dependency on extension */
+	/* if created from within an extension script, register dependency */
 	recordDependencyOnCurrentExtension(&myself, false);
 
 	/* Post creation hook for new extension control */

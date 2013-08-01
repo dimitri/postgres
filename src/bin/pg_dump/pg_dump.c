@@ -8096,7 +8096,7 @@ dumpExtensionTemplate(Archive *fout, ExtensionTemplateInfo *exttmplinfo)
 		qto = pg_strdup(fmtId(exttmplinfo->to));
 		qversion = NULL;
 
-		appendPQExpBuffer(delq, "DROP TEMPLATE FOR EXTENSION %s FROM %s TO %s;\n",
+		appendPQExpBuffer(delq, "DROP TEMPLATE FOR EXTENSION %s FOR UPDATE FROM %s TO %s;\n",
 						  qextname, qfrom, qto);
 	}
 	else
@@ -8110,7 +8110,7 @@ dumpExtensionTemplate(Archive *fout, ExtensionTemplateInfo *exttmplinfo)
 	appendPQExpBuffer(q, "CREATE TEMPLATE FOR EXTENSION %s", qextname);
 
 	if (upgrade)
-		appendPQExpBuffer(q, " FROM %s TO %s", qfrom, qto);
+		appendPQExpBuffer(q, " FOR UPDATE FROM %s TO %s", qfrom, qto);
 	else
 	{
 		if (exttmplinfo->isdefault)
