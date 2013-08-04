@@ -2451,7 +2451,7 @@ pg_extension_controls(void)
 
 	scandesc = systable_beginscan(rel,
 								  ExtensionControlNameVersionIndexId, true,
-								  SnapshotNow, 0, NULL);
+								  NULL, 0, NULL);
 
 	/* find all the control tuples for extname */
 	while (HeapTupleIsValid(tuple = systable_getnext(scandesc)))
