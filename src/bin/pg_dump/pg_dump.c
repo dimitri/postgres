@@ -3075,7 +3075,7 @@ getExtensionTemplates(Archive *fout, int *numExtensionTemplates)
 	/*
 	 * Before 9.3, there are no extension templates.
 	 */
-	if (fout->remoteVersion < 90300)
+	if (fout->remoteVersion < 90400)
 	{
 		*numExtensionTemplates = 0;
 		return NULL;
