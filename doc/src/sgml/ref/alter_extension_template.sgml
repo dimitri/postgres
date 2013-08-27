@@ -104,7 +104,7 @@ ALTER TEMPLATE FOR EXTENSION <replaceable class="parameter">name</replaceable> R
     <listitem>
      <para>
       For details about the control parameters meaning, please refer
-      to <xref linkend="extend-extensions">.
+      to <xref linkend="sql-create-template-for-extension">.
      </para>
     </listitem>
    </varlistentry>

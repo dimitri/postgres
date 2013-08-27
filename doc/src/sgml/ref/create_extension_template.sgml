@@ -74,6 +74,82 @@ AS <replaceable class="parameter">script</replaceable>
    to <xref linkend="extend-extensions">.
   </para>
 
+  <variablelist>
+     <varlistentry>
+      <term><varname>COMMENT</varname> (<type>string</type>)</term>
+      <listitem>
+       <para>
+        See the <literal>comment</> control file parameter
+        in <xref linkend="extend-extensions">.
+       </para>
+      </listitem>
+     </varlistentry>
+
+     <varlistentry>
+      <term><varname>REQUIRES</varname> (<type>string</type>)</term>
+      <listitem>
+       <para>
+        See the <literal>requires</> control file parameter
+        in <xref linkend="extend-extensions">.
+       </para>
+      </listitem>
+     </varlistentry>
+
+     <varlistentry>
+      <term><varname>SUPERUSER</varname> (<type>boolean</type>)</term>
+      <listitem>
+       <para>
+        Sets the <literal>superuser</> control file parameter
+        to <literal>true</>, with meaning as explained
+        in <xref linkend="extend-extensions">.
+       </para>
+      </listitem>
+     </varlistentry>
+
+     <varlistentry>
+      <term><varname>NOSUPERUSER</varname> (<type>boolean</type>)</term>
+      <listitem>
+       <para>
+        Sets the <literal>superuser</> control file parameter
+        to <literal>false</>, with meaning as explained
+        in <xref linkend="extend-extensions">.
+       </para>
+      </listitem>
+     </varlistentry>
+
+     <varlistentry>
+      <term><varname>RELOCATABLE</varname> (<type>boolean</type>)</term>
+      <listitem>
+       <para>
+        Sets the <literal>relocatable</> control file parameter
+        to <literal>true</>, with meaning as explained
+        in <xref linkend="extend-extensions">.
+       </para>
+      </listitem>
+     </varlistentry>
+
+     <varlistentry>
+      <term><varname>NORELOCATABLE</varname> (<type>boolean</type>)</term>
+      <listitem>
+       <para>
+        Sets the <literal>relocatable</> control file parameter
+        to <literal>false</>, with meaning as explained
+        in <xref linkend="extend-extensions">.
+       </para>
+      </listitem>
+     </varlistentry>
+
+     <varlistentry>
+      <term><varname>schema</varname> (<type>string</type>)</term>
+      <listitem>
+       <para>
+        See the <literal>schema</> control file parameter
+        in <xref linkend="extend-extensions">.
+       </para>
+      </listitem>
+     </varlistentry>
+  </variablelist>
+
   <para>
    The arguments can appear in any order, not only the one shown above.
   </para>
