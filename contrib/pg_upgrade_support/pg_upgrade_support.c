@@ -190,7 +190,8 @@ create_empty_extension(PG_FUNCTION_ARGS)
 						 text_to_cstring(extVersion),
 						 extConfig,
 						 extCondition,
-						 requiredExtensions);
+						 requiredExtensions,
+						 InvalidOid);
 
 	PG_RETURN_VOID();
 }
