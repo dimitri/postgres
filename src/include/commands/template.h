@@ -15,6 +15,7 @@
 #define TEMPLATE_H
 
 #include "nodes/parsenodes.h"
+#include "extension.h"
 
 extern Oid CreateTemplate(CreateExtTemplateStmt *stmt);
 extern Oid CreateExtensionTemplate(CreateExtTemplateStmt *stmt);
