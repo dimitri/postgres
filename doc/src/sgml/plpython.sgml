@@ -880,6 +880,39 @@ $$ LANGUAGE plpythonu;
   </para>
  </sect1>
 
+ <sect1 id="plpython-event-trigger">
+  <title>Event Trigger Functions</title>
+
+  <indexterm zone="plpython-event-trigger">
+   <primary>event trigger</primary>
+   <secondary>in PL/Python</secondary>
+  </indexterm>
+
+  <para>
+   When a function is used as an event trigger, the dictionary
+   <literal>TD</literal> contains event-trigger-related values:
+   <variablelist>
+    <varlistentry>
+     <term><literal>TD["event"]</></term>
+     <listitem>
+      <para>
+         The name of the event the trigger is fired for.
+      </para>
+     </listitem>
+    </varlistentry>
+
+    <varlistentry>
+     <term><literal>TD["tag"]</></term>
+     <listitem>
+      <para>
+       The command tag for which the trigger is fired.
+      </para>
+     </listitem>
+    </varlistentry>
+   </variablelist>
+  </para>
+ </sect1>
+
  <sect1 id="plpython-database">
   <title>Database Access</title>
 
