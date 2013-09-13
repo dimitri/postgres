@@ -1889,14 +1889,14 @@ plperl_validator(PG_FUNCTION_ARGS)
 	functyptype = get_typtype(proc->prorettype);
 
 	/* Disallow pseudotype result */
-	/* except for TRIGGER, CMDTRIGGER, RECORD, or VOID */
+	/* except for TRIGGER, EVTTRIGGER, RECORD, or VOID */
 	if (functyptype == TYPTYPE_PSEUDO)
 	{
 		/* we assume OPAQUE with no arguments means a trigger */
 		if (proc->prorettype == TRIGGEROID ||
 			(proc->prorettype == OPAQUEOID && proc->pronargs == 0))
 			is_dml_trigger = true;
-		else if (proc->prorettype == EVENTTRIGGEROID)
+		else if (proc->prorettype == EVTTRIGGEROID)
 			is_evt_trigger = true;
 		else if (proc->prorettype != RECORDOID &&
 				 proc->prorettype != VOIDOID)
@@ -2688,7 +2688,8 @@ compile_plperl_function(Oid fn_oid, bool is_dml_trigger, bool is_evt_trigger)
 				if (procStruct->prorettype == VOIDOID ||
 					procStruct->prorettype == RECORDOID)
 					 /* okay */ ;
-				else if (procStruct->prorettype == TRIGGEROID)
+				else if (procStruct->prorettype == TRIGGEROID ||
+						 procStruct->prorettype == EVTTRIGGEROID)
 				{
 					free_plperl_function(prodesc);
 					ereport(ERROR,
