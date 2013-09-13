@@ -1322,7 +1322,7 @@ compile_pltcl_function(Oid fn_oid, Oid tgreloid,
 					 "__PLTcl_proc_%u", fn_oid);
 		else if (is_evt_trigger)
 			snprintf(internal_proname, sizeof(internal_proname),
-					 "__PLTcl_proc_%u_cmdtrigger", fn_oid);
+					 "__PLTcl_proc_%u_evttrigger", fn_oid);
 		else if (is_dml_trigger)
 			snprintf(internal_proname, sizeof(internal_proname),
 					 "__PLTcl_proc_%u_trigger", fn_oid);
@@ -1381,7 +1381,8 @@ compile_pltcl_function(Oid fn_oid, Oid tgreloid,
 			{
 				if (procStruct->prorettype == VOIDOID)
 					 /* okay */ ;
-				else if (procStruct->prorettype == TRIGGEROID)
+				else if (procStruct->prorettype == TRIGGEROID ||
+						 procStruct->prorettype == EVTTRIGGEROID)
 				{
 					free(prodesc->user_proname);
 					free(prodesc->internal_proname);
