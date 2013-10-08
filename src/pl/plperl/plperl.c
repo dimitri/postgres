@@ -1622,7 +1622,6 @@ plperl_event_trigger_build_args(FunctionCallInfo fcinfo)
 	HV		   *hv;
 
 	hv = newHV();
-	hv_ksplit(hv, 12);			/* pre-grow the hash */
 
 	tdata = (EventTriggerData *) fcinfo->context;
 
