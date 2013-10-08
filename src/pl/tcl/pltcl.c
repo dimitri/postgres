@@ -651,6 +651,7 @@ pltcl_handler(PG_FUNCTION_ARGS, bool pltrusted)
 		{
 			pltcl_current_fcinfo = NULL;
 			pltcl_event_trigger_handler(fcinfo, pltrusted);
+			retval = (Datum) 0;
 		}
 		else
 		{

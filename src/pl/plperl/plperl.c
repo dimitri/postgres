@@ -1739,7 +1739,10 @@ plperl_call_handler(PG_FUNCTION_ARGS)
 		if (CALLED_AS_TRIGGER(fcinfo))
 			retval = PointerGetDatum(plperl_trigger_handler(fcinfo));
 		else if (CALLED_AS_EVENT_TRIGGER(fcinfo))
+		{
 			plperl_event_trigger_handler(fcinfo);
+			retval = (Datum) 0;
+		}
 		else
 			retval = plperl_func_handler(fcinfo);
 	}
@@ -2241,6 +2244,7 @@ plperl_call_perl_event_trigger_func(plperl_proc_desc *desc,
 	}
 
 	retval = newSVsv(POPs);
+	(void) retval;				/* silence compiler warning */
 
 	PUTBACK;
 	FREETMPS;
