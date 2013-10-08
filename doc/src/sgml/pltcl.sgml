@@ -720,7 +720,7 @@ CREATE TRIGGER trig_mytab_modcount BEFORE INSERT OR UPDATE ON mytab
     </indexterm>
 
     <para>
-     Event Trigger procedures can be written in PL/Tcl.
+     Event trigger procedures can be written in PL/Tcl.
      <productname>PostgreSQL</productname> requires that a procedure that is
      to be called as an event trigger must be declared as a function with no
      arguments and a return type of <literal>event_trigger</>.
@@ -757,7 +757,7 @@ CREATE TRIGGER trig_mytab_modcount BEFORE INSERT OR UPDATE ON mytab
 
 <programlisting>
 CREATE OR REPLACE FUNCTION tclsnitch() RETURNS event_trigger AS $$
-  elog NOTICE " tclsnitch: $TG_event $TG_tag"
+  elog NOTICE "tclsnitch: $TG_event $TG_tag"
 $$ LANGUAGE PLTCL;
 
 CREATE EVENT TRIGGER tcl_a_snitch ON ddl_command_start EXECUTE PROCEDURE tclsnitch();

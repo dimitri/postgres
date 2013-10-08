@@ -260,8 +260,8 @@ static void plperl_event_trigger_handler(PG_FUNCTION_ARGS);
 static void free_plperl_function(plperl_proc_desc *prodesc);
 
 static plperl_proc_desc *compile_plperl_function(Oid fn_oid,
-												 bool is_dml_trigger,
-												 bool is_evt_trigger);
+												 bool is_trigger,
+												 bool is_event_trigger);
 
 static SV  *plperl_hash_from_tuple(HeapTuple tuple, TupleDesc tupdesc);
 static SV  *plperl_hash_from_datum(Datum attr);
@@ -1877,7 +1877,7 @@ plperl_validator(PG_FUNCTION_ARGS)
 	Oid		   *argtypes;
 	char	  **argnames;
 	char	   *argmodes;
-	bool		is_dml_trigger = false, is_evt_trigger = false;
+	bool		is_trigger = false, is_event_trigger = false;
 	int			i;
 
 	/* Get the new function's pg_proc entry */
@@ -1895,9 +1895,9 @@ plperl_validator(PG_FUNCTION_ARGS)
 		/* we assume OPAQUE with no arguments means a trigger */
 		if (proc->prorettype == TRIGGEROID ||
 			(proc->prorettype == OPAQUEOID && proc->pronargs == 0))
-			is_dml_trigger = true;
+			is_trigger = true;
 		else if (proc->prorettype == EVTTRIGGEROID)
-			is_evt_trigger = true;
+			is_event_trigger = true;
 		else if (proc->prorettype != RECORDOID &&
 				 proc->prorettype != VOIDOID)
 			ereport(ERROR,
@@ -1924,7 +1924,7 @@ plperl_validator(PG_FUNCTION_ARGS)
 	/* Postpone body checks if !check_function_bodies */
 	if (check_function_bodies)
 	{
-		(void) compile_plperl_function(funcoid, is_dml_trigger, is_evt_trigger);
+		(void) compile_plperl_function(funcoid, is_trigger, is_event_trigger);
 	}
 
 	/* the result of a validator is ignored */
@@ -2563,7 +2563,7 @@ free_plperl_function(plperl_proc_desc *prodesc)
 
 
 static plperl_proc_desc *
-compile_plperl_function(Oid fn_oid, bool is_dml_trigger, bool is_evt_trigger)
+compile_plperl_function(Oid fn_oid, bool is_trigger, bool is_event_trigger)
 {
 	HeapTuple	procTup;
 	Form_pg_proc procStruct;
@@ -2588,7 +2588,7 @@ compile_plperl_function(Oid fn_oid, bool is_dml_trigger, bool is_evt_trigger)
 
 	/* Try to find function in plperl_proc_hash */
 	proc_key.proc_id = fn_oid;
-	proc_key.is_trigger = is_dml_trigger;
+	proc_key.is_trigger = is_trigger;
 	proc_key.user_id = GetUserId();
 
 	proc_ptr = hash_search(plperl_proc_hash, &proc_key,
@@ -2669,7 +2669,7 @@ compile_plperl_function(Oid fn_oid, bool is_dml_trigger, bool is_evt_trigger)
 		 * Get the required information for input conversion of the
 		 * return value.
 		 ************************************************************/
-		if (!is_dml_trigger && !is_evt_trigger)
+		if (!is_trigger && !is_event_trigger)
 		{
 			typeTup =
 				SearchSysCache1(TYPEOID,
@@ -2725,7 +2725,7 @@ compile_plperl_function(Oid fn_oid, bool is_dml_trigger, bool is_evt_trigger)
 		 * Get the required information for output conversion
 		 * of all procedure arguments
 		 ************************************************************/
-		if (!is_dml_trigger && !is_evt_trigger)
+		if (!is_trigger && !is_event_trigger)
 		{
 			prodesc->nargs = procStruct->pronargs;
 			for (i = 0; i < prodesc->nargs; i++)

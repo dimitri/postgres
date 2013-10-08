@@ -206,7 +206,7 @@ static void pltcl_event_trigger_handler(PG_FUNCTION_ARGS, bool pltrusted);
 static void throw_tcl_error(Tcl_Interp *interp, const char *proname);
 
 static pltcl_proc_desc *compile_pltcl_function(Oid fn_oid, Oid tgreloid,
-											   bool is_evt_trigger,
+											   bool is_event_trigger,
 											   bool pltrusted);
 
 static int pltcl_elog(ClientData cdata, Tcl_Interp *interp,
@@ -852,7 +852,7 @@ pltcl_trigger_handler(PG_FUNCTION_ARGS, bool pltrusted)
 	/* Find or compile the function */
 	prodesc = compile_pltcl_function(fcinfo->flinfo->fn_oid,
 									 RelationGetRelid(trigdata->tg_relation),
-									 false, /* not a command trigger */
+									 false, /* not a event trigger */
 									 pltrusted);
 
 	pltcl_current_prodesc = prodesc;
@@ -1140,7 +1140,7 @@ pltcl_trigger_handler(PG_FUNCTION_ARGS, bool pltrusted)
 }
 
 /**********************************************************************
- * pltcl_event_trigger_handler()	- Handler for command trigger calls
+ * pltcl_event_trigger_handler()	- Handler for event trigger calls
  **********************************************************************/
 static void
 pltcl_event_trigger_handler(PG_FUNCTION_ARGS, bool pltrusted)
@@ -1163,35 +1163,16 @@ pltcl_event_trigger_handler(PG_FUNCTION_ARGS, bool pltrusted)
 
 	interp = prodesc->interp_desc->interp;
 
-	/************************************************************
-	 * Create the tcl command to call the internal
-	 * proc in the interpreter
-	 ************************************************************/
+	/* Create the tcl command and call the internal proc */
 	Tcl_DStringInit(&tcl_cmd);
 	Tcl_DStringAppendElement(&tcl_cmd, prodesc->internal_proname);
-	PG_TRY();
-	{
-		Tcl_DStringAppendElement(&tcl_cmd, tdata->event);
-		Tcl_DStringAppendElement(&tcl_cmd, tdata->tag);
-	}
-	PG_CATCH();
-	{
-		Tcl_DStringFree(&tcl_cmd);
-		PG_RE_THROW();
-	}
-	PG_END_TRY();
+	Tcl_DStringAppendElement(&tcl_cmd, tdata->event);
+	Tcl_DStringAppendElement(&tcl_cmd, tdata->tag);
 
-	/************************************************************
-	 * Call the Tcl function
-	 *
-	 * We assume no PG error can be thrown directly from this call.
-	 ************************************************************/
 	tcl_rc = Tcl_GlobalEval(interp, Tcl_DStringValue(&tcl_cmd));
 	Tcl_DStringFree(&tcl_cmd);
 
-	/************************************************************
-	 * Check for errors reported by Tcl.
-	 ************************************************************/
+	/* Check for errors reported by Tcl. */
 	if (tcl_rc != TCL_OK)
 		throw_tcl_error(interp, prodesc->user_proname);
 
@@ -1240,7 +1221,7 @@ throw_tcl_error(Tcl_Interp *interp, const char *proname)
  **********************************************************************/
 static pltcl_proc_desc *
 compile_pltcl_function(Oid fn_oid, Oid tgreloid,
-					   bool is_evt_trigger, bool pltrusted)
+					   bool is_event_trigger, bool pltrusted)
 {
 	HeapTuple	procTup;
 	Form_pg_proc procStruct;
@@ -1297,7 +1278,7 @@ compile_pltcl_function(Oid fn_oid, Oid tgreloid,
 	 ************************************************************/
 	if (prodesc == NULL)
 	{
-		bool		is_dml_trigger = OidIsValid(tgreloid);
+		bool		is_trigger = OidIsValid(tgreloid);
 		char		internal_proname[128];
 		HeapTuple	typeTup;
 		Form_pg_type typeStruct;
@@ -1317,13 +1298,13 @@ compile_pltcl_function(Oid fn_oid, Oid tgreloid,
 		 * "_trigger" when appropriate to ensure the normal and trigger
 		 * cases are kept separate.
 		 ************************************************************/
-		if (!is_dml_trigger && !is_evt_trigger)
+		if (!is_trigger && !is_event_trigger)
 			snprintf(internal_proname, sizeof(internal_proname),
 					 "__PLTcl_proc_%u", fn_oid);
-		else if (is_evt_trigger)
+		else if (is_event_trigger)
 			snprintf(internal_proname, sizeof(internal_proname),
 					 "__PLTcl_proc_%u_evttrigger", fn_oid);
-		else if (is_dml_trigger)
+		else if (is_trigger)
 			snprintf(internal_proname, sizeof(internal_proname),
 					 "__PLTcl_proc_%u_trigger", fn_oid);
 
@@ -1361,7 +1342,7 @@ compile_pltcl_function(Oid fn_oid, Oid tgreloid,
 		 * Get the required information for input conversion of the
 		 * return value.
 		 ************************************************************/
-		if (!is_dml_trigger && !is_evt_trigger)
+		if (!is_trigger && !is_event_trigger)
 		{
 			typeTup =
 				SearchSysCache1(TYPEOID,
@@ -1423,7 +1404,7 @@ compile_pltcl_function(Oid fn_oid, Oid tgreloid,
 		 * Get the required information for output conversion
 		 * of all procedure arguments
 		 ************************************************************/
-		if (!is_dml_trigger && !is_evt_trigger)
+		if (!is_trigger && !is_event_trigger)
 		{
 			prodesc->nargs = procStruct->pronargs;
 			proc_internal_args[0] = '\0';
@@ -1473,13 +1454,13 @@ compile_pltcl_function(Oid fn_oid, Oid tgreloid,
 				ReleaseSysCache(typeTup);
 			}
 		}
-		else if (is_dml_trigger)
+		else if (is_trigger)
 		{
 			/* trigger procedure has fixed args */
 			strcpy(proc_internal_args,
 				   "TG_name TG_relid TG_table_name TG_table_schema TG_relatts TG_when TG_level TG_op __PLTcl_Tup_NEW __PLTcl_Tup_OLD args");
 		}
-		else if (is_evt_trigger)
+		else if (is_event_trigger)
 		{
 			/* event trigger procedure has fixed args */
 			strcpy(proc_internal_args, "TG_event TG_tag");
@@ -1503,7 +1484,7 @@ compile_pltcl_function(Oid fn_oid, Oid tgreloid,
 		Tcl_DStringAppend(&proc_internal_body, "upvar #0 ", -1);
 		Tcl_DStringAppend(&proc_internal_body, internal_proname, -1);
 		Tcl_DStringAppend(&proc_internal_body, " GD\n", -1);
-		if (is_dml_trigger)
+		if (is_trigger)
 		{
 			Tcl_DStringAppend(&proc_internal_body,
 							  "array set NEW $__PLTcl_Tup_NEW\n", -1);
@@ -1519,7 +1500,7 @@ compile_pltcl_function(Oid fn_oid, Oid tgreloid,
 							  "}\n"
 							  "unset i v\n\n", -1);
 		}
-		else if (is_evt_trigger)
+		else if (is_event_trigger)
 		{
 			/* no argument support for event triggers */
 		}
