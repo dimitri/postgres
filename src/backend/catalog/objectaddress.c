@@ -2716,6 +2716,18 @@ getObjectTypeDescription(const ObjectAddress *object)
 			appendStringInfoString(&buffer, "extension");
 			break;
 
+		case OCLASS_EXTENSION_CONTROL:
+			appendStringInfoString(&buffer, "extension control");
+			break;
+
+		case OCLASS_EXTENSION_TEMPLATE:
+			appendStringInfoString(&buffer, "extension template");
+			break;
+
+		case OCLASS_EXTENSION_UPTMPL:
+			appendStringInfoString(&buffer, "extension template for update");
+			break;
+
 		case OCLASS_EVENT_TRIGGER:
 			appendStringInfoString(&buffer, "event trigger");
 			break;
@@ -3440,6 +3452,45 @@ getObjectIdentity(const ObjectAddress *object)
 					elog(ERROR, "cache lookup failed for extension %u",
 						 object->objectId);
 				appendStringInfoString(&buffer, quote_identifier(extname));
+				break;
+			}
+
+		case OCLASS_EXTENSION_CONTROL:
+			{
+				char	   *extname;
+
+				extname = get_extension_control_name(object->objectId);
+				if (!extname)
+					elog(ERROR, "cache lookup failed for extension control %u",
+						 object->objectId);
+				appendStringInfo(&buffer, "for extension %s",
+								 quote_identifier(extname));
+				break;
+			}
+
+		case OCLASS_EXTENSION_TEMPLATE:
+			{
+				char	   *extname;
+
+				extname = get_extension_template_name(object->objectId);
+				if (!extname)
+					elog(ERROR, "cache lookup failed for extension template %u",
+						 object->objectId);
+				appendStringInfo(&buffer, "for extension %s",
+								 quote_identifier(extname));
+				break;
+			}
+
+		case OCLASS_EXTENSION_UPTMPL:
+			{
+				char	   *extname;
+
+				extname = get_extension_uptmpl_name(object->objectId);
+				if (!extname)
+					elog(ERROR, "cache lookup failed for extension template for update %u",
+						 object->objectId);
+				appendStringInfo(&buffer, "for extension %s",
+								 quote_identifier(extname));
 				break;
 			}
 
