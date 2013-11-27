@@ -154,6 +154,21 @@
      </row>
 
      <row>
+      <entry><link linkend="catalog-pg-extension-control"><structname>pg_extension_control</structname></link></entry>
+      <entry>control information for extension templates</entry>
+     </row>
+
+     <row>
+      <entry><link linkend="catalog-pg-extension-template"><structname>pg_extension_template</structname></link></entry>
+      <entry>extension templates</entry>
+     </row>
+
+     <row>
+      <entry><link linkend="catalog-pg-extension-uptmpl"><structname>pg_extension_uptmpl</structname></link></entry>
+      <entry>update scripts for extensions</entry>
+     </row>
+
+     <row>
       <entry><link linkend="catalog-pg-foreign-data-wrapper"><structname>pg_foreign_data_wrapper</structname></link></entry>
       <entry>foreign-data wrapper definitions</entry>
      </row>
@@ -3290,6 +3305,259 @@
   </para>
  </sect1>
 
+ <sect1 id="catalog-pg-extension-control">
+  <title><structname>pg_extension_control</structname></title>
+
+  <indexterm zone="catalog-pg-extension-control">
+   <primary>pg_extension_control</primary>
+  </indexterm>
+
+  <para>
+   The catalog <structname>pg_extension_control</structname> stores
+   information about extensions made available by templates.
+   See <xref linkend="extend-extensions"> for details about extensions and
+   extension templates.
+  </para>
+
+  <table>
+   <title><structname>pg_extension_control</> Columns</title>
+
+   <tgroup cols="4">
+    <thead>
+     <row>
+      <entry>Name</entry>
+      <entry>Type</entry>
+      <entry>References</entry>
+      <entry>Description</entry>
+     </row>
+    </thead>
+
+    <tbody>
+     <row>
+      <entry><structfield>oid</structfield></entry>
+      <entry><type>oid</type></entry>
+      <entry></entry>
+      <entry>Row identifier (hidden attribute; must be explicitly selected)</entry>
+     </row>
+
+     <row>
+      <entry><structfield>ctlname</structfield></entry>
+      <entry><type>name</type></entry>
+      <entry></entry>
+      <entry>Name of the extension made available</entry>
+     </row>
+
+     <row>
+      <entry><structfield>ctlowner</structfield></entry>
+      <entry><type>oid</type></entry>
+      <entry><literal><link linkend="catalog-pg-authid"><structname>pg_authid</structname></link>.oid</literal></entry>
+      <entry>Owner of the template control entry</entry>
+     </row>
+
+     <row>
+      <entry><structfield>ctldefault</structfield></entry>
+      <entry><type>boolean</type></entry>
+      <entry></entry>
+      <entry>True if the control entry refers to the default version of the extension made available.</entry>
+     </row>
+
+     <row>
+      <entry><structfield>ctldefaultfull</structfield></entry>
+      <entry><type>boolean</type></entry>
+      <entry></entry>
+      <entry>True if the control entry refers to the default full version of the extension made available.</entry>
+     </row>
+
+     <row>
+      <entry><structfield>ctlrelocatable</structfield></entry>
+      <entry><type>bool</type></entry>
+      <entry></entry>
+      <entry>True if extension made available can be relocated to another
+      schema</entry>
+     </row>
+
+     <row>
+      <entry><structfield>ctlsuperuser</structfield></entry>
+      <entry><type>bool</type></entry>
+      <entry></entry>
+      <entry>True if template must be used as a superuser when creating the
+      extension</entry>
+     </row>
+
+     <row>
+      <entry><structfield>ctlnamespace</structfield></entry>
+      <entry><type>name</type></entry>
+      <entry></entry>
+      <entry>Name of the schema to be created in the process of creating the
+      extension, if it does not already exists</entry>
+     </row>
+
+     <row>
+      <entry><structfield>ctlversion</structfield></entry>
+      <entry><type>text</type></entry>
+      <entry></entry>
+      <entry>Version name for the extension</entry>
+     </row>
+
+     <row>
+      <entry><structfield>ctlrequires</structfield></entry>
+      <entry><type>text</type></entry>
+      <entry></entry>
+      <entry>Comma separated list of extension names that are required to be installed to allow for installing the extension made available by this template</entry>
+     </row>
+    </tbody>
+   </tgroup>
+  </table>
+
+  <para>
+   Note that unlike most catalogs with a <quote>namespace</> column,
+   <structfield>ctlnamespace</structfield> is not meant to imply that the
+   extension template control entry belongs to that schema. Extension names
+   are never schema-qualified. Rather, <structfield>ctlnamespace</structfield>
+   indicates the schema that contains most or all of the extension's objects,
+   when created from the template.
+  </para>
+ </sect1>
+
+ <sect1 id="catalog-pg-extension-template">
+  <title><structname>pg_extension_template</structname></title>
+
+  <indexterm zone="catalog-pg-extension-template">
+   <primary>pg_extension_template</primary>
+  </indexterm>
+
+  <para>
+   The catalog <structname>pg_extension_template</structname> stores
+   information about extensions made available by templates.
+   See <xref linkend="extend-extensions"> for details about extensions and
+   extension templates.
+  </para>
+
+  <table>
+   <title><structname>pg_extension_template</> Columns</title>
+
+   <tgroup cols="4">
+    <thead>
+     <row>
+      <entry>Name</entry>
+      <entry>Type</entry>
+      <entry>References</entry>
+      <entry>Description</entry>
+     </row>
+    </thead>
+
+    <tbody>
+     <row>
+      <entry><structfield>oid</structfield></entry>
+      <entry><type>oid</type></entry>
+      <entry></entry>
+      <entry>Row identifier (hidden attribute; must be explicitly selected)</entry>
+     </row>
+
+     <row>
+      <entry><structfield>tplname</structfield></entry>
+      <entry><type>name</type></entry>
+      <entry></entry>
+      <entry>Name of the extension made available</entry>
+     </row>
+
+     <row>
+      <entry><structfield>tplowner</structfield></entry>
+      <entry><type>oid</type></entry>
+      <entry><literal><link linkend="catalog-pg-authid"><structname>pg_authid</structname></link>.oid</literal></entry>
+      <entry>Owner of the extension template entry</entry>
+     </row>
+
+     <row>
+      <entry><structfield>tplversion</structfield></entry>
+      <entry><type>text</type></entry>
+      <entry></entry>
+      <entry>Version name for the extension this template installs</entry>
+     </row>
+
+     <row>
+      <entry><structfield>tplscript</structfield></entry>
+      <entry><type>text</type></entry>
+      <entry></entry>
+      <entry>SQL Script used to create the extension provided by this template</entry>
+     </row>
+    </tbody>
+   </tgroup>
+  </table>
+ </sect1>
+
+ <sect1 id="catalog-pg-extension-uptmpl">
+  <title><structname>pg_extension_uptmpl</structname></title>
+  <indexterm zone="catalog-pg-extension-template">
+   <primary>pg_extension_uptmpl</primary>
+  </indexterm>
+
+  <para>
+   The catalog <structname>pg_extension_uptmpl</structname> stores
+   information about extensions made available by templates.
+   See <xref linkend="extend-extensions"> for details about extensions and
+   extension templates.
+  </para>
+
+  <table>
+   <title><structname>pg_extension_uptmpl</> Columns</title>
+
+   <tgroup cols="4">
+    <thead>
+     <row>
+      <entry>Name</entry>
+      <entry>Type</entry>
+      <entry>References</entry>
+      <entry>Description</entry>
+     </row>
+    </thead>
+
+    <tbody>
+     <row>
+      <entry><structfield>oid</structfield></entry>
+      <entry><type>oid</type></entry>
+      <entry></entry>
+      <entry>Row identifier (hidden attribute; must be explicitly selected)</entry>
+     </row>
+
+     <row>
+      <entry><structfield>uptname</structfield></entry>
+      <entry><type>name</type></entry>
+      <entry></entry>
+      <entry>Name of the extension made available</entry>
+     </row>
+
+     <row>
+      <entry><structfield>uptowner</structfield></entry>
+      <entry><type>oid</type></entry>
+      <entry><literal><link linkend="catalog-pg-authid"><structname>pg_authid</structname></link>.oid</literal></entry>
+      <entry>Owner of the extension template entry</entry>
+     </row>
+
+     <row>
+      <entry><structfield>uptfrom</structfield></entry>
+      <entry><type>text</type></entry>
+      <entry></entry>
+      <entry>Version name for the extension this template allows updating from</entry>
+     </row>
+
+     <row>
+      <entry><structfield>uptto</structfield></entry>
+      <entry><type>text</type></entry>
+      <entry></entry>
+      <entry>Version name for the extension this template allows updating to</entry>
+     </row>
+
+     <row>
+      <entry><structfield>uptscript</structfield></entry>
+      <entry><type>text</type></entry>
+      <entry></entry>
+      <entry>SQL Script used to update the extension provided by this template</entry>
+     </row>
+    </tbody>
+   </tgroup>
+  </table>
+ </sect1>
 
  <sect1 id="catalog-pg-foreign-data-wrapper">
   <title><structname>pg_foreign_data_wrapper</structname></title>

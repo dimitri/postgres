@@ -30,8 +30,8 @@ PostgreSQL documentation
   <title>Description</title>
 
   <para>
-   <command>DROP TEMPLATE FOR EXTENSION</command> drops a template for an
-   extension.
+   <command>DROP TEMPLATE FOR EXTENSION</command> drops an existing template
+   for the named extension.
   </para>
  </refsect1>
 
@@ -52,7 +52,7 @@ PostgreSQL documentation
     <term><literal>CASCADE</literal></term>
     <listitem>
      <para>
-      Automatically drop objects that depend on the template.
+      Automatically drop objects that depend on the extension template.
      </para>
     </listitem>
    </varlistentry>
@@ -61,8 +61,8 @@ PostgreSQL documentation
     <term><literal>RESTRICT</literal></term>
     <listitem>
      <para>
-      Refuse to drop the template if any objects depend on it. This is the
-      default.
+      Refuse to drop the extension template if any objects depend on it.
+      This is the default.
      </para>
     </listitem>
    </varlistentry>

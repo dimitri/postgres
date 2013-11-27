@@ -384,15 +384,15 @@
 
     <para>
      The <xref linkend="sql-create-template-for-extension"> command allows a
-     superuser to create an <firstterm>Extension's Template</>, that users
+     superuser to create an <firstterm>Extension Template</>, that users
      will then be able to use as the source for their script and control
      parameters. Upgrade scripts can be provided with the same command, and
-     those upgrade scripts can include parameters update too, as would a
+     those upgrade scripts can include parameter updates too, as would a
      secondary control file.
     </para>
 
     <para>
-     Here's a very simple example at using a template for an extension:
+     Here's a very simple example of using a template for an extension:
 <programlisting>
 create template for extension myextension version '1.0' with (nosuperuser) as
 $script$
@@ -476,12 +476,29 @@ create extension myextension;
       <listitem>
        <para>
         This option allows an extension author to avoid shiping all versions
-        scripts when shipping an extension. When a version is requested and
-        the matching script does not exist on disk,
+        of all scripts when shipping an extension. When a version is requested
+        and the matching script does not exist on disk,
         set <replaceable>default_full_version</replaceable> to the first
         script you still ship and PostgreSQL will apply the intermediate
         upgrade script as per the <command>ALTER EXTENSION UPDATE</command>
         command.
+       </para>
+       <para>
+        For example, say you did provide the extension <literal>pair</literal>
+        version <literal>1.0</literal> and are now providing the
+        version <literal>1.1</literal>. If you want both current and new users
+        to be able to install the new version, you can provide both the
+        scripts <literal>pair--1.0--1.1.sql</literal>
+        and <literal>pair--1.1.sql</literal>, adding to the already
+        existing <literal>pair--1.0.sql</literal>.
+       </para>
+       <para>
+        When specifying <literal>default_version</literal>
+        and <literal>default_full_version = 1.0</literal> you can instead only
+        provide only the scripts <literal>pair--1.0.sql</literal>
+        and <literal>pair-1.0--1.1.sql</literal>. The <command>CREATE
+        EXTENSION pair;</command> will then automatically use the afore
+        mentionned scripts to install version 1.0 then update it to 1.1.
        </para>
       </listitem>
      </varlistentry>

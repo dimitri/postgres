@@ -12,7 +12,7 @@ PostgreSQL documentation
 
  <refnamediv>
   <refname>CREATE TEMPLATE FOR EXTENSION</refname>
-  <refpurpose>define a new template for extension</refpurpose>
+  <refpurpose>define a new template for an extension</refpurpose>
  </refnamediv>
 
  <indexterm zone="sql-create-template-for-extension">
@@ -57,7 +57,7 @@ AS <replaceable class="parameter">script</replaceable>
 
   <para>
    Using the <command>CREATE TEMPLATE FOR EXTENSION</command> command you
-   can upload script to be run at <command>CREATE EXTENSION</command> time
+   can upload a script to be run at <command>CREATE EXTENSION</command> time
    and at <command>ALTER EXTENSION ... UPDATE</command> time.
   </para>
 
@@ -76,20 +76,20 @@ AS <replaceable class="parameter">script</replaceable>
 
   <variablelist>
      <varlistentry>
-      <term><varname>COMMENT</varname> (<type>string</type>)</term>
+      <term><varname>schema</varname> (<type>string</type>)</term>
       <listitem>
        <para>
-        See the <literal>comment</> control file parameter
+        See the <literal>schema</> control file parameter
         in <xref linkend="extend-extensions">.
        </para>
       </listitem>
      </varlistentry>
 
      <varlistentry>
-      <term><varname>REQUIRES</varname> (<type>string</type>)</term>
+      <term><varname>COMMENT</varname> (<type>string</type>)</term>
       <listitem>
        <para>
-        See the <literal>requires</> control file parameter
+        See the <literal>comment</> control file parameter
         in <xref linkend="extend-extensions">.
        </para>
       </listitem>
@@ -140,10 +140,10 @@ AS <replaceable class="parameter">script</replaceable>
      </varlistentry>
 
      <varlistentry>
-      <term><varname>schema</varname> (<type>string</type>)</term>
+      <term><varname>REQUIRES</varname> (<type>string</type>)</term>
       <listitem>
        <para>
-        See the <literal>schema</> control file parameter
+        See the <literal>requires</> control file parameter
         in <xref linkend="extend-extensions">.
        </para>
       </listitem>

@@ -468,7 +468,7 @@ static ObjectAddress get_object_address_type(ObjectType objtype,
 						List *objname, bool missing_ok);
 static ObjectAddress get_object_address_opcf(ObjectType objtype, List *objname,
 						List *objargs, bool missing_ok);
-static ObjectAddress get_object_address_tmpl(ObjectType objtype,
+static ObjectAddress get_object_address_exttmpl(ObjectType objtype,
 						List *objname, List *objargs, bool missing_ok);
 static ObjectPropertyType *get_object_property_data(Oid class_id);
 
@@ -562,8 +562,8 @@ get_object_address(ObjectType objtype, List *objname, List *objargs,
 				break;
 			case OBJECT_EXTENSION_TEMPLATE:
 			case OBJECT_EXTENSION_UPTMPL:
-				address = get_object_address_tmpl(objtype,
-												  objname, objargs, missing_ok);
+				address = get_object_address_exttmpl(objtype, objname,
+													 objargs, missing_ok);
 				break;
 			case OBJECT_TYPE:
 			case OBJECT_DOMAIN:
@@ -1159,12 +1159,11 @@ get_object_address_opcf(ObjectType objtype,
 }
 
 /*
- * Find the ObjectAddress for an extension template, control or update
- * template.
+ * Find the ObjectAddress for an extension template or update template.
  */
 static ObjectAddress
-get_object_address_tmpl(ObjectType objtype,
-						List *objname, List *objargs, bool missing_ok)
+get_object_address_exttmpl(ObjectType objtype,
+						   List *objname, List *objargs, bool missing_ok)
 {
 	const char *name;
 	ObjectAddress address;
