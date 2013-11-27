@@ -30,8 +30,8 @@ PostgreSQL documentation
   <title>Description</title>
 
   <para>
-   <command>DROP TEMPLATE FOR EXTENSION</command> drops an existing template
-   for named extension
+   <command>DROP TEMPLATE FOR EXTENSION</command> drops a template for an
+   extension.
   </para>
  </refsect1>
 
@@ -43,7 +43,7 @@ PostgreSQL documentation
     <term><replaceable class="parameter">name</replaceable></term>
     <listitem>
      <para>
-      The name of an existing text search template.
+      The name of the extension made available by the template.
      </para>
     </listitem>
    </varlistentry>

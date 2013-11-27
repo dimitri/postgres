@@ -113,7 +113,12 @@ ALTER TEMPLATE FOR EXTENSION <replaceable class="parameter">name</replaceable> R
     <term><replaceable class="parameter">new_name</replaceable></term>
     <listitem>
      <para>
-      The new name of the aggregate function.
+      The new name of the template and the extension that is made available by
+      it.
+     </para>
+     <para>
+      This operation is not allowed when the extension made available by the
+      template is already installed.
      </para>
     </listitem>
    </varlistentry>
@@ -122,7 +127,7 @@ ALTER TEMPLATE FOR EXTENSION <replaceable class="parameter">name</replaceable> R
     <term><replaceable class="parameter">new_owner</replaceable></term>
     <listitem>
      <para>
-      The new owner of the aggregate function.
+      The new owner of the extension template.
      </para>
     </listitem>
    </varlistentry>

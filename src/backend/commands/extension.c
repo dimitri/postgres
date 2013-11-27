@@ -648,7 +648,7 @@ read_extension_aux_control_file(const ExtensionControl *pcontrol,
  *
  * When reading from the catalogs, we have in pg_extension_control at most a
  * row per version, with the whole set of properties we need to apply. So once
- * we found the current default version to install, we don't need to read and
+ * we found the current default version to install, we don't need to read an
  * another set of properties and override them.
  *
  * In both cases we return the structure ExtensionControl.
