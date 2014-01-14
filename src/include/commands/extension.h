@@ -26,6 +26,8 @@
 extern bool creating_extension;
 extern Oid	CurrentExtensionObject;
 
+/* GUC extension_control_path */
+extern char *Extension_control_path;
 
 extern Oid	CreateExtension(CreateExtensionStmt *stmt);
 

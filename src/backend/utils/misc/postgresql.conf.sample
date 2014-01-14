@@ -547,6 +547,7 @@
 # - Other Defaults -
 
 #dynamic_library_path = '$libdir'
+#extension_control_path = '$extdir'
 #local_preload_libraries = ''
 #session_preload_libraries = ''
 

@@ -146,6 +146,18 @@ show_includedir_server(bool all)
 }
 
 static void
+show_extdir(bool all)
+{
+	char		path[MAXPGPATH];
+
+	if (all)
+		printf("EXTDIR = ");
+	get_share_path(mypath, path);
+	cleanup_path(path);
+	printf("%s/extension\n", path);
+}
+
+static void
 show_libdir(bool all)
 {
 	char		path[MAXPGPATH];
@@ -402,6 +414,7 @@ static const InfoItem info_items[] = {
 	{"--pkgincludedir", show_pkgincludedir},
 	{"--includedir-server", show_includedir_server},
 	{"--libdir", show_libdir},
+	{"--extdir", show_extdir},
 	{"--pkglibdir", show_pkglibdir},
 	{"--localedir", show_localedir},
 	{"--mandir", show_mandir},
@@ -436,6 +449,7 @@ help(void)
 			 "                        interfaces\n"));
 	printf(_("  --pkgincludedir       show location of other C header files\n"));
 	printf(_("  --includedir-server   show location of C header files for the server\n"));
+	printf(_("  --extdir              show location of extension control files\n"));
 	printf(_("  --libdir              show location of object code libraries\n"));
 	printf(_("  --pkglibdir           show location of dynamically loadable modules\n"));
 	printf(_("  --localedir           show location of locale support files\n"));

@@ -5955,6 +5955,55 @@ SET XML OPTION { DOCUMENT | CONTENT };
 
      <variablelist>
 
+     <varlistentry id="guc-extension-control-path" xreflabel="extension_control_path">
+      <term><varname>extension_control_path</varname> (<type>string</type>)</term>
+      <indexterm>
+       <primary><varname>extension_control_path</> configuration parameter</primary>
+      </indexterm>
+      <indexterm><primary>extension packaging</></>
+      <listitem>
+       <para>
+        The command <command>CREATE EXTENSION</> searches for the extension
+        control file in order to install it. The value
+        for <varname>extension_control_path</varname> is used to search for
+        the <literal>name.control</literal> files.
+       </para>
+
+       <para>
+        The value for <varname>extension_control_path</varname> must be a list
+        of absolute directory paths separated by colons (or semi-colons on
+        Windows). If a list element starts with the special
+        string <literal>$extdir</literal>, the
+        compiled-in <productname>PostgreSQL</productname> package extension
+        directory is substituted for <literal>$extdir</literal>; this is where
+        the extensions provided by the standard
+        <productname>PostgreSQL</productname> distribution are installed.
+        (Use <literal>pg_config --extdir</literal> to find out the name of
+        this directory.) For example:
+<programlisting>
+extension_control_path = '/usr/local/postgresql/extension:/home/my_project:$extdir'
+</programlisting>
+        or, in a Windows environment:
+<programlisting>
+extension_control_path = 'C:\tools\postgresql;H:\my_project\lib;$extdir'
+</programlisting>
+       </para>
+
+       <para>
+        The default value for this parameter is <literal>'$extdir'</literal>.
+       </para>
+
+       <para>
+        This parameter can be changed at run time by superusers, but a
+        setting done that way will only persist until the end of the
+        client connection, so this method should be reserved for
+        development purposes. The recommended way to set this parameter
+        is in the <filename>postgresql.conf</filename> configuration
+        file.
+       </para>
+      </listitem>
+     </varlistentry>
+
      <varlistentry id="guc-dynamic-library-path" xreflabel="dynamic_library_path">
       <term><varname>dynamic_library_path</varname> (<type>string</type>)</term>
       <indexterm>
