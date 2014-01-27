@@ -431,7 +431,7 @@ find_in_extension_control_path(const char *basename)
 		if (piece == p)
 			ereport(ERROR,
 					(errcode(ERRCODE_INVALID_NAME),
-					 errmsg("zero-length component in parameter \"extension_control__path\"")));
+					 errmsg("zero-length component in parameter \"extension_control_path\"")));
 
 		if (piece == NULL)
 			len = strlen(p);
@@ -499,7 +499,7 @@ list_extension_control_paths()
 		if (piece == p)
 			ereport(ERROR,
 					(errcode(ERRCODE_INVALID_NAME),
-					 errmsg("zero-length component in parameter \"extension_control__path\"")));
+					 errmsg("zero-length component in parameter \"extension_control_path\"")));
 
 		if (piece == NULL)
 			len = strlen(p);
