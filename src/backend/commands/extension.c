@@ -531,6 +531,11 @@ list_extension_control_paths()
 	return paths;
 }
 
+/*
+ * When this function is called, the control file has already been opened and
+ * its true name is registered in control->filename. We don't need to find the
+ * control file in extension_control_path anymore.
+ */
 static char *
 get_extension_control_directory(ExtensionControlFile *control)
 {
@@ -541,12 +546,30 @@ get_extension_control_directory(ExtensionControlFile *control)
 	return filename;
 }
 
+/*
+ * We need to either open directory/extname.control or go find the control
+ * file for extname in extension_control_path, depending on being given a
+ * directory where to look into.
+ */
 static char *
-get_extension_control_filename(const char *extname)
+get_extension_control_filename(const char *extname, const char *directory)
 {
-	return find_in_extension_control_path(extname);
+	char	   *result;
+
+	if (directory == NULL)
+		return find_in_extension_control_path(extname);
+
+	result = (char *) palloc(MAXPGPATH);
+	snprintf(result, MAXPGPATH, "%s/%s.control", directory, extname);
+
+	return result;
 }
 
+/*
+ * When this function is called, the control file has already been opened and
+ * its true name is registered in control->filename. We don't need to find the
+ * control file in extension_control_path anymore.
+ */
 static char *
 get_extension_script_directory(ExtensionControlFile *control)
 {
@@ -571,6 +594,11 @@ get_extension_script_directory(ExtensionControlFile *control)
 	return result;
 }
 
+/*
+ * When this function is called, the control file has already been opened and
+ * its true name is registered in control->filename. We don't need to find the
+ * control file in extension_control_path anymore.
+ */
 static char *
 get_extension_aux_control_filename(ExtensionControlFile *control,
 								   const char *version)
@@ -589,6 +617,11 @@ get_extension_aux_control_filename(ExtensionControlFile *control,
 	return result;
 }
 
+/*
+ * When this function is called, the control file has already been opened and
+ * its true name is registered in control->filename. We don't need to find the
+ * control file in extension_control_path anymore.
+ */
 static char *
 get_extension_script_filename(ExtensionControlFile *control,
 							  const char *from_version, const char *version)
@@ -623,7 +656,8 @@ get_extension_script_filename(ExtensionControlFile *control,
  */
 static void
 parse_extension_control_file(ExtensionControlFile *control,
-							 const char *version)
+							 const char *version,
+							 const char *directory)
 {
 	char	   *filename;
 	FILE	   *file;
@@ -637,7 +671,7 @@ parse_extension_control_file(ExtensionControlFile *control,
 	if (version)
 		filename = get_extension_aux_control_filename(control, version);
 	else
-		filename = get_extension_control_filename(control->name);
+		filename = get_extension_control_filename(control->name, directory);
 
 	if ((file = AllocateFile(filename, "r")) == NULL)
 	{
@@ -759,9 +793,12 @@ parse_extension_control_file(ExtensionControlFile *control,
 
 /*
  * Read the primary control file for the specified extension.
+ *
+ * When directory is not NULL, then instead of trying to find the extension
+ * control file in extension_control_path, we just open the file in directory.
  */
 static ExtensionControlFile *
-read_extension_control_file(const char *extname)
+read_extension_control_file(const char *extname, const char *directory)
 {
 	ExtensionControlFile *control;
 
@@ -777,7 +814,44 @@ read_extension_control_file(const char *extname)
 	/*
 	 * Parse the primary control file.
 	 */
-	parse_extension_control_file(control, NULL);
+	parse_extension_control_file(control, NULL, directory);
+
+	return control;
+}
+
+/*
+ * Find the control file where default_version is the same as given version.
+ * To be able to check that we've found the right control file, we need to
+ * parse it.
+ */
+static ExtensionControlFile *
+find_extension_control_file_for_version(const char *extname, const char *version)
+{
+	ExtensionControlFile *control = NULL;
+	List *extension_control_paths = list_extension_control_paths();
+	ListCell *lc;
+
+	foreach(lc, extension_control_paths)
+	{
+		char *location = (char *) lfirst(lc);
+		char *path = get_extension_control_filename(extname, location);
+
+		if (access(path, R_OK) == 0)
+		{
+			control = read_extension_control_file(extname, location);
+
+			if (strcmp(control->default_version, version) == 0)
+				break;
+			else
+				control = NULL;
+		}
+	}
+	if (control == NULL)
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+				 errmsg("invalid extension version: \"%s\"", version),
+				 errdetail("Extension '%s' has no control file for version '%s'.",
+						   extname, version)));
 
 	return control;
 }
@@ -803,7 +877,7 @@ read_extension_aux_control_file(const ExtensionControlFile *pcontrol,
 	/*
 	 * Parse the auxiliary control file, overwriting struct fields
 	 */
-	parse_extension_control_file(acontrol, version);
+	parse_extension_control_file(acontrol, version, NULL);
 
 	return acontrol;
 }
@@ -1410,7 +1484,7 @@ CreateExtension(CreateExtensionStmt *stmt)
 	 * any non-ASCII data, so there is no need to worry about encoding at this
 	 * point.
 	 */
-	pcontrol = read_extension_control_file(stmt->extname);
+	pcontrol = read_extension_control_file(stmt->extname, NULL);
 
 	/*
 	 * Read the statement option list
@@ -1462,6 +1536,14 @@ CreateExtension(CreateExtensionStmt *stmt)
 		versionName = NULL;		/* keep compiler quiet */
 	}
 	check_valid_version_name(versionName);
+
+	/*
+	 * We might need to read another control file given a version number that
+	 * is not the default one.
+	 */
+	if (strcmp(versionName, pcontrol->default_version) != 0)
+		pcontrol =
+			find_extension_control_file_for_version(stmt->extname, versionName);
 
 	/*
 	 * Determine the (unpackaged) version to update from, if any, and then
@@ -1840,7 +1922,7 @@ list_available_extensions(TupleDesc	tupdesc, Tuplestorestate *tupstore,
 			if (strstr(extname, "--"))
 				continue;
 
-			control = read_extension_control_file(extname);
+			control = read_extension_control_file(extname, location);
 
 			memset(values, 0, sizeof(values));
 			memset(nulls, 0, sizeof(nulls));
@@ -2005,7 +2087,7 @@ pg_available_extension_versions(PG_FUNCTION_ARGS)
 					continue;
 
 				/* read the control file */
-				control = read_extension_control_file(extname);
+				control = read_extension_control_file(extname, location);
 
 				/* scan extension's script directory for install scripts */
 				get_available_versions_for_extension(control, tupstore, tupdesc);
@@ -2170,7 +2252,7 @@ pg_extension_update_paths(PG_FUNCTION_ARGS)
 	MemoryContextSwitchTo(oldcontext);
 
 	/* Read the extension's control file */
-	control = read_extension_control_file(NameStr(*extname));
+	control = read_extension_control_file(NameStr(*extname), NULL);
 
 	/* Extract the version update graph from the script directory */
 	evi_list = get_ext_ver_list(control);
@@ -2855,7 +2937,8 @@ ExecAlterExtensionStmt(AlterExtensionStmt *stmt)
 	 * any non-ASCII data, so there is no need to worry about encoding at this
 	 * point.
 	 */
-	control = read_extension_control_file(stmt->extname);
+	control = find_extension_control_file_for_version(stmt->extname,
+													  oldVersionName);
 
 	/*
 	 * Read the statement option list
