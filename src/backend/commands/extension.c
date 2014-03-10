@@ -673,6 +673,13 @@ parse_extension_control_file(ExtensionControlFile *control,
 	else
 		filename = get_extension_control_filename(control->name, directory);
 
+	if (filename == NULL)
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+				 errmsg("extension \"%s\" is not available", control->name),
+				 errdetail("Couldn't find \"%s.control\" anywhere in extension_control_path",
+						   control->name)));
+
 	if ((file = AllocateFile(filename, "r")) == NULL)
 	{
 		if (version && errno == ENOENT)
@@ -836,7 +843,7 @@ find_extension_control_file_for_version(const char *extname, const char *version
 		char *location = (char *) lfirst(lc);
 		char *path = get_extension_control_filename(extname, location);
 
-		if (access(path, R_OK) == 0)
+		if (path && access(path, R_OK) == 0)
 		{
 			control = read_extension_control_file(extname, location);
 
