@@ -119,11 +119,14 @@ static void AlterEventTriggerOwner_internal(Relation rel,
 								HeapTuple tup,
 								Oid newOwnerId);
 static event_trigger_command_tag_check_result check_ddl_tag(const char *tag);
+static event_trigger_command_tag_check_result check_table_rewrite_ddl_tag(
+	const char *tag);
 static void error_duplicate_filter_variable(const char *defname);
 static Datum filter_list_to_array(List *filterlist);
 static Oid insert_event_trigger_tuple(char *trigname, char *eventname,
 						   Oid evtOwner, Oid funcoid, List *tags);
 static void validate_ddl_tags(const char *filtervar, List *taglist);
+static void validate_table_rewrite_tags(const char *filtervar, List *taglist);
 static void EventTriggerInvoke(List *fn_oid_list, EventTriggerData *trigdata);
 
 /*
@@ -154,7 +157,8 @@ CreateEventTrigger(CreateEventTrigStmt *stmt)
 	/* Validate event name. */
 	if (strcmp(stmt->eventname, "ddl_command_start") != 0 &&
 		strcmp(stmt->eventname, "ddl_command_end") != 0 &&
-		strcmp(stmt->eventname, "sql_drop") != 0)
+		strcmp(stmt->eventname, "sql_drop") != 0 &&
+		strcmp(stmt->eventname, "table_rewrite") != 0)
 		ereport(ERROR,
 				(errcode(ERRCODE_SYNTAX_ERROR),
 				 errmsg("unrecognized event name \"%s\"",
@@ -183,6 +187,9 @@ CreateEventTrigger(CreateEventTrigStmt *stmt)
 		 strcmp(stmt->eventname, "sql_drop") == 0)
 		&& tags != NULL)
 		validate_ddl_tags("tag", tags);
+	else if (strcmp(stmt->eventname, "table_rewrite") == 0
+			 && tags != NULL)
+		validate_table_rewrite_tags("tag", tags);
 
 	/*
 	 * Give user a nice error message if an event trigger of the same name
@@ -278,6 +285,40 @@ check_ddl_tag(const char *tag)
 	if (!etsd->supported)
 		return EVENT_TRIGGER_COMMAND_TAG_NOT_SUPPORTED;
 	return EVENT_TRIGGER_COMMAND_TAG_OK;
+}
+
+/*
+ * Validate DDL command tags.
+ */
+static void
+validate_table_rewrite_tags(const char *filtervar, List *taglist)
+{
+	ListCell   *lc;
+
+	foreach(lc, taglist)
+	{
+		const char *tag = strVal(lfirst(lc));
+		event_trigger_command_tag_check_result result;
+
+		result = check_table_rewrite_ddl_tag(tag);
+		if (result == EVENT_TRIGGER_COMMAND_TAG_NOT_SUPPORTED)
+			ereport(ERROR,
+					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+			/* translator: %s represents an SQL statement name */
+					 errmsg("event triggers are not supported for %s",
+							tag)));
+	}
+}
+
+static event_trigger_command_tag_check_result
+check_table_rewrite_ddl_tag(const char *tag)
+{
+	if (pg_strcasecmp(tag, "ALTER TABLE") == 0 ||
+		pg_strcasecmp(tag, "CLUSTER") == 0 ||
+		pg_strcasecmp(tag, "VACUUM") == 0)
+		return EVENT_TRIGGER_COMMAND_TAG_OK;
+
+	return EVENT_TRIGGER_COMMAND_TAG_NOT_SUPPORTED;
 }
 
 /*
@@ -836,6 +877,55 @@ EventTriggerSQLDrop(Node *parsetree)
 
 	/* Cleanup. */
 	list_free(runlist);
+}
+
+
+/*
+ * Fire table_rewrite triggers.
+ */
+void
+EventTriggerTableRewrite(Node *parsetree)
+{
+	List	   *runlist;
+	EventTriggerData trigdata;
+
+	/*
+	 * Event Triggers are completely disabled in standalone mode.  There are
+	 * (at least) two reasons for this:
+	 *
+	 * 1. A sufficiently broken event trigger might not only render the
+	 * database unusable, but prevent disabling itself to fix the situation.
+	 * In this scenario, restarting in standalone mode provides an escape
+	 * hatch.
+	 *
+	 * 2. BuildEventTriggerCache relies on systable_beginscan_ordered, and
+	 * therefore will malfunction if pg_event_trigger's indexes are damaged.
+	 * To allow recovery from a damaged index, we need some operating mode
+	 * wherein event triggers are disabled.  (Or we could implement
+	 * heapscan-and-sort logic for that case, but having disaster recovery
+	 * scenarios depend on code that's otherwise untested isn't appetizing.)
+	 */
+	if (!IsUnderPostmaster)
+		return;
+
+	runlist = EventTriggerCommonSetup(parsetree,
+									  EVT_TableRewrite,
+									  "table_rewrite",
+									  &trigdata);
+	if (runlist == NIL)
+		return;
+
+	/* Run the triggers. */
+	EventTriggerInvoke(runlist, &trigdata);
+
+	/* Cleanup. */
+	list_free(runlist);
+
+	/*
+	 * Make sure anything the event triggers did will be visible to the main
+	 * command.
+	 */
+	CommandCounterIncrement();
 }
 
 /*

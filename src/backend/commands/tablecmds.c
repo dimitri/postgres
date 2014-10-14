@@ -46,6 +46,7 @@
 #include "commands/cluster.h"
 #include "commands/comment.h"
 #include "commands/defrem.h"
+#include "commands/event_trigger.h"
 #include "commands/policy.h"
 #include "commands/sequence.h"
 #include "commands/tablecmds.h"
@@ -303,7 +304,8 @@ static void validateForeignKeyConstraint(char *conname,
 static void createForeignKeyTriggers(Relation rel, Oid refRelOid,
 						 Constraint *fkconstraint,
 						 Oid constraintOid, Oid indexOid);
-static void ATController(Relation rel, List *cmds, bool recurse, LOCKMODE lockmode);
+static void ATController(AlterTableStmt *parsetree,
+						 Relation rel, List *cmds, bool recurse, LOCKMODE lockmode);
 static void ATPrepCmd(List **wqueue, Relation rel, AlterTableCmd *cmd,
 		  bool recurse, bool recursing, LOCKMODE lockmode);
 static void ATRewriteCatalogs(List **wqueue, LOCKMODE lockmode);
@@ -2723,7 +2725,8 @@ AlterTable(Oid relid, LOCKMODE lockmode, AlterTableStmt *stmt)
 
 	CheckTableNotInUse(rel, "ALTER TABLE");
 
-	ATController(rel, stmt->cmds, interpretInhOption(stmt->relation->inhOpt),
+	ATController(stmt,
+				 rel, stmt->cmds, interpretInhOption(stmt->relation->inhOpt),
 				 lockmode);
 }
 
@@ -2746,7 +2749,7 @@ AlterTableInternal(Oid relid, List *cmds, bool recurse)
 
 	rel = relation_open(relid, lockmode);
 
-	ATController(rel, cmds, recurse, lockmode);
+	ATController(NULL, rel, cmds, recurse, lockmode);
 }
 
 /*
@@ -3015,10 +3018,12 @@ AlterTableGetLockLevel(List *cmds)
 }
 
 static void
-ATController(Relation rel, List *cmds, bool recurse, LOCKMODE lockmode)
+ATController(AlterTableStmt *parsetree,
+			 Relation rel, List *cmds, bool recurse, LOCKMODE lockmode)
 {
 	List	   *wqueue = NIL;
 	ListCell   *lcmd;
+	ListCell   *ltab;
 
 	/* Phase 1: preliminary examination of commands, create work queue */
 	foreach(lcmd, cmds)
@@ -3030,6 +3035,28 @@ ATController(Relation rel, List *cmds, bool recurse, LOCKMODE lockmode)
 
 	/* Close the relation, but keep lock until commit */
 	relation_close(rel, NoLock);
+
+	/*
+	 * If a rewrite is needed, fire off an Event Trigger now.
+	 *
+	 * We don't support Event Trigger for nested commands anywhere, here
+	 * included, and parstree is given NULL when comming from
+	 * AlterTableInternal.
+	 */
+	if (parsetree)
+	{
+		foreach(ltab, wqueue)
+		{
+			AlteredTableInfo *tab = (AlteredTableInfo *) lfirst(ltab);
+
+			if (tab->rewrite)
+			{
+				/* we don't have no parsetree to provide for here. */
+				EventTriggerTableRewrite(parsetree);
+				break;
+			}
+		}
+	}
 
 	/* Phase 2: update system catalogs */
 	ATRewriteCatalogs(&wqueue, lockmode);
