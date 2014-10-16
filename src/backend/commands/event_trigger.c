@@ -682,8 +682,18 @@ EventTriggerCommonSetup(Node *parsetree,
 		const char *dbgtag;
 
 		dbgtag = CreateCommandTag(parsetree);
-		if (check_ddl_tag(dbgtag) != EVENT_TRIGGER_COMMAND_TAG_OK)
-			elog(ERROR, "unexpected command tag \"%s\"", dbgtag);
+		if (event == EVT_DDLCommandStart ||
+			event == EVT_DDLCommandEnd   ||
+			event == EVT_SQLDrop)
+		{
+			if (check_ddl_tag(dbgtag) != EVENT_TRIGGER_COMMAND_TAG_OK)
+				elog(ERROR, "unexpected command tag \"%s\"", dbgtag);
+		}
+		else if (event == EVT_TableRewrite)
+		{
+			if(check_table_rewrite_ddl_tag(dbgtag) != EVENT_TRIGGER_COMMAND_TAG_OK)
+				elog(ERROR, "unexpected command tag \"%s\"", dbgtag);
+		}
 	}
 #endif
 
