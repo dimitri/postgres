@@ -626,23 +626,6 @@ standard_ProcessUtility(Node *parsetree,
 			}
 			break;
 
-		case T_ClusterStmt:
-			/* we choose to allow this during "read only" transactions */
-			PreventCommandDuringRecovery("CLUSTER");
-			cluster((ClusterStmt *) parsetree, isTopLevel);
-			break;
-
-		case T_VacuumStmt:
-			{
-				VacuumStmt *stmt = (VacuumStmt *) parsetree;
-
-				/* we choose to allow this during "read only" transactions */
-				PreventCommandDuringRecovery((stmt->options & VACOPT_VACUUM) ?
-											 "VACUUM" : "ANALYZE");
-				vacuum(stmt, InvalidOid, true, NULL, false, isTopLevel);
-			}
-			break;
-
 		case T_ExplainStmt:
 			ExplainQuery((ExplainStmt *) parsetree, queryString, params, dest);
 			break;
@@ -950,6 +933,25 @@ ProcessUtilitySlow(Node *parsetree,
 						if (lnext(l) != NULL)
 							CommandCounterIncrement();
 					}
+				}
+				break;
+
+			case T_ClusterStmt:
+				{
+					/* we choose to allow this during "read only" transactions */
+					PreventCommandDuringRecovery("CLUSTER");
+					cluster((ClusterStmt *) parsetree, isTopLevel);
+				}
+				break;
+
+			case T_VacuumStmt:
+				{
+					VacuumStmt *stmt = (VacuumStmt *) parsetree;
+
+					/* we choose to allow this during "read only" transactions */
+					PreventCommandDuringRecovery((stmt->options & VACOPT_VACUUM) ?
+												 "VACUUM" : "ANALYZE");
+					vacuum(stmt, InvalidOid, true, NULL, false, isTopLevel);
 				}
 				break;
 

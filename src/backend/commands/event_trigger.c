@@ -42,11 +42,15 @@
 #include "utils/syscache.h"
 #include "tcop/utility.h"
 
-
+/*
+ * Data Structure for sql_drop and table_rewrite Event Trigger support.
+ */
 typedef struct EventTriggerQueryState
 {
 	slist_head	SQLDropList;
 	bool		in_sql_drop;
+	bool		in_table_rewrite;
+	Oid			tableOid;
 	MemoryContext cxt;
 	struct EventTriggerQueryState *previous;
 } EventTriggerQueryState;
@@ -264,6 +268,7 @@ check_ddl_tag(const char *tag)
 
 	/*
 	 * Otherwise, command should be CREATE, ALTER, or DROP.
+	 * Or one of ANALYZE, CLUSTER, VACUUM.
 	 */
 	if (pg_strncasecmp(tag, "CREATE ", 7) == 0)
 		obtypename = tag + 7;
@@ -271,6 +276,10 @@ check_ddl_tag(const char *tag)
 		obtypename = tag + 6;
 	else if (pg_strncasecmp(tag, "DROP ", 5) == 0)
 		obtypename = tag + 5;
+	else if (pg_strncasecmp(tag, "ANALYZE", 7) == 0 ||
+			 pg_strncasecmp(tag, "CLUSTER", 7) == 0 ||
+			 pg_strncasecmp(tag, "VACUUM", 6) == 0)
+		return EVENT_TRIGGER_COMMAND_TAG_OK;
 	else
 		return EVENT_TRIGGER_COMMAND_TAG_NOT_RECOGNIZED;
 
@@ -315,7 +324,8 @@ check_table_rewrite_ddl_tag(const char *tag)
 {
 	if (pg_strcasecmp(tag, "ALTER TABLE") == 0 ||
 		pg_strcasecmp(tag, "CLUSTER") == 0 ||
-		pg_strcasecmp(tag, "VACUUM") == 0)
+		pg_strcasecmp(tag, "VACUUM") == 0 ||
+		pg_strcasecmp(tag, "ANALYZE") == 0 )
 		return EVENT_TRIGGER_COMMAND_TAG_OK;
 
 	return EVENT_TRIGGER_COMMAND_TAG_NOT_SUPPORTED;
@@ -894,10 +904,12 @@ EventTriggerSQLDrop(Node *parsetree)
  * Fire table_rewrite triggers.
  */
 void
-EventTriggerTableRewrite(Node *parsetree)
+EventTriggerTableRewrite(Node *parsetree, Oid tableOid)
 {
 	List	   *runlist;
 	EventTriggerData trigdata;
+
+	elog(DEBUG1, "EventTriggerTableRewrite(%u)", tableOid);
 
 	/*
 	 * Event Triggers are completely disabled in standalone mode.  There are
@@ -925,8 +937,31 @@ EventTriggerTableRewrite(Node *parsetree)
 	if (runlist == NIL)
 		return;
 
+	/*
+	 * Make sure pg_event_trigger_table_rewrite_oid only works when running
+	 * these triggers.  Use PG_TRY to ensure in_table_rewrite is reset even when
+	 * one trigger fails.  (This is perhaps not necessary, as the currentState
+	 * variable will be removed shortly by our caller, but it seems better to
+	 * play safe.)
+	 */
+	currentEventTriggerState->in_table_rewrite = true;
+	currentEventTriggerState->tableOid = tableOid;
+
 	/* Run the triggers. */
-	EventTriggerInvoke(runlist, &trigdata);
+	PG_TRY();
+	{
+		EventTriggerInvoke(runlist, &trigdata);
+	}
+	PG_CATCH();
+	{
+		currentEventTriggerState->in_table_rewrite = false;
+		currentEventTriggerState->tableOid = InvalidOid;
+		PG_RE_THROW();
+	}
+	PG_END_TRY();
+
+	currentEventTriggerState->in_table_rewrite = false;
+	currentEventTriggerState->tableOid = InvalidOid;
 
 	/* Cleanup. */
 	list_free(runlist);
@@ -970,6 +1005,8 @@ EventTriggerInvoke(List *fn_oid_list, EventTriggerData *trigdata)
 		FmgrInfo	flinfo;
 		FunctionCallInfoData fcinfo;
 		PgStat_FunctionCallUsage fcusage;
+
+		elog(DEBUG1, "EventTriggerInvoke %u", fnoid);
 
 		/*
 		 * We want each event trigger to be able to see the results of the
@@ -1141,6 +1178,8 @@ EventTriggerBeginCompleteQuery(void)
 	state->cxt = cxt;
 	slist_init(&(state->SQLDropList));
 	state->in_sql_drop = false;
+	state->in_table_rewrite = false;
+	state->tableOid = InvalidOid;
 
 	state->previous = currentEventTriggerState;
 	currentEventTriggerState = state;
@@ -1180,8 +1219,9 @@ EventTriggerEndCompleteQuery(void)
 bool
 trackDroppedObjectsNeeded(void)
 {
-	/* true if any sql_drop event trigger exists */
-	return list_length(EventCacheLookup(EVT_SQLDrop)) > 0;
+	/* true if any sql_drop or table_rewrite event trigger exists */
+	return list_length(EventCacheLookup(EVT_SQLDrop)) > 0 ||
+		list_length(EventCacheLookup(EVT_TableRewrite)) > 0;
 }
 
 /*
@@ -1396,4 +1436,26 @@ pg_event_trigger_dropped_objects(PG_FUNCTION_ARGS)
 	tuplestore_donestoring(tupstore);
 
 	return (Datum) 0;
+}
+
+/*
+ * pg_event_trigger_table_rewrite_oid
+ *
+ * Make the Oid of the table going to be rewritten available to the user
+ * function run by the Event Trigger.
+ */
+Datum
+pg_event_trigger_table_rewrite_oid(PG_FUNCTION_ARGS)
+{
+	/*
+	 * Protect this function from being called out of context
+	 */
+	if (!currentEventTriggerState ||
+		!currentEventTriggerState->in_table_rewrite)
+		ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+		 errmsg("%s can only be called in a table_rewrite event trigger function",
+				"pg_event_trigger_table_rewrite_oid()")));
+
+	PG_RETURN_OID(currentEventTriggerState->tableOid);
 }

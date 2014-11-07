@@ -17540,14 +17540,18 @@ FOR EACH ROW EXECUTE PROCEDURE suppress_redundant_updates_trigger();
   <sect1 id="functions-event-triggers">
    <title>Event Trigger Functions</title>
 
+   <para>
+    Currently <productname>PostgreSQL</> provides two built-in event trigger
+    helper function, <function>pg_event_trigger_dropped_objects</>
+    and <function>pg_event_trigger_table_rewrite_oid</>.
+   </para>
+
+  <sect2 id="pg-event-trigger-dropped-objects">
+   <title>Processing objects dropped by a DDL command.</title>
+
    <indexterm>
      <primary>pg_event_trigger_dropped_objects</primary>
    </indexterm>
-
-   <para>
-    Currently <productname>PostgreSQL</> provides one built-in event trigger
-    helper function, <function>pg_event_trigger_dropped_objects</>.
-   </para>
 
    <para>
     <function>pg_event_trigger_dropped_objects</> returns a list of all objects
@@ -17647,6 +17651,68 @@ CREATE EVENT TRIGGER test_event_trigger_for_drops
        For more information about event triggers,
        see <xref linkend="event-triggers">.
     </para>
+  </sect2>
+
+  <sect2 id="pg-event-trigger-table-rewrite-oid">
+   <title>Handling a Table Rewrite Event</title>
+
+   <indexterm>
+     <primary>pg_event_trigger_table_rewrite_oid</primary>
+   </indexterm>
+
+   <para>
+    <function>pg_event_trigger_table_rewrite_oid</> returns
+    the <literal>OID</> of the table that is going to be rewritten on-disk by
+    the current DDL command. If called in any other context,
+    <function>pg_event_trigger_table_rewrite_oid</> raises an error.
+    <function>pg_event_trigger_table_rewrite_oid</> returns the following
+    columns:
+
+    <informaltable>
+     <tgroup cols="3">
+      <thead>
+       <row>
+        <entry>Name</entry>
+        <entry>Type</entry>
+        <entry>Description</entry>
+       </row>
+      </thead>
+
+      <tbody>
+       <row>
+        <entry><literal>oid</literal></entry>
+        <entry><type>Oid</type></entry>
+        <entry>OID of the pg_class entry for the table.</entry>
+       </row>
+      </tbody>
+     </tgroup>
+    </informaltable>
+   </para>
+
+   <para>
+    The <function>pg_event_trigger_table_rewrite_oid</> function can be used
+    in an event trigger like this:
+<programlisting>
+create function test_event_trigger_table_rewrite_oid()
+ returns event_trigger
+ language plpgsql as
+$$
+begin
+  raise notice 'rewriting table %', pg_event_trigger_table_rewrite_oid()::regclass;
+end;
+$$;
+
+create event trigger test_table_rewrite_oid
+                  on table_rewrite
+   execute procedure test_event_trigger_table_rewrite_oid();
+</programlisting>
+    </para>
+
+     <para>
+       For more information about event triggers,
+       see <xref linkend="event-triggers">.
+    </para>
+  </sect2>
   </sect1>
 
 </chapter>

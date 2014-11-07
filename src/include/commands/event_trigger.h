@@ -46,7 +46,7 @@ extern bool EventTriggerSupportsObjectClass(ObjectClass objclass);
 extern void EventTriggerDDLCommandStart(Node *parsetree);
 extern void EventTriggerDDLCommandEnd(Node *parsetree);
 extern void EventTriggerSQLDrop(Node *parsetree);
-extern void EventTriggerTableRewrite(Node *parsetree);
+extern void EventTriggerTableRewrite(Node *parsetree, Oid tableOid);
 
 extern bool EventTriggerBeginCompleteQuery(void);
 extern void EventTriggerEndCompleteQuery(void);

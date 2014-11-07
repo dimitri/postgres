@@ -269,7 +269,7 @@ cluster_rel(Node *parsetree,
 	/*
 	 * Fire off an Event Trigger now, before actually rewriting the table.
 	 */
-	EventTriggerTableRewrite((Node *)parsetree);
+	EventTriggerTableRewrite((Node *)parsetree, tableOid);
 
 	/*
 	 * We grab exclusive access to the target rel and index for the duration

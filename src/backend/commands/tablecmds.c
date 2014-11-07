@@ -3744,7 +3744,7 @@ ATRewriteTables(AlterTableStmt *parsetree, List **wqueue, LOCKMODE lockmode)
 			 */
 			if (parsetree && !evt_table_rewrite_fired)
 			{
-				EventTriggerTableRewrite((Node *)parsetree);
+				EventTriggerTableRewrite((Node *)parsetree, tab->relid);
 				evt_table_rewrite_fired = true;
 			}
 
@@ -3799,7 +3799,7 @@ ATRewriteTables(AlterTableStmt *parsetree, List **wqueue, LOCKMODE lockmode)
 				 */
 				if (parsetree && !evt_table_rewrite_fired)
 				{
-					EventTriggerTableRewrite((Node *)parsetree);
+					EventTriggerTableRewrite((Node *)parsetree, tab->relid);
 					evt_table_rewrite_fired = true;
 				}
 				ATRewriteTable(tab, InvalidOid, lockmode);
