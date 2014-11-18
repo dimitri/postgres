@@ -49,8 +49,7 @@ typedef struct EventTriggerQueryState
 {
 	slist_head	SQLDropList;
 	bool		in_sql_drop;
-	bool		in_table_rewrite;
-	Oid			tableOid;
+	Oid			table_rewrite_oid;
 	MemoryContext cxt;
 	struct EventTriggerQueryState *previous;
 } EventTriggerQueryState;
@@ -939,13 +938,12 @@ EventTriggerTableRewrite(Node *parsetree, Oid tableOid)
 
 	/*
 	 * Make sure pg_event_trigger_table_rewrite_oid only works when running
-	 * these triggers.  Use PG_TRY to ensure in_table_rewrite is reset even when
-	 * one trigger fails.  (This is perhaps not necessary, as the currentState
-	 * variable will be removed shortly by our caller, but it seems better to
-	 * play safe.)
+	 * these triggers. Use PG_TRY to ensure table_rewrite_oid is reset even
+	 * when one trigger fails. (This is perhaps not necessary, as the
+	 * currentState variable will be removed shortly by our caller, but it
+	 * seems better to play safe.)
 	 */
-	currentEventTriggerState->in_table_rewrite = true;
-	currentEventTriggerState->tableOid = tableOid;
+	currentEventTriggerState->table_rewrite_oid = tableOid;
 
 	/* Run the triggers. */
 	PG_TRY();
@@ -954,14 +952,12 @@ EventTriggerTableRewrite(Node *parsetree, Oid tableOid)
 	}
 	PG_CATCH();
 	{
-		currentEventTriggerState->in_table_rewrite = false;
-		currentEventTriggerState->tableOid = InvalidOid;
+		currentEventTriggerState->table_rewrite_oid = InvalidOid;
 		PG_RE_THROW();
 	}
 	PG_END_TRY();
 
-	currentEventTriggerState->in_table_rewrite = false;
-	currentEventTriggerState->tableOid = InvalidOid;
+	currentEventTriggerState->table_rewrite_oid = InvalidOid;
 
 	/* Cleanup. */
 	list_free(runlist);
@@ -1163,8 +1159,9 @@ EventTriggerBeginCompleteQuery(void)
 	MemoryContext cxt;
 
 	/*
-	 * Currently, sql_drop events are the only reason to have event trigger
-	 * state at all; so if there are none, don't install one.
+	 * Currently, sql_drop and table_rewrite events are the only reason to
+	 * have event trigger state at all; so if there are none, don't install
+	 * one.
 	 */
 	if (!trackDroppedObjectsNeeded())
 		return false;
@@ -1178,8 +1175,7 @@ EventTriggerBeginCompleteQuery(void)
 	state->cxt = cxt;
 	slist_init(&(state->SQLDropList));
 	state->in_sql_drop = false;
-	state->in_table_rewrite = false;
-	state->tableOid = InvalidOid;
+	state->table_rewrite_oid = InvalidOid;
 
 	state->previous = currentEventTriggerState;
 	currentEventTriggerState = state;
@@ -1451,11 +1447,11 @@ pg_event_trigger_table_rewrite_oid(PG_FUNCTION_ARGS)
 	 * Protect this function from being called out of context
 	 */
 	if (!currentEventTriggerState ||
-		!currentEventTriggerState->in_table_rewrite)
+		currentEventTriggerState->table_rewrite_oid != InvalidOid)
 		ereport(ERROR,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 		 errmsg("%s can only be called in a table_rewrite event trigger function",
 				"pg_event_trigger_table_rewrite_oid()")));
 
-	PG_RETURN_OID(currentEventTriggerState->tableOid);
+	PG_RETURN_OID(currentEventTriggerState->table_rewrite_oid);
 }

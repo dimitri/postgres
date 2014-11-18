@@ -314,8 +314,8 @@
        </row>
        <row>
         <entry align="left"><literal>CLUSTER</literal></entry>
-        <entry align="center"><literal>X</literal></entry>
-        <entry align="center"><literal>X</literal></entry>
+        <entry align="center"><literal>-</literal></entry>
+        <entry align="center"><literal>-</literal></entry>
         <entry align="center"><literal>-</literal></entry>
         <entry align="center"><literal>X</literal></entry>
        </row>
@@ -741,8 +741,8 @@
        </row>
        <row>
         <entry align="left"><literal>VACUUM</literal></entry>
-        <entry align="center"><literal>X</literal></entry>
-        <entry align="center"><literal>X</literal></entry>
+        <entry align="center"><literal>-</literal></entry>
+        <entry align="center"><literal>-</literal></entry>
         <entry align="center"><literal>-</literal></entry>
         <entry align="center"><literal>X</literal></entry>
        </row>

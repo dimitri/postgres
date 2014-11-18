@@ -826,6 +826,74 @@ standard_ProcessUtility(Node *parsetree,
 }
 
 /*
+ * VACUUM and CLUSTER support the table_rewrite Event Trigger, but they are
+ * not covered by the ddl_command_{start|end} event triggers, so they need a
+ * special treatment here.
+ */
+static bool
+ProcessUtilityForTableRewriteSupportOnly(Node *parsetree,
+										 const char *queryString,
+										 ProcessUtilityContext context,
+										 ParamListInfo params,
+										 DestReceiver *dest,
+										 char *completionTag,
+										 bool isTopLevel,
+										 bool needCleanup)
+{
+	bool done = false;
+
+	PG_TRY();
+	{
+		switch (nodeTag(parsetree))
+		{
+			case T_ClusterStmt:
+				{
+					/* we choose to allow this during "read only" transactions */
+					PreventCommandDuringRecovery("CLUSTER");
+					cluster((ClusterStmt *) parsetree, isTopLevel);
+
+					done = true;
+				}
+				break;
+
+			case T_VacuumStmt:
+				{
+					VacuumStmt *stmt = (VacuumStmt *) parsetree;
+					/* we choose to allow this during "read only" transactions */
+					PreventCommandDuringRecovery((stmt->options & VACOPT_VACUUM) ?
+												 "VACUUM" : "ANALYZE");
+					vacuum(stmt, InvalidOid, true, NULL, false, isTopLevel);
+
+					done = true;
+				}
+				break;
+
+			default:
+				{
+					/*
+					 * make compiler happy about all those enumeration value we
+					 * are not handling on purpose.
+					 */
+					(void) 0;
+				}
+				break;
+		}
+	}
+	PG_CATCH();
+	{
+		if (done && needCleanup)
+			EventTriggerEndCompleteQuery();
+		PG_RE_THROW();
+	}
+	PG_END_TRY();
+
+	if (done && needCleanup)
+		EventTriggerEndCompleteQuery();
+
+	return done;
+}
+
+/*
  * The "Slow" variant of ProcessUtility should only receive statements
  * supported by the event triggers facility.  Therefore, we always
  * perform the trigger support calls if the context allows it.
@@ -844,6 +912,21 @@ ProcessUtilitySlow(Node *parsetree,
 
 	/* All event trigger calls are done only when isCompleteQuery is true */
 	needCleanup = isCompleteQuery && EventTriggerBeginCompleteQuery();
+
+	/*
+	 * Take care of commands with support for table_rewrite but no support for
+	 * ddl_command_start and ddl_command_end Event Trigger support, currently
+	 * only CLUSTER and VACUUM.
+	 */
+	if (ProcessUtilityForTableRewriteSupportOnly(parsetree,
+												 queryString,
+												 context,
+												 params,
+												 dest,
+												 completionTag,
+												 isTopLevel,
+												 needCleanup))
+		return;
 
 	/* PG_TRY block is to ensure we call EventTriggerEndCompleteQuery */
 	PG_TRY();
@@ -933,25 +1016,6 @@ ProcessUtilitySlow(Node *parsetree,
 						if (lnext(l) != NULL)
 							CommandCounterIncrement();
 					}
-				}
-				break;
-
-			case T_ClusterStmt:
-				{
-					/* we choose to allow this during "read only" transactions */
-					PreventCommandDuringRecovery("CLUSTER");
-					cluster((ClusterStmt *) parsetree, isTopLevel);
-				}
-				break;
-
-			case T_VacuumStmt:
-				{
-					VacuumStmt *stmt = (VacuumStmt *) parsetree;
-
-					/* we choose to allow this during "read only" transactions */
-					PreventCommandDuringRecovery((stmt->options & VACOPT_VACUUM) ?
-												 "VACUUM" : "ANALYZE");
-					vacuum(stmt, InvalidOid, true, NULL, false, isTopLevel);
 				}
 				break;
 
