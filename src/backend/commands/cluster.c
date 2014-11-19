@@ -31,7 +31,6 @@
 #include "catalog/objectaccess.h"
 #include "catalog/toasting.h"
 #include "commands/cluster.h"
-#include "commands/event_trigger.h"
 #include "commands/tablecmds.h"
 #include "commands/vacuum.h"
 #include "miscadmin.h"
@@ -176,7 +175,7 @@ cluster(ClusterStmt *stmt, bool isTopLevel)
 		heap_close(rel, NoLock);
 
 		/* Do the job. */
-		cluster_rel((Node *)stmt, tableOid, indexOid, false, stmt->verbose);
+		cluster_rel(tableOid, indexOid, false, stmt->verbose);
 	}
 	else
 	{
@@ -226,8 +225,7 @@ cluster(ClusterStmt *stmt, bool isTopLevel)
 			/* functions in indexes may want a snapshot set */
 			PushActiveSnapshot(GetTransactionSnapshot());
 			/* Do the job. */
-			cluster_rel((Node *)stmt,
-						rvtc->tableOid, rvtc->indexOid, true, stmt->verbose);
+			cluster_rel(rvtc->tableOid, rvtc->indexOid, true, stmt->verbose);
 			PopActiveSnapshot();
 			CommitTransactionCommand();
 		}
@@ -258,18 +256,12 @@ cluster(ClusterStmt *stmt, bool isTopLevel)
  * and error messages should refer to the operation as VACUUM not CLUSTER.
  */
 void
-cluster_rel(Node *parsetree,
-			Oid tableOid, Oid indexOid, bool recheck, bool verbose)
+cluster_rel(Oid tableOid, Oid indexOid, bool recheck, bool verbose)
 {
 	Relation	OldHeap;
 
 	/* Check for user-requested abort. */
 	CHECK_FOR_INTERRUPTS();
-
-	/*
-	 * Fire off an Event Trigger now, before actually rewriting the table.
-	 */
-	EventTriggerTableRewrite((Node *)parsetree, tableOid);
 
 	/*
 	 * We grab exclusive access to the target rel and index for the duration

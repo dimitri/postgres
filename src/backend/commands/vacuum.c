@@ -1278,8 +1278,7 @@ vacuum_rel(Oid relid, VacuumStmt *vacstmt, bool do_toast, bool for_wraparound)
 		onerel = NULL;
 
 		/* VACUUM FULL is now a variant of CLUSTER; see cluster.c */
-		cluster_rel((Node *)vacstmt,
-					relid, InvalidOid, false,
+		cluster_rel(relid, InvalidOid, false,
 					(vacstmt->options & VACOPT_VERBOSE) != 0);
 	}
 	else
