@@ -66,8 +66,12 @@
 
    <para>
     The <literal>table_rewrite</> event occurs just before a table is going to
-    get rewritten by the commands <literal>ALTER TABLE</literal>,
-    <literal>CLUSTER</literal> or <literal>VACUUM</literal>.
+    get rewritten by the commands <literal>ALTER TABLE</literal>. While other
+    control statements are available to rewrite a table,
+    like <literal>CLUSTER</literal> and <literal>VACUUM</literal>,
+    the <literal>table_rewrite</> event is currently only triggered by
+    the <literal>ALTER TABLE</literal> command, which might or might not need
+    to rewrite the table.
    </para>
 
    <para>
@@ -130,13 +134,6 @@
        </row>
       </thead>
       <tbody>
-       <row>
-        <entry align="left"><literal>ANALYZE</literal></entry>
-        <entry align="center"><literal>X</literal></entry>
-        <entry align="center"><literal>X</literal></entry>
-        <entry align="center"><literal>-</literal></entry>
-        <entry align="center"><literal>-</literal></entry>
-       </row>
        <row>
         <entry align="left"><literal>ALTER AGGREGATE</literal></entry>
         <entry align="center"><literal>X</literal></entry>
@@ -311,13 +308,6 @@
         <entry align="center"><literal>X</literal></entry>
         <entry align="center"><literal>-</literal></entry>
         <entry align="center"><literal>-</literal></entry>
-       </row>
-       <row>
-        <entry align="left"><literal>CLUSTER</literal></entry>
-        <entry align="center"><literal>-</literal></entry>
-        <entry align="center"><literal>-</literal></entry>
-        <entry align="center"><literal>-</literal></entry>
-        <entry align="center"><literal>X</literal></entry>
        </row>
        <row>
         <entry align="left"><literal>CREATE AGGREGATE</literal></entry>
@@ -738,13 +728,6 @@
         <entry align="center"><literal>X</literal></entry>
         <entry align="center"><literal>-</literal></entry>
         <entry align="center"><literal>-</literal></entry>
-       </row>
-       <row>
-        <entry align="left"><literal>VACUUM</literal></entry>
-        <entry align="center"><literal>-</literal></entry>
-        <entry align="center"><literal>-</literal></entry>
-        <entry align="center"><literal>-</literal></entry>
-        <entry align="center"><literal>X</literal></entry>
        </row>
       </tbody>
      </tgroup>

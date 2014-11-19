@@ -294,6 +294,9 @@ SELECT * FROM dropped_objects WHERE type = 'schema';
 DROP ROLE regression_bob;
 DROP EVENT TRIGGER regress_event_trigger_drop_objects;
 DROP EVENT TRIGGER undroppable;
+-- only allowed from within an event trigger function, should fail
+select pg_event_trigger_table_rewrite_oid();
+ERROR:  pg_event_trigger_table_rewrite_oid() can only be called in a table_rewrite event trigger function
 -- test Table Rewrite Event Trigger
 CREATE OR REPLACE FUNCTION test_evtrig_no_rewrite() RETURNS event_trigger
 LANGUAGE plpgsql AS $$
@@ -309,10 +312,6 @@ insert into rewriteme
 alter table rewriteme alter column foo type numeric;
 ERROR:  I'm sorry Sir, No Rewrite Allowed.
 alter table rewriteme add column baz int default 0;
-ERROR:  I'm sorry Sir, No Rewrite Allowed.
-cluster rewriteme using rewriteme_pkey;
-ERROR:  I'm sorry Sir, No Rewrite Allowed.
-vacuum full rewriteme;
 ERROR:  I'm sorry Sir, No Rewrite Allowed.
 drop table rewriteme;
 drop event trigger no_rewrite_allowed;

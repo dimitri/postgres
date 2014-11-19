@@ -207,6 +207,9 @@ DROP ROLE regression_bob;
 DROP EVENT TRIGGER regress_event_trigger_drop_objects;
 DROP EVENT TRIGGER undroppable;
 
+-- only allowed from within an event trigger function, should fail
+select pg_event_trigger_table_rewrite_oid();
+
 -- test Table Rewrite Event Trigger
 CREATE OR REPLACE FUNCTION test_evtrig_no_rewrite() RETURNS event_trigger
 LANGUAGE plpgsql AS $$
@@ -223,9 +226,6 @@ insert into rewriteme
      select x * 1.001 from generate_series(1, 500) as t(x);
 alter table rewriteme alter column foo type numeric;
 alter table rewriteme add column baz int default 0;
-
-cluster rewriteme using rewriteme_pkey;
-vacuum full rewriteme;
 
 drop table rewriteme;
 drop event trigger no_rewrite_allowed;
