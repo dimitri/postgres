@@ -3714,6 +3714,19 @@ ATRewriteTables(AlterTableStmt *parsetree, List **wqueue, LOCKMODE lockmode)
 			heap_close(OldHeap, NoLock);
 
 			/*
+			 * Fire off an Event Trigger now, before actually rewriting the
+			 * table.
+			 *
+			 * We don't support Event Trigger for nested commands anywhere,
+			 * here included, and parstree is given NULL when comming from
+			 * AlterTableInternal.
+			 *
+			 * And fire it only once.
+			 */
+			if (parsetree)
+				EventTriggerTableRewrite((Node *)parsetree, tab->relid);
+
+			/*
 			 * Create transient table that will receive the modified data.
 			 *
 			 * Ensure it is marked correctly as logged or unlogged.  We have
@@ -3730,19 +3743,6 @@ ATRewriteTables(AlterTableStmt *parsetree, List **wqueue, LOCKMODE lockmode)
 			 */
 			OIDNewHeap = make_new_heap(tab->relid, NewTableSpace, persistence,
 									   lockmode);
-
-			/*
-			 * Fire off an Event Trigger now, before actually rewriting the
-			 * table.
-			 *
-			 * We don't support Event Trigger for nested commands anywhere,
-			 * here included, and parstree is given NULL when comming from
-			 * AlterTableInternal.
-			 *
-			 * And fire it only once.
-			 */
-			if (parsetree)
-				EventTriggerTableRewrite((Node *)parsetree, tab->relid);
 
 			/*
 			 * Copy the heap data into the new table with the desired
