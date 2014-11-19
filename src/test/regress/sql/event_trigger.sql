@@ -227,6 +227,23 @@ insert into rewriteme
 alter table rewriteme alter column foo type numeric;
 alter table rewriteme add column baz int default 0;
 
+-- test with more than one reason to rewrite a single table
+CREATE OR REPLACE FUNCTION test_evtrig_no_rewrite() RETURNS event_trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+  RAISE NOTICE 'Table ''%'' is being rewritten',
+               pg_event_trigger_table_rewrite_oid()::regclass;
+END;
+$$;
+
+alter table rewriteme
+ add column onemore int default 0,
+ add column another int default -1,
+ alter column foo type numeric(10,4);
+
+-- shouldn't trigger a table_rewrite event
+alter table rewriteme alter column foo type numeric(12,4);
+
 drop table rewriteme;
 drop event trigger no_rewrite_allowed;
 drop function test_evtrig_no_rewrite();
