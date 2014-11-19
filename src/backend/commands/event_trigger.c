@@ -1447,7 +1447,7 @@ pg_event_trigger_table_rewrite_oid(PG_FUNCTION_ARGS)
 	 * Protect this function from being called out of context
 	 */
 	if (!currentEventTriggerState ||
-		currentEventTriggerState->table_rewrite_oid != InvalidOid)
+		currentEventTriggerState->table_rewrite_oid == InvalidOid)
 		ereport(ERROR,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 		 errmsg("%s can only be called in a table_rewrite event trigger function",
