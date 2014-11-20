@@ -951,9 +951,9 @@ COMMIT;
    <para>
     Here's an example implementing such a policy.
 <programlisting>
-create or replace function no_rewrite()
- returns event_trigger
- language plpgsql as
+CREATE OR REPLACE FUNCTION no_rewrite()
+ RETURNS event_trigger
+ LANGUAGE plpgsql AS
 $$
 ---
 --- Implement local Table Rewriting policy:
@@ -961,35 +961,35 @@ $$
 ---   other tables are only allowed rewriting between 1am and 6am
 ---   unless they have more than 100 blocks
 ---
-declare
+DECLARE
   table_oid oid := pg_event_trigger_table_rewrite_oid();
   current_hour integer := extract('hour' from current_time);
   pages integer;
   max_pages integer := 100;
-begin
-  if pg_event_trigger_table_rewrite_oid() = 'public.foo'::regclass
-  then
-        raise exception 'you''re not allowed to rewrite the table %',
+BEGIN
+  IF pg_event_trigger_table_rewrite_oid() = 'public.foo'::regclass
+  THEN
+        RAISE EXCEPTION 'you''re not allowed to rewrite the table %',
                         table_oid::regclass;
-  end if;
+  END IF;
 
-  select into pages relpages from pg_class where oid = table_oid;
-  if pages > max_pages
-  then
-        raise exception 'rewrites only allowed for table with less than % pages',
+  SELECT INTO pages relpages FROM pg_class WHERE oid = table_oid;
+  IF pages > max_pages
+  THEN
+        RAISE EXCEPTION 'rewrites only allowed for table with less than % pages',
                         max_pages;
-  end if;
+  END IF;
 
-  if not current_hour between 1 and 6
-  then
-        raise exception 'rewrites only allowed between 1am and 6am';
-  end if;
-end;
+  IF current_hour NOT BETWEEN 1 AND 6
+  THEN
+        RAISE EXCEPTION 'rewrites only allowed between 1am and 6am';
+  END IF;
+END;
 $$;
 
-create event trigger no_rewrite_allowed
-                  on table_rewrite
-   execute procedure no_rewrite();
+CREATE EVENT TRIGGER no_rewrite_allowed
+                  ON table_rewrite
+   EXECUTE PROCEDURE no_rewrite();
 </programlisting>
    </para>
  </sect1>

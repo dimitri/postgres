@@ -17693,18 +17693,18 @@ CREATE EVENT TRIGGER test_event_trigger_for_drops
     The <function>pg_event_trigger_table_rewrite_oid</> function can be used
     in an event trigger like this:
 <programlisting>
-create function test_event_trigger_table_rewrite_oid()
- returns event_trigger
- language plpgsql as
+CREATE FUNCTION test_event_trigger_table_rewrite_oid()
+ RETURNS event_trigger
+ LANGUAGE plpgsql AS
 $$
-begin
-  raise notice 'rewriting table %', pg_event_trigger_table_rewrite_oid()::regclass;
-end;
+BEGIN
+  RAISE NOTICE 'rewriting table %', pg_event_trigger_table_rewrite_oid()::regclass;
+END;
 $$;
 
-create event trigger test_table_rewrite_oid
-                  on table_rewrite
-   execute procedure test_event_trigger_table_rewrite_oid();
+CREATE EVENT TRIGGER test_table_rewrite_oid
+                  ON table_rewrite
+   EXECUTE PROCEDURE test_event_trigger_table_rewrite_oid();
 </programlisting>
     </para>
 
