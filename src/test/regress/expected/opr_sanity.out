@@ -1428,7 +1428,13 @@ ORDER BY 1;
   3940 | jsonb_extract_path_text | get value from jsonb as text with path elements
   3951 | json_extract_path       | get value from json with path elements
   3953 | json_extract_path_text  | get value from json as text with path elements
-(9 rows)
+  8800 | sql_query_eq            | equal
+  8801 | sql_query_ne            | not equal
+  8802 | sql_query_lt            | less than
+  8803 | sql_query_le            | less than or equal
+  8804 | sql_query_gt            | greater than
+  8805 | sql_query_ge            | greater than or equal
+(15 rows)
 
 -- Operators that are commutator pairs should have identical volatility
 -- and leakproofness markings on their implementation functions.

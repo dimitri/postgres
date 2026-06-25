@@ -594,4 +594,10 @@
 { castsource => 'tstzrange', casttarget => 'tstzmultirange',
   castfunc => 'tstzmultirange(tstzrange)', castcontext => 'e',
   castmethod => 'f' },
+
+# sql_query casts: implicit from text (parses and analyzes); implicit to text (deparsed SQL)
+{ castsource => 'text', casttarget => 'sql_query', castfunc => '0',
+  castcontext => 'i', castmethod => 'i' },
+{ castsource => 'sql_query', casttarget => 'text', castfunc => '0',
+  castcontext => 'i', castmethod => 'i' },
 ]

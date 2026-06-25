@@ -84,9 +84,12 @@
 #include "funcapi.h"
 #include "miscadmin.h"
 #include "nodes/nodeFuncs.h"
+#include "nodes/nodes.h"
+#include "nodes/parsenodes.h"
 #include "parser/parsetree.h"
 #include "rewrite/rewriteRemove.h"
 #include "storage/lmgr.h"
+#include "utils/builtins.h"
 #include "utils/fmgroids.h"
 #include "utils/lsyscache.h"
 #include "utils/syscache.h"
@@ -1942,6 +1945,31 @@ find_expr_references_walker(Node *node,
 						add_object_address(NamespaceRelationId, objoid, 0,
 										   context->addrs);
 					break;
+
+					/*
+					 * A sql_query constant holds a nodeToString-serialized
+					 * analyzed Query.  Recursively extract all objects
+					 * referenced by that inner query so they become
+					 * dependencies of the outer expression (e.g. a matview
+					 * body).  This is what lets pg_restore order REFRESH
+					 * MATERIALIZED VIEW after the tables the query references.
+					 */
+				case SQL_QUERYOID:
+					{
+						char	   *nodestr;
+						Query	   *innerq;
+
+						nodestr = TextDatumGetCString(con->constvalue);
+						innerq = castNode(Query, stringToNode(nodestr));
+						pfree(nodestr);
+
+						context->rtables = lcons(innerq->rtable,
+												 context->rtables);
+						find_expr_references_walker((Node *) innerq, context);
+						context->rtables =
+							list_delete_first(context->rtables);
+						break;
+					}
 
 					/*
 					 * Dependencies for regrole should be shared among all
