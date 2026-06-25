@@ -484,6 +484,11 @@
   opcfamily => 'brin/pg_lsn_bloom_ops', opcintype => 'pg_lsn',
   opcdefault => 'f', opckeytype => 'pg_lsn' },
 
+{ opcmethod => 'btree', opcname => 'sql_query_ops',
+  opcfamily => 'btree/sql_query_ops', opcintype => 'sql_query' },
+{ opcmethod => 'hash', opcname => 'sql_query_ops',
+  opcfamily => 'hash/sql_query_ops', opcintype => 'sql_query' },
+
 # no brin opclass for enum, tsvector, tsquery, jsonb
 
 { opcmethod => 'brin', opcname => 'box_inclusion_ops',

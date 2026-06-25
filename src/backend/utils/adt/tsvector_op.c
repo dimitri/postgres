@@ -31,6 +31,7 @@
 #include "utils/builtins.h"
 #include "utils/regproc.h"
 #include "utils/rel.h"
+#include "utils/ruleutils.h"
 
 
 typedef struct
@@ -2638,6 +2639,18 @@ ts_stat_sql(MemoryContext persistentContext, text *txt, text *ws)
 	return stat;
 }
 
+/*
+ * ts_stat1 / ts_stat2
+ *
+ * ts_stat accepts a sql_query value.  The datum holds an analyzed Query node
+ * in nodeToString() format.  We deparse it to canonical SQL via
+ * pg_get_querydef(), which is search_path-sensitive: in a context with a
+ * restricted search_path (e.g. pg_restore's REFRESH MATERIALIZED VIEW), it
+ * emits schema-qualified names, making the re-executed query safe.
+ */
+PG_FUNCTION_INFO_V1(ts_stat1);
+PG_FUNCTION_INFO_V1(ts_stat2);
+
 Datum
 ts_stat1(PG_FUNCTION_ARGS)
 {
@@ -2647,12 +2660,19 @@ ts_stat1(PG_FUNCTION_ARGS)
 	if (SRF_IS_FIRSTCALL())
 	{
 		TSVectorStat *stat;
-		text	   *txt = PG_GETARG_TEXT_PP(0);
+		text	   *sqldatum = PG_GETARG_TEXT_PP(0);
+		Query	   *query;
+		char	   *sql;
+		text	   *sqltxt;
+
+		query = castNode(Query, stringToNode(text_to_cstring(sqldatum)));
+		sql = pg_get_querydef(query, false);
+		sqltxt = cstring_to_text(sql);
 
 		funcctx = SRF_FIRSTCALL_INIT();
 		SPI_connect();
-		stat = ts_stat_sql(funcctx->multi_call_memory_ctx, txt, NULL);
-		PG_FREE_IF_COPY(txt, 0);
+		stat = ts_stat_sql(funcctx->multi_call_memory_ctx, sqltxt, NULL);
+		pfree(sqltxt);
 		ts_setup_firstcall(fcinfo, funcctx, stat);
 		SPI_finish();
 	}
@@ -2672,13 +2692,20 @@ ts_stat2(PG_FUNCTION_ARGS)
 	if (SRF_IS_FIRSTCALL())
 	{
 		TSVectorStat *stat;
-		text	   *txt = PG_GETARG_TEXT_PP(0);
+		text	   *sqldatum = PG_GETARG_TEXT_PP(0);
 		text	   *ws = PG_GETARG_TEXT_PP(1);
+		Query	   *query;
+		char	   *sql;
+		text	   *sqltxt;
+
+		query = castNode(Query, stringToNode(text_to_cstring(sqldatum)));
+		sql = pg_get_querydef(query, false);
+		sqltxt = cstring_to_text(sql);
 
 		funcctx = SRF_FIRSTCALL_INIT();
 		SPI_connect();
-		stat = ts_stat_sql(funcctx->multi_call_memory_ctx, txt, ws);
-		PG_FREE_IF_COPY(txt, 0);
+		stat = ts_stat_sql(funcctx->multi_call_memory_ctx, sqltxt, ws);
+		pfree(sqltxt);
 		PG_FREE_IF_COPY(ws, 1);
 		ts_setup_firstcall(fcinfo, funcctx, stat);
 		SPI_finish();

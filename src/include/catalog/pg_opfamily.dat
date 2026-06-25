@@ -308,5 +308,9 @@
   opfmethod => 'hash', opfname => 'multirange_ops' },
 { oid => '6158',
   opfmethod => 'gist', opfname => 'multirange_ops' },
+{ oid => '8815',
+  opfmethod => 'btree', opfname => 'sql_query_ops' },
+{ oid => '8818',
+  opfmethod => 'hash', opfname => 'sql_query_ops' },
 
 ]

@@ -603,7 +603,8 @@ CREATE TABLE tab_core_types AS SELECT
   '(2020-01-02 03:04:05, 2021-02-03 06:07:08)'::tsrange,
   '{(2020-01-02 03:04:05, 2021-02-03 06:07:08)}'::tsmultirange,
   '(2020-01-02 03:04:05, 2021-02-03 06:07:08)'::tstzrange,
-  '{(2020-01-02 03:04:05, 2021-02-03 06:07:08)}'::tstzmultirange;
+  '{(2020-01-02 03:04:05, 2021-02-03 06:07:08)}'::tstzmultirange,
+  'SELECT 1'::sql_query;
 
 -- Sanity check on the previous table, checking that all core types are
 -- included in this table.

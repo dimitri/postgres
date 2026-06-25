@@ -1,0 +1,244 @@
+--
+-- Tests for the sql_query data type
+--
+-- sql_query stores a fully analyzed SQL query in nodeToString() format.
+-- Its key property is that deparsing under an empty search_path emits
+-- schema-qualified names, fixing pg_restore's REFRESH MATERIALIZED VIEW
+-- failure when ts_stat() references unqualified table names.
+--
+-- Verify type and operator catalog entries
+SELECT typname, typcategory, typinput::regproc, typoutput::regproc
+FROM pg_type WHERE typname = 'sql_query';
+  typname  | typcategory |   typinput   |   typoutput   
+-----------+-------------+--------------+---------------
+ sql_query | Z           | sql_query_in | sql_query_out
+(1 row)
+
+SELECT oprname, oprleft::regtype, oprright::regtype, oprresult::regtype
+FROM pg_operator WHERE oprleft = 'sql_query'::regtype
+ORDER BY oprname;
+ oprname |  oprleft  | oprright  | oprresult 
+---------+-----------+-----------+-----------
+ <       | sql_query | sql_query | boolean
+ <=      | sql_query | sql_query | boolean
+ <>      | sql_query | sql_query | boolean
+ =       | sql_query | sql_query | boolean
+ >       | sql_query | sql_query | boolean
+ >=      | sql_query | sql_query | boolean
+(6 rows)
+
+SELECT amopstrategy, amoplefttype::regtype, amoprighttype::regtype
+FROM pg_amop
+WHERE amopfamily = (
+  SELECT oid FROM pg_opfamily
+  WHERE opfmethod = (SELECT oid FROM pg_am WHERE amname = 'btree')
+    AND opfname = 'sql_query_ops'
+)
+ORDER BY amopstrategy;
+ amopstrategy | amoplefttype | amoprighttype 
+--------------+--------------+---------------
+            1 | sql_query    | sql_query
+            2 | sql_query    | sql_query
+            3 | sql_query    | sql_query
+            4 | sql_query    | sql_query
+            5 | sql_query    | sql_query
+(5 rows)
+
+-- I/O: canonical SQL produced by pg_get_querydef()
+SELECT 'SELECT 1 + 1'::sql_query;
+           sql_query           
+-------------------------------
+  SELECT (1 + 1) AS "?column?"
+(1 row)
+
+SELECT 'SELECT 1+1'::sql_query;            -- normalised to same form
+           sql_query           
+-------------------------------
+  SELECT (1 + 1) AS "?column?"
+(1 row)
+
+SELECT 'select 1+1'::sql_query;            -- case-insensitive SQL keyword
+           sql_query           
+-------------------------------
+  SELECT (1 + 1) AS "?column?"
+(1 row)
+
+-- Multiple-statement input is rejected
+SELECT 'SELECT 1; SELECT 2'::sql_query;
+ERROR:  sql_query value must contain exactly one SQL statement
+LINE 1: SELECT 'SELECT 1; SELECT 2'::sql_query;
+               ^
+-- Invalid SQL is rejected
+SELECT 'NOT VALID SQL'::sql_query;
+ERROR:  syntax error at or near "NOT"
+LINE 1: SELECT 'NOT VALID SQL'::sql_query;
+               ^
+-- Non-SELECT statements are accepted (any fully-parseable statement)
+SELECT 'UPDATE pg_class SET relname = relname WHERE false'::sql_query;
+               sql_query                
+----------------------------------------
+  UPDATE pg_class SET relname = relname+
+   WHERE false
+(1 row)
+
+-- Arrays of sql_query
+SELECT ARRAY['SELECT 1'::sql_query, 'SELECT 2'::sql_query];
+                           array                           
+-----------------------------------------------------------
+ {" SELECT 1 AS \"?column?\""," SELECT 2 AS \"?column?\""}
+(1 row)
+
+-- Equality and comparison operators
+SELECT 'SELECT 1 + 1'::sql_query = 'SELECT 1+1'::sql_query AS equal;
+ equal 
+-------
+ t
+(1 row)
+
+SELECT 'SELECT 1'::sql_query = 'SELECT 2'::sql_query AS not_equal;
+ not_equal 
+-----------
+ f
+(1 row)
+
+SELECT 'SELECT 1'::sql_query < 'SELECT 2'::sql_query AS less_than;
+ less_than 
+-----------
+ t
+(1 row)
+
+SELECT 'SELECT 2'::sql_query > 'SELECT 1'::sql_query AS greater_than;
+ greater_than 
+--------------
+ t
+(1 row)
+
+-- ORDER BY uses the B-tree opclass
+SELECT q FROM
+  (VALUES ('SELECT 3'::sql_query), ('SELECT 1'::sql_query), ('SELECT 2'::sql_query)) v(q)
+ORDER BY q;
+            q            
+-------------------------
+  SELECT 1 AS "?column?"
+  SELECT 2 AS "?column?"
+  SELECT 3 AS "?column?"
+(3 rows)
+
+-- DISTINCT: synonymous queries collapse to one row
+SELECT DISTINCT q FROM
+  (VALUES ('SELECT 1+1'::sql_query), ('SELECT 1 + 1'::sql_query), ('SELECT 2'::sql_query)) v(q)
+ORDER BY q;
+               q               
+-------------------------------
+  SELECT 2 AS "?column?"
+  SELECT (1 + 1) AS "?column?"
+(2 rows)
+
+-- text ↔ sql_query casts: both directions are implicit
+SELECT 'SELECT 1'::sql_query::text;        -- sql_query → text (implicit)
+          text           
+-------------------------
+  SELECT 1 AS "?column?"
+(1 row)
+
+SELECT CAST('SELECT 1' AS sql_query);      -- text → sql_query (implicit)
+        sql_query        
+-------------------------
+  SELECT 1 AS "?column?"
+(1 row)
+
+-- ts_stat with sql_query
+--
+-- String literals are untyped; with only ts_stat(sql_query) available,
+-- function type resolution coerces them to sql_query automatically via
+-- sql_query_in().  No explicit cast is needed, preserving backward
+-- compatibility with existing ts_stat('...') call sites.
+DROP TABLE IF EXISTS sqlquery_articles;
+NOTICE:  table "sqlquery_articles" does not exist, skipping
+CREATE TABLE sqlquery_articles (body text);
+INSERT INTO sqlquery_articles VALUES
+  ('the cat sat on the mat'),
+  ('cats are great');
+SELECT word, ndoc, nentry
+FROM ts_stat(
+  $$ SELECT to_tsvector('english', body) FROM sqlquery_articles $$
+)
+ORDER BY ndoc DESC, word;
+ word  | ndoc | nentry 
+-------+------+--------
+ cat   |    2 |      2
+ great |    1 |      1
+ mat   |    1 |      1
+ sat   |    1 |      1
+(4 rows)
+
+-- Weights filter: 'abcd' includes all weights including the default 'D'
+SELECT word, ndoc, nentry
+FROM ts_stat(
+  $$ SELECT to_tsvector('english', body) FROM sqlquery_articles $$,
+  'abcd'
+)
+ORDER BY ndoc DESC, word;
+ word  | ndoc | nentry 
+-------+------+--------
+ cat   |    2 |      2
+ great |    1 |      1
+ mat   |    1 |      1
+ sat   |    1 |      1
+(4 rows)
+
+-- Materialized view using ts_stat(sql_query) and its dependencies
+--
+-- After the matview is created, the dependency tracker must have recorded
+-- sqlquery_articles as a dependency of the rewrite rule (via the sql_query
+-- constant in the ts_stat() argument).
+CREATE MATERIALIZED VIEW sqlquery_word_stats AS
+  SELECT word, ndoc, nentry
+  FROM ts_stat(
+    $$ SELECT to_tsvector('english', body) FROM sqlquery_articles $$
+  )
+  ORDER BY ndoc DESC, word;
+SELECT * FROM sqlquery_word_stats;
+ word  | ndoc | nentry 
+-------+------+--------
+ cat   |    2 |      2
+ great |    1 |      1
+ mat   |    1 |      1
+ sat   |    1 |      1
+(4 rows)
+
+-- Dependency must include sqlquery_articles
+SELECT d.refobjid::regclass AS dep
+FROM pg_rewrite r
+JOIN pg_depend d ON d.classid = 'pg_rewrite'::regclass AND d.objid = r.oid
+WHERE r.ev_class = 'sqlquery_word_stats'::regclass
+  AND d.refclassid = 'pg_class'::regclass
+  AND d.refobjid <> 'sqlquery_word_stats'::regclass
+ORDER BY dep;
+        dep        
+-------------------
+ sqlquery_articles
+(1 row)
+
+-- Primary fix: REFRESH under empty search_path must succeed.
+--
+-- pg_restore uses an empty search_path when it runs REFRESH MATERIALIZED VIEW
+-- for security.  With the old text-based ts_stat, the unqualified table name
+-- "sqlquery_articles" cannot be resolved in that context.  With sql_query,
+-- pg_get_querydef() emits the schema-qualified name "public.sqlquery_articles"
+-- so SPI_prepare() succeeds.
+SET search_path = '';
+REFRESH MATERIALIZED VIEW public.sqlquery_word_stats;
+RESET search_path;
+SELECT * FROM sqlquery_word_stats;
+ word  | ndoc | nentry 
+-------+------+--------
+ cat   |    2 |      2
+ great |    1 |      1
+ mat   |    1 |      1
+ sat   |    1 |      1
+(4 rows)
+
+-- Cleanup
+DROP MATERIALIZED VIEW sqlquery_word_stats;
+DROP TABLE sqlquery_articles;

@@ -1039,6 +1039,29 @@
         <returnvalue>(foo,10,15) ...</returnvalue>
        </para></entry>
       </row>
+
+      <row>
+       <entry role="func_table_entry"><para role="func_signature">
+        <function>ts_stat</function> ( <parameter>sqlquery</parameter> <type>sql_query</type>
+        <optional>, <parameter>weights</parameter> <type>text</type> </optional> )
+        <returnvalue>setof record</returnvalue>
+        ( <parameter>word</parameter> <type>text</type>,
+        <parameter>ndoc</parameter> <type>integer</type>,
+        <parameter>nentry</parameter> <type>integer</type> )
+       </para>
+       <para>
+        Like the <type>text</type> form, but accepts a pre-parsed
+        <type>sql_query</type> value.  The query is deparsed at execution
+        time using the current <varname>search_path</varname>, which ensures
+        that schema-qualified names are emitted when the search path is
+        empty (as during <command>pg_restore</command>'s
+        <command>REFRESH MATERIALIZED VIEW</command> step).
+       </para>
+       <para>
+        <literal>ts_stat($$ SELECT vector FROM apod $$::sql_query)</literal>
+        <returnvalue>(foo,10,15) ...</returnvalue>
+       </para></entry>
+      </row>
      </tbody>
     </tgroup>
    </table>

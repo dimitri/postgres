@@ -244,6 +244,12 @@
       </row>
 
       <row>
+       <entry><type>sql_query</type></entry>
+       <entry></entry>
+       <entry>pre-parsed, analyzed SQL query</entry>
+      </row>
+
+      <row>
        <entry><type>text</type></entry>
        <entry></entry>
        <entry>variable-length character string</entry>
@@ -5145,6 +5151,73 @@ WHERE ...
     the calculated LSN should be in the range of <type>pg_lsn</type> type,
     i.e., between <literal>0/00000000</literal> and
     <literal>FFFFFFFF/FFFFFFFF</literal>.
+   </para>
+  </sect1>
+
+  <sect1 id="datatype-sql-query">
+   <title><type>sql_query</type> Type</title>
+
+   <indexterm zone="datatype-sql-query">
+    <primary>sql_query</primary>
+   </indexterm>
+
+   <para>
+    The <type>sql_query</type> data type stores a fully analyzed SQL query.
+    Its input function parses and semantically analyzes the input SQL text,
+    resolving all object names to object identifiers (OIDs) at that time.
+    Its output function deparsed the stored query back to canonical SQL text
+    using <productname>PostgreSQL</productname>'s deparser, which is sensitive
+    to the current <varname>search_path</varname>: when the search path is
+    empty, all relation and type names are emitted in schema-qualified form.
+   </para>
+
+   <para>
+    This type is used as the argument type for <function>ts_stat</function>
+    when the SQL query argument should be pre-validated and schema-qualified
+    at assignment time rather than at execution time.  The canonical use case
+    is a materialized view body that calls <function>ts_stat</function>: when
+    <productname>PostgreSQL</productname> refreshes the view (e.g., via
+    <command>pg_restore</command>) with an empty <varname>search_path</varname>
+    for security, a <type>text</type> argument containing unqualified table
+    names would fail to resolve.  A <type>sql_query</type> value instead
+    emits <literal>public.articles</literal> from its output function and the
+    query executes correctly.
+   </para>
+
+   <para>
+    Internally, the value is stored in the same
+    <function>nodeToString</function> serialization format used by
+    <type>pg_node_tree</type> catalog columns.  Unlike <type>pg_node_tree</type>,
+    <type>sql_query</type> accepts SQL text as input.  The serialized format is
+    not intended to be stable across major <productname>PostgreSQL</productname>
+    versions; values are correctly round-tripped by <command>pg_dump</command>
+    because the dump writes the canonical SQL text produced by the output
+    function.
+   </para>
+
+   <para>
+    The <type>sql_query</type> type supports the standard comparison operators
+    (<literal>=</literal>, <literal>&lt;&gt;</literal>,
+    <literal>&lt;</literal>, <literal>&lt;=</literal>,
+    <literal>&gt;</literal>, <literal>&gt;=</literal>)
+    and a B-tree operator class, which makes it usable in
+    <literal>ORDER BY</literal> clauses and indexes.  Comparison is performed
+    on the canonical SQL text.
+   </para>
+
+   <para>
+    A cast from <type>text</type> to <type>sql_query</type> is available but
+    requires an explicit cast (<literal>CAST(... AS sql_query)</literal> or
+    the <literal>::sql_query</literal> notation).  No implicit cast is
+    defined, to prevent accidental substitution.  The reverse cast from
+    <type>sql_query</type> to <type>text</type> is implicit.
+   </para>
+
+   <para>
+    <function>ts_stat</function> accepts a <type>sql_query</type> value
+    directly; no column definition list is needed because the output columns
+    are declared as named <literal>OUT</literal> parameters.
+    See <xref linkend="textsearch-statistics"/> for details.
    </para>
   </sect1>
 

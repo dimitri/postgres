@@ -2036,4 +2036,16 @@
 { amprocfamily => 'brin/box_inclusion_ops', amproclefttype => 'box',
   amprocrighttype => 'box', amprocnum => '13', amproc => 'box_contain' },
 
+# btree sql_query_ops support functions
+{ amprocfamily => 'btree/sql_query_ops', amproclefttype => 'sql_query',
+  amprocrighttype => 'sql_query', amprocnum => '1', amproc => 'sql_query_cmp' },
+{ amprocfamily => 'btree/sql_query_ops', amproclefttype => 'sql_query',
+  amprocrighttype => 'sql_query', amprocnum => '4', amproc => 'btequalimage' },
+
+# hash sql_query_ops support functions
+{ amprocfamily => 'hash/sql_query_ops', amproclefttype => 'sql_query',
+  amprocrighttype => 'sql_query', amprocnum => '1', amproc => 'sql_query_hash' },
+{ amprocfamily => 'hash/sql_query_ops', amproclefttype => 'sql_query',
+  amprocrighttype => 'sql_query', amprocnum => '2', amproc => 'sql_query_hash_extended' },
+
 ]

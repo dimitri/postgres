@@ -102,6 +102,7 @@ backend_sources += files(
   'ruleutils.c',
   'selfuncs.c',
   'skipsupport.c',
+  'sqlquery.c',
   'tid.c',
   'timestamp.c',
   'trigfuncs.c',

@@ -3250,4 +3250,26 @@
   amoprighttype => 'point', amopstrategy => '7', amopopr => '@>(box,point)',
   amopmethod => 'brin' },
 
+# btree sql_query_ops
+{ amopfamily => 'btree/sql_query_ops', amoplefttype => 'sql_query',
+  amoprighttype => 'sql_query', amopstrategy => '1',
+  amopopr => '<(sql_query,sql_query)', amopmethod => 'btree' },
+{ amopfamily => 'btree/sql_query_ops', amoplefttype => 'sql_query',
+  amoprighttype => 'sql_query', amopstrategy => '2',
+  amopopr => '<=(sql_query,sql_query)', amopmethod => 'btree' },
+{ amopfamily => 'btree/sql_query_ops', amoplefttype => 'sql_query',
+  amoprighttype => 'sql_query', amopstrategy => '3',
+  amopopr => '=(sql_query,sql_query)', amopmethod => 'btree' },
+{ amopfamily => 'btree/sql_query_ops', amoplefttype => 'sql_query',
+  amoprighttype => 'sql_query', amopstrategy => '4',
+  amopopr => '>=(sql_query,sql_query)', amopmethod => 'btree' },
+{ amopfamily => 'btree/sql_query_ops', amoplefttype => 'sql_query',
+  amoprighttype => 'sql_query', amopstrategy => '5',
+  amopopr => '>(sql_query,sql_query)', amopmethod => 'btree' },
+
+# hash sql_query_ops
+{ amopfamily => 'hash/sql_query_ops', amoplefttype => 'sql_query',
+  amoprighttype => 'sql_query', amopstrategy => '1',
+  amopopr => '=(sql_query,sql_query)', amopmethod => 'hash' },
+
 ]
